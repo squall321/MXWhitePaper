@@ -72,6 +72,29 @@ export function DocumentReaderPage() {
     }
   }, [slug, data?.document?.title])
 
+  // Tier 2D — analytics view ping. Fire-and-forget; failures are silent so
+  // the read-only UX never depends on the analytics pipeline.
+  useEffect(() => {
+    if (!slug || !data) return
+    const url = (import.meta.env.VITE_API_URL as string | undefined) || '/api/v1'
+    void fetch(`${url}/documents/${slug}/view`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: (() => {
+        const h: Record<string, string> = {}
+        try {
+          const tok = window.sessionStorage.getItem('mxwp.access_token')
+          if (tok) h['Authorization'] = `Bearer ${tok}`
+        } catch {
+          /* ignore */
+        }
+        return h
+      })(),
+    }).catch(() => {
+      /* ignore */
+    })
+  }, [slug, data])
+
   // Honour ?edit=<sectionId> + ?fullEdit=1 deep links.
   useEffect(() => {
     if (!data) return

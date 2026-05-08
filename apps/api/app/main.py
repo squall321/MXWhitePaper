@@ -15,9 +15,14 @@ from .core.errors import (
     envelope,
     validation_error_handler,
 )
+from .routers.admin import router as admin_router
+from .routers.analytics import router as analytics_router
 from .routers.auth import router as auth_router
+from .routers.comments import router_doc as comments_doc_router
+from .routers.comments import router_one as comments_one_router
 from .routers.documents import router as documents_router
 from .routers.glossary import router as glossary_router
+from .routers.links_graph import router as links_graph_router
 from .routers.orgs import router as orgs_router
 from .routers.search import router as search_router
 from .routers.uploads import images_router, uploads_router
@@ -69,6 +74,24 @@ TAGS_METADATA: list[dict[str, str]] = [
     {
         "name": "widgets",
         "description": "위젯 데이터 (표/차트/KPI) 엔드포인트.",
+    },
+    {
+        "name": "admin",
+        "description": "관리자 대시보드 — 유저/감사/헬스/유지보수.",
+    },
+    {
+        "name": "analytics",
+        "description": "사용량 분석 — MAU/일별 활동/탑 검색/탑 조회 문서.",
+    },
+    {
+        "name": "comments",
+        "description": (
+            "문서/섹션/블록 단위 댓글. 작성자/admin 만 수정·삭제 (soft delete) 가능."
+        ),
+    },
+    {
+        "name": "links",
+        "description": "위키 링크 그래프 — BFS 그래프 / 전역 그래프.",
     },
 ]
 
@@ -128,6 +151,13 @@ def create_app() -> FastAPI:
     app.include_router(widgets_router)
     # Polish D — owner 자동완성용 유저 검색
     app.include_router(users_router)
+    # Tier 2D — admin dashboard + usage analytics
+    app.include_router(admin_router)
+    app.include_router(analytics_router)
+    # Tier 2C — comments workflow + wiki link graph
+    app.include_router(comments_doc_router)
+    app.include_router(comments_one_router)
+    app.include_router(links_graph_router)
 
     return app
 

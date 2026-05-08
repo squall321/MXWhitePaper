@@ -14,6 +14,10 @@ import {
   ImageDropzone,
   type ImageDropzoneHandle,
 } from '@/features/upload/components/ImageDropzone'
+import { CropOverlay } from '@/features/upload/CropOverlay'
+import { uploadImage } from '@/features/upload/uploadImage'
+import { loadImageElement, rotateImageToBlob } from '@/features/upload/canvasEncode'
+import { rotate90 } from '@/features/upload/cropMath'
 
 /**
  * Pure keyboard policy for caption/alt inputs. Extracted so we can unit-test
@@ -175,6 +179,8 @@ export function ImageBlockEditor({
   const [altChipDismissed, setAltChipDismissed] = useState(false)
   const [captionPulsing, setCaptionPulsing] = useState(false)
   const [galleryOpen, setGalleryOpen] = useState(false)
+  const [cropOpen, setCropOpen] = useState(false)
+  const [rotateBusy, setRotateBusy] = useState(false)
 
   const captionRef = useRef<HTMLInputElement>(null)
   const altRef = useRef<HTMLInputElement>(null)
@@ -288,6 +294,36 @@ export function ImageBlockEditor({
 
   const onReplaceClick = () => dropzoneRef.current?.openFilePicker()
 
+  const onCropApply = useCallback(
+    async (blob: Blob) => {
+      try {
+        const rec = await uploadImage(blob, { filename: `crop-${block.id}.png` })
+        await persist({ imageId: rec.image_id })
+        setCropOpen(false)
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [block.id, persist],
+  )
+
+  const onRotateClick = async () => {
+    if (rotateBusy || !src || usingSample) return
+    setRotateBusy(true)
+    setError(null)
+    try {
+      const el = await loadImageElement(src)
+      const next = rotate90(0, 1) // single 90° step per click
+      const blob = await rotateImageToBlob(el, next)
+      const rec = await uploadImage(blob, { filename: `rot-${block.id}.png` })
+      await persist({ imageId: rec.image_id })
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setRotateBusy(false)
+    }
+  }
+
   const altWarn = shouldShowAltWarning(alt ?? '', savedOnce)
 
   return (
@@ -335,6 +371,28 @@ export function ImageBlockEditor({
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            title="자르기"
+            aria-label="이미지 자르기"
+            data-action="crop"
+            onClick={() => setCropOpen(true)}
+            disabled={busy || usingSample}
+            className="rounded px-1 hover:bg-smsg-100 disabled:opacity-40"
+          >
+            ✂
+          </button>
+          <button
+            type="button"
+            title="회전 (90°)"
+            aria-label="이미지 90도 회전"
+            data-action="rotate"
+            onClick={() => void onRotateClick()}
+            disabled={busy || rotateBusy || usingSample}
+            className="rounded px-1 hover:bg-smsg-100 disabled:opacity-40"
+          >
+            ↻
+          </button>
           <button
             type="button"
             title="교체"
@@ -464,6 +522,14 @@ export function ImageBlockEditor({
         mode="replace"
         onImageReady={(rec) => persist({ imageId: rec.image_id })}
       />
+
+      {cropOpen && !usingSample && (
+        <CropOverlay
+          src={image?.urls.orig ?? src}
+          onApply={onCropApply}
+          onCancel={() => setCropOpen(false)}
+        />
+      )}
     </figure>
   )
 }

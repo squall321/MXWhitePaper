@@ -3,6 +3,7 @@ import type { ChartBlock, TableBlock } from '@/types/document'
 import { ChartBlockView } from '@/components/blocks/ChartBlock'
 import { useEditorStore } from '@/features/editor/state'
 import { parseCsv } from '@/features/editor/extensions/csv-paste'
+import { tableToChartData } from '@/features/editor/tableToChart'
 
 interface ChartBlockEditorProps {
   block: ChartBlock
@@ -325,16 +326,3 @@ function scanBlocks(blocks: import('@/types/document').Block[]): TableBlock | nu
   return null
 }
 
-/** First column = labels; remaining columns = series. Non-numeric cells → 0. */
-function tableToChartData(table: TableBlock): ChartBlock['data'] {
-  const labels = table.rows.map((r) => r[0] ?? '')
-  const seriesCount = Math.max(0, table.headers.length - 1)
-  const series = Array.from({ length: seriesCount }, (_, sIdx) => ({
-    name: table.headers[sIdx + 1] ?? `Series ${sIdx + 1}`,
-    values: table.rows.map((r) => {
-      const n = Number(r[sIdx + 1])
-      return Number.isFinite(n) ? n : 0
-    }),
-  }))
-  return { labels, series }
-}

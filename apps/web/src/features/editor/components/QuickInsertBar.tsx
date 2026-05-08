@@ -2,6 +2,7 @@ import type { Block, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { insertBlock, isPreconditionFailed } from '../api'
 import { ulid } from '../ulid'
+import { useClipboardImage } from '../hooks/useClipboardImage'
 
 /**
  * QuickInsertBar — a horizontally-scrollable strip of icon buttons for the
@@ -137,6 +138,7 @@ export function QuickInsertBar({ slug, items = ITEMS, onInserted }: Props) {
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
   const targetSectionId = draft?.sections[0]?.id
+  const clipboardHasImage = useClipboardImage()
 
   const onPick = async (it: QuickInsertItem) => {
     if (it.kind === 'image') {
@@ -167,19 +169,29 @@ export function QuickInsertBar({ slug, items = ITEMS, onInserted }: Props) {
       aria-label="빠른 블록 삽입"
       className="-mx-4 flex items-stretch gap-1 overflow-x-auto border-t border-gray-200 bg-white/95 px-4 py-1.5 text-xs sm:-mx-6 sm:px-6"
     >
-      {items.map((it) => (
-        <button
-          key={it.kind}
-          type="button"
-          onClick={() => void onPick(it)}
-          aria-label={it.label}
-          data-kind={it.kind}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:bg-smsg-50 hover:text-smsg-900"
-        >
-          <span aria-hidden className="text-sm leading-none">{it.icon}</span>
-          <span>{it.label}</span>
-        </button>
-      ))}
+      {items.map((it) => {
+        const glow = it.kind === 'image' && clipboardHasImage
+        return (
+          <button
+            key={it.kind}
+            type="button"
+            onClick={() => void onPick(it)}
+            aria-label={it.label}
+            title={glow ? '붙여넣은 이미지 추가' : undefined}
+            data-kind={it.kind}
+            data-clipboard-glow={glow ? '' : undefined}
+            className={
+              'inline-flex shrink-0 items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:bg-smsg-50 hover:text-smsg-900' +
+              (glow
+                ? ' border-smsg-500 bg-smsg-50 text-smsg-900 ring-2 ring-smsg-300 ring-offset-1 animate-pulse'
+                : '')
+            }
+          >
+            <span aria-hidden className="text-sm leading-none">{it.icon}</span>
+            <span>{it.label}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }

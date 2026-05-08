@@ -1,5 +1,12 @@
+import { useState } from 'react'
 import type { CalloutBlock } from '@/types/document'
 import { Inline } from '../wiki/Inline'
+import { useEditorStore, editorSelectors } from '@/features/editor/state'
+import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
+import {
+  CALLOUT_LABEL,
+  nextCalloutVariant,
+} from '@/features/editor/calloutVariant'
 
 interface VariantSpec {
   border: string
@@ -52,9 +59,36 @@ const VARIANT_STYLES: Record<CalloutBlock['variant'], VariantSpec> = {
 
 export function CalloutBlockView({ block }: { block: CalloutBlock }) {
   const v = VARIANT_STYLES[block.variant]
+  const isFullEditing = useEditorStore(editorSelectors.isFullEditing)
+  const slug = useEditorStore((s) => s.slug)
+  const etag = useEditorStore((s) => s.etag)
+  const apply = useEditorStore((s) => s.applyServerSnapshot)
+  const setConflict = useEditorStore((s) => s.setConflict)
+  const [busy, setBusy] = useState(false)
+
+  const onCycle = async () => {
+    if (busy || !slug || !etag) return
+    setBusy(true)
+    try {
+      const next = nextCalloutVariant(block.variant)
+      const result = await patchBlock(
+        slug,
+        block.id,
+        { variant: next },
+        etag,
+        '콜아웃 변형 변경',
+      )
+      apply(result.document, result.etag)
+    } catch (err) {
+      if (isPreconditionFailed(err)) setConflict(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <aside
-      className={`flex gap-3 rounded-md border-l-4 ${v.border} ${v.bg} p-4 text-[15px] leading-7`}
+      className={`group relative flex gap-3 rounded-md border-l-4 ${v.border} ${v.bg} p-4 text-[15px] leading-7`}
     >
       <span
         aria-hidden="true"
@@ -70,6 +104,19 @@ export function CalloutBlockView({ block }: { block: CalloutBlock }) {
           <Inline text={block.text} />
         </p>
       </div>
+      {isFullEditing && slug && (
+        <button
+          type="button"
+          aria-label={`콜아웃 변형 변경 (현재: ${CALLOUT_LABEL[block.variant]})`}
+          data-callout-variant-chip
+          data-variant={block.variant}
+          onClick={() => void onCycle()}
+          disabled={busy}
+          className="absolute right-2 top-2 rounded-full border border-gray-300 bg-white/95 px-2 py-0.5 text-[11px] font-medium text-gray-700 opacity-0 shadow-sm transition-opacity hover:bg-gray-50 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-40"
+        >
+          {CALLOUT_LABEL[block.variant]} ↻
+        </button>
+      )}
     </aside>
   )
 }

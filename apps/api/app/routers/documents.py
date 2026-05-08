@@ -753,3 +753,42 @@ async def reorder_sections(
         },
         meta={"etag": etag},
     )
+
+
+# ── 조회 추적 (Tier 2D) ──────────────────────────────────────────────────
+@router.post(
+    "/{slug}/view",
+    summary="문서 조회 ping (analytics 용)",
+    status_code=204,
+)
+async def ping_view(
+    slug: str,
+    s: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_reader),
+) -> Response:
+    """문서 본문 조회 시 FE 가 호출. audit_logs 에 'document.view' 1건 기록.
+
+    중복 호출 자체는 막지 않지만, FE 가 mount 1회 호출만 하므로 폭주는 없다.
+    혹시 모를 폭주를 막기 위해 같은 user+slug 가 60초 내 또 들어오면 skip.
+    """
+    row = (await s.execute(
+        _sql_text("""
+            SELECT 1 FROM audit_logs
+            WHERE user_id = CAST(:u AS uuid)
+              AND action = 'document.view'
+              AND target = :t
+              AND created_at >= NOW() - INTERVAL '60 seconds'
+            LIMIT 1
+        """),
+        {"u": user["id"], "t": f"document:{slug}"},
+    )).first()
+    if row is None:
+        await document_repo.insert_audit(
+            s,
+            user_id=user.get("id"),
+            action="document.view",
+            target=f"document:{slug}",
+            payload=None,
+        )
+        await s.commit()
+    return Response(status_code=204)

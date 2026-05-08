@@ -17,6 +17,11 @@ export interface UploadImageOptions {
   onProgress?: (stage: 'hashing' | 'uploading' | 'finalizing', pct: number) => void
   /** Whether to log extra debug info to the console. */
   debug?: boolean
+  /**
+   * Optional filename to use when uploading a `Blob` (no inherent name).
+   * Ignored when the input is already a `File`.
+   */
+  filename?: string
 }
 
 /**
@@ -28,12 +33,19 @@ export interface UploadImageOptions {
  *   4. POST /uploads/image/finalize — server returns the final image record.
  *
  * The dedupe path skips steps 3 and 4: the server returns `deduped` directly.
+ *
+ * Accepts a `File` for normal uploads OR a `Blob` for re-encoded variants
+ * (crop/rotate). For Blobs we synthesise filename + mime from the optional
+ * second arg — the BE strips EXIF either way so re-uploaded blobs are safe.
  */
 export async function uploadImage(
-  file: File,
+  source: File | Blob,
   opts: UploadImageOptions = {},
 ): Promise<ImageRecord> {
   const { onProgress, debug } = opts
+
+  // Normalize Blob → { name, type, size } even when caller passed a raw Blob.
+  const file = toUploadable(source, opts)
 
   onProgress?.('hashing', 0)
   const sha256 = await hashFile(file)
@@ -78,4 +90,20 @@ export async function uploadImage(
     detail: file.name,
   })
   return record
+}
+
+/**
+ * Wrap a raw `Blob` (e.g. from a canvas re-encode) into a `File` so the rest
+ * of the pipeline — which reads `.name`, `.type`, `.size` — can stay on the
+ * single upload path.
+ */
+function toUploadable(
+  source: File | Blob,
+  opts: UploadImageOptions,
+): File {
+  if (source instanceof File) return source
+  const ext = (source.type.split('/')[1] || 'png').replace(/\W+/g, '')
+  const name = opts.filename ?? `edited-image-${Date.now()}.${ext}`
+  const type = source.type || 'image/png'
+  return new File([source], name, { type })
 }

@@ -66,6 +66,40 @@ describe('uploadImage', () => {
     expect(stages).toContain('finalizing')
   })
 
+  it('accepts a raw Blob (re-encoded crop variant)', async () => {
+    const post = apiClient.post as ReturnType<typeof vi.fn>
+    post
+      .mockResolvedValueOnce({
+        data: {
+          data: {
+            deduped: false,
+            uploadId: 'u-blob',
+            method: 'PUT',
+            url: 'https://example/put',
+            headers: {},
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          data: {
+            image_id: 'img-from-blob',
+            urls: { thumb: '/t', view: '/v', orig: '/o' },
+            deduped: false,
+          },
+        },
+      })
+
+    const blob = new Blob([new Uint8Array([9, 8, 7])], { type: 'image/png' })
+    const result = await uploadImage(blob, { filename: 'crop-1.png' })
+
+    expect(result.image_id).toBe('img-from-blob')
+    // Filename was synthesized from opts.filename and forwarded to /init.
+    const initBody = post.mock.calls[0]?.[1] as { filename?: string; mime?: string }
+    expect(initBody?.filename).toBe('crop-1.png')
+    expect(initBody?.mime).toBe('image/png')
+  })
+
   it('runs init → PUT → finalize on a normal upload', async () => {
     const post = apiClient.post as ReturnType<typeof vi.fn>
     post

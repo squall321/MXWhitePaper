@@ -80,6 +80,16 @@ async def login(
         raise Unauthorized("Invalid credentials")
 
     user = _user_payload(row)
+    # Tier 2D — last_login_at 갱신 (admin 대시보드용). 컬럼이 없으면 무시.
+    try:
+        await s.execute(
+            text("UPDATE users SET last_login_at = NOW() WHERE id = CAST(:id AS uuid)"),
+            {"id": user["id"]},
+        )
+        await s.commit()
+    except Exception:
+        await s.rollback()
+
     access = make_access_token(user["id"], extra={"role": user["role"]})
     refresh = make_refresh_token(user["id"])
     await _set_refresh_cookie(response, refresh)

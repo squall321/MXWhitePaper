@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom'
  *   - `G R` → /recent
  *   - `G N` → /docs/new
  *   - `G S` → /settings
+ *   - `G A` → /analytics
  *
  * The chord arms when the user presses `G` outside an editable element and
  * disarms after 1.5s if no second key follows. Pressing `Esc` cancels.
@@ -68,6 +69,9 @@ export function useGChord() {
           break
         case 's':
           dest = '/settings'
+          break
+        case 'a':
+          dest = '/analytics'
           break
         case 'escape':
           break

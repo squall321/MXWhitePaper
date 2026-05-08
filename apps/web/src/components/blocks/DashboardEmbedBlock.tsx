@@ -3,14 +3,24 @@ import type { DashboardEmbedBlock } from '@/types/document'
 import { Badge } from '@/components/ui/Badge'
 
 /**
- * Dev-only base URLs per provider — replaced via env vars in real deployments.
- * TODO: source from `/config/whoami` or build-time env.
+ * Build-time provider base URLs. Source of truth is the `VITE_DASHBOARD_*_BASE`
+ * env vars (see `.env.example`) so deployments can swap intra hosts without
+ * code changes. Empty value → render the "URL 미설정" placeholder.
+ *
+ * Read lazily (via getter) so unit tests can `vi.stubEnv()` between imports
+ * without re-evaluating the module.
  */
-const PROVIDER_BASE: Record<DashboardEmbedBlock['provider'], string> = {
-  grafana: 'https://grafana.intra.example.com/d-solo',
-  tableau: 'https://tableau.intra.example.com/views',
-  superset: 'https://superset.intra.example.com/superset/dashboard',
-}
+export const PROVIDER_BASE: Record<DashboardEmbedBlock['provider'], string> = {
+  get grafana() {
+    return (import.meta.env.VITE_DASHBOARD_GRAFANA_BASE as string | undefined) ?? ''
+  },
+  get tableau() {
+    return (import.meta.env.VITE_DASHBOARD_TABLEAU_BASE as string | undefined) ?? ''
+  },
+  get superset() {
+    return (import.meta.env.VITE_DASHBOARD_SUPERSET_BASE as string | undefined) ?? ''
+  },
+} as Record<DashboardEmbedBlock['provider'], string>
 
 const PROVIDER_LABEL: Record<DashboardEmbedBlock['provider'], string> = {
   grafana: 'Grafana',
@@ -18,9 +28,18 @@ const PROVIDER_LABEL: Record<DashboardEmbedBlock['provider'], string> = {
   superset: 'Superset',
 }
 
-function buildUrl(provider: DashboardEmbedBlock['provider'], panelId: string, params: unknown): string {
+/**
+ * Pure URL builder — exported for unit tests. Accepts an explicit provider
+ * map so tests can vary `PROVIDER_BASE` without round-tripping through env.
+ */
+export function buildDashboardUrl(
+  provider: DashboardEmbedBlock['provider'],
+  panelId: string,
+  params: unknown,
+  bases: Record<DashboardEmbedBlock['provider'], string> = PROVIDER_BASE,
+): string {
   if (!panelId) return ''
-  const base = PROVIDER_BASE[provider]
+  const base = bases[provider]
   if (!base) return ''
   try {
     const url = new URL(`${base}/${encodeURIComponent(panelId)}`)
@@ -34,6 +53,10 @@ function buildUrl(provider: DashboardEmbedBlock['provider'], panelId: string, pa
   } catch {
     return ''
   }
+}
+
+function buildUrl(provider: DashboardEmbedBlock['provider'], panelId: string, params: unknown): string {
+  return buildDashboardUrl(provider, panelId, params)
 }
 
 /**
@@ -51,7 +74,8 @@ export function DashboardEmbedBlockView({ block }: { block: DashboardEmbedBlock 
     [panelId],
   )
 
-  const isKnownProvider = Boolean(provider && PROVIDER_BASE[provider])
+  const isKnownProvider = Boolean(provider && PROVIDER_LABEL[provider])
+  const isProviderConfigured = Boolean(provider && PROVIDER_BASE[provider])
   const providerLabel = isKnownProvider ? PROVIDER_LABEL[provider] : '알 수 없는 제공자'
 
   return (
@@ -66,6 +90,13 @@ export function DashboardEmbedBlockView({ block }: { block: DashboardEmbedBlock 
       {!isKnownProvider ? (
         <div className="grid h-48 place-items-center rounded border border-dashed border-amber-300 bg-amber-50 text-xs text-amber-800">
           지원하지 않는 대시보드 제공자입니다.
+        </div>
+      ) : !isProviderConfigured ? (
+        <div
+          data-dashboard-no-base
+          className="grid h-48 place-items-center rounded border border-dashed border-gray-300 bg-gray-50 text-xs text-gray-500"
+        >
+          URL 미설정 — 환경 변수 VITE_DASHBOARD_{provider.toUpperCase()}_BASE 를 설정하세요.
         </div>
       ) : src ? (
         <iframe

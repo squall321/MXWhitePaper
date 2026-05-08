@@ -1,5 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+
+// Provider base URLs come from VITE_* env vars. Stub one BEFORE importing
+// the components under test so the preview iframe renders.
+vi.stubEnv('VITE_DASHBOARD_GRAFANA_BASE', 'https://grafana.test/d-solo')
+
 import { DashboardEmbedBlockEditor } from '../DashboardEmbedBlockEditor'
 import { useEditorStore } from '@/features/editor/state'
 import type { DashboardEmbedBlock } from '@/types/document'

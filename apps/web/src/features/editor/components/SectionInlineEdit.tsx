@@ -3,7 +3,7 @@ import type { Block, Slug } from '@/types/document'
 import type { AnySection } from '../api'
 import { patchSection, isPreconditionFailed } from '../api'
 import { useEditorStore } from '../state'
-import { SectionEditor } from './SectionEditor'
+import { SectionEditor } from './SectionEditorLazy'
 import { EmptyArticleCTA } from './EmptyArticleCTA'
 
 interface SectionInlineEditProps {
