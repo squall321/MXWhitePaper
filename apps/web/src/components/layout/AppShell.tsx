@@ -85,9 +85,10 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
 
       {/* Sticky breadcrumb directly under the TopBar (auto-hides on routes
           without a meaningful trail, e.g. /login which lives outside this
-          shell anyway). 명시적 white background + border-bottom 로 본문이
-          비치지 않도록 + shadow 로 시각 분리. */}
-      <div className="fixed inset-x-0 top-[var(--header-h)] z-sticky border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/90">
+          shell anyway). 100% 불투명 (bg-white/-gray-900) + border + shadow 로
+          본문이 절대 비치지 않도록 한다. backdrop-blur 는 일부 GPU 에서 합성
+          순서가 꼬여서 본문이 위에 보이는 사례가 있어 제거. */}
+      <div className="fixed inset-x-0 top-[var(--header-h)] z-sticky border-b border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
         <Breadcrumb />
       </div>
 

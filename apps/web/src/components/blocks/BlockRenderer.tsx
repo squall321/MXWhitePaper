@@ -27,6 +27,7 @@ import { DashboardEmbedBlockView } from './DashboardEmbedBlock'
 import { CalculatorBlockView } from './CalculatorBlock'
 import { OrgChartBlockView } from './OrgChartBlock'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
+import { InlineTextBlockEditor } from '@/features/editor/components/InlineTextBlockEditor'
 import { ImageBlockEditor } from '@/features/editor/blocks/ImageBlockEditor'
 import { GalleryBlockEditor } from '@/features/editor/blocks/GalleryBlockEditor'
 import { ChartBlockEditorWrapper } from '@/features/editor/blocks/ChartBlockEditorWrapper'
@@ -75,6 +76,68 @@ function BlockRendererInner({ block }: { block: Block }) {
   }
 
   if (isFullEditing && editorSlug) {
+    // Text-only blocks: inline contentEditable so users can just click and
+    // type without invoking the slash menu.
+    if (block.type === 'paragraph') {
+      return (
+        <InlineTextBlockEditor
+          slug={editorSlug}
+          blockId={block.id}
+          blockType="paragraph"
+          initialText={block.text}
+          className="text-[15px] leading-7 text-smsg-900 min-h-[1.5rem] py-1"
+          placeholder="글을 입력하세요…"
+        />
+      )
+    }
+    if (block.type === 'heading-4') {
+      return (
+        <InlineTextBlockEditor
+          slug={editorSlug}
+          blockId={block.id}
+          blockType="heading-4"
+          initialText={block.title}
+          className="text-lg font-semibold text-gray-700 min-h-[1.5rem] py-1"
+          placeholder="제목을 입력하세요…"
+        />
+      )
+    }
+    if (block.type === 'quote') {
+      return (
+        <div className="border-l-4 border-smsg-300 pl-3 italic text-gray-700">
+          <InlineTextBlockEditor
+            slug={editorSlug}
+            blockId={block.id}
+            blockType="quote"
+            initialText={block.text}
+            placeholder="인용문…"
+          />
+        </div>
+      )
+    }
+    if (block.type === 'callout') {
+      const variant = block.variant ?? 'info'
+      const tone =
+        variant === 'warn'
+          ? 'border-amber-300 bg-amber-50'
+          : variant === 'tip'
+            ? 'border-emerald-300 bg-emerald-50'
+            : variant === 'danger'
+              ? 'border-red-300 bg-red-50'
+              : 'border-smsg-300 bg-smsg-50'
+      return (
+        <div className={`rounded-md border-l-4 px-3 py-2 ${tone}`}>
+          <InlineTextBlockEditor
+            slug={editorSlug}
+            blockId={block.id}
+            blockType="callout"
+            initialText={block.text}
+            variant={variant}
+            placeholder="콜아웃 텍스트…"
+          />
+        </div>
+      )
+    }
     if (block.type === 'image') {
       return <ImageBlockEditor slug={editorSlug} block={block} />
     }

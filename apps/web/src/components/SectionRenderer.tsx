@@ -2,7 +2,8 @@ import type { Slug, SectionLevel1, SectionLevel2, SectionLevel3 } from '@/types/
 import { BlockRenderer } from './blocks/BlockRenderer'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { SectionQuickEdit } from '@/features/editor/components/SectionQuickEdit'
-import { SectionInlineEdit } from '@/features/editor/components/SectionInlineEdit'
+import { SimpleStackEditor } from '@/features/editor/components/SimpleStackEditor'
+import { BlockHoverInserter } from '@/features/editor/components/BlockHoverInserter'
 
 /**
  * Local alias — the schema declares 3 explicit Section interfaces; mostly
@@ -57,16 +58,18 @@ export function SectionRenderer({
     )
   }
 
-  // In fullEdit mode the level-1 section becomes a live BlockNote editor with
-  // an inline-renamable title. Sub-sections stay rendered (we keep them as
-  // BlockRenderers so the user sees structure even while editing top-level).
+  // In fullEdit mode the level-1 section becomes a SimpleStackEditor
+  // (Notion-style block stack with `+` rails on every block, drag-to-reorder,
+  // and inline contentEditable for text blocks). Replaces the BlockNote-based
+  // SectionInlineEdit so users no longer need the "/" slash menu to add
+  // widgets. Sub-sections still render below for structure visibility.
   if (isFullEditing && editableSlug && section.level === 1) {
     return (
       <div data-section-level={section.level}>
-        <SectionInlineEdit
+        <SimpleStackEditor
           slug={editableSlug}
           section={section}
-          autoFocus={autoFocusInline}
+          autoFocusTitle={autoFocusInline}
         />
         {subsections.length > 0 && (
           <div className="mt-4 space-y-6">
@@ -104,7 +107,7 @@ export function SectionRenderer({
       />
 
       <div className="mt-3 space-y-4">
-        {section.blocks.map((block) => (
+        {(section.blocks ?? []).map((block) => (
           <BlockRenderer key={block.id} block={block} />
         ))}
       </div>

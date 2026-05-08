@@ -49,6 +49,44 @@ function unwrap(res: {
   return { document, etag }
 }
 
+/**
+ * BE quirk: several mutation endpoints (POST /blocks, PATCH /blocks/:id,
+ * DELETE /blocks/:id, /blocks/:id/move, /sections/:id, /sections/reorder)
+ * return a *partial* envelope like `{slug, version, block_id}` instead of
+ * a full DocumentJSON. `applyServerSnapshot` rejects partials so it doesn't
+ * wipe `draft.metadata` / `sections`, but that means the UI also won't
+ * reflect the new block until a full doc arrives.
+ *
+ * `withFullDocFallback` solves it on the FE side: if the mutation response
+ * doesn't smell like a full doc, do a follow-up GET /documents/:slug and
+ * return that as the canonical document. Now every mutation behaves as if
+ * the BE returned the full doc — no silent UI desync.
+ */
+function looksLikeFullDoc(doc: unknown): boolean {
+  if (!doc || typeof doc !== 'object') return false
+  const d = doc as { sections?: unknown; metadata?: unknown }
+  return Array.isArray(d.sections) && !!d.metadata && typeof d.metadata === 'object'
+}
+
+async function withFullDocFallback(
+  slug: Slug,
+  result: EditorMutationResult,
+): Promise<EditorMutationResult> {
+  if (looksLikeFullDoc(result.document)) return result
+  // BE quirk: `GET /documents/:slug` returns the database row wrapped as
+  // `{data: {id, slug, ...row..., content: DocumentJSON}}` — the actual
+  // DocumentJSON we want lives at `data.content`, NOT `data` itself.
+  const res = await apiClient.get<ApiEnvelope<{ content?: DocumentJSONV10 }>>(
+    `/documents/${encodeURIComponent(slug)}`,
+  )
+  const row = res.data.data
+  const full = row?.content
+  if (!full) return result
+  const headerEtag = (res.headers as Record<string, string | undefined>)['etag']
+  const meta = (res.data.meta ?? {}) as { etag?: string }
+  return { document: full, etag: headerEtag ?? meta.etag ?? result.etag }
+}
+
 export type AnySection = SectionLevel1 | SectionLevel2 | SectionLevel3
 
 /** Patch of an existing section (only mutable fields). */
@@ -82,7 +120,7 @@ export async function patchSection(
     patch,
     { headers: buildHeaders(etag, changeLog) },
   )
-  return unwrap(res as never)
+  return withFullDocFallback(slug, unwrap(res as never))
 }
 
 /** PATCH /documents/:slug/blocks/:id — partial block update. */
@@ -98,7 +136,7 @@ export async function patchBlock(
     patch,
     { headers: buildHeaders(etag, changeLog) },
   )
-  return unwrap(res as never)
+  return withFullDocFallback(slug, unwrap(res as never))
 }
 
 export interface InsertBlockBody {
@@ -121,7 +159,7 @@ export async function insertBlock(
     body,
     { headers: buildHeaders(etag, changeLog) },
   )
-  return unwrap(res as never)
+  return withFullDocFallback(slug, unwrap(res as never))
 }
 
 /** DELETE /documents/:slug/blocks/:id */
@@ -135,7 +173,7 @@ export async function deleteBlock(
     `/documents/${encodeURIComponent(slug)}/blocks/${blockId}`,
     { headers: buildHeaders(etag, changeLog) },
   )
-  return unwrap(res as never)
+  return withFullDocFallback(slug, unwrap(res as never))
 }
 
 export interface MoveBlockBody {
@@ -156,7 +194,7 @@ export async function moveBlock(
     body,
     { headers: buildHeaders(etag, changeLog) },
   )
-  return unwrap(res as never)
+  return withFullDocFallback(slug, unwrap(res as never))
 }
 
 /** POST /documents/:slug/sections/reorder */
@@ -171,7 +209,7 @@ export async function reorderSections(
     { outline },
     { headers: buildHeaders(etag, changeLog) },
   )
-  return unwrap(res as never)
+  return withFullDocFallback(slug, unwrap(res as never))
 }
 
 /** PUT /documents/:slug — full document replacement (forced overwrite). */
@@ -190,10 +228,11 @@ export async function putDocument(
     body,
     { headers },
   )
-  return unwrap(res as never)
+  return withFullDocFallback(slug, unwrap(res as never))
 }
 
-/** POST /documents — create new doc. */
+/** POST /documents — create new doc. The response IS a full doc, so we
+ *  never need the fallback here. */
 export async function postDocument(
   body: DocumentJSONV10,
 ): Promise<EditorMutationResult> {
@@ -264,7 +303,7 @@ export async function restoreVersion(
     {},
     { headers: buildHeaders(etag, changeLog) },
   )
-  return unwrap(res as never)
+  return withFullDocFallback(slug, unwrap(res as never))
 }
 
 /**

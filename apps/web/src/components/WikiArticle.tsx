@@ -21,7 +21,9 @@ interface WikiArticleProps {
  * pill, owner/tag badges in the meta strip.
  */
 export function WikiArticle({ document, row, meta, editableSlug }: WikiArticleProps) {
-  const md = document.metadata
+  // Defensive: insertBlock 등 부분 응답이 metadata 를 빠뜨려도 (또는 신규 문서가
+  // empty metadata 인 경우) 페이지 전체가 흰 화면이 되지 않게 한다.
+  const md = document.metadata ?? {}
   const path = [md.division, md.team, md.group, md.part]
     .filter(Boolean)
     .join(' / ')
@@ -64,7 +66,7 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
       <div className="clearfix">
         {document.infobox && <Infobox data={document.infobox} />}
         <div className="space-y-6">
-          {document.sections.map((section, idx) => (
+          {(document.sections ?? []).map((section, idx) => (
             <SectionRenderer
               key={section.id}
               section={section}

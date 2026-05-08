@@ -4,11 +4,12 @@ import { BlockRenderer } from './BlockRenderer'
 
 export function TabsBlockView({ block }: { block: TabsBlock }) {
   const [active, setActive] = useState(0)
-  const tab = block.tabs[active] ?? block.tabs[0]
+  const tabs = block.tabs ?? []
+  const tab = tabs[active] ?? tabs[0]
   return (
     <div className="rounded border border-gray-200 bg-white">
       <div role="tablist" className="flex flex-wrap gap-1 border-b border-gray-200 p-1 text-xs">
-        {block.tabs.map((t, i) => (
+        {tabs.map((t, i) => (
           <button
             key={i}
             role="tab"
@@ -26,7 +27,7 @@ export function TabsBlockView({ block }: { block: TabsBlock }) {
         ))}
       </div>
       <div className="space-y-3 p-3">
-        {tab.blocks.map((b) => (
+        {(tab?.blocks ?? []).map((b) => (
           <BlockRenderer key={b.id} block={b} />
         ))}
       </div>

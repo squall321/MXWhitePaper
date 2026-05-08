@@ -40,12 +40,15 @@ export default {
         focus: '0 0 0 3px rgba(46, 91, 255, .25)',
       },
       zIndex: {
+        // Library portals (Mantine/BlockNote/Recharts/Tippy) freely stomp on
+        // 1000~5000. Our TopBar/Breadcrumb must NEVER let body content bleed
+        // above them, so we live at 9000+.
         content: '0',
-        sticky:  '100',  // TopBar / EditorToolbar above body widgets
-        drawer:  '200',
-        modal:   '300',
-        popover: '400',
-        toast:   '500',
+        sticky:  '9000',  // TopBar / Breadcrumb / EditorToolbar
+        drawer:  '9100',
+        modal:   '9200',
+        popover: '9300',
+        toast:   '9400',
       },
       transitionDuration: {
         fast: '120ms',

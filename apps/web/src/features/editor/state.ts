@@ -120,17 +120,45 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setDraft: (doc) => set({ draft: doc, dirty: true }),
 
   applyServerSnapshot: (doc, etag) =>
-    set({
-      draft: doc,
-      etag,
-      dirty: false,
-      autoSaveStatus: 'saved',
-      conflictRemote: null,
-      conflictRemoteEtag: null,
-      // After a successful save the saved doc IS the new base for any
-      // subsequent edits.
-      baseContent: doc,
-      baseEtag: etag,
+    set((s) => {
+      // 일부 BE mutation 엔드포인트(/blocks POST, PATCH, /sections PATCH,
+      // /sections/reorder 등)는 전체 DocumentJSON 이 아니라 `{slug, version,
+      // ...}` 또는 `{slug, version, sections}` 같은 부분 응답만 돌려준다.
+      // 그걸 그대로 draft 에 덮으면 metadata / infobox 가 통째로 사라져
+      // 다음 렌더에서 division / tags 등을 읽을 때 화면 전체가 흰 화면이 된다.
+      // → 응답에 sections 배열 + metadata 객체가 모두 있어야만 full doc
+      //    으로 간주하고 교체한다. 그 외에는 etag 만 갱신.
+      const candidate = doc as DocumentJSONV10 | undefined
+      const looksFull = Boolean(
+        candidate &&
+          typeof candidate === 'object' &&
+          Array.isArray(candidate.sections) &&
+          candidate.metadata &&
+          typeof candidate.metadata === 'object',
+      )
+      if (!looksFull) {
+        return {
+          etag,
+          dirty: false,
+          autoSaveStatus: 'saved' as const,
+          conflictRemote: null,
+          conflictRemoteEtag: null,
+          baseContent: s.draft ?? s.baseContent,
+          baseEtag: etag,
+        }
+      }
+      return {
+        draft: doc,
+        etag,
+        dirty: false,
+        autoSaveStatus: 'saved' as const,
+        conflictRemote: null,
+        conflictRemoteEtag: null,
+        // After a successful save the saved doc IS the new base for any
+        // subsequent edits.
+        baseContent: doc,
+        baseEtag: etag,
+      }
     }),
 
   setAutoSaveEnabled: (on) => set({ autoSaveEnabled: on }),

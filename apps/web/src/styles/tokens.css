@@ -54,15 +54,16 @@
   --shadow-lg: 0 10px 32px rgba(15, 23, 42, .12);
   --shadow-focus: 0 0 0 3px rgba(46, 91, 255, .25);
 
-  /* z-index — body widgets (Mantine/Recharts/Mermaid) self-assign 1~99,
-     so header+overlays must clearly outrank them. Header is in its own
-     stacking context (.app-header) so child popovers don't escape. */
+  /* z-index — Mantine/BlockNote/Recharts/Tippy 등 라이브러리 popover/portal
+     이 1000~5000 범위를 자유롭게 박는다. 우리 TopBar/Breadcrumb 가 절대
+     침투당하지 않으려면 9000+ 로 올려둔다. modal/drawer 가 헤더 위에
+     떠야 하므로 그 위로 차곡차곡 쌓는다. */
   --z-content:  0;
-  --z-sticky:   100;   /* TopBar / EditorToolbar */
-  --z-drawer:   200;
-  --z-modal:    300;
-  --z-popover:  400;   /* in-modal popovers, slash menus */
-  --z-toast:    500;
+  --z-sticky:   9000;   /* TopBar / Breadcrumb / EditorToolbar */
+  --z-drawer:   9100;
+  --z-modal:    9200;
+  --z-popover:  9300;   /* in-modal popovers, slash menus */
+  --z-toast:    9400;
 
   /* Motion */
   --duration-fast: 120ms;
