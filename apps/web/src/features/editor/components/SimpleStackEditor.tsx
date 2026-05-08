@@ -27,6 +27,11 @@ import { InlineFormattingToolbar } from './InlineFormattingToolbar'
 import { BlockRenderer } from '@/components/blocks/BlockRenderer'
 import { useSectionCollapseStore } from '../sectionCollapseStore'
 import { cloneBlockWithNewIds, looksLikeBlockArray } from './BulkActionsBar'
+import { htmlToBlocks } from '../paste/htmlPaste'
+import { rehydratePastedImages } from '../paste/imageRehydrate'
+import { looksLikeCsv, parseCsv } from '../extensions/csv-paste'
+import { ulid } from '../ulid'
+import { toast } from '@/components/ui/Toast'
 
 /**
  * SimpleStackEditor — Notion-style block stack with drag-to-reorder and
@@ -323,48 +328,145 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
   }, [blocks, slug, section.id, apply, setConflict, clearSel, setManySel])
 
   /**
-   * Ctrl/Cmd+V handler scoped to this section. Reads the clipboard and, if
-   * it parses to a Block[] payload from a "클립보드에 복사" action, asks for
-   * confirmation and inserts each block at the end of the section.
+   * Sequentially insert a list of blocks at the end of the section. Returns
+   * the (possibly cloned) blocks that landed so the caller can kick off
+   * post-insert work (image rehydration, etc.). Pulled out of the paste
+   * handler so the multi-block cross-component event can reuse it.
    */
-  const onPaste = useCallback(
-    async (ev: React.ClipboardEvent<HTMLElement>) => {
-      // Bail if the user is typing inside a contentEditable / input — let the
-      // native paste run.
-      const t = ev.target as HTMLElement | null
-      if (t?.isContentEditable) return
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
-      const text = ev.clipboardData?.getData('text/plain') ?? ''
-      if (!text.trim().startsWith('[')) return
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(text)
-      } catch {
-        return
-      }
-      if (!looksLikeBlockArray(parsed)) return
-      ev.preventDefault()
-      const arr = parsed as Block[]
-      if (!window.confirm(`${arr.length}개 블록 붙여넣기?`)) return
+  const insertManyAtEnd = useCallback(
+    async (arr: Block[], changeLog: string): Promise<Block[]> => {
+      const inserted: Block[] = []
       for (const b of arr) {
         const tag = useEditorStore.getState().etag
         if (!tag) break
+        const cloned = cloneBlockWithNewIds(b)
         try {
           const result = await insertBlock(
             slug,
-            { section_id: section.id, index: -1, block: cloneBlockWithNewIds(b) },
+            { section_id: section.id, index: -1, block: cloned },
             tag,
-            '클립보드에서 붙여넣기',
+            changeLog,
           )
           apply(result.document, result.etag)
+          inserted.push(cloned)
         } catch (err) {
           if (isPreconditionFailed(err)) setConflict(null)
           break
         }
       }
+      return inserted
     },
     [slug, section.id, apply, setConflict],
   )
+
+  /**
+   * Ctrl/Cmd+V handler scoped to this section. Recognises three clipboard
+   * shapes, in priority order:
+   *
+   *   1. Bulk-clipboard JSON Block[] — from a "클립보드에 복사" action.
+   *      Confirm + insert at end of section.
+   *   2. text/html (and not just span-wrapped plain text) — convert via
+   *      `htmlToBlocks` and insert each as a Block. Image blocks with
+   *      `meta.note: "src:<url>"` get rehydrated in the background.
+   *   3. text/plain CSV-shaped — confirm "표로 변환?" → insert a table block.
+   *
+   * Anything else falls through to the default browser paste (which will be
+   * handled by the inline editor's own onPaste if focus is inside one).
+   */
+  const onPaste = useCallback(
+    async (ev: React.ClipboardEvent<HTMLElement>) => {
+      // Bail if the user is typing inside a contentEditable / input — let the
+      // native paste run (the inline editor handles HTML there).
+      const t = ev.target as HTMLElement | null
+      if (t?.isContentEditable) return
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
+
+      const cd = ev.clipboardData
+      const text = cd?.getData('text/plain') ?? ''
+      const html = cd?.getData('text/html') ?? ''
+
+      // 1. Bulk-clipboard JSON Block[] — checked first so it wins over HTML
+      //    when our own copy action put both formats on the clipboard.
+      if (text.trim().startsWith('[')) {
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(text)
+        } catch {
+          parsed = null
+        }
+        if (looksLikeBlockArray(parsed)) {
+          ev.preventDefault()
+          const arr = parsed as Block[]
+          if (!window.confirm(`${arr.length}개 블록 붙여넣기?`)) return
+          await insertManyAtEnd(arr, '클립보드에서 붙여넣기')
+          return
+        }
+      }
+
+      // 2. Rich HTML — Word / Notion / web. Skip when the only thing in the
+      //    HTML is a single <span> wrapper around plain text (Slack does
+      //    this and we'd rather treat it as plain).
+      if (html && isRichHtml(html)) {
+        ev.preventDefault()
+        const { blocks, warnings } = htmlToBlocks(html)
+        if (warnings.length > 0) {
+          for (const w of warnings.slice(0, 3)) toast.warn(w)
+        }
+        if (blocks.length === 0) return
+        const inserted = await insertManyAtEnd(blocks, 'HTML 붙여넣기')
+        rehydratePastedImages(slug, inserted)
+        return
+      }
+
+      // 3. Plain-text CSV. Looser test than rich HTML — only fires for
+      //    multi-line text with consistent delimiters.
+      if (text && looksLikeCsv(text)) {
+        const parsed = parseCsv(text)
+        if (parsed) {
+          ev.preventDefault()
+          if (!window.confirm('표로 변환할까요?')) {
+            // Decline — just insert as a paragraph (preserves user choice).
+            await insertManyAtEnd(
+              [{ type: 'paragraph', id: ulid(), text } as Block],
+              '평문 붙여넣기',
+            )
+            return
+          }
+          const tableBlock: Block = {
+            type: 'table',
+            id: ulid(),
+            headers: parsed.headers,
+            rows: parsed.rows,
+          }
+          await insertManyAtEnd([tableBlock], 'CSV 붙여넣기')
+          return
+        }
+      }
+    },
+    [slug, insertManyAtEnd],
+  )
+
+  /**
+   * Cross-component paste handoff: when the inline contentEditable's paste
+   * decides the HTML payload represents multiple blocks, it dispatches a
+   * `mxwp:paste-multi-blocks` event with `{detail: {blocks, sectionId}}`.
+   * We catch it here, ignore other sections' events, and insert at end.
+   */
+  useEffect(() => {
+    function onMulti(ev: Event) {
+      const ce = ev as CustomEvent<{ blocks: Block[]; sectionId: Ulid }>
+      if (!ce.detail || ce.detail.sectionId !== section.id) return
+      const arr = ce.detail.blocks
+      if (!Array.isArray(arr) || arr.length === 0) return
+      void (async () => {
+        const inserted = await insertManyAtEnd(arr, 'HTML 붙여넣기')
+        rehydratePastedImages(slug, inserted)
+      })()
+    }
+    window.addEventListener('mxwp:paste-multi-blocks', onMulti as EventListener)
+    return () =>
+      window.removeEventListener('mxwp:paste-multi-blocks', onMulti as EventListener)
+  }, [section.id, insertManyAtEnd, slug])
 
   const onTrailingClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     const r = e.currentTarget.getBoundingClientRect()
@@ -377,6 +479,7 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
   return (
     <section
       data-simple-stack-editor
+      data-section-id={section.id}
       data-section-level={section.level}
       className="space-y-3"
       onMouseDown={onSurfaceMouseDown}
@@ -501,6 +604,21 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
           single instance regardless of how many text blocks are present. */}
       <InlineFormattingToolbar />
     </section>
+  )
+}
+
+/**
+ * Heuristic to decide whether a `text/html` clipboard payload is rich
+ * enough to be worth running through `htmlToBlocks`. Slack copies plain
+ * text wrapped in a single `<span>` (or even `<meta>` + `<span>`) — those
+ * shouldn't trigger our paragraph-splitting machinery. We require at least
+ * one block-level tag.
+ */
+function isRichHtml(html: string): boolean {
+  if (!html || html.length === 0) return false
+  // Cheap regex; avoids paying for the full tokenizer twice.
+  return /<(p|h[1-6]|ul|ol|li|table|tr|blockquote|pre|img|figure|hr|br|div|article|section)\b/i.test(
+    html,
   )
 }
 

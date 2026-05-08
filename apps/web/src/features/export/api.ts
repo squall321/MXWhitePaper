@@ -4,6 +4,7 @@
  * - `downloadHtml(slug)`  → 기존 GET /documents/{slug}/export.html 새 창.
  * - `downloadMarkdown(slug)` → POST /exports/markdown 후 파일 다운로드.
  * - `downloadPdf(slug)` → POST /exports/pdf, 501 이면 print-friendly fallback.
+ * - `downloadPptx(slug)` → POST /exports/pptx 후 .pptx 다운로드.
  *
  * 모든 다운로드는 Blob → object URL → anchor click → revoke 패턴으로 통일.
  */
@@ -74,6 +75,21 @@ export async function downloadPdf(slug: string): Promise<PdfDownloadResult> {
     }
     throw err
   }
+}
+
+export async function downloadPptx(slug: string): Promise<void> {
+  const res = await apiClient.post(
+    '/exports/pptx',
+    { slug },
+    { responseType: 'blob' },
+  )
+  const blob = res.data instanceof Blob
+    ? res.data
+    : new Blob([res.data as ArrayBuffer], {
+        type:
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      })
+  triggerDownload(blob, `${slug}.pptx`)
 }
 
 /** HTML export 는 기존 GET 엔드포인트가 직접 다운로드 attachment 로 응답한다. */

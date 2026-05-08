@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   downloadMarkdown,
   downloadPdf,
+  downloadPptx,
   htmlExportUrl,
 } from './api'
 
@@ -14,13 +15,14 @@ interface ExportMenuProps {
  * 항목:
  *  - HTML : 기존 export.html 엔드포인트 (새 창)
  *  - Markdown : POST /exports/markdown → 다운로드
+ *  - PowerPoint : POST /exports/pptx → 다운로드
  *  - PDF : POST /exports/pdf, 501 이면 print 페이지로 fallback
  *
  * 외부 라이브러리 없이 click-outside + Escape 닫기를 구현한다.
  */
 export function ExportMenu({ slug }: ExportMenuProps) {
   const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState<null | 'md' | 'pdf'>(null)
+  const [busy, setBusy] = useState<null | 'md' | 'pdf' | 'pptx'>(null)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -59,6 +61,21 @@ export function ExportMenu({ slug }: ExportMenuProps) {
       // eslint-disable-next-line no-console
       console.error('[export] markdown failed', err)
       setStatusMsg('Markdown 내보내기 실패')
+    } finally {
+      setBusy(null)
+      setOpen(false)
+    }
+  }
+
+  const handlePptx = async () => {
+    setBusy('pptx')
+    try {
+      await downloadPptx(slug)
+      setStatusMsg('PowerPoint 다운로드 시작')
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[export] pptx failed', err)
+      setStatusMsg('PowerPoint 내보내기 실패')
     } finally {
       setBusy(null)
       setOpen(false)
@@ -133,6 +150,19 @@ export function ExportMenu({ slug }: ExportMenuProps) {
             <span>Markdown</span>
             <span className="ml-auto text-[10px] text-gray-400">
               {busy === 'md' ? '…' : '.md'}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={handlePptx}
+            disabled={busy !== null}
+            className={itemClass}
+            data-testid="export-pptx-item"
+          >
+            <span aria-hidden>📊</span>
+            <span>PowerPoint</span>
+            <span className="ml-auto text-[10px] text-gray-400">
+              {busy === 'pptx' ? '…' : '.pptx'}
             </span>
           </button>
           <button

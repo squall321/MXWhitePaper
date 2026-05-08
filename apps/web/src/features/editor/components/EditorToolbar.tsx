@@ -14,6 +14,7 @@ import { FindReplaceModal } from './FindReplaceModal'
 import { PartPicker } from './PartPicker'
 import { SectionLinkPicker } from './SectionLinkPicker'
 import { ExportMenu } from '@/features/export/ExportMenu'
+import { AiButton } from '@/features/ai/AiButton'
 
 interface EditorToolbarProps {
   slug: Slug
@@ -303,6 +304,7 @@ export function EditorToolbar({
         <div className="ml-auto flex items-center gap-1.5">
           <span className="hidden truncate font-mono text-[11px] text-gray-500 md:inline">{slug}</span>
           <ExportMenu slug={slug} />
+          <AiButton />
           <a
             href={`/present/${encodeURIComponent(slug)}`}
             target="_blank"

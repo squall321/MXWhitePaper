@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Slug, Ulid } from '@/types/document'
+import type { ParagraphBlock, Slug, Ulid } from '@/types/document'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { useEditorStore } from '../state'
+import { htmlToBlocks } from '../paste/htmlPaste'
 
 /**
  * InlineTextBlockEditor — contentEditable for text-only blocks
@@ -134,6 +135,61 @@ export function InlineTextBlockEditor({
     // contentEditable; they fire input events on their own.
   }
 
+  /**
+   * Rich-paste handler for the inline contentEditable surface.
+   *
+   *  - Single-block parse  → paste inline as plain text (so bold/italic from
+   *    Word survives; the browser's native paste does that for us — we just
+   *    forward execCommand insertHTML for the inline subset of the source).
+   *  - Multi-block parse   → emit `mxwp:paste-multi-blocks` so the parent
+   *    `SimpleStackEditor` can insert each block at the section level.
+   *
+   * Plain text and CSV pastes fall through to the browser default (typing
+   * a CSV into a paragraph is unusual; we don't want to surprise users with
+   * a table modal mid-sentence).
+   */
+  const onPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const html = e.clipboardData.getData('text/html')
+    if (!html) return
+    // Skip the parser for trivial single-span Slack-style pastes — they have
+    // no block-level tags so htmlToBlocks would emit a single paragraph
+    // anyway, and the native paste already preserves inline formatting.
+    if (
+      !/<(p|h[1-6]|ul|ol|li|table|tr|blockquote|pre|img|figure|hr|div)\b/i.test(
+        html,
+      )
+    ) {
+      return
+    }
+    const { blocks } = htmlToBlocks(html)
+    if (blocks.length === 0) return
+    if (blocks.length === 1 && blocks[0]!.type === 'paragraph') {
+      // Single paragraph — paste inline with markdown-lite collapsed back to
+      // HTML so bold / italic survive. Prevent the default to avoid double-
+      // pasting the same content.
+      e.preventDefault()
+      const paste = blocks[0] as ParagraphBlock
+      const inlineHtml = mdLiteToHtml(paste.text)
+      try {
+        document.execCommand('insertHTML', false, inlineHtml)
+      } catch {
+        document.execCommand('insertText', false, paste.text)
+      }
+      ref.current?.dispatchEvent(new InputEvent('input', { bubbles: true }))
+      return
+    }
+    // Multi-block — hand off to the parent section editor.
+    e.preventDefault()
+    const root = ref.current?.closest('[data-simple-stack-editor]') as HTMLElement | null
+    const sectionId = root?.getAttribute('data-section-id') ?? null
+    if (!sectionId) return
+    window.dispatchEvent(
+      new CustomEvent('mxwp:paste-multi-blocks', {
+        detail: { blocks, sectionId },
+      }),
+    )
+  }
+
   return (
     <div
       ref={ref}
@@ -148,6 +204,7 @@ export function InlineTextBlockEditor({
       onInput={onInput}
       onBlur={() => void persist()}
       onKeyDown={onKeyDown}
+      onPaste={onPaste}
       data-placeholder={placeholder}
       className={
         (className ?? '') +

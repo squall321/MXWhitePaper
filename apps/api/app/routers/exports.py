@@ -1,11 +1,13 @@
-"""문서 내보내기 라우터 — Markdown / PDF.
+"""문서 내보내기 라우터 — Markdown / PDF / PPTX.
 
 기존 `/api/v1/documents/{slug}/export.html` (HTML) 와 별도로,
-git 커밋 가능한 Markdown 과 인쇄/공유용 PDF 출력을 제공한다.
+git 커밋 가능한 Markdown / 인쇄/공유용 PDF / 발표용 PowerPoint 출력을 제공한다.
 
 PDF 는 WeasyPrint 가 환경에 설치되어 있을 때만 활성화된다.
 설치되지 않은 경우 `/exports/pdf` 호출은 501 을 돌려준다 — FE 는 이때
 `/docs/:slug?print=1` 같은 print-friendly 라우트로 폴백해 `window.print()` 를 띄운다.
+
+PPTX 는 python-pptx 만 사용하므로 시스템 라이브러리 의존이 없어 항상 가용.
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ from app.core.db import get_db
 from app.core.errors import APIError
 from app.services import document_service
 from app.services.markdown_export import render_markdown
+from app.services.pptx_export import PptxOptions, render_pptx
 
 router = APIRouter(prefix="/api/v1/exports", tags=["exports"])
 
@@ -126,6 +129,74 @@ async def export_pdf(
     return FastAPIResponse(
         content=pdf_bytes,
         media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{quote(filename)}"; '
+                f"filename*=UTF-8''{quote(filename)}"
+            ),
+            "Cache-Control": "private, no-store",
+        },
+    )
+
+
+# ── PPTX export (python-pptx) ───────────────────────────────────────
+
+
+_PPTX_MEDIA_TYPE = (
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+)
+
+
+@router.post(
+    "/pptx",
+    summary="문서를 PowerPoint (.pptx) 로 내보내기",
+    description=(
+        "DocumentJSON 본문을 발표용 .pptx 로 변환한다.\n\n"
+        "- level-1 섹션 1개 = 슬라이드 1장 (제목 슬라이드 포함).\n"
+        "- level-2 sub-section 은 분량이 ≤500자면 inline bullets,"
+        " 초과하면 별도 슬라이드로 분리.\n"
+        "- chart 는 line/bar/pie 만 네이티브 차트로, 그 외는 텍스트 요약 fallback.\n"
+        "- ``meta.note: \"speaker: …\"`` prefix 를 만난 블록은 슬라이드 노트에 누적."
+    ),
+)
+async def export_pptx(
+    payload: dict[str, Any],
+    s: AsyncSession = Depends(get_db),
+    _user: dict = Depends(require_reader),
+) -> FastAPIResponse:
+    slug = (payload or {}).get("slug")
+    if not slug or not isinstance(slug, str):
+        from app.core.errors import ValidationFailed
+
+        raise ValidationFailed("slug 가 필요합니다.", details={"required": ["slug"]})
+
+    doc = await document_service.get_document_or_404(s, slug)
+    content = doc["content_json"]
+
+    # 이미지 resolver — documents.py 의 헬퍼를 재사용 (slide 내 add_picture 용 bytes).
+    from app.routers.documents import (
+        _collect_image_ids,
+        _fetch_image_bytes,
+        _fetch_image_urls,
+    )
+
+    image_ids = _collect_image_ids(content)
+    image_blob_lookup: dict[str, dict[str, Any]] = {}
+    if image_ids:
+        urls = await _fetch_image_urls(s, image_ids)
+        image_blob_lookup = await _fetch_image_bytes(s, urls)
+
+    def resolver(image_id: str) -> dict[str, Any] | None:
+        info = image_blob_lookup.get(image_id)
+        if not info:
+            return None
+        return {"bytes": info.get("bytes"), "mime": info.get("mime")}
+
+    pptx_bytes = render_pptx(content, options=PptxOptions(image_resolver=resolver))
+    filename = f"{slug}.pptx"
+    return FastAPIResponse(
+        content=pptx_bytes,
+        media_type=_PPTX_MEDIA_TYPE,
         headers={
             "Content-Disposition": (
                 f'attachment; filename="{quote(filename)}"; '

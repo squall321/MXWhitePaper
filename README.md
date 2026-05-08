@@ -207,6 +207,54 @@ chmod +x apps/web/scripts/check-all.sh   # 최초 1회
   타입의 read-mode/edit-mode 컴파일을 한 번에 보장합니다.
 - BE에 샘플을 즉시 반영하려면 `python -m apps.api.scripts.seed_samples` (orgs/admin은 `app.scripts.seed`가 먼저 깔려있어야 함).
 
+## AI 보조 훅 (요약 / 번역 / 다듬기 / 이어쓰기 / 제목 자동생성)
+
+EditorToolbar 의 "✨ AI" 버튼을 통해 5종의 보조 액션을 호출합니다.
+**현재 응답은 모두 placeholder** — 실제 LLM 호출은 별도 작업으로 분리되어
+있고, FE 와이어링·rate-limit·feature flag 만 미리 깔아둔 상태입니다.
+
+### 1) Feature flag
+
+`.env` (또는 apptainer `--env-file`) 에 다음을 설정:
+
+```bash
+AI_ENABLED=true        # 기본 false. false 이면 모든 /ai/* 가 503(AI_DISABLED).
+```
+
+flag 가 꺼져 있으면 BE 가 503 + `{ "code": "AI_DISABLED" }` 를 돌려주고,
+FE 는 "AI 기능이 비활성화되어 있습니다. 관리자에게 문의하세요." 메시지를
+보여줍니다.
+
+### 2) 현재는 placeholder 응답
+
+- `/ai/summarize` → 입력의 앞 ~30% (문장 경계에서 절단)
+- `/ai/translate` → `[KO→EN placeholder] <원문>` 처럼 라벨링된 원문
+- `/ai/polish`    → 좌우 공백 제거 + 끝 문장부호 `.` 정규화
+- `/ai/continue`  → `"...(이어 쓰기 자리표시자: 실제 LLM 연결 시 자동완성)"`
+- `/ai/title`     → 입력의 앞 50자
+
+모든 endpoint 는 editor+ 권한 + **10/min/user** in-process rate-limit.
+
+### 3) 실제 LLM 연결 (추후)
+
+`apps/api/app/routers/ai.py` 의 `_call_llm(...)` placeholder 를 실 SDK 호출로
+교체하면 됩니다. 권장 절차:
+
+1. `.env` 에 키 추가:
+
+   ```bash
+   OPENAI_API_KEY=sk-...
+   # 또는
+   ANTHROPIC_API_KEY=sk-ant-...
+   ```
+
+2. `apps/api/app/core/config.py` 의 `Settings` 에 `openai_api_key` /
+   `anthropic_api_key` 필드 추가.
+3. `_call_llm` 안에서 `AsyncOpenAI` 또는 `AsyncAnthropic` 호출.
+4. 각 placeholder 함수 (`_placeholder_summary` 등) 를 system-prompt + user-text
+   조합으로 교체. **응답 shape (`{ summary }`, `{ translated, source_language }`,
+   …) 는 그대로** 두면 FE 변경 없이 실시간 응답이 흐릅니다.
+
 ## 라이선스
 
 사내 전용 (UNLICENSED)

@@ -21,6 +21,18 @@ export function parseFootnoteDefinition(
 }
 
 /**
+ * Speaker-note convention. A paragraph whose `meta.note` begins with
+ * `speaker:` (or equals `speaker-note`) is presenter-only content: the body
+ * lives in `block.text`, but it is hidden from normal read mode AND from the
+ * slide body. It surfaces only in PresenterView's notes pane.
+ */
+export function isSpeakerNoteParagraph(meta?: { note?: string } | undefined): boolean {
+  const note = meta?.note
+  if (!note) return false
+  return note === 'speaker-note' || note.startsWith('speaker:')
+}
+
+/**
  * Paragraph block — `\n\n` separates paragraphs. Each paragraph runs through
  * the inline parser (markdown-lite + WikiLink).
  *
@@ -34,8 +46,16 @@ export function parseFootnoteDefinition(
  * output because `<SectionRenderer>` already collects all definitions into a
  * "각주" mini-list at the bottom of the section (no duplication). Edit-mode
  * surfaces (`InlineTextBlockEditor`) still see the raw text untouched.
+ *
+ * Speaker notes: a paragraph whose `meta.note` starts with `speaker:` (or
+ * equals `speaker-note`) is presenter-only. It is hidden from read mode AND
+ * from the slide body — it surfaces only in PresenterView's notes pane.
+ * Edit-mode surfaces still see the raw text untouched.
  */
 export function ParagraphBlockView({ block }: { block: ParagraphBlock }) {
+  if (isSpeakerNoteParagraph(block.meta)) {
+    return null
+  }
   if (block.meta?.note === 'page-break-before') {
     return (
       <div

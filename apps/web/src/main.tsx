@@ -97,6 +97,11 @@ const NotFoundPage = lazyLogged('NotFound', () =>
 const PresentationPage = lazyLogged('Presentation', () =>
   import('./pages/Presentation').then((m) => ({ default: m.PresentationPage })),
 )
+const PresenterViewPage = lazyLogged('PresenterView', () =>
+  import('./features/presentation/PresenterView').then((m) => ({
+    default: m.PresenterViewPage,
+  })),
+)
 const GraphPage = lazyLogged('Graph', () =>
   import('./pages/Graph').then((m) => ({ default: m.GraphPage })),
 )
@@ -191,6 +196,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 element={
                   <AuthGuard>
                     <Boundaried name="present"><PresentationPage /></Boundaried>
+                  </AuthGuard>
+                }
+              />
+              <Route
+                path="/present/:slug/notes"
+                element={
+                  <AuthGuard>
+                    <Boundaried name="presenter"><PresenterViewPage /></Boundaried>
                   </AuthGuard>
                 }
               />

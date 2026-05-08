@@ -16,6 +16,7 @@ from .core.errors import (
     validation_error_handler,
 )
 from .routers.admin import router as admin_router
+from .routers.ai import router as ai_router
 from .routers.analytics import router as analytics_router
 from .routers.auth import router as auth_router
 from .routers.comments import router_doc as comments_doc_router
@@ -122,6 +123,13 @@ TAGS_METADATA: list[dict[str, str]] = [
             "rename/delete 로 모든 문서의 metadata.tags 를 일괄 갱신한다."
         ),
     },
+    {
+        "name": "ai",
+        "description": (
+            "AI 보조 훅 — 요약/번역/다듬기/이어쓰기/제목 자동생성. "
+            "현재는 placeholder 응답이며, `AI_ENABLED=true` + LLM 키 설정 후 활성화된다."
+        ),
+    },
 ]
 
 
@@ -195,6 +203,8 @@ def create_app() -> FastAPI:
     app.include_router(exports_router)
     # 태그 자동완성 + 태그 매니저
     app.include_router(tags_router)
+    # AI 보조 훅 — placeholder 응답 (실제 LLM 호출은 추후 작업)
+    app.include_router(ai_router)
 
     return app
 

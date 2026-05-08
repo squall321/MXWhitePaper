@@ -26,6 +26,10 @@ dependencies = [
   # 직접 OOXML/OMML 을 파싱하므로 python-docx 자체에 강결합되진 않지만,
   # 향후 idiomatic 표준화 + sub-dep 호환을 위해 명시적으로 의존성 선언.
   "python-docx>=1.1",
+  # pptx export (POST /exports/pptx). pure-python 이라 시스템 라이브러리
+  # 의존이 없어 apptainer 환경에서 추가 설정 없이 동작한다 (WeasyPrint 와
+  # 달리 cairo/pango 같은 native lib 미요구).
+  "python-pptx>=0.6",
 ]
 
 [project.optional-dependencies]

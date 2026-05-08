@@ -32,6 +32,17 @@ export const SLASH_ITEMS: SlashMenuItem[] = [
     emoji: '⤓',
     build: () => ({ type: 'paragraph', id: ulid(), text: '', meta: { note: 'page-break-before' } }),
   },
+  // Speaker note: a paragraph carrying meta.note starting with "speaker:" is
+  // hidden from read-mode AND from the slide body — it surfaces only in the
+  // PresenterView's notes pane. The trailing token is just a serial label so
+  // multiple notes in one section stay distinguishable in tooling; the
+  // convention only requires the `speaker:` prefix.
+  {
+    type: 'paragraph',
+    label: '발표자 메모',
+    emoji: '🎤',
+    build: () => ({ type: 'paragraph', id: ulid(), text: '', meta: { note: `speaker:${nextSpeakerSerial()}` } }),
+  },
   { type: 'heading-4', label: '소제목 (H4)', emoji: 'H', build: () => ({ type: 'heading-4', id: ulid(), title: '' }) },
   { type: 'list', label: '목록', emoji: '•', build: () => ({ type: 'list', id: ulid(), style: 'bullet', items: [''] }) },
   { type: 'quote', label: '인용', emoji: '❝', build: () => ({ type: 'quote', id: ulid(), text: '' }) },
@@ -246,4 +257,31 @@ export function SlashCommandMenu({ slug, sectionId, index, open, onClose, anchor
       />
     </>
   )
+}
+
+/**
+ * Best-effort serial label for a new speaker-note block. Scans the current
+ * draft for paragraph blocks whose `meta.note` matches `/^speaker:(\d+)$/`,
+ * then returns max+1 (default 1). The `speaker:` prefix is what the convention
+ * checks; this serial is purely a hint for the author.
+ */
+function nextSpeakerSerial(): number {
+  const draft = useEditorStore.getState().draft
+  if (!draft) return 1
+  const used = new Set<number>()
+  type Walkable = {
+    blocks?: readonly { type?: string; meta?: { note?: string } }[]
+    subsections?: readonly Walkable[]
+  }
+  const walk = (s: Walkable) => {
+    for (const b of s.blocks ?? []) {
+      if (b.type !== 'paragraph') continue
+      const m = b.meta?.note?.match(/^speaker:(\d+)$/)
+      if (m) used.add(Number(m[1]))
+    }
+    s.subsections?.forEach(walk)
+  }
+  ;(draft.sections ?? []).forEach((s) => walk(s as unknown as Walkable))
+  if (used.size === 0) return 1
+  return Math.max(...used) + 1
 }

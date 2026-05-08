@@ -12,7 +12,12 @@ vi.mock('@/lib/api/client', () => ({
 }))
 
 import { apiClient } from '@/lib/api/client'
-import { downloadMarkdown, downloadPdf, htmlExportUrl } from '../api'
+import {
+  downloadMarkdown,
+  downloadPdf,
+  downloadPptx,
+  htmlExportUrl,
+} from '../api'
 
 const post = apiClient.post as unknown as ReturnType<typeof vi.fn>
 
@@ -167,5 +172,34 @@ describe('export/api · downloadPdf()', () => {
     await expect(downloadPdf('paper')).rejects.toMatchObject({
       response: { status: 500 },
     })
+  })
+})
+
+describe('export/api · downloadPptx()', () => {
+  it('POSTs to /exports/pptx and triggers a .pptx download on success', async () => {
+    const blob = new Blob([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], {
+      type:
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    })
+    post.mockResolvedValueOnce({ data: blob })
+
+    await downloadPptx('deck')
+
+    expect(post).toHaveBeenCalledWith(
+      '/exports/pptx',
+      { slug: 'deck' },
+      { responseType: 'blob' },
+    )
+    expect(createdAnchors).toHaveLength(1)
+    expect(createdAnchors[0]!.download).toBe('deck.pptx')
+    expect(createdAnchors[0]!.click).toHaveBeenCalledTimes(1)
+  })
+
+  it('propagates 422 errors', async () => {
+    post.mockRejectedValueOnce({ response: { status: 422 } })
+    await expect(downloadPptx('deck')).rejects.toMatchObject({
+      response: { status: 422 },
+    })
+    expect(createdAnchors).toHaveLength(0)
   })
 })

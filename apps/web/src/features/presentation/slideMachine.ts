@@ -1,8 +1,10 @@
 import type {
+  Block,
   DocumentJSONV10,
   SectionLevel1,
   SectionLevel2,
 } from '@/types/document'
+import { isSpeakerNoteParagraph } from '@/components/blocks/ParagraphBlock'
 
 /**
  * Slide is one screen in presentation mode.
@@ -133,24 +135,64 @@ export interface KeyEventLike {
 
 export function keyToNav(ev: KeyEventLike): NavCommand | null {
   // Ignore modified shortcuts so Cmd-R / Ctrl-K still work.
+  // (Shift-only is fine — the Presentation page handles Shift+P explicitly.)
   if (ev.metaKey || ev.ctrlKey || ev.altKey) return null
   switch (ev.key) {
     case 'ArrowRight':
     case ' ':
     case 'PageDown':
-    case 'n':
-    case 'N':
       return { type: 'next' }
     case 'ArrowLeft':
     case 'PageUp':
-    case 'p':
-    case 'P':
       return { type: 'prev' }
     case 'Home':
       return { type: 'first' }
     case 'End':
       return { type: 'last' }
     default:
+      // Digit keys 1..9 jump to slide N (1-based).
+      if (/^[1-9]$/.test(ev.key)) {
+        return { type: 'goto', index: Number(ev.key) - 1 }
+      }
       return null
   }
+}
+
+/**
+ * Split a section's blocks into the visible slide body (everything except
+ * speaker-note paragraphs) and the presenter notes (speaker-note paragraphs,
+ * in source order). Pure: takes a Block[], returns two Block[] slices.
+ */
+export interface SlideBlockSplit {
+  body: Block[]
+  notes: Block[]
+}
+export function splitSpeakerNotes(blocks: readonly (Block | undefined)[]): SlideBlockSplit {
+  const body: Block[] = []
+  const notes: Block[] = []
+  for (const b of blocks) {
+    if (!b) continue
+    if (b.type === 'paragraph' && isSpeakerNoteParagraph(b.meta)) {
+      notes.push(b)
+    } else {
+      body.push(b)
+    }
+  }
+  return { body, notes }
+}
+
+/**
+ * Extract the human-readable speaker-note text for a slide. Concatenates the
+ * `text` fields of every speaker-note paragraph in `slide.section.blocks`,
+ * separated by blank lines. Returns the empty string for title slides or
+ * sections with no notes.
+ */
+export function speakerNotesFor(slide: Slide): string {
+  if (slide.kind !== 'section') return ''
+  const blocks = Array.isArray(slide.section?.blocks) ? slide.section.blocks : []
+  const { notes } = splitSpeakerNotes(blocks)
+  return notes
+    .map((b) => (b.type === 'paragraph' ? b.text : ''))
+    .filter(Boolean)
+    .join('\n\n')
 }

@@ -111,6 +111,34 @@
         "title": "CommentPatchIn",
         "type": "object"
       },
+      "ContinueBody": {
+        "properties": {
+          "max_tokens": {
+            "anyOf": [
+              {
+                "maximum": 4096.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          },
+          "text": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ContinueBody",
+        "type": "object"
+      },
       "DivisionCreate": {
         "additionalProperties": false,
         "properties": {
@@ -372,6 +400,59 @@
         "title": "PartUpdate",
         "type": "object"
       },
+      "PolishBody": {
+        "properties": {
+          "text": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PolishBody",
+        "type": "object"
+      },
+      "SummarizeBody": {
+        "properties": {
+          "target_length": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "medium",
+            "title": "Target Length"
+          },
+          "text": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SummarizeBody",
+        "type": "object"
+      },
       "TeamCreate": {
         "additionalProperties": false,
         "properties": {
@@ -418,6 +499,43 @@
           }
         },
         "title": "TeamUpdate",
+        "type": "object"
+      },
+      "TitleBody": {
+        "properties": {
+          "content": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "TitleBody",
+        "type": "object"
+      },
+      "TranslateBody": {
+        "properties": {
+          "target_language": {
+            "maxLength": 8,
+            "minLength": 2,
+            "title": "Target Language",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "target_language"
+        ],
+        "title": "TranslateBody",
         "type": "object"
       },
       "UserPatch": {
@@ -779,6 +897,311 @@
         "summary": "유저 role/활성 갱신",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/api/v1/ai/continue": {
+      "post": {
+        "operationId": "ai_continue_api_v1_ai_continue_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinueBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ai Continue Api V1 Ai Continue Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ai Continue",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/v1/ai/polish": {
+      "post": {
+        "operationId": "ai_polish_api_v1_ai_polish_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolishBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ai Polish Api V1 Ai Polish Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ai Polish",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/v1/ai/summarize": {
+      "post": {
+        "operationId": "ai_summarize_api_v1_ai_summarize_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummarizeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ai Summarize Api V1 Ai Summarize Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ai Summarize",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/v1/ai/title": {
+      "post": {
+        "operationId": "ai_title_api_v1_ai_title_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TitleBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ai Title Api V1 Ai Title Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ai Title",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/v1/ai/translate": {
+      "post": {
+        "operationId": "ai_translate_api_v1_ai_translate_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranslateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ai Translate Api V1 Ai Translate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ai Translate",
+        "tags": [
+          "ai"
         ]
       }
     },
@@ -2914,6 +3337,48 @@
         ]
       }
     },
+    "/api/v1/exports/pptx": {
+      "post": {
+        "description": "DocumentJSON 본문을 발표용 .pptx 로 변환한다.\n\n- level-1 섹션 1개 = 슬라이드 1장 (제목 슬라이드 포함).\n- level-2 sub-section 은 분량이 ≤500자면 inline bullets, 초과하면 별도 슬라이드로 분리.\n- chart 는 line/bar/pie 만 네이티브 차트로, 그 외는 텍스트 요약 fallback.\n- ``meta.note: \"speaker: …\"`` prefix 를 만난 블록은 슬라이드 노트에 누적.",
+        "operationId": "export_pptx_api_v1_exports_pptx_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서를 PowerPoint (.pptx) 로 내보내기",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
     "/api/v1/files/finalize": {
       "post": {
         "operationId": "files_finalize_api_v1_files_finalize_post",
@@ -4933,6 +5398,10 @@
     {
       "description": "태그 자동완성 + 태그 매니저. metadata.tags 를 집계해 prefix 검색 + count 를 제공하고, rename/delete 로 모든 문서의 metadata.tags 를 일괄 갱신한다.",
       "name": "tags"
+    },
+    {
+      "description": "AI 보조 훅 — 요약/번역/다듬기/이어쓰기/제목 자동생성. 현재는 placeholder 응답이며, `AI_ENABLED=true` + LLM 키 설정 후 활성화된다.",
+      "name": "ai"
     }
   ]
 }

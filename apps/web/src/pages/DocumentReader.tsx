@@ -160,6 +160,33 @@ export function DocumentReaderPage() {
     return () => setRightRail(null)
   }, [data, slug, isFullEditing, showVersions, setRightRail])
 
+  // FE PDF fallback — `?print=1` triggers `window.print()` once the doc
+  // has settled. After the print dialog closes we strip the param so a
+  // reload doesn't re-trigger the dialog. Two rAF ticks let WikiArticle
+  // commit its layout (charts/images) before the snapshot is captured.
+  useEffect(() => {
+    if (!data) return
+    if (typeof window === 'undefined') return
+    if (searchParams.get('print') !== '1') return
+    let raf1 = 0
+    let raf2 = 0
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        try {
+          window.print()
+        } finally {
+          const url = new URL(window.location.href)
+          url.searchParams.delete('print')
+          window.history.replaceState(null, '', url.toString())
+        }
+      })
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+    }
+  }, [data, searchParams])
+
   // Deep-link to #section-X.Y.Z after the body has rendered. When the
   // target section sits inside a collapsed group, expand it first so the
   // anchor lands on visible content.

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildSlides, keyToNav, navigate } from '../slideMachine'
-import type { DocumentJSONV10 } from '@/types/document'
+import {
+  buildSlides,
+  keyToNav,
+  navigate,
+  speakerNotesFor,
+  splitSpeakerNotes,
+} from '../slideMachine'
+import type { Block, DocumentJSONV10 } from '@/types/document'
 
 function makeDoc(overrides: Partial<DocumentJSONV10> = {}): DocumentJSONV10 {
   return {
@@ -114,15 +120,28 @@ describe('keyToNav', () => {
   it.each([
     ['ArrowRight', 'next'],
     [' ', 'next'],
-    ['n', 'next'],
     ['PageDown', 'next'],
     ['ArrowLeft', 'prev'],
-    ['p', 'prev'],
     ['PageUp', 'prev'],
     ['Home', 'first'],
     ['End', 'last'],
   ] as const)('maps %s → %s', (key, expected) => {
     expect(keyToNav({ key })?.type).toBe(expected)
+  })
+
+  it('digit 1..9 maps to goto N-1', () => {
+    const result = keyToNav({ key: '1' })
+    expect(result?.type).toBe('goto')
+    if (result?.type === 'goto') expect(result.index).toBe(0)
+    const r5 = keyToNav({ key: '5' })
+    if (r5?.type === 'goto') expect(r5.index).toBe(4)
+  })
+
+  it('does not treat n/p as navigation (reserved for notes pane)', () => {
+    expect(keyToNav({ key: 'n' })).toBeNull()
+    expect(keyToNav({ key: 'N' })).toBeNull()
+    expect(keyToNav({ key: 'p' })).toBeNull()
+    expect(keyToNav({ key: 'P' })).toBeNull()
   })
 
   it('ignores plain alphabet keys', () => {
@@ -133,6 +152,69 @@ describe('keyToNav', () => {
   it('ignores when modifier key is held (so Cmd-R still reloads)', () => {
     expect(keyToNav({ key: 'ArrowRight', metaKey: true })).toBeNull()
     expect(keyToNav({ key: 'ArrowRight', ctrlKey: true })).toBeNull()
-    expect(keyToNav({ key: 'n', altKey: true })).toBeNull()
+    expect(keyToNav({ key: '1', altKey: true })).toBeNull()
+  })
+})
+
+describe('speaker notes', () => {
+  function para(id: string, text: string, note?: string): Block {
+    return { type: 'paragraph', id: id as Block extends { id: infer I } ? I : never, text, ...(note ? { meta: { note } } : {}) } as Block
+  }
+
+  it('splitSpeakerNotes separates body and notes preserving order', () => {
+    const blocks: Block[] = [
+      para('01P000000000000000000000A1', 'visible 1'),
+      para('01P000000000000000000000A2', 'note 1', 'speaker:1'),
+      para('01P000000000000000000000A3', 'visible 2'),
+      para('01P000000000000000000000A4', 'note 2', 'speaker-note'),
+    ]
+    const { body, notes } = splitSpeakerNotes(blocks)
+    expect(body.map((b) => (b.type === 'paragraph' ? b.text : ''))).toEqual([
+      'visible 1',
+      'visible 2',
+    ])
+    expect(notes.map((b) => (b.type === 'paragraph' ? b.text : ''))).toEqual([
+      'note 1',
+      'note 2',
+    ])
+  })
+
+  it('splitSpeakerNotes ignores other meta.note values (e.g., page-break-before)', () => {
+    const blocks: Block[] = [
+      para('01P000000000000000000000B1', 'visible'),
+      para('01P000000000000000000000B2', '', 'page-break-before'),
+      para('01P000000000000000000000B3', 'note', 'speaker:5'),
+    ]
+    const { body, notes } = splitSpeakerNotes(blocks)
+    expect(body.length).toBe(2)
+    expect(notes.length).toBe(1)
+  })
+
+  it('speakerNotesFor concatenates notes with blank-line separators', () => {
+    const doc = makeDoc({
+      sections: [
+        {
+          id: '01SEC00000000000000000000A',
+          number: '1',
+          level: 1,
+          title: 'sec',
+          blocks: [
+            para('01P000000000000000000000C1', 'body'),
+            para('01P000000000000000000000C2', 'first', 'speaker:1'),
+            para('01P000000000000000000000C3', 'second', 'speaker:2'),
+          ],
+          subsections: [],
+        },
+      ] as DocumentJSONV10['sections'],
+    })
+    const slides = buildSlides(doc)
+    const sectionSlide = slides.find((s) => s.kind === 'section')!
+    expect(speakerNotesFor(sectionSlide)).toBe('first\n\nsecond')
+  })
+
+  it('speakerNotesFor returns "" for title slides', () => {
+    const slides = buildSlides(makeDoc())
+    const titleSlide = slides[0]!
+    expect(speakerNotesFor(titleSlide)).toBe('')
   })
 })

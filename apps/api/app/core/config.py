@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     file_max_bytes: int = Field(default=25 * 1024 * 1024)
     rate_limit_per_minute: int = Field(default=120)
 
+    # AI assist hooks (요약/번역/다듬기/이어쓰기/제목 자동생성).
+    # 기본 false — 활성화하면 placeholder 응답이 흘러나간다. 실제 LLM 호출은
+    # 추후 OPENAI_API_KEY / ANTHROPIC_API_KEY 가 잡혀야 의미가 있다.
+    ai_enabled: bool = Field(default=False)
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
