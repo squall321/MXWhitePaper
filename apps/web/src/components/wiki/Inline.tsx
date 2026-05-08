@@ -20,6 +20,7 @@ interface InlineProps {
  *
  * Inline syntax:
  *   `**bold**`     → <strong>
+ *   `~~strike~~`   → <s>
  *   `*italic*`     → <em>
  *   `` `code` ``   → <code>
  *
@@ -75,6 +76,17 @@ function renderMarkdownLite(text: string, glossary: boolean): ReactNode[] {
       if (close > i + 2) {
         flush()
         out.push(<strong key={`b${key++}`}>{text.slice(i + 2, close)}</strong>)
+        i = close + 2
+        continue
+      }
+    }
+    // Strikethrough — same precedence as bold (2-char delimiter); must come
+    // before single-char `*italic*` so `~~foo~~` doesn't interleave.
+    if (text.startsWith('~~', i)) {
+      const close = text.indexOf('~~', i + 2)
+      if (close > i + 2) {
+        flush()
+        out.push(<s key={`s${key++}`}>{text.slice(i + 2, close)}</s>)
         i = close + 2
         continue
       }

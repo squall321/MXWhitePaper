@@ -25,7 +25,7 @@ const SECTIONS: { title: string; rows: ShortcutRow[] }[] = [
     title: '편집',
     rows: [
       { keys: '/', desc: '슬래시 메뉴 — 블록 추가' },
-      { keys: 'Tab / ⇧ Tab', desc: '아웃라인 들여쓰기 / 내어쓰기' },
+      { keys: 'Tab / ⇧ Tab', desc: '들여쓰기 / 내어쓰기 (리스트 안)' },
       { keys: '⌘ ↑ / ⌘ ↓', desc: '블록 위/아래로 이동' },
       { keys: '[[', desc: '문서 위키링크 자동완성' },
       { keys: '@', desc: '용어 참조 자동완성' },
@@ -40,7 +40,7 @@ const SECTIONS: { title: string; rows: ShortcutRow[] }[] = [
       { keys: '⌘ U', desc: '밑줄' },
       { keys: '⌘ E', desc: '인라인 코드' },
       { keys: '⌘ K', desc: '링크 삽입 ([[slug]] 또는 https://…)' },
-      { keys: '⌘ ⇧ X', desc: '취소선' },
+      { keys: '~~text~~', desc: '취소선 (또는 toolbar의 S 버튼)' },
     ],
   },
   {

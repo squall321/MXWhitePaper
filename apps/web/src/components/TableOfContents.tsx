@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { DocumentJSONV10, SectionLevel1, SectionLevel2, SectionLevel3 } from '@/types/document'
+import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
 
 type AnySection = SectionLevel1 | SectionLevel2 | SectionLevel3
 
 interface TocItem {
   id: string
+  /** Section ULID — distinct from `id` (which is the heading anchor). */
+  sectionId: string
   number?: string
   title: string
   level: 1 | 2 | 3
@@ -25,6 +28,7 @@ export function TableOfContents({ document }: TableOfContentsProps) {
     const walk = (s: AnySection) => {
       out.push({
         id: s.number ? `section-${s.number}` : s.id,
+        sectionId: s.id,
         number: s.number,
         title: s.title,
         level: s.level,
@@ -36,6 +40,13 @@ export function TableOfContents({ document }: TableOfContentsProps) {
     for (const s of document.sections) walk(s)
     return out
   }, [document])
+
+  // Subscribe to the per-slug collapse map so the rail re-renders when a
+  // section folds. We deliberately read the inner sub-object rather than
+  // calling `isCollapsed` per item so the equality stays referential.
+  const slug = document.slug
+  const collapsedMap = useSectionCollapseStore((s) => s.map[slug])
+  const setCollapsed = useSectionCollapseStore((s) => s.setCollapsed)
 
   const [activeId, setActiveId] = useState<string | null>(items[0]?.id ?? null)
 
@@ -78,22 +89,38 @@ export function TableOfContents({ document }: TableOfContentsProps) {
           const indent =
             it.level === 1 ? 'pl-0' : it.level === 2 ? 'pl-3' : 'pl-6'
           const active = it.id === activeId
+          const isCollapsed = collapsedMap?.[it.sectionId] === true
+          // Faded style for collapsed sections — clickable so users can jump
+          // to (and auto-expand) a folded section from the rail.
+          const collapsedCls = isCollapsed ? 'opacity-50' : ''
           return (
             <li key={it.id} className={indent}>
               <a
                 href={`#${it.id}`}
+                data-toc-collapsed={isCollapsed ? 'true' : undefined}
                 onClick={(e) => {
                   e.preventDefault()
-                  const el = globalThis.document.getElementById(it.id)
-                  if (el) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    history.replaceState(null, '', `#${it.id}`)
+                  // Auto-expand the target section before scrolling so the
+                  // anchor lands on visible content.
+                  if (isCollapsed) setCollapsed(slug, it.sectionId, false)
+                  const scroll = () => {
+                    const el = globalThis.document.getElementById(it.id)
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      history.replaceState(null, '', `#${it.id}`)
+                    }
                   }
+                  // The expand re-renders the panel children — rAF lets the
+                  // anchor target settle into the layout before we scroll.
+                  if (isCollapsed) requestAnimationFrame(scroll)
+                  else scroll()
                 }}
                 className={
-                  active
+                  (active
                     ? 'block border-l-2 border-smsg-500 pl-2 font-medium text-smsg-700'
-                    : 'block border-l-2 border-transparent pl-2 text-gray-600 hover:border-gray-300 hover:text-smsg-900'
+                    : 'block border-l-2 border-transparent pl-2 text-gray-600 hover:border-gray-300 hover:text-smsg-900') +
+                  ' ' +
+                  collapsedCls
                 }
               >
                 {it.number && (

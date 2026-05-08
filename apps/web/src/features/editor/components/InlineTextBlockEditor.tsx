@@ -184,12 +184,18 @@ function wrapSelectionTag(tag: string) {
 
 /**
  * Convert markdown-lite text into HTML for display inside the contentEditable.
- *   `**bold**` → <strong>bold</strong>
- *   `*italic*` → <em>italic</em>
+ *   `**bold**`   → <strong>bold</strong>
+ *   `~~strike~~` → <s>strike</s>
  *   `` `code` `` → <code>code</code>
+ *   `*italic*`   → <em>italic</em>
  *   `[[slug]]`   → kept verbatim (the renderer's WikiLink handles them on
  *                  read; while editing we keep the raw form so the user can
  *                  see what they're typing).
+ *
+ * Token order: 2-char delimiters first (`**`, `~~`) so `*` and `~` don't
+ * accidentally match a single char inside a stronger run. Code (` ` `) is
+ * a hard fence — once opened it consumes everything to the next backtick,
+ * so `~~` inside `` `…` `` stays literal.
  *
  * Plain text is escaped so no stray `<` becomes a tag mid-edit.
  */
@@ -202,6 +208,14 @@ export function mdLiteToHtml(src: string): string {
       const close = src.indexOf('**', i + 2)
       if (close > i + 2) {
         out += `<strong>${escapeHtml(src.slice(i + 2, close))}</strong>`
+        i = close + 2
+        continue
+      }
+    }
+    if (src.startsWith('~~', i)) {
+      const close = src.indexOf('~~', i + 2)
+      if (close > i + 2) {
+        out += `<s>${escapeHtml(src.slice(i + 2, close))}</s>`
         i = close + 2
         continue
       }
@@ -243,22 +257,30 @@ export function mdLiteToHtml(src: string): string {
  *   <strong>/<b>          → **…**
  *   <em>/<i>              → *…*
  *   <code>                → `…`
+ *   <s>/<del>/<strike>    → ~~…~~  (also: <span style="text-decoration:
+ *                          line-through"> emitted by some browsers'
+ *                          execCommand('strikeThrough'))
  *   <a href="X">label</a> → [[X]] when X looks like a wiki slug, else label
  *                          plus an inline `(url)` suffix so the URL is
  *                          preserved (the markdown-lite parser doesn't
  *                          render <a>, but exports/HTML preview can).
  *   <br>, <div>, <p>      → newline (Chrome inserts <div> per Enter)
- *   underline / strikethrough → stripped (no md-lite syntax). Users can
- *                          reapply via the toolbar; we keep them visual but
- *                          drop on save to stay round-trippable.
+ *   underline             → stripped (no md-lite syntax). Users can reapply
+ *                          via the toolbar; we keep it visual but drop on
+ *                          save to stay round-trippable.
  */
 export function htmlToMdLite(html: string): string {
   const tmp = document.createElement('div')
   tmp.innerHTML = html
-  return walk(tmp).replace(/ /g, ' ').trim()
+  return walkNodeForMdLite(tmp).replace(/ /g, ' ').trim()
 }
 
-function walk(node: Node): string {
+/**
+ * Exported for unit tests so they can build a fake-Node tree without needing
+ * jsdom/happy-dom. The tree must satisfy the subset of the DOM Node interface
+ * used here: `childNodes`, `nodeType`, `textContent`, `tagName`, `getAttribute`.
+ */
+export function walkNodeForMdLite(node: Node): string {
   let out = ''
   for (const child of Array.from(node.childNodes)) {
     if (child.nodeType === Node.TEXT_NODE) {
@@ -268,7 +290,7 @@ function walk(node: Node): string {
     if (child.nodeType !== Node.ELEMENT_NODE) continue
     const el = child as HTMLElement
     const tag = el.tagName.toLowerCase()
-    const inner = walk(el)
+    const inner = walkNodeForMdLite(el)
     switch (tag) {
       case 'strong':
       case 'b':
@@ -280,6 +302,11 @@ function walk(node: Node): string {
         break
       case 'code':
         out += inner.length ? `\`${inner}\`` : ''
+        break
+      case 's':
+      case 'del':
+      case 'strike':
+        out += inner.length ? `~~${inner}~~` : ''
         break
       case 'a': {
         const href = el.getAttribute('href') ?? ''
@@ -320,6 +347,15 @@ function walk(node: Node): string {
           /font-style:\s*italic/i.test(el.getAttribute('style') ?? '')
         ) {
           out += `*${inner}*`
+        } else if (
+          tag === 'span' &&
+          /text-decoration(?:-line)?:\s*[^;]*line-through/i.test(
+            el.getAttribute('style') ?? '',
+          )
+        ) {
+          // Some Chromium builds emit <span style="text-decoration:line-through">
+          // for execCommand('strikeThrough'). Normalize to ~~…~~ on save.
+          out += inner.length ? `~~${inner}~~` : ''
         } else {
           out += inner
         }

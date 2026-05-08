@@ -21,6 +21,7 @@ from .routers.auth import router as auth_router
 from .routers.comments import router_doc as comments_doc_router
 from .routers.comments import router_one as comments_one_router
 from .routers.documents import router as documents_router
+from .routers.files import router as files_router
 from .routers.glossary import router as glossary_router
 from .routers.links_graph import router as links_graph_router
 from .routers.orgs import router as orgs_router
@@ -62,6 +63,10 @@ TAGS_METADATA: list[dict[str, str]] = [
     {
         "name": "uploads",
         "description": "이미지 업로드 — pending → confirm → ULID/UUID 양방향 조회.",
+    },
+    {
+        "name": "files",
+        "description": "일반 파일 첨부 업로드 — presigned PUT + finalize + 1일 GET.",
     },
     {
         "name": "search",
@@ -144,6 +149,8 @@ def create_app() -> FastAPI:
     # Sprint 5 — image upload pipeline
     app.include_router(uploads_router)
     app.include_router(images_router)
+    # Sprint 7 — generic file upload pipeline (FileBlock attachments)
+    app.include_router(files_router)
     # Sprint 6 — auth, search, glossary, widgets
     app.include_router(auth_router)
     app.include_router(search_router)

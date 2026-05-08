@@ -3,6 +3,7 @@ import type { Block, Slug, Ulid } from '@/types/document'
 import { insertBlock, isPreconditionFailed } from '../api'
 import { useEditorStore } from '../state'
 import { BlockInsertPalette, type PaletteItem } from './BlockInsertPalette'
+import { BlockResizeWrapper } from './BlockResizeWrapper'
 
 /**
  * BlockHoverInserter — wraps a single block with Notion-style affordances:
@@ -31,6 +32,8 @@ interface Props {
   index: number
   /** Whether the editor is in fullEdit mode — when false we render children as-is. */
   active: boolean
+  /** The block being wrapped — needed by BlockResizeWrapper for meta + patch. */
+  block: Block
   children: ReactNode
   /** Drag handle: parent passes the dnd-kit listeners + setNodeRef when sortable. */
   dragListeners?: Record<string, unknown>
@@ -44,6 +47,7 @@ export function BlockHoverInserter({
   sectionId,
   index,
   active,
+  block,
   children,
   dragListeners,
   dragSetActivatorRef,
@@ -107,10 +111,14 @@ export function BlockHoverInserter({
   )
 
   if (!active) {
-    // Reader / quick-edit mode: render the block plain. The hover affordances
-    // would be visual noise outside fullEdit and the API calls would fail
-    // anyway (no etag).
-    return <>{children}</>
+    // Reader / quick-edit mode: skip the +/drag/delete affordances. Still apply
+    // any persisted width/height via the resize wrapper (handles disabled when
+    // !active) so the rendered size is consistent across modes.
+    return (
+      <BlockResizeWrapper slug={slug} block={block} active={false}>
+        {children}
+      </BlockResizeWrapper>
+    )
   }
 
   return (
@@ -176,7 +184,9 @@ export function BlockHoverInserter({
         </button>
       )}
 
-      {children}
+      <BlockResizeWrapper slug={slug} block={block} active>
+        {children}
+      </BlockResizeWrapper>
 
       {/* Bottom + rail. */}
       <button

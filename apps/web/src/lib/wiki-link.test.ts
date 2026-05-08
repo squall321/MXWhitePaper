@@ -84,4 +84,40 @@ describe('parseInline', () => {
       { kind: 'wiki', slug: '분기결산', anchor: '1.1', display: '분기' },
     ])
   })
+
+  it('parses a same-doc anchor link with the explicit `section-` prefix', () => {
+    expect(parseInline('see [[#section-1.1]] above')).toEqual([
+      { kind: 'text', value: 'see ' },
+      { kind: 'wiki', slug: '', anchor: 'section-1.1' },
+      { kind: 'text', value: ' above' },
+    ])
+  })
+
+  it('parses a same-doc anchor link with a custom display label', () => {
+    expect(parseInline('[[#section-1.1|커스텀 라벨]]')).toEqual([
+      { kind: 'wiki', slug: '', anchor: 'section-1.1', display: '커스텀 라벨' },
+    ])
+  })
+
+  it('parses a cross-doc anchor with the explicit `section-` prefix', () => {
+    expect(parseInline('[[other#section-2|라벨]]')).toEqual([
+      { kind: 'wiki', slug: 'other', anchor: 'section-2', display: '라벨' },
+    ])
+  })
+
+  it('parses a cross-doc anchor with the explicit `section-` prefix (no label)', () => {
+    expect(parseInline('[[other-doc#section-2]]')).toEqual([
+      { kind: 'wiki', slug: 'other-doc', anchor: 'section-2' },
+    ])
+  })
+
+  it('rejects an empty slug without an anchor', () => {
+    expect(parseInline('[[#]]')).toEqual([{ kind: 'text', value: '[[#]]' }])
+  })
+
+  it('rejects a malformed `section-` anchor and falls through', () => {
+    expect(parseInline('[[#section-abc]]')).toEqual([
+      { kind: 'text', value: '[[#section-abc]]' },
+    ])
+  })
 })

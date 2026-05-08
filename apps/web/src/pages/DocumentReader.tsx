@@ -17,6 +17,36 @@ import { OrgTree } from '@/features/org/components/OrgTree'
 import { Drawer } from '@/components/ui/Drawer'
 import { pushRecent } from '@/features/recent/store'
 import type { AppOutletContext } from '@/App'
+import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
+import type {
+  DocumentJSONV10,
+  SectionLevel1,
+  SectionLevel2,
+  SectionLevel3,
+} from '@/types/document'
+
+/**
+ * Walk the document tree for a section whose `number` matches `num` and
+ * return its ULID. Used by the collapse-aware deep-link effect to translate
+ * a `#section-1.1` hash into the section identifier the collapse store
+ * keys on.
+ */
+function findSectionUlidByNumber(
+  doc: DocumentJSONV10,
+  num: string,
+): string | null {
+  type AnySection = SectionLevel1 | SectionLevel2 | SectionLevel3
+  const stack: AnySection[] = [...doc.sections]
+  while (stack.length > 0) {
+    const cur = stack.pop()
+    if (!cur) continue
+    if (cur.number === num) return cur.id
+    if ('subsections' in cur && cur.subsections) {
+      for (const s of cur.subsections) stack.push(s as AnySection)
+    }
+  }
+  return null
+}
 
 /**
  * Document reader.
@@ -129,18 +159,32 @@ export function DocumentReaderPage() {
     return () => setRightRail(null)
   }, [data, slug, isFullEditing, showVersions, setRightRail])
 
-  // Deep-link to #section-X.Y.Z after the body has rendered.
+  // Deep-link to #section-X.Y.Z after the body has rendered. When the
+  // target section sits inside a collapsed group, expand it first so the
+  // anchor lands on visible content.
   useEffect(() => {
     if (!data) return
     if (typeof window === 'undefined') return
     const hash = window.location.hash?.replace(/^#/, '')
-    if (!hash) return
+    if (!hash || !slug) return
+    // hash is the DOM id (`section-1.1`); the collapse store keys on
+    // section ULIDs. Walk the doc once for the matching ULID.
+    if (hash.startsWith('section-')) {
+      const num = hash.slice('section-'.length)
+      const sectionId = findSectionUlidByNumber(data.document, num)
+      if (sectionId) {
+        const store = useSectionCollapseStore.getState()
+        if (store.isCollapsed(slug, sectionId)) {
+          store.setCollapsed(slug, sectionId, false)
+        }
+      }
+    }
     const r = requestAnimationFrame(() => {
       const el = document.getElementById(hash)
       if (el) el.scrollIntoView({ behavior: 'auto', block: 'start' })
     })
     return () => cancelAnimationFrame(r)
-  }, [data])
+  }, [data, slug])
 
   if (!slug) return <p className="text-sm text-red-600">missing slug parameter</p>
   if (isPending) return <p className="text-sm text-gray-500">loading…</p>

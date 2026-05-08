@@ -24,6 +24,7 @@ import { BlockHoverInserter } from './BlockHoverInserter'
 import { BlockInsertPalette, type PaletteItem } from './BlockInsertPalette'
 import { InlineFormattingToolbar } from './InlineFormattingToolbar'
 import { BlockRenderer } from '@/components/blocks/BlockRenderer'
+import { useSectionCollapseStore } from '../sectionCollapseStore'
 
 /**
  * SimpleStackEditor — Notion-style block stack with drag-to-reorder and
@@ -70,6 +71,15 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
   const [tailOpen, setTailOpen] = useState<{ x: number; y: number } | null>(null)
 
   const blocks = section.blocks ?? []
+
+  // Section-level collapse — same store as the read-mode SectionRenderer so a
+  // user who collapsed a section in reader stays collapsed when they enter
+  // full-edit. We hide the blocks list but keep title + trailing "+" visible
+  // (clicking "+" auto-expands the section so users never get stuck).
+  const collapsed = useSectionCollapseStore((s) => s.isCollapsed(slug, section.id))
+  const setCollapsed = useSectionCollapseStore((s) => s.setCollapsed)
+  const toggleCollapsed = useSectionCollapseStore((s) => s.toggle)
+  const blocksPanelId = `section-stack-panel-${section.id}`
 
   const persistTitle = useCallback(async () => {
     if (!etag || !titleDirty) return
@@ -156,6 +166,9 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
 
   const onTrailingClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     const r = e.currentTarget.getBoundingClientRect()
+    // If the section was collapsed, expand it before opening the palette so
+    // the user can see the inserted block land in context.
+    if (collapsed) setCollapsed(slug, section.id, false)
     setTailOpen({ x: e.clientX || r.left + 24, y: e.clientY || r.bottom })
   }
 
@@ -166,6 +179,29 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
       className="space-y-3"
     >
       <div className="group flex items-baseline gap-2">
+        <button
+          type="button"
+          onClick={() => toggleCollapsed(slug, section.id)}
+          aria-label={collapsed ? '섹션 펴기' : '섹션 접기'}
+          aria-expanded={!collapsed}
+          aria-controls={blocksPanelId}
+          data-testid="section-collapse-toggle"
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-smsg-500 transition-transform hover:bg-smsg-50 hover:text-smsg-900"
+          style={{ transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 12 12"
+            className="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="2,4 6,8 10,4" />
+          </svg>
+        </button>
         {section.number && (
           <span className="font-mono text-sm text-smsg-500">{section.number}</span>
         )}
@@ -189,35 +225,45 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
         />
       </div>
 
-      {blocks.length === 0 ? (
-        <button
-          type="button"
-          onClick={onTrailingClick}
-          className="group flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-sm text-gray-500 transition-colors hover:border-smsg-300 hover:bg-smsg-50 hover:text-smsg-900 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-800"
-          aria-label="첫 블록 추가"
-        >
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-smsg-500 text-smsg-700 group-hover:bg-smsg-500 group-hover:text-white">
-            +
-          </span>
-          첫 블록 추가
-        </button>
-      ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void onDragEnd(e)}>
-          <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-4 pl-7 pr-7">
-              {blocks.map((block, idx) => (
-                <SortableBlock
-                  key={block.id}
-                  slug={slug}
-                  sectionId={section.id}
-                  index={idx}
-                  block={block}
-                  onDelete={() => void onDelete(block.id)}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
+      {!collapsed && (
+        blocks.length === 0 ? (
+          <button
+            type="button"
+            onClick={onTrailingClick}
+            className="group flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-sm text-gray-500 transition-colors hover:border-smsg-300 hover:bg-smsg-50 hover:text-smsg-900 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-800"
+            aria-label="첫 블록 추가"
+          >
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-smsg-500 text-smsg-700 group-hover:bg-smsg-500 group-hover:text-white">
+              +
+            </span>
+            첫 블록 추가
+          </button>
+        ) : (
+          <div id={blocksPanelId}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void onDragEnd(e)}>
+              <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-4 pl-7 pr-7">
+                  {blocks.map((block, idx) => (
+                    <SortableBlock
+                      key={block.id}
+                      slug={slug}
+                      sectionId={section.id}
+                      index={idx}
+                      block={block}
+                      onDelete={() => void onDelete(block.id)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
+        )
+      )}
+
+      {collapsed && blocks.length > 0 && (
+        <p className="pl-7 text-xs text-gray-500" aria-live="polite">
+          ({blocks.length}개 항목 접힘)
+        </p>
       )}
 
       {blocks.length > 0 && (
@@ -276,6 +322,7 @@ function SortableBlock({ slug, sectionId, index, block, onDelete }: SortableBloc
         sectionId={sectionId}
         index={index}
         active
+        block={block}
         dragListeners={listeners as Record<string, unknown>}
         dragSetActivatorRef={setActivatorNodeRef}
         onRequestDelete={onDelete}

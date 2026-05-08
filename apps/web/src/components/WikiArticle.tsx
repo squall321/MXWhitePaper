@@ -1,9 +1,15 @@
-import type { DocumentJSONV10 } from '@/types/document'
+import type {
+  DocumentJSONV10,
+  SectionLevel1,
+  SectionLevel2,
+  SectionLevel3,
+} from '@/types/document'
 import type { DocumentMetaEnvelope, DocumentRow } from '@/features/document/api'
 import { Infobox } from './Infobox'
 import { SectionRenderer } from './SectionRenderer'
 import { Badge } from '@/components/ui'
 import { FavoriteStar } from '@/features/favorites/components/FavoriteStar'
+import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
 
 interface WikiArticleProps {
   document: DocumentJSONV10
@@ -20,6 +26,20 @@ interface WikiArticleProps {
  * Visual: stronger title hierarchy, subtle gradient accent under the slug
  * pill, owner/tag badges in the meta strip.
  */
+type AnySection = SectionLevel1 | SectionLevel2 | SectionLevel3
+
+function collectSectionIds(sections: readonly AnySection[]): string[] {
+  const out: string[] = []
+  const walk = (s: AnySection) => {
+    if (s?.id) out.push(s.id)
+    if ('subsections' in s && Array.isArray(s.subsections)) {
+      for (const sub of s.subsections) walk(sub as AnySection)
+    }
+  }
+  for (const s of sections) walk(s)
+  return out
+}
+
 export function WikiArticle({ document, row, meta, editableSlug }: WikiArticleProps) {
   // Defensive: insertBlock 등 부분 응답이 metadata 를 빠뜨려도 (또는 신규 문서가
   // empty metadata 인 경우) 페이지 전체가 흰 화면이 되지 않게 한다.
@@ -28,6 +48,15 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
     .filter(Boolean)
     .join(' / ')
   const updatedAt = row?.updated_at ?? meta?.updated_at
+
+  // "전체 펴기 / 접기" — operates on section-level collapse only.
+  // Block-level meta.collapsed is intentionally NOT touched here: walking the
+  // tree to flip every block's meta would mean N patchBlock calls (or a giant
+  // PUT) and most users won't expect a "fold sections" button to disturb
+  // individual chart toggles.
+  const slug = editableSlug ?? document.slug
+  const expandAll = useSectionCollapseStore((s) => s.expandAll)
+  const collapseAll = useSectionCollapseStore((s) => s.collapseAll)
 
   return (
     <article className="space-y-6">
@@ -63,6 +92,28 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
         </p>
       </header>
 
+      {(document.sections ?? []).length > 0 && (
+        <div
+          className="flex justify-end gap-1 text-xs"
+          data-testid="section-collapse-controls"
+        >
+          <button
+            type="button"
+            onClick={() => collapseAll(slug, collectSectionIds((document.sections ?? []) as AnySection[]))}
+            className="rounded border border-gray-200 px-2 py-1 text-gray-600 hover:bg-gray-50 hover:text-smsg-700"
+          >
+            전체 접기
+          </button>
+          <button
+            type="button"
+            onClick={() => expandAll(slug)}
+            className="rounded border border-gray-200 px-2 py-1 text-gray-600 hover:bg-gray-50 hover:text-smsg-700"
+          >
+            전체 펴기
+          </button>
+        </div>
+      )}
+
       <div className="clearfix">
         {document.infobox && <Infobox data={document.infobox} />}
         <div className="space-y-6">
@@ -72,6 +123,7 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
               section={section}
               editableSlug={editableSlug}
               autoFocusInline={idx === 0}
+              collapseSlug={slug}
             />
           ))}
         </div>

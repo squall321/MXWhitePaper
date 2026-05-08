@@ -53,6 +53,63 @@ describe('<SectionRenderer />', () => {
     expect(html).not.toContain('text-link-missing')
   })
 
+  it('hides children when the section is collapsed via the store', async () => {
+    // Reset modules so the store starts fresh for this test (we use SSR
+    // markup and read only what's rendered, so the collapsed branch shows up
+    // only when the store reports collapsed=true at render time).
+    vi.resetModules()
+    vi.doMock('@/features/document/hooks/useDocumentExists', () => ({
+      useDocumentExists: () => ({ data: true, isPending: false, isError: false }),
+    }))
+    vi.doMock('@/features/glossary/useGlossary', () => ({
+      useGlossary: () => ({
+        terms: [],
+        lookup: () => undefined,
+        findEntry: () => undefined,
+      }),
+    }))
+    const { SectionRenderer: SR } = await import('../SectionRenderer')
+    const { useSectionCollapseStore } = await import(
+      '@/features/editor/sectionCollapseStore'
+    )
+
+    const section: SectionLevel1 = {
+      id: '01ABCDEFGHJKMNPQRSTVWXYZ90',
+      number: '3',
+      level: 1,
+      title: '접힘 섹션',
+      blocks: [
+        {
+          type: 'paragraph',
+          id: '01ABCDEFGHJKMNPQRSTVWXYZ91',
+          text: '이 텍스트는 접혔을 때 보이지 않아야 한다.',
+        },
+      ],
+      subsections: [],
+    }
+
+    // Pre-collapse the section in the store.
+    useSectionCollapseStore.getState().setCollapsed('test-slug', section.id, true)
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <SR section={section} collapseSlug="test-slug" />
+      </MemoryRouter>,
+    )
+
+    // Heading still rendered.
+    expect(html).toContain('접힘 섹션')
+    // Hint shows the direct block count.
+    expect(html).toContain('1개 항목 접힘')
+    // Body text is hidden.
+    expect(html).not.toContain('이 텍스트는 접혔을 때')
+    // Toggle button reports aria-expanded="false".
+    expect(html).toContain('aria-expanded="false"')
+
+    // Cleanup so other tests start clean.
+    useSectionCollapseStore.getState().expandAll('test-slug')
+  })
+
   it('renders a missing-link variant when the existence hook returns false', async () => {
     // Re-stub the hook for this test only.
     vi.resetModules()

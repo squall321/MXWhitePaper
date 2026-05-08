@@ -10,10 +10,11 @@ function formatSize(size: number | undefined): string {
 }
 
 /**
- * File attachment row — links to `/api/v1/files/<id>` (intra storage).
+ * File attachment row — link hits `/api/v1/files/<id>/download` which 302s
+ * to a fresh 1-day presigned MinIO GET URL (cookie auth carries through).
  */
 export function FileBlockView({ block }: { block: FileBlock }) {
-  const href = `/api/v1/files/${encodeURIComponent(block.fileId)}`
+  const href = `/api/v1/files/${encodeURIComponent(block.fileId)}/download`
   return (
     <a
       href={href}

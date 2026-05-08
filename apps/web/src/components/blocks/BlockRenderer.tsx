@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Block } from '@/types/document'
 import { ParagraphBlockView } from './ParagraphBlock'
 import { Heading4BlockView } from './Heading4Block'
@@ -53,6 +54,10 @@ import {
   TabsBlockEditor,
 } from '@/features/editor/blocks/ContainerBlockEditors'
 import { BlockBoundary } from './BlockBoundary'
+import {
+  BlockCollapseWrapper,
+} from '@/features/editor/components/BlockCollapseWrapper'
+import { COLLAPSIBLE_BLOCK_TYPES } from '@/features/editor/components/BlockResizeWrapper'
 
 /**
  * BlockRenderer — discriminates on `block.type` and never throws on unknown
@@ -68,10 +73,40 @@ import { BlockBoundary } from './BlockBoundary'
  * unmount the entire article (Hardening C).
  */
 export function BlockRenderer({ block }: { block: Block }) {
-  return (
+  // For "tall" blocks (chart/table/code/gallery/gantt/flow/kpi-cards/
+  // calculator/dashboard-embed/math/org-chart) we wrap with a small "접기"
+  // toggle. Read mode → local state; edit mode → meta.collapsed via patchBlock.
+  // Other types (paragraph, callout, container blocks, etc.) pass through.
+  const wrapWithCollapse = block && typeof block.type === 'string' && COLLAPSIBLE_BLOCK_TYPES.has(block.type)
+  const inner = (
     <BlockBoundary blockType={block?.type}>
       <BlockRendererInner block={block} />
     </BlockBoundary>
+  )
+  if (!wrapWithCollapse) return inner
+  return (
+    <BlockCollapseWrapperWithSlug block={block}>
+      {inner}
+    </BlockCollapseWrapperWithSlug>
+  )
+}
+
+/**
+ * Tiny adapter so the wrapper can read `slug` from the editor store without
+ * forcing every BlockRenderer caller to plumb it through.
+ */
+function BlockCollapseWrapperWithSlug({
+  block,
+  children,
+}: {
+  block: Block
+  children: ReactNode
+}) {
+  const editorSlug = useEditorStore((s) => s.slug)
+  return (
+    <BlockCollapseWrapper block={block} slug={editorSlug ?? undefined}>
+      {children}
+    </BlockCollapseWrapper>
   )
 }
 

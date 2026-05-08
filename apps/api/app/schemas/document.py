@@ -90,6 +90,14 @@ class BlockMeta(BaseModel):
     """
     Heading 블록(heading-4 type)에서 실제 보여줄 단계. 2=큰 제목, 3=중간 제목, 4=작은 제목(기본). 다른 블록 타입에서는 무시됨.
     """
+    width: int | None = Field(None, ge=32, le=4000)
+    """
+    사용자 지정 블록 너비(px). 미지정 또는 0이면 부모 컨테이너에 맞춤(기존 동작).
+    """
+    height: int | None = Field(None, ge=32, le=4000)
+    """
+    사용자 지정 블록 높이(px). 미지정이면 콘텐츠 자동 높이(기존 동작).
+    """
 
 
 class ParagraphBlock(BaseModel):

@@ -2794,6 +2794,173 @@
         ]
       }
     },
+    "/api/v1/files/finalize": {
+      "post": {
+        "operationId": "files_finalize_api_v1_files_finalize_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Files Finalize Api V1 Files Finalize Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Files Finalize",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/presign-put": {
+      "post": {
+        "operationId": "files_presign_put_api_v1_files_presign_put_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Files Presign Put Api V1 Files Presign Put Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Files Presign Put",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{file_id}/download": {
+      "get": {
+        "description": "Issue a fresh 1-day presigned GET URL and 302-redirect.\n\n인증된 reader+ 이면 다운로드 허용 — 문서별 ACL 은 추후 도입. (현재 본\n문서들은 조직 전체에서 reader+ 권한이면 모두 열람 가능한 구조이므로\n문서-파일 연결 검사는 over-engineering.)",
+        "operationId": "files_download_api_v1_files__file_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "title": "File Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Files Download",
+        "tags": [
+          "files"
+        ]
+      }
+    },
     "/api/v1/glossary": {
       "get": {
         "operationId": "list_glossary_api_v1_glossary_get",
@@ -4315,6 +4482,10 @@
     {
       "description": "이미지 업로드 — pending → confirm → ULID/UUID 양방향 조회.",
       "name": "uploads"
+    },
+    {
+      "description": "일반 파일 첨부 업로드 — presigned PUT + finalize + 1일 GET.",
+      "name": "files"
     },
     {
       "description": "Meilisearch 기반 전체검색 + 하이라이트.",

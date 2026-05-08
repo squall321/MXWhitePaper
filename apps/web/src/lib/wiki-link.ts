@@ -6,10 +6,18 @@
  *   [[slug|display]]
  *   [[slug#1.1.1]]
  *   [[slug#1.1.1|display]]
+ *   [[#section-1.1]]                  (current-doc anchor, slug = '')
+ *   [[#section-1.1|display]]
+ *   [[other#section-2]]               (cross-doc anchor with explicit prefix)
+ *   [[other#section-2|display]]
  *
  * Constraints:
  *   slug   = [a-z0-9가-힣][a-z0-9가-힣-]{0,99}   (Polish D — Hangul allowed)
- *   anchor = \d+(\.\d+){0,2}
+ *   anchor = \d+(\.\d+){0,2}                   (legacy form: digits)
+ *          | section-\d+(\.\d+){0,2}           (explicit `section-` prefix)
+ *
+ * The `slug` may be empty when the link starts with `#` — the renderer treats
+ * such links as same-document anchors.
  *
  * Mismatched / malformed brackets fall through as plain text — never throw.
  */
@@ -21,7 +29,13 @@ export interface TextNode {
 
 export interface WikiNode {
   kind: 'wiki'
+  /** May be the empty string for same-document anchor links (`[[#section-1.1]]`). */
   slug: string
+  /**
+   * The raw anchor string. Either `1.1` (legacy) or `section-1.1` (explicit).
+   * Renderers MUST handle both — `WikiLink` prepends `section-` only when the
+   * anchor doesn't already start with that prefix.
+   */
   anchor?: string
   display?: string
 }
@@ -30,7 +44,8 @@ export type InlineNode = TextNode | WikiNode
 
 // Polish D — ASCII lowercase + digits + hyphen + Hangul 음절 (가-힣) 모두 허용.
 const SLUG_RE = /^[a-z0-9가-힣][a-z0-9가-힣-]{0,99}$/
-const ANCHOR_RE = /^\d+(?:\.\d+){0,2}$/
+// Either a bare numeric anchor (`1.1.1`) or one prefixed with `section-`.
+const ANCHOR_RE = /^(?:section-)?\d+(?:\.\d+){0,2}$/
 
 // Captures the inside of `[[...]]`. Greedy match is fine because we explicitly
 // reject if the inner blob contains `[[` or `]]`.
@@ -88,7 +103,13 @@ function parseWikiInner(inner: string): WikiNode | null {
   const anchorRaw =
     hashAt === -1 ? undefined : targetRaw.slice(hashAt + 1).trim() || undefined
 
-  if (!SLUG_RE.test(slug)) return null
+  // Same-doc anchors: `[[#section-1.1]]` → empty slug + anchor must be present.
+  // Anything else MUST satisfy SLUG_RE.
+  if (slug === '') {
+    if (!anchorRaw) return null
+  } else if (!SLUG_RE.test(slug)) {
+    return null
+  }
   if (anchorRaw !== undefined && !ANCHOR_RE.test(anchorRaw)) return null
 
   return {
