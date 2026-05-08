@@ -115,16 +115,17 @@ interface Props {
  * via the matching read-mode component. Auto-refresh interval = `refreshInterval`.
  */
 export function DataSourceBlockView({ block }: Props) {
-  const intervalMs = (block.refreshInterval ?? DEFAULT_REFRESH_S) * 1000
-  const paramsKey = STABLE_PARAMS_KEY(block.params)
-  const enabled = Boolean(block.endpoint)
+  const intervalMs = (block?.refreshInterval ?? DEFAULT_REFRESH_S) * 1000
+  const paramsKey = STABLE_PARAMS_KEY(block?.params)
+  const enabled = Boolean(block?.endpoint)
 
   const { data, error, isLoading, isFetching, dataUpdatedAt } = useQuery({
-    queryKey: ['data-source', block.endpoint, paramsKey],
+    queryKey: ['data-source', block?.endpoint, paramsKey],
     queryFn: () => fetchDataSource(block.endpoint, block.params),
     enabled,
     refetchInterval: enabled ? intervalMs : false,
     staleTime: Math.max(0, intervalMs - 1000),
+    retry: false,
   })
 
   const payload = data?.data ?? null
@@ -154,11 +155,21 @@ export function DataSourceBlockView({ block }: Props) {
     return <ErrorState title="데이터를 불러올 수 없습니다" description={(error as Error).message} />
   }
 
+  const blockId = block?.id ?? ''
   let body: React.ReactNode
-  if (block.render === 'chart') body = <ChartBlockView block={asChart(payload, block.id)} />
-  else if (block.render === 'kpi-cards')
-    body = <KpiCardsBlockView block={asKpiCards(payload, block.id)} />
-  else body = <TableBlockView block={asTable(payload, block.id)} />
+  try {
+    if (block?.render === 'chart') body = <ChartBlockView block={asChart(payload, blockId)} />
+    else if (block?.render === 'kpi-cards')
+      body = <KpiCardsBlockView block={asKpiCards(payload, blockId)} />
+    else body = <TableBlockView block={asTable(payload, blockId)} />
+  } catch (err) {
+    body = (
+      <ErrorState
+        title="데이터를 표시할 수 없습니다"
+        description={(err as Error)?.message ?? '알 수 없는 오류'}
+      />
+    )
+  }
 
   return (
     <section className="space-y-2 rounded border border-gray-200 bg-white p-3">

@@ -1,11 +1,6 @@
 import { apiClient } from '@/lib/api/client'
+import { unwrapListMaybe } from '@/lib/api/envelope'
 import type { Slug } from '@/types/document'
-
-interface ApiEnvelope<T> {
-  data: T
-  meta?: Record<string, unknown>
-  error?: { code: string; message: string } | null
-}
 
 export interface DocSearchHit {
   slug: Slug
@@ -33,16 +28,9 @@ export async function searchDocuments(
   limit = 10,
 ): Promise<DocSearchHit[]> {
   if (!q.trim()) return []
-  try {
-    const res = await apiClient.get<ApiEnvelope<DocSearchHit[]>>(`/search`, {
-      params: { q, limit },
-    })
-    return res.data.data ?? []
-  } catch (err) {
-    const status = (err as { response?: { status?: number } })?.response?.status
-    if (status === 404) return []
-    throw err
-  }
+  return unwrapListMaybe<DocSearchHit>(
+    apiClient.get('/search', { params: { q, limit } }),
+  )
 }
 
 export interface WidgetRegistryEntry {
@@ -55,14 +43,7 @@ export interface WidgetRegistryEntry {
 
 /** GET /api/v1/widgets/registry */
 export async function listWidgets(): Promise<WidgetRegistryEntry[]> {
-  try {
-    const res = await apiClient.get<ApiEnvelope<WidgetRegistryEntry[]>>(
-      '/widgets/registry',
-    )
-    return res.data.data ?? []
-  } catch (err) {
-    const status = (err as { response?: { status?: number } })?.response?.status
-    if (status === 404) return []
-    throw err
-  }
+  return unwrapListMaybe<WidgetRegistryEntry>(
+    apiClient.get('/widgets/registry'),
+  )
 }

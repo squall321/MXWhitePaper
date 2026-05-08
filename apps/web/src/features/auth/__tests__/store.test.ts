@@ -32,6 +32,16 @@ describe('auth/store', () => {
     expect(getAccessToken()).toBe('tok-abc')
   })
 
+  it('setSession() clears the hydrating flag', () => {
+    useAuthStore.getState().setHydrating(true)
+    useAuthStore.getState().setSession({
+      user: { id: 'u1', email: 'a@b', role: 'admin' },
+      accessToken: 'tok',
+      expiresAt: null,
+    })
+    expect(useAuthStore.getState().hydrating).toBe(false)
+  })
+
   it('clear() drops user and token', () => {
     useAuthStore.getState().setSession({
       user: { id: 'u1', email: 'a@b', role: 'editor' },
@@ -50,5 +60,35 @@ describe('auth/store', () => {
     expect(useAuthStore.getState().hydrating).toBe(true)
     useAuthStore.getState().setHydrating(false)
     expect(useAuthStore.getState().hydrating).toBe(false)
+  })
+
+  it('setUser() updates the user without touching the access token', () => {
+    useAuthStore.getState().setSession({
+      user: { id: 'u1', email: 'a@b', role: 'editor' },
+      accessToken: 'tok-1',
+      expiresAt: null,
+    })
+    useAuthStore.getState().setUser({ id: 'u1', email: 'a@b', role: 'admin' })
+    const s = useAuthStore.getState()
+    expect(s.user?.role).toBe('admin')
+    expect(s.accessToken).toBe('tok-1')
+  })
+
+  it('setSession() with null token persists the cleared state', () => {
+    useAuthStore.getState().setSession({ user: null, accessToken: null, expiresAt: null })
+    expect(getAccessToken()).toBeNull()
+    expect(useAuthStore.getState().user).toBeNull()
+  })
+
+  it('hydrating round-trip: true then session set flips to false', () => {
+    useAuthStore.getState().setHydrating(true)
+    expect(useAuthStore.getState().hydrating).toBe(true)
+    useAuthStore.getState().setSession({
+      user: { id: 'u1', email: 'a@b', role: 'admin' },
+      accessToken: 'tok-2',
+      expiresAt: null,
+    })
+    expect(useAuthStore.getState().hydrating).toBe(false)
+    expect(useAuthStore.getState().user?.email).toBe('a@b')
   })
 })

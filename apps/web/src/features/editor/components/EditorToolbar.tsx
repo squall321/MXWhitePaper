@@ -144,6 +144,7 @@ export function EditorToolbar({
     <>
       <div
         data-editor-toolbar
+        data-testid="editor-toolbar"
         className="sticky top-[var(--header-h)] z-sticky -mx-4 flex flex-wrap items-center gap-1.5 border-b border-gray-200 bg-white/95 px-4 py-2 text-sm shadow-sm backdrop-blur-sm sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
       >
         <button
@@ -231,17 +232,19 @@ export function EditorToolbar({
 
         <PartPicker slug={slug} />
 
-        <SaveStatusPill
-          manualLabel={manualLabel}
-          onClick={
-            status === 'conflict'
-              ? () => {
-                  /* Modal already opens via store conflictRemote — clicking the pill
-                       should just bring it into view. We re-render the same conflict. */
-                }
-              : undefined
-          }
-        />
+        <span data-testid="save-status">
+          <SaveStatusPill
+            manualLabel={manualLabel}
+            onClick={
+              status === 'conflict'
+                ? () => {
+                    /* Modal already opens via store conflictRemote — clicking the pill
+                         should just bring it into view. We re-render the same conflict. */
+                  }
+                : undefined
+            }
+          />
+        </span>
 
         <div className="ml-auto flex items-center gap-1.5">
           <span className="hidden truncate font-mono text-[11px] text-gray-500 md:inline">{slug}</span>

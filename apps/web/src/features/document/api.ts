@@ -1,11 +1,13 @@
 import { apiClient } from '@/lib/api/client'
+import {
+  isNotFound,
+  readMeta,
+  unwrap,
+  unwrapListMaybe,
+  unwrapMaybe,
+  type ApiEnvelope,
+} from '@/lib/api/envelope'
 import type { DocumentJSONV10, Slug } from '@/types/document'
-
-interface ApiEnvelope<T> {
-  data: T
-  meta?: Record<string, unknown>
-  error?: { code: string; message: string } | null
-}
 
 export interface DocumentMetaEnvelope {
   version?: number
@@ -73,11 +75,11 @@ export async function getDocument(slug: Slug): Promise<DocumentResult> {
   const res = await apiClient.get<ApiEnvelope<DocumentRow>>(
     `/documents/${encodeURIComponent(slug)}`,
   )
-  const row = res.data.data
+  const row = unwrap(res)
   return {
     document: row.content,
     row,
-    meta: (res.data.meta ?? {}) as DocumentMetaEnvelope,
+    meta: readMeta<DocumentMetaEnvelope>(res),
   }
 }
 
@@ -87,17 +89,9 @@ export async function getDocument(slug: Slug): Promise<DocumentResult> {
 export async function listDocuments(
   params: ListDocumentsParams = {},
 ): Promise<DocumentCard[]> {
-  try {
-    const res = await apiClient.get<ApiEnvelope<DocumentCard[]>>('/documents', {
-      params,
-    })
-    return res.data.data ?? []
-  } catch (err) {
-    if ((err as { response?: { status?: number } })?.response?.status === 404) {
-      return []
-    }
-    throw err
-  }
+  return unwrapListMaybe<DocumentCard>(
+    apiClient.get('/documents', { params }),
+  )
 }
 
 /**
@@ -125,20 +119,23 @@ export interface BacklinksResult {
 
 export async function getBacklinks(slug: Slug): Promise<BacklinksResult> {
   try {
-    const res = await apiClient.get<
-      ApiEnvelope<BacklinkRow[]> & { meta?: { target_exists?: boolean } }
-    >(`/documents/${encodeURIComponent(slug)}/backlinks`)
+    const res = await apiClient.get<ApiEnvelope<BacklinkRow[]>>(
+      `/documents/${encodeURIComponent(slug)}/backlinks`,
+    )
+    const meta = readMeta<{ target_exists?: boolean; total?: number }>(res)
     return {
-      items: res.data.data ?? [],
+      items: Array.isArray(res.data?.data) ? (res.data.data as BacklinkRow[]) : [],
       // Default to true so a transient error never paints the "missing" CTA.
-      targetExists: res.data.meta?.target_exists !== false,
+      targetExists: meta.target_exists !== false,
     }
   } catch (err) {
+    // 404 here means the BE could not resolve the target slug — the doc is
+    // missing and there are no backlinks. 5xx degrades the same way so a
+    // partially-built backend never blocks the article render.
+    if (isNotFound(err)) return { items: [], targetExists: false }
     const status = (err as { response?: { status?: number } })?.response?.status
-    if (status === 404 || status === 500) {
-      // 404 here means the BE could not even resolve the slug — the doc is
-      // missing and there are no backlinks.
-      return { items: [], targetExists: status !== 404 }
+    if (status != null && status >= 500) {
+      return { items: [], targetExists: true }
     }
     throw err
   }
@@ -151,11 +148,14 @@ export async function getBacklinks(slug: Slug): Promise<BacklinksResult> {
  */
 export async function checkDocumentExists(slug: Slug): Promise<boolean> {
   try {
-    await apiClient.get(`/documents/${encodeURIComponent(slug)}`)
-    return true
-  } catch (err) {
-    const status = (err as { response?: { status?: number } })?.response?.status
-    if (status === 404) return false
+    const value = await unwrapMaybe<DocumentRow | null>(
+      apiClient.get<ApiEnvelope<DocumentRow | null>>(
+        `/documents/${encodeURIComponent(slug)}`,
+      ),
+      null,
+    )
+    return value !== null
+  } catch {
     // 5xx / network — treat as "exists" so we don't paint everything red.
     return true
   }

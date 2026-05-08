@@ -28,15 +28,19 @@ export function PartPicker({ slug }: PartPickerProps) {
   const applySnapshot = useEditorStore((s) => s.applyServerSnapshot)
 
   const options = useMemo<PartOption[]>(() => {
-    if (!tree) return []
+    if (!Array.isArray(tree)) return []
     const out: PartOption[] = []
     for (const d of tree) {
-      for (const t of d.teams) {
-        for (const g of t.groups) {
-          for (const p of g.parts) {
+      const teams = Array.isArray(d?.teams) ? d.teams : []
+      for (const t of teams) {
+        const groups = Array.isArray(t?.groups) ? t.groups : []
+        for (const g of groups) {
+          const parts = Array.isArray(g?.parts) ? g.parts : []
+          for (const p of parts) {
+            if (!p?.slug) continue
             out.push({
               slug: p.slug,
-              label: `${d.name} / ${t.name} / ${g.name} / ${p.name}`,
+              label: `${d?.name ?? ''} / ${t?.name ?? ''} / ${g?.name ?? ''} / ${p?.name ?? ''}`,
             })
           }
         }

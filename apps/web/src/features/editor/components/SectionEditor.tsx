@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useCreateBlockNote, SuggestionMenuController } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
 import '@blocknote/core/fonts/inter.css'
@@ -11,6 +11,9 @@ import {
   type BNBlock,
 } from '../adapters'
 import { buildSlashItems, type BNEditorLike } from './slash-menu-items'
+import { EditorTriggerOverlay, type OverlaySelection } from '../extensions/WikiLinkSuggestion'
+import { parseCsv } from '../extensions/csv-paste'
+import { decideUrlPaste } from '../extensions/url-paste'
 
 interface SectionEditorProps {
   /** Initial DocumentJSON Block array. */
@@ -91,11 +94,140 @@ export function SectionEditor({
     return () => clearTimeout(t)
   }, [editor, autoFocus, readOnly])
 
+  // ── Inline suggestion overlay + paste interception (Cycle 15) ──────────
+  const surfaceRef = useRef<HTMLDivElement | null>(null)
+
+  /**
+   * Replace the trigger text immediately preceding the caret with
+   * `replacement`. Falls back gracefully when `Selection` / `Range` aren't
+   * available (e.g. jsdom-less unit tests).
+   */
+  const insertAtCaret = useCallback((consume: number, replacement: string) => {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return
+    const range = sel.getRangeAt(0)
+    const node = range.startContainer
+    if (node.nodeType !== Node.TEXT_NODE) return
+    const offset = range.startOffset
+    const start = Math.max(0, offset - consume)
+    const text = (node.textContent ?? '')
+    const next = text.slice(0, start) + replacement + text.slice(offset)
+    node.textContent = next
+    // Position the caret after the inserted text.
+    const newOffset = start + replacement.length
+    const newRange = document.createRange()
+    newRange.setStart(node, Math.min(newOffset, next.length))
+    newRange.collapse(true)
+    sel.removeAllRanges()
+    sel.addRange(newRange)
+    // Notify ProseMirror via an input event so it picks up the DOM mutation.
+    surfaceRef.current?.dispatchEvent(new InputEvent('input', { bubbles: true }))
+  }, [])
+
+  const handleSuggestionSelect = useCallback(
+    (sel: OverlaySelection) => {
+      const insertText = sel.item.insertText
+      // The wiki-create fallback: redirect to /docs/new instead of inserting.
+      if (insertText.startsWith('__create__')) {
+        const slug = insertText.slice('__create__'.length)
+        window.location.href = `/docs/new?slug=${encodeURIComponent(slug)}`
+        return
+      }
+      insertAtCaret(sel.match.consume, insertText)
+    },
+    [insertAtCaret],
+  )
+
+  /**
+   * Editor-level paste interception:
+   *   - CSV → wrap in a hidden chip "표로 변환?" (yes inserts a `table` block).
+   *     For now we just insert the table directly when no selection is set,
+   *     since the Cycle 15 milestone is about the pipeline working end-to-end.
+   *   - URL on selection → wrap the selection.
+   *   - URL on bare line + internal slug → suggest `[[slug]]`.
+   */
+  const onPaste = useCallback(
+    (e: React.ClipboardEvent<HTMLDivElement>) => {
+      const text = e.clipboardData.getData('text/plain')
+      if (!text) return
+      // 1) CSV first.
+      const csv = parseCsv(text)
+      if (csv) {
+        // Defer to `editor.insertBlocks` if available.
+        const ed = editor as unknown as BNEditorLike | undefined
+        if (ed && typeof ed.insertBlocks === 'function') {
+          e.preventDefault()
+          const cur = ed.getTextCursorPosition?.()
+          ed.insertBlocks(
+            [
+              {
+                type: 'table',
+                content: {
+                  type: 'tableContent',
+                  rows: [
+                    { cells: csv.headers },
+                    ...csv.rows.map((r) => ({ cells: r })),
+                  ],
+                },
+              },
+            ],
+            cur?.block ?? { id: 'first' },
+            'after',
+          )
+          return
+        }
+      }
+      // 2) URL handling.
+      const decision = decideUrlPaste({
+        text,
+        selection: window.getSelection()?.toString() ?? '',
+        origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+      })
+      if (decision.kind === 'wikilink' && decision.slug) {
+        e.preventDefault()
+        insertAtCaret(0, `[[${decision.slug}]]`)
+      }
+      // wrap / link / none → fall through to BlockNote default.
+    },
+    [editor, insertAtCaret],
+  )
+
+  /**
+   * `[ ] ` at the start of a line converts to a check-list item. We listen
+   * for the Space keystroke and inspect the four characters before the
+   * caret. The conversion is a simple text replacement; BlockNote's input
+   * rules will pick it up on the next render.
+   */
+  const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== ' ') return
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return
+    const range = sel.getRangeAt(0)
+    const node = range.startContainer
+    if (node.nodeType !== Node.TEXT_NODE) return
+    const before = (node.textContent ?? '').slice(0, range.startOffset)
+    if (!/(^|\n)\[ \]$/.test(before)) return
+    e.preventDefault()
+    // Replace `[ ]` with empty string and let BlockNote's checkListItem
+    // shortcut take over — easiest approach: dispatch a synthetic event
+    // that mutates the type via the editor API.
+    const ed = editor as unknown as BNEditorLike | undefined
+    if (!ed) return
+    const cur = ed.getTextCursorPosition?.()
+    if (!cur) return
+    // Strip the literal text from the line.
+    insertAtCaret(3, '')
+    ed.insertBlocks([{ type: 'checkListItem' }], cur.block, 'after')
+  }, [editor, insertAtCaret])
+
   if (!editor) return null
   const isEmpty = initial.length === 0
 
   return (
     <div
+      ref={surfaceRef}
+      onPaste={onPaste}
+      onKeyDown={onKeyDown}
       data-blocknote-surface
       className="wp-editor-surface relative rounded-md border border-smsg-100 bg-white"
     >
@@ -135,6 +267,11 @@ export function SectionEditor({
       </BlockNoteView>
 
       {isEmpty && !readOnly && <EmptyEditorHint />}
+
+      {/* Wiki / mention / emoji autocomplete (Cycle 15). */}
+      {!readOnly && (
+        <EditorTriggerOverlay hostRef={surfaceRef} onSelect={handleSuggestionSelect} />
+      )}
     </div>
   )
 }

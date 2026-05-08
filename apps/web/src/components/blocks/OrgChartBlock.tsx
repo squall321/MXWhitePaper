@@ -15,22 +15,29 @@ export interface PositionedNode {
  * acceptable for the typical org-chart depth (≤ 6).
  *
  * Coordinates are in abstract units; the renderer scales them via NODE_W/H.
+ *
+ * Defensive: tolerates missing `root`, missing `children`, or an empty tree.
  */
 export function layoutTree(
-  root: OrgChartNode,
+  root: OrgChartNode | null | undefined,
   layout: 'tree' | 'horizontal' = 'tree',
 ): { nodes: PositionedNode[]; width: number; height: number } {
+  if (!root || typeof root !== 'object') {
+    return { nodes: [], width: 1, height: 1 }
+  }
   let cursor = 0
   const result: PositionedNode[] = []
 
   function visit(node: OrgChartNode, depth: number, parentId?: string): number {
-    const children = node.children ?? []
+    const children = Array.isArray(node?.children) ? node.children : []
     if (children.length === 0) {
       const x = cursor++
       result.push({ node, x, y: depth, parentId })
       return x
     }
-    const childXs = children.map((c) => visit(c, depth + 1, node.id))
+    const childXs = children
+      .filter((c): c is OrgChartNode => Boolean(c))
+      .map((c) => visit(c, depth + 1, node.id))
     const first = childXs[0] ?? 0
     const last = childXs[childXs.length - 1] ?? 0
     const x = (first + last) / 2
@@ -39,6 +46,7 @@ export function layoutTree(
   }
   visit(root, 0)
 
+  if (result.length === 0) return { nodes: [], width: 1, height: 1 }
   const xs = result.map((p) => p.x)
   const ys = result.map((p) => p.y)
   const width = Math.max(...xs) + 1
@@ -54,11 +62,16 @@ export function layoutTree(
 }
 
 /** Collect descendant ids of `id` for hover highlight. */
-export function collectDescendants(root: OrgChartNode, id: string): Set<string> {
+export function collectDescendants(
+  root: OrgChartNode | null | undefined,
+  id: string,
+): Set<string> {
   const out = new Set<string>()
+  if (!root) return out
   function find(n: OrgChartNode): OrgChartNode | null {
-    if (n.id === id) return n
-    for (const c of n.children ?? []) {
+    if (n?.id === id) return n
+    for (const c of Array.isArray(n?.children) ? n.children : []) {
+      if (!c) continue
       const f = find(c)
       if (f) return f
     }
@@ -67,8 +80,9 @@ export function collectDescendants(root: OrgChartNode, id: string): Set<string> 
   const target = find(root)
   if (!target) return out
   function walk(n: OrgChartNode) {
-    out.add(n.id)
-    for (const c of n.children ?? []) walk(c)
+    if (!n) return
+    if (n.id) out.add(n.id)
+    for (const c of Array.isArray(n.children) ? n.children : []) walk(c)
   }
   walk(target)
   return out
@@ -88,13 +102,21 @@ interface Props {
  * node + its descendants.
  */
 export function OrgChartBlockView({ block }: Props) {
-  const layout = block.layout ?? 'tree'
-  const positioned = useMemo(() => layoutTree(block.root, layout), [block.root, layout])
+  const layout = block?.layout ?? 'tree'
+  const positioned = useMemo(() => layoutTree(block?.root, layout), [block?.root, layout])
   const [hoverId, setHoverId] = useState<string | null>(null)
   const highlight = useMemo(
-    () => (hoverId ? collectDescendants(block.root, hoverId) : null),
-    [hoverId, block.root],
+    () => (hoverId ? collectDescendants(block?.root, hoverId) : null),
+    [hoverId, block?.root],
   )
+
+  if (!block?.root || positioned.nodes.length === 0) {
+    return (
+      <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-3 text-xs text-gray-500">
+        조직도 데이터가 비어 있습니다.
+      </div>
+    )
+  }
 
   const stepX = NODE_W + X_GAP
   const stepY = NODE_H + Y_GAP
@@ -180,6 +202,7 @@ export function OrgChartBlockView({ block }: Props) {
   )
 }
 
-function truncate(s: string, n: number): string {
-  return s.length > n ? `${s.slice(0, n - 1)}…` : s
+function truncate(s: string | undefined | null, n: number): string {
+  const safe = typeof s === 'string' ? s : ''
+  return safe.length > n ? `${safe.slice(0, n - 1)}…` : safe
 }

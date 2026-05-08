@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client'
+import { unwrapListMaybe, type ApiEnvelope } from '@/lib/api/envelope'
 import type {
   Block,
   DocumentJSONV10,
@@ -8,13 +9,6 @@ import type {
   Slug,
   Ulid,
 } from '@/types/document'
-
-/** Wrapper for a single API success — `data.data` carries the payload. */
-interface ApiEnvelope<T> {
-  data: T
-  meta?: Record<string, unknown>
-  error?: { code: string; message: string } | null
-}
 
 export interface EditorResponseMeta {
   version?: number
@@ -48,7 +42,11 @@ function unwrap(res: {
   // ETag header has highest authority but `meta.etag` is the documented contract.
   const headerEtag = (res.headers as Record<string, string | undefined>)['etag']
   const etag = headerEtag ?? meta.etag ?? ''
-  return { document: res.data.data, etag }
+  const document = res.data.data
+  if (!document) {
+    throw new Error('서버 응답이 비어 있습니다.')
+  }
+  return { document, etag }
 }
 
 export type AnySection = SectionLevel1 | SectionLevel2 | SectionLevel3
@@ -229,16 +227,9 @@ export interface VersionRow {
 
 /** GET /documents/:slug/versions */
 export async function listVersions(slug: Slug): Promise<VersionRow[]> {
-  try {
-    const res = await apiClient.get<ApiEnvelope<VersionRow[]>>(
-      `/documents/${encodeURIComponent(slug)}/versions`,
-    )
-    return res.data.data ?? []
-  } catch (err) {
-    const status = (err as { response?: { status?: number } })?.response?.status
-    if (status === 404) return []
-    throw err
-  }
+  return unwrapListMaybe<VersionRow>(
+    apiClient.get(`/documents/${encodeURIComponent(slug)}/versions`),
+  )
 }
 
 export interface VersionDetail extends VersionRow {
@@ -253,7 +244,7 @@ export async function getVersion(
     const res = await apiClient.get<ApiEnvelope<VersionDetail>>(
       `/documents/${encodeURIComponent(slug)}/versions/${version}`,
     )
-    return res.data.data
+    return res.data.data ?? null
   } catch (err) {
     const status = (err as { response?: { status?: number } })?.response?.status
     if (status === 404) return null

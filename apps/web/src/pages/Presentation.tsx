@@ -34,10 +34,16 @@ export function PresentationPage() {
   const navigate = useNavigate()
   const { data, isPending, isError } = useDocument(slug)
 
-  const slides = useMemo<Slide[]>(
-    () => (data ? buildSlides(data.document, { nested }) : []),
-    [data, nested],
-  )
+  const slides = useMemo<Slide[]>(() => {
+    if (!data?.document) return []
+    try {
+      return buildSlides(data.document, { nested })
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[Presentation] buildSlides failed', err)
+      return []
+    }
+  }, [data, nested])
 
   const [index, dispatch] = useReducer(
     (state: number, action: Parameters<typeof navReducer>[2]) =>
@@ -74,25 +80,70 @@ export function PresentationPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [exit])
 
-  if (!slug) return <p style={{ color: 'white', padding: 24 }}>missing slug</p>
+  if (!slug) {
+    return (
+      <div style={{ color: 'white', padding: 24 }}>
+        <p>슬러그가 지정되지 않았습니다.</p>
+        <a href="/" style={{ color: '#a5b4fc', textDecoration: 'underline' }}>
+          ← 돌아가기
+        </a>
+      </div>
+    )
+  }
   if (isPending)
     return <p style={{ color: 'white', padding: 24 }}>불러오는 중…</p>
-  if (isError || !data)
+  if (isError || !data) {
+    const status = (
+      (
+        (data as unknown) ??
+        (Object.create(null) as { response?: { status?: number } })
+      ) as { response?: { status?: number } }
+    )?.response?.status
     return (
-      <p style={{ color: 'white', padding: 24 }}>
-        문서를 불러오지 못했습니다.
-      </p>
+      <div style={{ color: 'white', padding: 24 }}>
+        <p>
+          {status === 404
+            ? '해당 슬러그의 문서를 찾을 수 없습니다.'
+            : '문서를 불러오지 못했습니다.'}
+        </p>
+        <a
+          href="/"
+          style={{ color: '#a5b4fc', textDecoration: 'underline' }}
+        >
+          ← 돌아가기
+        </a>
+      </div>
     )
+  }
 
   const total = slides.length
+  if (total === 0) {
+    return (
+      <div style={{ color: 'white', padding: 24 }}>
+        <p>슬라이드를 만들 수 없는 문서입니다.</p>
+        <a
+          href={`/docs/${encodeURIComponent(slug)}`}
+          style={{ color: '#a5b4fc', textDecoration: 'underline' }}
+        >
+          ← 돌아가기
+        </a>
+      </div>
+    )
+  }
   // `index` is reducer-clamped, but TS sees `slides[number]` as possibly
   // undefined under noUncheckedIndexedAccess. Guard explicitly.
   const slide = slides[index] ?? slides[0]
   if (!slide) {
     return (
-      <p style={{ color: 'white', padding: 24 }}>
-        렌더할 슬라이드가 없습니다.
-      </p>
+      <div style={{ color: 'white', padding: 24 }}>
+        <p>렌더할 슬라이드가 없습니다.</p>
+        <a
+          href={`/docs/${encodeURIComponent(slug)}`}
+          style={{ color: '#a5b4fc', textDecoration: 'underline' }}
+        >
+          ← 돌아가기
+        </a>
+      </div>
     )
   }
   const progress = total > 1 ? ((index + 1) / total) * 100 : 100
@@ -168,31 +219,33 @@ export function PresentationPage() {
 
 function SlideContent({ slide }: { slide: Slide }) {
   if (slide.kind === 'title') {
+    const tags = Array.isArray(slide.meta?.tags) ? slide.meta.tags : []
     return (
       <div className="slide-body slide-title">
-        <h1>{slide.title}</h1>
+        <h1>{slide.title || '(제목 없음)'}</h1>
         {slide.summary && <p className="slide-summary">{slide.summary}</p>}
         <div className="slide-meta">
-          {slide.meta.path && <span>{slide.meta.path}</span>}
-          {slide.meta.confidentiality && (
+          {slide.meta?.path && <span>{slide.meta.path}</span>}
+          {slide.meta?.confidentiality && (
             <span className="badge">{slide.meta.confidentiality}</span>
           )}
-          {slide.meta.tags.slice(0, 5).map((t) => (
+          {tags.slice(0, 5).map((t) => (
             <span key={t} className="tag">#{t}</span>
           ))}
         </div>
       </div>
     )
   }
+  const blocks = Array.isArray(slide.section?.blocks) ? slide.section.blocks : []
   return (
     <div className="slide-body slide-section">
       <header className="slide-heading">
         {slide.number && <span className="num">{slide.number}</span>}
-        <h2>{slide.title}</h2>
+        <h2>{slide.title || '(제목 없음)'}</h2>
       </header>
       <div className="slide-blocks">
-        {slide.section.blocks.map((block) => (
-          <SlideBlockRenderer key={block.id} block={block} />
+        {blocks.map((block) => (
+          <SlideBlockRenderer key={block?.id ?? Math.random().toString(36)} block={block} />
         ))}
       </div>
     </div>

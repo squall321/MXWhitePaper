@@ -1,5 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useBacklinks } from '@/features/document/hooks/useBacklinks'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { toApiError } from '@/lib/api/envelope'
 import type { Slug } from '@/types/document'
 
 interface BacklinksProps {
@@ -16,7 +19,7 @@ interface BacklinksProps {
  * resolves to a clickable `/docs/<slug>` Link.
  */
 export function Backlinks({ slug }: BacklinksProps) {
-  const { data, isPending } = useBacklinks(slug)
+  const { data, isPending, isError, error, refetch } = useBacklinks(slug)
   const items = data?.items ?? []
   const showCreateCta = data ? data.targetExists === false : false
 
@@ -39,7 +42,18 @@ export function Backlinks({ slug }: BacklinksProps) {
       )}
 
       {isPending ? (
-        <p className="text-xs text-gray-400">불러오는 중…</p>
+        <div className="space-y-1.5" aria-busy="true">
+          <Skeleton className="h-3 w-3/4" />
+          <Skeleton className="h-3 w-2/3" />
+          <Skeleton className="h-3 w-1/2" />
+        </div>
+      ) : isError ? (
+        <ErrorState
+          title="백링크를 불러오지 못했습니다"
+          description={toApiError(error).message}
+          onRetry={() => void refetch()}
+          className="px-3 py-3"
+        />
       ) : items.length === 0 ? (
         <p className="text-xs text-gray-400">백링크 없음</p>
       ) : (

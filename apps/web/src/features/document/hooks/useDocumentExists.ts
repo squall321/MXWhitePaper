@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { checkDocumentExists } from '../api'
 import type { Slug } from '@/types/document'
 
@@ -21,5 +21,7 @@ export function useDocumentExists(slug: Slug | undefined) {
     enabled: Boolean(slug),
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
+    retry: 1,
+    placeholderData: keepPreviousData,
   })
 }

@@ -21,14 +21,19 @@ const PROVIDER_LABEL: Record<DashboardEmbedBlock['provider'], string> = {
 function buildUrl(provider: DashboardEmbedBlock['provider'], panelId: string, params: unknown): string {
   if (!panelId) return ''
   const base = PROVIDER_BASE[provider]
-  const url = new URL(`${base}/${encodeURIComponent(panelId)}`)
-  if (params && typeof params === 'object' && !Array.isArray(params)) {
-    for (const [k, v] of Object.entries(params as Record<string, unknown>)) {
-      if (v == null) continue
-      url.searchParams.set(k, String(v))
+  if (!base) return ''
+  try {
+    const url = new URL(`${base}/${encodeURIComponent(panelId)}`)
+    if (params && typeof params === 'object' && !Array.isArray(params)) {
+      for (const [k, v] of Object.entries(params as Record<string, unknown>)) {
+        if (v == null) continue
+        url.searchParams.set(k, String(v))
+      }
     }
+    return url.toString()
+  } catch {
+    return ''
   }
-  return url.toString()
 }
 
 /**
@@ -37,25 +42,35 @@ function buildUrl(provider: DashboardEmbedBlock['provider'], panelId: string, pa
  * unknown providers fall through to an empty src and a warning state.
  */
 export function DashboardEmbedBlockView({ block }: { block: DashboardEmbedBlock }) {
-  const src = useMemo(
-    () => buildUrl(block.provider, block.panelId, block.params),
-    [block.provider, block.panelId, block.params],
+  const provider = block?.provider
+  const panelId = block?.panelId ?? ''
+  const params = block?.params
+  const src = useMemo(() => buildUrl(provider, panelId, params), [provider, panelId, params])
+  const stamp = useMemo(
+    () => new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+    [panelId],
   )
-  const stamp = useMemo(() => new Date().toLocaleTimeString('ko-KR', { hour12: false }), [block.panelId])
+
+  const isKnownProvider = Boolean(provider && PROVIDER_BASE[provider])
+  const providerLabel = isKnownProvider ? PROVIDER_LABEL[provider] : '알 수 없는 제공자'
 
   return (
     <figure className="space-y-2 rounded border border-gray-200 bg-white p-2">
       <header className="flex items-center justify-between gap-2 text-xs text-gray-500">
         <div className="flex items-center gap-2">
-          <Badge tone="brand" size="sm">{PROVIDER_LABEL[block.provider]}</Badge>
-          <code className="text-[11px] text-gray-600">{block.panelId || '(panel id 없음)'}</code>
+          <Badge tone="brand" size="sm">{providerLabel}</Badge>
+          <code className="text-[11px] text-gray-600">{panelId || '(panel id 없음)'}</code>
         </div>
         <span>요청 {stamp}</span>
       </header>
-      {src ? (
+      {!isKnownProvider ? (
+        <div className="grid h-48 place-items-center rounded border border-dashed border-amber-300 bg-amber-50 text-xs text-amber-800">
+          지원하지 않는 대시보드 제공자입니다.
+        </div>
+      ) : src ? (
         <iframe
           src={src}
-          title={`${block.provider} ${block.panelId}`}
+          title={`${provider} ${panelId}`}
           className="block h-96 w-full rounded border border-gray-100"
           sandbox="allow-scripts allow-same-origin allow-popups"
           loading="lazy"

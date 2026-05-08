@@ -472,10 +472,12 @@ export function diffDocument(
   base: DocumentJSONV10,
   next: DocumentJSONV10,
 ): DocDiff {
+  const safeBase = (base ?? {}) as DocumentJSONV10
+  const safeNext = (next ?? {}) as DocumentJSONV10
   const scalars: KeyDiff[] = []
   for (const k of SCALAR_KEYS) {
-    const bv = base[k]
-    const nv = next[k]
+    const bv = safeBase[k]
+    const nv = safeNext[k]
     if (!deepEqual(bv, nv)) {
       scalars.push({
         key: k as string,
@@ -488,28 +490,31 @@ export function diffDocument(
   }
   return {
     scalars,
-    metadata: diffMetadata(base.metadata, next.metadata),
-    infobox: diffInfobox(base.infobox, next.infobox),
+    metadata: diffMetadata(
+      safeBase.metadata ?? ({} as DocumentJSONV10['metadata']),
+      safeNext.metadata ?? ({} as DocumentJSONV10['metadata']),
+    ),
+    infobox: diffInfobox(safeBase.infobox, safeNext.infobox),
     sections: diffSections(
-      base.sections as AnySection[],
-      next.sections as AnySection[],
+      (Array.isArray(safeBase.sections) ? safeBase.sections : []) as AnySection[],
+      (Array.isArray(safeNext.sections) ? safeNext.sections : []) as AnySection[],
     ),
     related_documents: diffList<RelatedDoc>(
-      base.related_documents,
-      next.related_documents,
-      (r) => `${r.slug}::${r.relation}`,
+      safeBase.related_documents,
+      safeNext.related_documents,
+      (r) => `${r?.slug ?? ''}::${r?.relation ?? ''}`,
     ),
     glossary: diffList<GlossaryItem>(
-      base.glossary,
-      next.glossary,
-      (g) => g.term,
+      safeBase.glossary,
+      safeNext.glossary,
+      (g) => g?.term ?? '',
     ),
     references: diffList<Reference>(
-      base.references,
-      next.references,
-      (r) => `${r.type}::${r.label}::${r.url ?? ''}`,
+      safeBase.references,
+      safeNext.references,
+      (r) => `${r?.type ?? ''}::${r?.label ?? ''}::${r?.url ?? ''}`,
     ),
-    see_also: diffList<Slug>(base.see_also, next.see_also, (s) => s),
+    see_also: diffList<Slug>(safeBase.see_also, safeNext.see_also, (s) => s ?? ''),
   }
 }
 
@@ -522,8 +527,11 @@ export function threeWayDiff(
   mine: DocumentJSONV10,
   theirs: DocumentJSONV10,
 ): ThreeWayDiff {
-  const minePatch = diffDocument(base, mine)
-  const theirsPatch = diffDocument(base, theirs)
+  const safeBase = (base ?? {}) as DocumentJSONV10
+  const safeMine = (mine ?? {}) as DocumentJSONV10
+  const safeTheirs = (theirs ?? {}) as DocumentJSONV10
+  const minePatch = diffDocument(safeBase, safeMine)
+  const theirsPatch = diffDocument(safeBase, safeTheirs)
 
   const conflicts: ConflictNode[] = []
 
@@ -568,9 +576,9 @@ export function threeWayDiff(
   // section presence + title + blocks
   const mineSecMap = new Map(minePatch.sections.map((s) => [s.id, s]))
   const theirsSecMap = new Map(theirsPatch.sections.map((s) => [s.id, s]))
-  const baseSecIndex = indexSections(base.sections as AnySection[])
-  const mineSecIndex = indexSections(mine.sections as AnySection[])
-  const theirsSecIndex = indexSections(theirs.sections as AnySection[])
+  const baseSecIndex = indexSections((Array.isArray(safeBase.sections) ? safeBase.sections : []) as AnySection[])
+  const mineSecIndex = indexSections((Array.isArray(safeMine.sections) ? safeMine.sections : []) as AnySection[])
+  const theirsSecIndex = indexSections((Array.isArray(safeTheirs.sections) ? safeTheirs.sections : []) as AnySection[])
 
   const allSectionIds = new Set([...mineSecMap.keys(), ...theirsSecMap.keys()])
   for (const sid of allSectionIds) {
@@ -629,9 +637,9 @@ export function threeWayDiff(
   }
 
   // block-level conflicts (across the whole doc)
-  const baseBlocks = indexBlocks(base.sections as AnySection[])
-  const mineBlocks = indexBlocks(mine.sections as AnySection[])
-  const theirsBlocks = indexBlocks(theirs.sections as AnySection[])
+  const baseBlocks = indexBlocks((Array.isArray(safeBase.sections) ? safeBase.sections : []) as AnySection[])
+  const mineBlocks = indexBlocks((Array.isArray(safeMine.sections) ? safeMine.sections : []) as AnySection[])
+  const theirsBlocks = indexBlocks((Array.isArray(safeTheirs.sections) ? safeTheirs.sections : []) as AnySection[])
   const allBlockIds = new Set<Ulid>([
     ...mineBlocks.keys(),
     ...theirsBlocks.keys(),
@@ -746,9 +754,9 @@ export function threeWayDiff(
   }
 
   return {
-    base,
-    mine,
-    theirs,
+    base: safeBase,
+    mine: safeMine,
+    theirs: safeTheirs,
     minePatch,
     theirsPatch,
     conflicts,

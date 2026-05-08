@@ -6,6 +6,9 @@ import type { DocumentCard } from '@/features/document/api'
 import { Badge, Button, Card, Skeleton, EmptyState, ErrorState, cn } from '@/components/ui'
 import { RecentRail } from '@/features/recent/components/RecentRail'
 import { useRecentStore } from '@/features/recent/store'
+import { RailBoundary } from '@/components/blocks/BlockBoundary'
+import { SlowFetchBanner, useSlowFetch } from '@/lib/api/useSlowFetch'
+import { toApiError } from '@/lib/api/envelope'
 import type { AppOutletContext } from '@/App'
 
 /**
@@ -18,18 +21,25 @@ import type { AppOutletContext } from '@/App'
  * the team breadcrumb, title, summary and last-updated label.
  */
 export function HomePage() {
-  const { data, isPending, isError, error, refetch } = useDocumentList({ limit: 12 })
+  const { data, isPending, isError, error, refetch, isFetching } = useDocumentList({ limit: 12 })
+  const slowFetch = useSlowFetch(isPending || isFetching)
   const user = useAuthStore((s) => s.user)
-  const canWrite = !!user && ['editor', 'owner', 'admin'].includes(user.role)
+  const role = user?.role ?? ''
+  const canWrite = !!user && ['editor', 'owner', 'admin'].includes(role)
   const [activeTeam, setActiveTeam] = useState<string | null>(null)
   const { setLeftRail, setRightRail } = useOutletContext<AppOutletContext>()
-  const recentItems = useRecentStore((s) => s.items)
+  const recentItemsRaw = useRecentStore((s) => s.items)
+  const recentItems = Array.isArray(recentItemsRaw) ? recentItemsRaw : []
   const [recentMobileOpen, setRecentMobileOpen] = useState(false)
 
   // HomePage uses the default left (OrgTree) and pushes RecentRail to right.
   useEffect(() => {
     setLeftRail(undefined)
-    setRightRail(<RecentRail />)
+    setRightRail(
+      <RailBoundary name="최근 본 문서">
+        <RecentRail />
+      </RailBoundary>,
+    )
     return () => {
       setRightRail(null)
     }
@@ -37,14 +47,15 @@ export function HomePage() {
 
   const teams = useMemo(() => {
     const set = new Set<string>()
-    for (const d of data ?? []) if (d.team) set.add(d.team)
+    const list = Array.isArray(data) ? data : []
+    for (const d of list) if (d?.team) set.add(d.team)
     return Array.from(set).sort()
   }, [data])
 
   const filtered = useMemo(() => {
-    if (!data) return []
-    if (!activeTeam) return data
-    return data.filter((d) => d.team === activeTeam)
+    const list = Array.isArray(data) ? data : []
+    if (!activeTeam) return list
+    return list.filter((d) => d?.team === activeTeam)
   }, [data, activeTeam])
 
   return (
@@ -92,12 +103,14 @@ export function HomePage() {
         </div>
       )}
 
+      {slowFetch && <SlowFetchBanner />}
+
       {isPending && <DocumentGridSkeleton />}
 
       {isError && (
         <ErrorState
           title="문서 목록을 불러오지 못했습니다"
-          description={(error as Error).message}
+          description={toApiError(error).message}
           onRetry={() => void refetch()}
         />
       )}
@@ -118,6 +131,7 @@ export function HomePage() {
 
       {!isPending && !isError && filtered.length > 0 && (
         <ul
+          data-testid="home-card-grid"
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
         >
           {filtered.map((doc) => (

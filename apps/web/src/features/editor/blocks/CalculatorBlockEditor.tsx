@@ -12,6 +12,42 @@ const KINDS: NonNullable<CalculatorBlock['inputs'][number]['kind']>[] = [
   'select',
 ]
 
+export interface CalculatorTemplate {
+  id: string
+  label: string
+  inputs: CalculatorBlock['inputs']
+  formula: string
+  resultLabel: string
+}
+
+/**
+ * Two starter templates so the empty calculator block isn't a cold start.
+ *   - ROI 계산기:    (gain - cost) / cost * 100
+ *   - 비용편익:       benefit / cost
+ */
+export const CALCULATOR_TEMPLATES: ReadonlyArray<CalculatorTemplate> = [
+  {
+    id: 'roi',
+    label: 'ROI 계산기',
+    inputs: [
+      { name: 'gain', label: '이익', kind: 'number', default: 0 },
+      { name: 'cost', label: '비용', kind: 'number', default: 1 },
+    ],
+    formula: '(gain - cost) / cost * 100',
+    resultLabel: 'ROI (%)',
+  },
+  {
+    id: 'cost_benefit',
+    label: '비용편익',
+    inputs: [
+      { name: 'benefit', label: '편익', kind: 'number', default: 0 },
+      { name: 'cost', label: '비용', kind: 'number', default: 1 },
+    ],
+    formula: 'benefit / cost',
+    resultLabel: '편익/비용 비율',
+  },
+]
+
 interface Props {
   slug: Slug
   block: CalculatorBlock
@@ -29,6 +65,31 @@ export function validateFormula(formula: string): { ok: true } | { ok: false; er
 }
 
 /**
+ * Pretty-print a numeric result with comma thousands separators and an
+ * optional unit suffix. Non-numeric results pass through unchanged.
+ */
+export function formatResult(raw: string, unit?: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return raw
+  // Match the leading numeric token so e.g. `12.5 (some text)` formats nicely.
+  const m = trimmed.match(/^(-?\d+(?:\.\d+)?)/)
+  if (!m || m[1] == null) return unit ? `${raw} ${unit}` : raw
+  const numericLiteral = m[1]
+  const n = Number(numericLiteral)
+  if (!Number.isFinite(n)) return raw
+  const intPart = Math.trunc(n).toString()
+  const sign = intPart.startsWith('-') ? '-' : ''
+  const absInt = sign ? intPart.slice(1) : intPart
+  const grouped = absInt.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  const fracMatch = numericLiteral.match(/\.(\d+)$/)
+  const frac = fracMatch ? `.${fracMatch[1]}` : ''
+  const numericFmt = `${sign}${grouped}${frac}`
+  const rest = trimmed.slice(m[0].length)
+  const head = `${numericFmt}${rest}`
+  return unit ? `${head} ${unit}` : head
+}
+
+/**
  * `calculator` editor — manage `inputs[]` rows, the formula, and an output
  * label. The live `CalculatorBlockView` below acts as a preview.
  */
@@ -37,6 +98,8 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const [local, setLocal] = useState<CalculatorBlock>(block)
   const [error, setError] = useState<string | null>(null)
+  const [templateId, setTemplateId] = useState<string>('')
+  const [unit, setUnit] = useState<string>('')
 
   const formulaCheck = useMemo(() => validateFormula(local.formula), [local.formula])
 
@@ -70,14 +133,50 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
     void push({ ...local, inputs: local.inputs.filter((_, i) => i !== idx) })
   }
 
+  const applyTemplate = (id: string) => {
+    setTemplateId(id)
+    if (!id) return
+    const tpl = CALCULATOR_TEMPLATES.find((t) => t.id === id)
+    if (!tpl) return
+    void push({
+      ...local,
+      inputs: tpl.inputs,
+      formula: tpl.formula,
+      label: tpl.resultLabel,
+    })
+  }
+
   return (
     <div className="space-y-3 rounded border border-smsg-100 bg-smsg-100/40 p-3">
-      <Field label="결과 라벨">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Field label="결과 라벨">
+          <Input
+            value={local.label ?? ''}
+            onChange={(e) => setLocal({ ...local, label: e.target.value })}
+            onBlur={() => void push(local)}
+            placeholder="예: 총합"
+          />
+        </Field>
+        <Field label="템플릿">
+          <Select
+            value={templateId}
+            onChange={(e) => applyTemplate(e.target.value)}
+            aria-label="calculator template"
+          >
+            <option value="">선택…</option>
+            {CALCULATOR_TEMPLATES.map((t) => (
+              <option key={t.id} value={t.id}>{t.label}</option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+
+      <Field label="단위 (선택)">
         <Input
-          value={local.label ?? ''}
-          onChange={(e) => setLocal({ ...local, label: e.target.value })}
-          onBlur={() => void push(local)}
-          placeholder="예: 총합"
+          value={unit}
+          onChange={(e) => setUnit(e.target.value)}
+          placeholder="예: 원, %, kg"
+          aria-label="unit suffix"
         />
       </Field>
 
@@ -167,6 +266,11 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
           미리보기
         </p>
         <CalculatorBlockView block={local} />
+        {unit && (
+          <p className="mt-2 text-[11px] text-gray-500" data-testid="formatted-hint">
+            * 결과는 천 단위 콤마와 단위 “{unit}”로 포매팅됩니다
+          </p>
+        )}
       </div>
     </div>
   )

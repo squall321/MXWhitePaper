@@ -7,6 +7,7 @@ import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { useEditorShortcuts } from '@/features/editor/hooks/useEditorShortcuts'
 import { useAutoSave } from '@/features/editor/hooks/useAutoSave'
 import { EditorToolbar } from '@/features/editor/components/EditorToolbar'
+import { QuickInsertBar } from '@/features/editor/components/QuickInsertBar'
 import { OutlinePanel } from '@/features/editor/components/OutlinePanel'
 import { VersionHistoryPanel } from '@/features/editor/components/VersionHistoryPanel'
 import { ConflictMergeModal } from '@/features/editor/components/ConflictMergeModal'
@@ -108,6 +109,7 @@ export function DocumentReaderPage() {
   // Deep-link to #section-X.Y.Z after the body has rendered.
   useEffect(() => {
     if (!data) return
+    if (typeof window === 'undefined') return
     const hash = window.location.hash?.replace(/^#/, '')
     if (!hash) return
     const r = requestAnimationFrame(() => {
@@ -164,7 +166,7 @@ export function DocumentReaderPage() {
   const live = draft ?? data.document
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-testid="doc-reader">
       <EditorToolbar
         slug={slug}
         onSaveNow={() => void saveNow()}
@@ -188,6 +190,8 @@ export function DocumentReaderPage() {
       ) : (
         <WikiArticle document={live} row={data.row} meta={data.meta} editableSlug={slug} />
       )}
+
+      {isFullEditing && <QuickInsertBar slug={slug} />}
 
       {conflict && <ConflictMergeModal slug={slug} />}
       {isFullEditing && <OnboardingTour />}

@@ -1,12 +1,6 @@
 import { apiClient } from '@/lib/api/client'
+import { unwrap, type ApiEnvelope } from '@/lib/api/envelope'
 import type { Ulid } from '@/types/document'
-
-/** Standard envelope from the BE — `data` carries the payload. */
-interface ApiEnvelope<T> {
-  data: T
-  meta?: Record<string, unknown>
-  error?: { code: string; message: string } | null
-}
 
 /** Body sent to `/uploads/image/init`. */
 export interface InitImageInput {
@@ -76,21 +70,27 @@ export async function initImageUpload(
     '/uploads/image/init',
     body,
   )
-  const raw = res.data.data
+  const raw = unwrap(res)
   if (raw.deduped) {
+    if (!raw.image_id || !raw.urls) {
+      throw new Error('이미지 dedup 응답이 불완전합니다.')
+    }
     return {
       deduped: true,
       image: {
-        image_id: raw.image_id!,
+        image_id: raw.image_id,
         image_uuid: raw.image_uuid,
-        urls: raw.urls!,
+        urls: raw.urls,
       },
     }
   }
+  if (!raw.uploadId || !raw.url) {
+    throw new Error('이미지 업로드 응답이 불완전합니다.')
+  }
   return {
     deduped: false,
-    uploadId: raw.uploadId!,
-    putUrl: raw.url!,
+    uploadId: raw.uploadId,
+    putUrl: raw.url,
     putHeaders: raw.headers ?? {},
     expiresIn: raw.expiresIn,
   }
@@ -139,7 +139,7 @@ export async function finalizeImageUpload(
     '/uploads/image/finalize',
     { uploadId },
   )
-  return res.data.data
+  return unwrap(res)
 }
 
 /** GET /api/v1/images/:imageId — used by ImageBlock view to resolve URLs. */
@@ -147,5 +147,5 @@ export async function getImage(imageId: Ulid): Promise<ImageRecord> {
   const res = await apiClient.get<ApiEnvelope<ImageRecord>>(
     `/images/${encodeURIComponent(imageId)}`,
   )
-  return res.data.data
+  return unwrap(res)
 }

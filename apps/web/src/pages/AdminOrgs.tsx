@@ -24,6 +24,7 @@ import { Card } from '@/components/ui/Card'
 import { Input, Field } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { toast } from '@/components/ui/Toast'
+import { ErrorState } from '@/components/ui/ErrorState'
 
 type Level = 'division' | 'team' | 'group' | 'part'
 
@@ -51,7 +52,8 @@ interface DeleteTarget {
 
 export function AdminOrgsPage() {
   const user = useAuthStore((s) => s.user)
-  const { data, isPending, isError, error } = useOrgTree()
+  const role = user?.role ?? ''
+  const { data, isPending, isError, error, refetch } = useOrgTree()
   const qc = useQueryClient()
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null)
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null)
@@ -61,21 +63,25 @@ export function AdminOrgsPage() {
     qc.invalidateQueries({ queryKey: ['orgs', 'tree'] })
   }, [qc])
 
-  // Non-admins are bounced to the home page.
+  // Non-admins (and ?dev bypass with no user) are bounced to the home page.
   if (!user) return null
-  if (user.role !== 'admin') return <Navigate to="/" replace />
+  if (role !== 'admin') return <Navigate to="/" replace />
 
   if (isPending) {
     return <p className="px-6 py-10 text-sm text-gray-500">불러오는 중…</p>
   }
   if (isError) {
     return (
-      <p className="px-6 py-10 text-sm text-red-600">
-        조직 트리 로드 실패: {(error as Error).message}
-      </p>
+      <div className="mx-auto max-w-3xl px-6 py-10">
+        <ErrorState
+          title="조직 트리를 불러올 수 없습니다"
+          description={error instanceof Error ? error.message : '알 수 없는 오류'}
+          onRetry={() => void refetch()}
+        />
+      </div>
     )
   }
-  const tree = data ?? []
+  const tree = Array.isArray(data) ? data : []
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8" data-testid="admin-orgs-page">
@@ -116,7 +122,7 @@ export function AdminOrgsPage() {
           </p>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3" data-testid="admin-orgs-tree">
           {tree.map((d) => (
             <DivisionRow
               key={d.id}
@@ -179,6 +185,7 @@ function DivisionRow({
   onEdit,
   onDelete,
 }: { division: OrgDivision } & RowHandlers) {
+  const teams = Array.isArray(division.teams) ? division.teams : []
   return (
     <Card>
       <NodeRow
@@ -200,7 +207,7 @@ function DivisionRow({
             slug: division.slug,
             name: division.name,
             parent: {},
-            childCount: division.teams.length,
+            childCount: teams.length,
           })
         }
         addButton={
@@ -219,9 +226,9 @@ function DivisionRow({
           </Button>
         }
       />
-      {division.teams.length > 0 && (
+      {teams.length > 0 && (
         <ul className="mt-2 space-y-1 border-l-2 border-smsg-100 pl-4">
-          {division.teams.map((t) => (
+          {teams.map((t) => (
             <TeamRow
               key={t.id}
               team={t}
@@ -250,6 +257,7 @@ function TeamRow({
   divisionSlug: string
   divisionName: string
 } & RowHandlers) {
+  const groups = Array.isArray(team.groups) ? team.groups : []
   return (
     <li>
       <NodeRow
@@ -271,7 +279,7 @@ function TeamRow({
             slug: team.slug,
             name: team.name,
             parent: { division: divisionSlug },
-            childCount: team.groups.length,
+            childCount: groups.length,
           })
         }
         addButton={

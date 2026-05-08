@@ -31,6 +31,52 @@ export function registerAuthHooks(hooks: AuthHooks) {
   authHooks = hooks
 }
 
+// ── Connection status hooks ───────────────────────────────────────────────
+// `bootstrap.ts` wires these so a Zustand store reflects axios traffic for
+// the TopBar status pill. Decoupled the same way as auth hooks to avoid
+// circular imports.
+export interface ConnectionHooks {
+  onSuccess(): void
+  onFailure(): void
+}
+
+let connectionHooks: ConnectionHooks | null = null
+
+export function registerConnectionHooks(hooks: ConnectionHooks) {
+  connectionHooks = hooks
+}
+
+// ── Retry budget ──────────────────────────────────────────────────────────
+function readRetryLimit(): number {
+  const raw = (import.meta.env.VITE_API_RETRY_LIMIT as string | undefined) ?? '1'
+  const n = Number.parseInt(raw, 10)
+  if (!Number.isFinite(n) || n < 0) return 1
+  return Math.min(n, 3)
+}
+
+const RETRY_LIMIT = readRetryLimit()
+
+interface RetryConfig extends AxiosRequestConfig {
+  _retry?: boolean
+  _retryCount?: number
+}
+
+function isIdempotentGet(cfg: AxiosRequestConfig | undefined): boolean {
+  if (!cfg) return false
+  return (cfg.method ?? 'get').toLowerCase() === 'get'
+}
+
+function isNetworkOr5xx(err: AxiosError): boolean {
+  if (!err.response) return true // network / DNS / CORS
+  const s = err.response.status
+  return s >= 500 && s <= 599
+}
+
+function delayMs(attempt: number): number {
+  // exponential backoff capped at 1.5s
+  return Math.min(150 * 2 ** attempt, 1500)
+}
+
 // ── Request: inject Bearer access token. ──────────────────────────────────
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = authHooks?.getAccessToken() ?? null
@@ -42,39 +88,71 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
-// ── Response: on 401, refresh once then retry. ────────────────────────────
+// ── Response: connection status + 401 refresh + idempotent retry ──────────
 let refreshInFlight: Promise<boolean> | null = null
 
-interface RetryConfig extends AxiosRequestConfig {
-  _retry?: boolean
-}
-
 apiClient.interceptors.response.use(
-  (r) => r,
+  (r) => {
+    connectionHooks?.onSuccess()
+    return r
+  },
   async (err: AxiosError) => {
     const original = err.config as RetryConfig | undefined
     const status = err.response?.status
     const url = original?.url ?? ''
     const isAuthCall = url.startsWith('/auth/') || url === '/me'
 
-    if (status !== 401 || !original || original._retry || isAuthCall || !authHooks) {
-      return Promise.reject(err)
+    // Treat any non-401, non-422, non-409 outcome as a connection blip so the
+    // TopBar pill flips amber. (Validation/business errors are still a fine
+    // healthy connection.)
+    if (status == null || (status >= 500 || status === 0)) {
+      connectionHooks?.onFailure()
+    } else if (status === 401 || status === 403) {
+      // Auth issues count as healthy network — leave the pill green.
+      connectionHooks?.onSuccess()
+    } else {
+      connectionHooks?.onSuccess()
     }
-    original._retry = true
 
-    if (!refreshInFlight) {
-      const hooks = authHooks
-      refreshInFlight = hooks.refresh().catch(() => false)
-      refreshInFlight.finally(() => {
-        refreshInFlight = null
-      })
+    // ── 401 → single-flight refresh + retry ──────────────────────────
+    if (status === 401 && original && !original._retry && !isAuthCall && authHooks) {
+      original._retry = true
+
+      if (!refreshInFlight) {
+        const hooks = authHooks
+        const p = hooks.refresh().catch(() => false)
+        refreshInFlight = p
+        // Reset the slot only once the in-flight promise resolves.
+        void p.finally(() => {
+          if (refreshInFlight === p) refreshInFlight = null
+        })
+      }
+
+      const ok = await refreshInFlight
+      if (!ok) {
+        authHooks.onUnauthenticated()
+        return Promise.reject(err)
+      }
+      // The request interceptor will re-inject a fresh Authorization header.
+      return apiClient.request(original)
     }
 
-    const ok = await refreshInFlight
-    if (!ok) {
-      authHooks.onUnauthenticated()
-      return Promise.reject(err)
+    // ── Idempotent GET retry on network / 5xx ────────────────────────
+    if (
+      RETRY_LIMIT > 0 &&
+      original &&
+      isIdempotentGet(original) &&
+      !isAuthCall &&
+      isNetworkOr5xx(err)
+    ) {
+      const used = original._retryCount ?? 0
+      if (used < RETRY_LIMIT) {
+        original._retryCount = used + 1
+        await new Promise((r) => setTimeout(r, delayMs(used)))
+        return apiClient.request(original)
+      }
     }
-    return apiClient.request(original)
+
+    return Promise.reject(err)
   },
 )

@@ -14,6 +14,66 @@ import { ulid } from '@/features/editor/ulid'
 import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { OrgChartBlockView } from '@/components/blocks/OrgChartBlock'
+import { parseCsv } from '@/features/editor/extensions/csv-paste'
+
+/**
+ * Parse a 2-column CSV (Manager, Subordinate) into an org-chart tree. Pure;
+ * exported for tests.
+ *
+ * Rules:
+ *   - The first row may be a header (e.g. `Manager,Subordinate`); detected
+ *     when neither cell looks like a real name (we accept any non-empty cell
+ *     for now and just skip the row when both cells equal the literal
+ *     `Manager` / `Subordinate`).
+ *   - The first manager seen becomes the tree root.
+ *   - A subordinate appearing later as a manager attaches its children
+ *     under itself.
+ *   - Any subordinate whose manager isn't in the file is silently dropped.
+ */
+export function parseOrgCsv(text: string): OrgChartNode | null {
+  const parsed = parseCsv(text)
+  if (!parsed) return null
+  const rows = parsed.rows.filter((r) => r.length >= 2 && r[0]!.trim() && r[1]!.trim())
+  // Drop a likely header row.
+  const isHeader =
+    rows[0]?.[0]?.toLowerCase() === 'manager' && rows[0]?.[1]?.toLowerCase() === 'subordinate'
+  const data = isHeader ? rows.slice(1) : rows
+  if (data.length === 0) return null
+
+  const nodeMap = new Map<string, OrgChartNode>()
+  const childOrder = new Map<string, string[]>()
+  const seenAsChild = new Set<string>()
+
+  const get = (label: string): OrgChartNode => {
+    const key = label.trim()
+    let n = nodeMap.get(key)
+    if (!n) {
+      n = { id: ulid(), label: key, children: [] }
+      nodeMap.set(key, n)
+    }
+    return n
+  }
+
+  for (const [mgr, sub] of data) {
+    const m = get(mgr!.trim())
+    const s = get(sub!.trim())
+    const arr = childOrder.get(m.label) ?? []
+    if (!arr.includes(s.label)) arr.push(s.label)
+    childOrder.set(m.label, arr)
+    seenAsChild.add(s.label)
+  }
+
+  // Hook up children once order is known.
+  for (const [mgrLabel, kids] of childOrder.entries()) {
+    const m = nodeMap.get(mgrLabel)!
+    m.children = kids.map((k) => nodeMap.get(k)!)
+  }
+
+  // Find the root: the manager that never appears as a child.
+  const rootLabel = data.find(([mgr]) => !seenAsChild.has(mgr!.trim()))?.[0]?.trim()
+  if (!rootLabel) return null
+  return nodeMap.get(rootLabel) ?? null
+}
 
 interface Props {
   slug: Slug
@@ -268,6 +328,14 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
     }
   }
 
+  const onCsvPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = e.clipboardData.getData('text/plain')
+    const root = parseOrgCsv(text)
+    if (!root) return
+    e.preventDefault()
+    void push({ ...local, root })
+  }
+
   const dndContent = useMemo(
     () => (
       <NodeRow
@@ -324,6 +392,17 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
           {dndContent}
         </DndContext>
       )}
+
+      <details className="rounded border border-gray-200 bg-white p-2 text-xs">
+        <summary className="cursor-pointer text-gray-600">엑셀에서 붙여넣기 (Manager,Subordinate)</summary>
+        <textarea
+          aria-label="org-csv-paste"
+          rows={4}
+          placeholder={'Manager,Subordinate\nCEO,COO\nCEO,CTO'}
+          onPaste={onCsvPaste}
+          className="mt-2 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-[11px]"
+        />
+      </details>
 
       {error && <p className="text-[11px] text-red-600">{error}</p>}
 

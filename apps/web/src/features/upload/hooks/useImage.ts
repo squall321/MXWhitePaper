@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { getImage, type ImageRecord } from '../api'
 
 /**
@@ -15,5 +15,7 @@ export function useImage(imageId: string | undefined) {
     enabled: Boolean(imageId),
     // Image URLs are immutable per id, so we can cache aggressively.
     staleTime: 5 * 60_000,
+    retry: 1,
+    placeholderData: keepPreviousData,
   })
 }

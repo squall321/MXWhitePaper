@@ -6,11 +6,7 @@
  * injects the bearer token automatically.
  */
 import { apiClient } from '@/lib/api/client'
-
-interface ApiEnvelope<T> {
-  data: T
-  error?: { code: string; message: string } | null
-}
+import { unwrapListMaybe, type ApiEnvelope } from '@/lib/api/envelope'
 
 // ── Division ──────────────────────────────────────────────────────────
 export interface CreateDivisionInput {
@@ -138,8 +134,10 @@ export async function deletePart(
  * 상태가 됩니다").
  */
 export async function countDocsInPart(partSlug: string): Promise<number> {
-  const res = await apiClient.get<ApiEnvelope<unknown[]>>('/documents', {
-    params: { part_slug: partSlug, limit: 200 },
-  })
-  return res.data.data?.length ?? 0
+  const items = await unwrapListMaybe<unknown>(
+    apiClient.get('/documents', {
+      params: { part_slug: partSlug, limit: 200 },
+    }),
+  )
+  return items.length
 }

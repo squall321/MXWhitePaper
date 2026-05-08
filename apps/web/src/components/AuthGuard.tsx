@@ -12,6 +12,10 @@ interface AuthGuardProps {
  * hydration: if no user, redirect to `/login?return=<path>`. In dev, an
  * `?dev` query parameter bypasses the gate (the existing X-MXWP-User
  * mock chain still works).
+ *
+ * Note: components rendered under `?dev` may not have a populated user
+ * (the bypass skips the cookie probe). Each consumer must null-check
+ * `useAuthStore((s) => s.user)` instead of dereferencing optimistically.
  */
 export function AuthGuard({ children }: AuthGuardProps) {
   const user = useAuthStore((s) => s.user)

@@ -61,7 +61,13 @@ export function ConflictMergeModal({ slug }: ConflictMergeModalProps) {
 
   const tw = useMemo(() => {
     if (closed) return null
-    return threeWayDiff(effectiveBase!, mineDoc!, remote!)
+    try {
+      return threeWayDiff(effectiveBase!, mineDoc!, remote!)
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[ConflictMergeModal] threeWayDiff threw', err)
+      return null
+    }
   }, [closed, effectiveBase, mineDoc, remote])
 
   const conflicts = tw?.conflicts ?? []
@@ -110,6 +116,36 @@ export function ConflictMergeModal({ slug }: ConflictMergeModalProps) {
   }, [closed, busy, conflicts, activeIdx])
 
   if (closed) return null
+  if (!tw) {
+    // 3-way diff failed — render a minimal 2-way fallback instead of blanking.
+    return (
+      <div
+        role="dialog"
+        aria-label="저장 충돌"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      >
+        <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-2xl">
+          <h2 className="text-base font-semibold text-smsg-900">저장 충돌</h2>
+          <p className="mt-2 text-sm text-gray-700">
+            3-way 비교에 필요한 데이터가 부족합니다. 저장된 내용을 다시 불러온
+            뒤 새로고침해 주세요.
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setConflict(null)
+                setAutoApplied(null)
+              }}
+              className="rounded border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const close = (): void => {
     setConflict(null)

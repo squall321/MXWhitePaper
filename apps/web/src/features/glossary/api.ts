@@ -1,10 +1,5 @@
 import { apiClient } from '@/lib/api/client'
-
-interface ApiEnvelope<T> {
-  data: T
-  meta?: Record<string, unknown>
-  error?: { code: string; message: string } | null
-}
+import { unwrapListMaybe } from '@/lib/api/envelope'
 
 export interface GlossaryEntry {
   term: string
@@ -14,17 +9,11 @@ export interface GlossaryEntry {
 
 /**
  * GET /api/v1/glossary?q=
- * No query → full registry (cached on the BE for cheap reads).
+ * No query → full registry (cached on the BE for cheap reads). Failures
+ * degrade silently to "no terms" so a missing index never blocks rendering.
  */
 export async function getGlossary(q?: string): Promise<GlossaryEntry[]> {
-  try {
-    const res = await apiClient.get<ApiEnvelope<GlossaryEntry[]>>('/glossary', {
-      params: q ? { q } : undefined,
-    })
-    return res.data.data ?? []
-  } catch (err) {
-    const status = (err as { response?: { status?: number } })?.response?.status
-    if (status === 404) return []
-    throw err
-  }
+  return unwrapListMaybe<GlossaryEntry>(
+    apiClient.get('/glossary', { params: q ? { q } : undefined }),
+  )
 }

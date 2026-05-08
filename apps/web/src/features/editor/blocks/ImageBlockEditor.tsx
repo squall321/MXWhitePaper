@@ -50,6 +50,65 @@ export function shouldShowAltWarning(alt: string, savedOnce: boolean): boolean {
   return savedOnce && alt.trim() === ''
 }
 
+/**
+ * Five built-in placeholder images. Each entry references a local data-URI
+ * SVG so we don't depend on a third-party CDN.
+ */
+export interface SampleImage {
+  id: string
+  label: string
+  /** Inline SVG data-URI used as the dropzone fallback. */
+  src: string
+}
+
+export const SAMPLE_IMAGES: ReadonlyArray<SampleImage> = [
+  {
+    id: 'mx-blue',
+    label: '파랑 그라데이션',
+    src:
+      'data:image/svg+xml;utf8,' +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1428A0"/><stop offset="1" stop-color="#4F8BFF"/></linearGradient></defs><rect width="320" height="180" fill="url(#g)"/><text x="160" y="100" font-size="22" fill="white" text-anchor="middle" font-family="Inter">MX 샘플</text></svg>',
+      ),
+  },
+  {
+    id: 'mx-grid',
+    label: '회색 그리드',
+    src:
+      'data:image/svg+xml;utf8,' +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><rect width="320" height="180" fill="#f5f5f5"/><g stroke="#ddd"><path d="M0 30h320M0 60h320M0 90h320M0 120h320M0 150h320"/></g></svg>',
+      ),
+  },
+  {
+    id: 'mx-warm',
+    label: '따뜻한 조명',
+    src:
+      'data:image/svg+xml;utf8,' +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><defs><radialGradient id="g"><stop offset="0" stop-color="#fde68a"/><stop offset="1" stop-color="#f59e0b"/></radialGradient></defs><rect width="320" height="180" fill="url(#g)"/></svg>',
+      ),
+  },
+  {
+    id: 'mx-mono',
+    label: '모노크롬',
+    src:
+      'data:image/svg+xml;utf8,' +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><rect width="320" height="180" fill="#1f2937"/><circle cx="160" cy="90" r="50" fill="#9ca3af"/></svg>',
+      ),
+  },
+  {
+    id: 'mx-grid-dark',
+    label: '다크 그리드',
+    src:
+      'data:image/svg+xml;utf8,' +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><rect width="320" height="180" fill="#0f172a"/><g stroke="#1e293b"><path d="M0 30h320M0 60h320M0 90h320M0 120h320M0 150h320M40 0v180M80 0v180M120 0v180M160 0v180M200 0v180M240 0v180M280 0v180"/></g></svg>',
+      ),
+  },
+]
+
 interface ImageBlockEditorProps {
   slug: Slug
   block: ImageBlock
@@ -115,6 +174,7 @@ export function ImageBlockEditor({
   const [error, setError] = useState<string | null>(null)
   const [altChipDismissed, setAltChipDismissed] = useState(false)
   const [captionPulsing, setCaptionPulsing] = useState(false)
+  const [galleryOpen, setGalleryOpen] = useState(false)
 
   const captionRef = useRef<HTMLInputElement>(null)
   const altRef = useRef<HTMLInputElement>(null)
@@ -144,7 +204,12 @@ export function ImageBlockEditor({
   }, [shouldAutoFocus, pendingFocusId, block.id, clearPendingFocus])
 
   const widthCls = WIDTH_CLASS[block.width ?? 'md']
-  const src = image?.urls.view ?? `/api/v1/images/${encodeURIComponent(block.imageId)}`
+  const usingSample = block.imageId.startsWith('sample:')
+  const sampleSrc = usingSample
+    ? SAMPLE_IMAGES.find((s) => `sample:${s.id}` === block.imageId)?.src
+    : undefined
+  const src =
+    sampleSrc ?? image?.urls.view ?? `/api/v1/images/${encodeURIComponent(block.imageId)}`
   const placeholderBg = image?.dominant_color ?? '#f3f4f6'
 
   const persist = useCallback(
@@ -279,6 +344,15 @@ export function ImageBlockEditor({
           >
             🔁
           </button>
+          <button
+            type="button"
+            title="샘플 이미지 갤러리"
+            aria-label="샘플 이미지 갤러리"
+            onClick={() => setGalleryOpen((v) => !v)}
+            className="rounded px-1 hover:bg-smsg-100"
+          >
+            🖻
+          </button>
           {image && (
             <a
               href={image.urls.orig}
@@ -358,6 +432,31 @@ export function ImageBlockEditor({
         )}
         {error && <p className="text-red-600">{error}</p>}
       </div>
+
+      {/* Sample image gallery — appears when toggled on by 🖻 chip. */}
+      {galleryOpen && (
+        <div
+          data-sample-image-gallery
+          className="mt-2 grid grid-cols-5 gap-2 rounded border border-gray-200 bg-white p-2"
+        >
+          {SAMPLE_IMAGES.map((sample) => (
+            <button
+              key={sample.id}
+              type="button"
+              aria-label={`샘플 ${sample.label}`}
+              data-sample-id={sample.id}
+              onClick={() => {
+                void persist({ imageId: `sample:${sample.id}` })
+                setGalleryOpen(false)
+              }}
+              className="overflow-hidden rounded border border-gray-200 transition-shadow hover:shadow-md"
+            >
+              <img src={sample.src} alt={sample.label} loading="lazy" className="h-12 w-full object-cover" />
+              <span className="block px-1 py-0.5 text-[10px] text-gray-600">{sample.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Hidden replace dropzone. */}
       <ImageDropzone

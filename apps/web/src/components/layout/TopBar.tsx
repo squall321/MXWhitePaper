@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/features/auth/store'
 import { logout } from '@/features/auth/api'
+import { deriveStatus, useConnectionStore } from '@/features/auth/connectionStore'
 import { IconButton } from '@/components/ui/IconButton'
 import { Badge } from '@/components/ui/Badge'
+import { NetworkStatusPill } from '@/components/NetworkStatusPill'
 
 interface TopBarProps {
   onOpenPalette?: (q?: string) => void
@@ -18,15 +20,20 @@ interface TopBarProps {
  */
 export function TopBar({ onOpenPalette, onOpenNav }: TopBarProps) {
   const user = useAuthStore((s) => s.user)
-  const canWrite = !!user && ['editor', 'owner', 'admin'].includes(user.role)
-  const isAdmin = !!user && user.role === 'admin'
+  const role = user?.role ?? ''
+  const canWrite = !!user && ['editor', 'owner', 'admin'].includes(role)
+  const isAdmin = !!user && role === 'admin'
 
   return (
-    <header className="fixed inset-x-0 top-0 z-sticky isolate h-[var(--header-h)] bg-smsg-700 text-white shadow-md">
+    <header
+      data-testid="topbar"
+      className="fixed inset-x-0 top-0 z-sticky isolate h-[var(--header-h)] bg-smsg-700 text-white shadow-md"
+    >
       <div className="flex h-[var(--header-h)] items-center gap-2 px-3 sm:gap-4 sm:px-6">
         {/* Mobile hamburger */}
         <IconButton
           aria-label="메뉴 열기"
+          data-testid="topbar-nav"
           variant="ghost"
           size="md"
           onClick={onOpenNav}
@@ -90,6 +97,7 @@ export function TopBar({ onOpenPalette, onOpenNav }: TopBarProps) {
               <Link
                 to="/docs/new"
                 aria-label="새 문서 작성"
+                data-testid="topbar-new-doc"
                 className="grid h-9 w-9 place-items-center rounded-md bg-white text-smsg-700 transition-all duration-base hover:bg-smsg-100 hover:no-underline hover:shadow-md focus-visible:outline-none focus-visible:shadow-focus sm:hidden"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -99,12 +107,17 @@ export function TopBar({ onOpenPalette, onOpenNav }: TopBarProps) {
               {/* Tablet+: text button */}
               <Link
                 to="/docs/new"
+                data-testid="topbar-new-doc-text"
                 className="hidden rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-smsg-700 transition-all duration-base hover:-translate-y-px hover:bg-smsg-100 hover:no-underline hover:shadow-md sm:inline-flex"
               >
                 + 새 문서
               </Link>
             </>
           )}
+
+          {/* Always-visible offline / slow-response pill (hidden on the
+              happy path so it doesn't add visual noise). */}
+          <NetworkStatusPill />
 
           <span className="mx-1 hidden h-5 w-px bg-white/25 sm:inline-block" aria-hidden="true" />
 
@@ -136,6 +149,7 @@ function SearchTrigger({ onOpenPalette }: { onOpenPalette?: (q?: string) => void
       </span>
       <input
         type="search"
+        data-testid="topbar-search"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onFocus={() => onOpenPalette?.(value)}
@@ -187,6 +201,7 @@ function ProfileMenu() {
     <div ref={ref} className="relative">
       <button
         type="button"
+        data-testid="topbar-profile"
         onClick={() => setOpen((v) => !v)}
         className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-sm font-semibold transition-colors hover:bg-white/25 focus-visible:outline-none focus-visible:shadow-focus"
         aria-label="프로필 메뉴"
@@ -203,8 +218,9 @@ function ProfileMenu() {
           <div className="border-b border-gray-100 px-4 py-3">
             <p className="text-sm font-semibold">{user.name ?? user.email}</p>
             <p className="text-xs text-gray-500">{user.email}</p>
-            <div className="mt-2">
+            <div className="mt-2 flex items-center gap-2">
               <Badge tone="brand" dot>{user.role}</Badge>
+              <ConnectionPill />
             </div>
           </div>
           <Link
@@ -230,5 +246,40 @@ function ProfileMenu() {
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Tiny pill that surfaces the axios-observed connection state. Updated
+ * by `connectionStore` from the response interceptor:
+ *   online       → 녹색  "온라인"
+ *   reconnecting → 주황  "재연결 시도 중"
+ *   offline      → 빨강  "오프라인"
+ */
+function ConnectionPill() {
+  // Subscribe to the slice that drives `deriveStatus` so the pill rerenders
+  // whenever traffic happens.
+  const lastSuccessAt = useConnectionStore((s) => s.lastSuccessAt)
+  const lastFailureAt = useConnectionStore((s) => s.lastFailureAt)
+  const consecutiveFailures = useConnectionStore((s) => s.consecutiveFailures)
+  const status = deriveStatus({ lastSuccessAt, lastFailureAt, consecutiveFailures })
+
+  const styles =
+    status === 'online'
+      ? 'bg-emerald-100 text-emerald-700'
+      : status === 'reconnecting'
+        ? 'bg-amber-100 text-amber-800'
+        : 'bg-red-100 text-red-700'
+  const label =
+    status === 'online' ? '온라인 ✓' : status === 'reconnecting' ? '재연결 시도 중' : '오프라인'
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${styles}`}
+      data-testid="connection-pill"
+      data-status={status}
+    >
+      {label}
+    </span>
   )
 }

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { getDocument, type DocumentResult } from '../api'
 import type { Slug } from '@/types/document'
 
@@ -11,5 +11,7 @@ export function useDocument(slug: Slug | undefined) {
     },
     enabled: Boolean(slug),
     staleTime: 60_000,
+    retry: 1,
+    placeholderData: keepPreviousData,
   })
 }

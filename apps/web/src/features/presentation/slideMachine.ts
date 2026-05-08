@@ -43,39 +43,44 @@ export function buildSlides(
   doc: DocumentJSONV10,
   opts: BuildSlidesOptions = {},
 ): Slide[] {
-  const md = doc.metadata
+  if (!doc) return []
+  const md = doc.metadata ?? ({} as DocumentJSONV10['metadata'])
   const path = [md.division, md.team, md.group, md.part]
     .filter((x): x is string => Boolean(x))
     .join(' / ')
   const slides: Slide[] = [
     {
       kind: 'title',
-      key: `title:${doc.slug}`,
-      title: doc.title,
+      key: `title:${doc.slug ?? 'unknown'}`,
+      title: doc.title ?? '',
       summary: doc.summary,
       meta: {
         path,
-        tags: md.tags ?? [],
+        tags: Array.isArray(md.tags) ? md.tags : [],
         confidentiality: md.confidentiality,
       },
     },
   ]
-  for (const section of doc.sections) {
+  const sections = Array.isArray(doc.sections) ? doc.sections : []
+  for (const section of sections) {
+    if (!section) continue
     slides.push({
       kind: 'section',
-      key: `sec:${section.id}`,
+      key: `sec:${section.id ?? Math.random().toString(36)}`,
       number: section.number ?? '',
-      title: section.title,
+      title: section.title ?? '',
       level: 1,
       section,
     })
     if (opts.nested) {
-      for (const sub of section.subsections ?? []) {
+      const subs = Array.isArray(section.subsections) ? section.subsections : []
+      for (const sub of subs) {
+        if (!sub) continue
         slides.push({
           kind: 'section',
-          key: `sec:${sub.id}`,
+          key: `sec:${sub.id ?? Math.random().toString(36)}`,
           number: sub.number ?? '',
-          title: sub.title,
+          title: sub.title ?? '',
           level: 2,
           section: sub,
         })

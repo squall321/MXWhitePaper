@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CalculatorBlockEditor, validateFormula } from '../CalculatorBlockEditor'
+import {
+  CalculatorBlockEditor,
+  validateFormula,
+  formatResult,
+  CALCULATOR_TEMPLATES,
+} from '../CalculatorBlockEditor'
 import {
   CalculatorBlockView,
   evaluateFormula,
@@ -78,6 +83,32 @@ describe('<CalculatorBlockView /> live preview', () => {
     // Result is 5, rendered inside the data-testid="calc-result" element.
     expect(html).toContain('data-testid="calc-result"')
     expect(html).toContain('>5<')
+  })
+})
+
+describe('formatResult', () => {
+  it('inserts thousand separators', () => {
+    expect(formatResult('1234567')).toBe('1,234,567')
+  })
+  it('preserves the fractional part', () => {
+    expect(formatResult('1234.56')).toBe('1,234.56')
+  })
+  it('appends a unit when given', () => {
+    expect(formatResult('1500', '원')).toBe('1,500 원')
+  })
+  it('handles negatives', () => {
+    expect(formatResult('-12345')).toBe('-12,345')
+  })
+  it('non-numeric values pass through', () => {
+    expect(formatResult('abc')).toBe('abc')
+  })
+})
+
+describe('CALCULATOR_TEMPLATES', () => {
+  it('exposes ROI and 비용편익', () => {
+    const ids = CALCULATOR_TEMPLATES.map((t) => t.id)
+    expect(ids).toContain('roi')
+    expect(ids).toContain('cost_benefit')
   })
 })
 

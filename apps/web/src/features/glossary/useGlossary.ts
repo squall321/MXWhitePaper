@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import { getGlossary, type GlossaryEntry } from './api'
 
 /**
@@ -7,17 +8,26 @@ import { getGlossary, type GlossaryEntry } from './api'
  * 10 minutes; failures degrade silently to "no terms".
  */
 export function useGlossary() {
-  const query = useQuery({
+  const query = useQuery<GlossaryEntry[]>({
     queryKey: ['glossary'],
     queryFn: () => getGlossary(),
     staleTime: 10 * 60_000,
+    retry: 1,
+    placeholderData: keepPreviousData,
+    select: (rows) => (Array.isArray(rows) ? rows : []),
   })
   const terms = query.data ?? []
-  const map = new Map<string, GlossaryEntry>()
-  for (const t of terms) {
-    map.set(t.term.toLowerCase(), t)
-    for (const a of t.aliases ?? []) map.set(a.toLowerCase(), t)
-  }
+  const map = useMemo(() => {
+    const m = new Map<string, GlossaryEntry>()
+    for (const t of terms) {
+      if (!t?.term) continue
+      m.set(t.term.toLowerCase(), t)
+      for (const a of t.aliases ?? []) {
+        if (a) m.set(a.toLowerCase(), t)
+      }
+    }
+    return m
+  }, [terms])
   return {
     terms,
     lookup: (term: string) => map.get(term.toLowerCase())?.definition,

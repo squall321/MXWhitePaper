@@ -6,6 +6,7 @@ import {
   removeNode,
   updateNode,
   reparent,
+  parseOrgCsv,
 } from '../OrgChartBlockEditor'
 import { useEditorStore } from '@/features/editor/state'
 import type { OrgChartBlock, OrgChartNode } from '@/types/document'
@@ -88,4 +89,28 @@ describe('<OrgChartBlockEditor />', () => {
     expect(html).toContain('aria-label="node a label"')
     expect(html).toContain('aria-label="add child to r"')
   })
+
+  it('exposes the CSV paste textarea', () => {
+    const html = renderToStaticMarkup(
+      <OrgChartBlockEditor slug="test" block={block} />,
+    )
+    expect(html).toContain('aria-label="org-csv-paste"')
+  })
 })
+
+describe('parseOrgCsv', () => {
+  it('builds a tree from Manager,Subordinate CSV', () => {
+    const root = parseOrgCsv('Manager,Subordinate\nCEO,COO\nCEO,CTO\nCTO,Eng')
+    expect(root).not.toBeNull()
+    expect(root!.label).toBe('CEO')
+    const labels = (root!.children ?? []).map((c) => c.label)
+    expect(labels).toEqual(['COO', 'CTO'])
+    const cto = (root!.children ?? []).find((c) => c.label === 'CTO')!
+    expect((cto.children ?? []).map((c) => c.label)).toEqual(['Eng'])
+  })
+
+  it('returns null for non-CSV', () => {
+    expect(parseOrgCsv('not a csv')).toBeNull()
+  })
+})
+

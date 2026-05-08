@@ -20,8 +20,10 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
+      // Apptainer host network: api는 호스트의 8800 포트에 직접 listen.
+      // 'api:8000'(docker DNS)은 더 이상 유효하지 않다. 환경변수 API_PORT 따름.
       '/api': {
-        target: 'http://api:8000',
+        target: process.env.VITE_PROXY_TARGET || 'http://127.0.0.1:8800',
         changeOrigin: true,
       },
     },

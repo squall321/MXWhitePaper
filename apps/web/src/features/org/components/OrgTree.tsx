@@ -1,5 +1,9 @@
 import { useState, useCallback } from 'react'
 import { useOrgTree } from '../hooks/useOrgTree'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { toApiError } from '@/lib/api/envelope'
 import type { OrgDivision, OrgTeam, OrgGroup, OrgPart } from '../types'
 
 /**
@@ -9,7 +13,7 @@ import type { OrgDivision, OrgTeam, OrgGroup, OrgPart } from '../types'
  * Folding state lives in component-local Sets keyed by id.
  */
 export function OrgTree() {
-  const { data, isPending, isError, error } = useOrgTree()
+  const { data, isPending, isError, error, refetch } = useOrgTree()
   const [open, setOpen] = useState<Set<string>>(new Set())
 
   const toggle = useCallback((id: string) => {
@@ -22,20 +26,36 @@ export function OrgTree() {
   }, [])
 
   if (isPending) {
-    return <p className="px-3 py-2 text-sm text-gray-500">Loading…</p>
+    return (
+      <div className="space-y-2 px-3 py-2" aria-busy="true" aria-label="조직 트리 불러오는 중">
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="ml-3 h-3 w-1/2" />
+        <Skeleton className="ml-3 h-3 w-3/5" />
+        <Skeleton className="h-4 w-3/4" />
+      </div>
+    )
   }
   if (isError) {
     return (
-      <p className="px-3 py-2 text-sm text-red-600">
-        Failed to load org tree: {(error as Error).message}
-      </p>
+      <div className="px-3 py-2">
+        <ErrorState
+          title="조직 트리를 불러오지 못했습니다"
+          description={toApiError(error).message}
+          onRetry={() => void refetch()}
+          className="px-3 py-4"
+        />
+      </div>
     )
   }
   if (!data || data.length === 0) {
     return (
-      <p className="px-3 py-2 text-sm text-gray-500">
-        No organisations yet.
-      </p>
+      <div className="px-3 py-2">
+        <EmptyState
+          title="아직 등록된 조직이 없습니다"
+          description="관리자 화면에서 사업부를 추가하세요."
+          className="px-3 py-4"
+        />
+      </div>
     )
   }
 

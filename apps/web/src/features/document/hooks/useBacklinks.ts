@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { getBacklinks, type BacklinksResult } from '../api'
 import type { Slug } from '@/types/document'
 
@@ -19,5 +19,11 @@ export function useBacklinks(slug: Slug | undefined) {
     },
     enabled: Boolean(slug),
     staleTime: 60_000,
+    retry: 1,
+    placeholderData: keepPreviousData,
+    select: (res) => ({
+      items: Array.isArray(res?.items) ? res.items : [],
+      targetExists: res?.targetExists !== false,
+    }),
   })
 }

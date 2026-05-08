@@ -11,6 +11,7 @@ import {
   decideKeyAction,
   shouldShowAltWarning,
   ImageBlockEditor,
+  SAMPLE_IMAGES,
 } from '../ImageBlockEditor'
 import { useEditorStore } from '@/features/editor/state'
 import type { ImageBlock } from '@/types/document'
@@ -95,5 +96,16 @@ describe('<ImageBlockEditor /> static render', () => {
       <ImageBlockEditor slug="test" block={block} />,
     )
     expect(html).not.toContain('data-alt-warning')
+  })
+})
+
+describe('SAMPLE_IMAGES gallery', () => {
+  it('exports five built-in placeholder images', () => {
+    expect(SAMPLE_IMAGES.length).toBe(5)
+    for (const s of SAMPLE_IMAGES) {
+      expect(s.id.length).toBeGreaterThan(0)
+      expect(s.label.length).toBeGreaterThan(0)
+      expect(s.src.startsWith('data:image/svg+xml')).toBe(true)
+    }
   })
 })

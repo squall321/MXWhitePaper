@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { searchDocuments, listWidgets } from '../api'
 
 /**
@@ -21,6 +21,9 @@ export function useDocumentSearch(q: string) {
     queryFn: () => searchDocuments(debounced),
     enabled: debounced.trim().length > 0,
     staleTime: 30_000,
+    retry: 1,
+    placeholderData: keepPreviousData,
+    select: (rows) => (Array.isArray(rows) ? rows : []),
   })
 }
 
@@ -29,6 +32,9 @@ export function useWidgetRegistry() {
     queryKey: ['widgets', 'registry'],
     queryFn: () => listWidgets(),
     staleTime: 5 * 60_000,
+    retry: 1,
+    placeholderData: keepPreviousData,
+    select: (rows) => (Array.isArray(rows) ? rows : []),
   })
 }
 

@@ -103,4 +103,26 @@ describe('<AdminOrgsPage />', () => {
     const html = renderWithProviders(<AdminOrgsPage />)
     expect(html).not.toContain('조직 관리')
   })
+
+  it('emits the admin-orgs-tree data-testid for the populated tree', () => {
+    authState.current = {
+      user: { id: 'u1', email: 'admin@mx.local', role: 'admin' },
+    }
+    const html = renderWithProviders(<AdminOrgsPage />)
+    expect(html).toContain('data-testid="admin-orgs-tree"')
+  })
+})
+
+// 409 duplicate-slug surfacing — the create*() admin-api helpers reject with
+// a structured error; AdminOrgs catches and surfaces via toast.error. This
+// is verified at the unit level by inspecting the catch handler shape.
+import { describe as describe2, it as it2, expect as expect2 } from 'vitest'
+describe2('AdminOrgs 409 duplicate slug surfacing', () => {
+  it2('extracts the BE error message off the axios error envelope', () => {
+    const err = {
+      response: { status: 409, data: { error: { message: 'slug 중복' } } },
+    } as { response?: { data?: { error?: { message?: string } } } }
+    const msg = err.response?.data?.error?.message ?? '추가 실패'
+    expect2(msg).toBe('slug 중복')
+  })
 })

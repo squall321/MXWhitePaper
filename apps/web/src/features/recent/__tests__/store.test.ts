@@ -156,4 +156,60 @@ describe('recent/store', () => {
     const items = useRecentStore.getState().items
     expect(items[0]?.title.length).toBe(200)
   })
+
+  it('survives JSON.parse failures by returning an empty list', () => {
+    ;(globalThis as unknown as { window: { localStorage: MemoryStorage } }).window.localStorage.setItem(
+      'mxwp.recentDocs',
+      'this is not json{',
+    )
+    useRecentStore.getState().hydrate()
+    expect(useRecentStore.getState().items).toEqual([])
+  })
+
+  it('discards entries that fail the schema check', () => {
+    ;(globalThis as unknown as { window: { localStorage: MemoryStorage } }).window.localStorage.setItem(
+      'mxwp.recentDocs',
+      JSON.stringify([
+        { slug: 'good', title: 'Good', viewedAt: 1 },
+        { slug: 123, title: 'Bad', viewedAt: 2 },
+        { slug: 'no-ts', title: 'X' },
+      ]),
+    )
+    useRecentStore.getState().hydrate()
+    const items = useRecentStore.getState().items
+    expect(items).toHaveLength(1)
+    expect(items[0]?.slug).toBe('good')
+  })
+
+  it('does not throw when localStorage.setItem raises QuotaExceededError', () => {
+    const orig = (globalThis as unknown as { window: { localStorage: MemoryStorage } })
+      .window.localStorage
+    const throwingStorage = {
+      getItem: orig.getItem.bind(orig),
+      removeItem: orig.removeItem.bind(orig),
+      key: orig.key.bind(orig),
+      get length() {
+        return orig.length
+      },
+      clear: orig.clear.bind(orig),
+      setItem: () => {
+        throw new Error('QuotaExceededError')
+      },
+    }
+    ;(globalThis as unknown as { window: { localStorage: unknown } }).window.localStorage =
+      throwingStorage as unknown as MemoryStorage
+    try {
+      expect(() => pushRecent('over-quota', 'X')).not.toThrow()
+      // Store still updates in memory even when persistence fails.
+      const items = useRecentStore.getState().items
+      expect(items[0]?.slug).toBe('over-quota')
+    } finally {
+      ;(globalThis as unknown as { window: { localStorage: MemoryStorage } }).window.localStorage = orig
+    }
+  })
+
+  it('ignores non-string slug input', () => {
+    ;(useRecentStore.getState().push as (s: unknown, t: unknown) => void)(123 as unknown as string, 'Bad')
+    expect(useRecentStore.getState().items).toEqual([])
+  })
 })

@@ -1,18 +1,20 @@
 import { Link } from 'react-router-dom'
 import type { DocLinkCardBlock } from '@/types/document'
 import { useDocument } from '@/features/document/hooks/useDocument'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 /**
  * Doc-link card. Lazily fetches `/documents/:slug` via TanStack Query and
  * shows a card with title + (optional) summary. 404 → red "missing" state.
  */
 export function DocLinkCardBlockView({ block }: { block: DocLinkCardBlock }) {
-  const { data, isLoading, isError } = useDocument(block.slug)
+  const { data, isPending, isError } = useDocument(block.slug)
 
-  if (isLoading) {
+  if (isPending) {
     return (
-      <div className="rounded border border-gray-200 bg-white p-3 text-xs text-gray-500">
-        문서 불러오는 중…
+      <div className="space-y-2 rounded border border-gray-200 bg-white p-3" aria-busy="true">
+        <Skeleton className="h-3.5 w-2/3" />
+        <Skeleton className="h-3 w-full" />
       </div>
     )
   }

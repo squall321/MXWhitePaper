@@ -35,6 +35,9 @@ import { DataSourceBlockEditor } from '@/features/editor/blocks/DataSourceBlockE
 import { DashboardEmbedBlockEditor } from '@/features/editor/blocks/DashboardEmbedBlockEditor'
 import { CalculatorBlockEditor } from '@/features/editor/blocks/CalculatorBlockEditor'
 import { OrgChartBlockEditor } from '@/features/editor/blocks/OrgChartBlockEditor'
+import { FlowBlockEditor } from '@/features/editor/blocks/FlowBlockEditor'
+import { KpiCardsBlockEditor } from '@/features/editor/blocks/KpiCardsBlockEditor'
+import { BlockBoundary } from './BlockBoundary'
 
 /**
  * BlockRenderer — discriminates on `block.type` and never throws on unknown
@@ -45,10 +48,31 @@ import { OrgChartBlockEditor } from '@/features/editor/blocks/OrgChartBlockEdito
  *   - Edit mode covers image, gallery, chart, math, data-source,
  *     dashboard-embed, calculator, org-chart. Other types fall back to the
  *     read view inside the full-edit pane (BlockNote handles them).
+ *
+ * Each block is wrapped in `<BlockBoundary>` so a single bad widget cannot
+ * unmount the entire article (Hardening C).
  */
 export function BlockRenderer({ block }: { block: Block }) {
+  return (
+    <BlockBoundary blockType={block?.type}>
+      <BlockRendererInner block={block} />
+    </BlockBoundary>
+  )
+}
+
+function BlockRendererInner({ block }: { block: Block }) {
   const isFullEditing = useEditorStore(editorSelectors.isFullEditing)
   const editorSlug = useEditorStore((s) => s.slug)
+
+  // If the block is malformed (no `type`), surface a friendly inline notice
+  // instead of throwing on the discriminator.
+  if (!block || typeof (block as { type?: unknown }).type !== 'string') {
+    return (
+      <div className="my-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        이 블록을 표시할 수 없습니다 (type=invalid).
+      </div>
+    )
+  }
 
   if (isFullEditing && editorSlug) {
     if (block.type === 'image') {
@@ -74,6 +98,12 @@ export function BlockRenderer({ block }: { block: Block }) {
     }
     if (block.type === 'org-chart') {
       return <OrgChartBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'flow') {
+      return <FlowBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'kpi-cards') {
+      return <KpiCardsBlockEditor slug={editorSlug} block={block} />
     }
   }
 

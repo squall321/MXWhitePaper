@@ -21,7 +21,11 @@ interface RecentRailProps {
  */
 export function RecentRail({ max = 10, items, showSeeAll = true }: RecentRailProps) {
   const storeItems = useRecentStore((s) => s.items)
-  const list = (items ?? storeItems).slice(0, max)
+  const safeMax = Number.isFinite(max) && max > 0 ? max : 10
+  const source = Array.isArray(items) ? items : Array.isArray(storeItems) ? storeItems : []
+  const list = source
+    .filter((d): d is RecentDoc => Boolean(d) && typeof d.slug === 'string')
+    .slice(0, safeMax)
 
   return (
     <section aria-label="최근 본 문서" className="px-3">
@@ -57,9 +61,9 @@ export function RecentRail({ max = 10, items, showSeeAll = true }: RecentRailPro
                 className="group block rounded-md border border-transparent px-2 py-1.5 transition-colors hover:border-smsg-100 hover:bg-smsg-50 hover:no-underline"
               >
                 <p className="line-clamp-2 text-sm font-medium text-smsg-900 group-hover:text-smsg-700">
-                  {doc.title}
+                  {doc.title || doc.slug}
                 </p>
-                <time className="text-[11px] text-gray-500" dateTime={new Date(doc.viewedAt).toISOString()}>
+                <time className="text-[11px] text-gray-500" dateTime={safeIsoDate(doc.viewedAt)}>
                   {formatRelative(doc.viewedAt)}
                 </time>
               </Link>
@@ -77,6 +81,7 @@ export function RecentRail({ max = 10, items, showSeeAll = true }: RecentRailPro
  * isn't a concern (the client immediately re-renders).
  */
 export function formatRelative(ts: number, now: number = Date.now()): string {
+  if (!Number.isFinite(ts)) return ''
   const diff = Math.max(0, now - ts)
   const min = 60_000
   const hour = 60 * min
@@ -88,6 +93,16 @@ export function formatRelative(ts: number, now: number = Date.now()): string {
   if (diff < 7 * day) return `${Math.floor(diff / day)}일 전`
   try {
     return new Date(ts).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })
+  } catch {
+    return ''
+  }
+}
+
+/** Safe ISO formatter — returns '' for non-finite timestamps. */
+function safeIsoDate(ts: number): string {
+  if (!Number.isFinite(ts)) return ''
+  try {
+    return new Date(ts).toISOString()
   } catch {
     return ''
   }

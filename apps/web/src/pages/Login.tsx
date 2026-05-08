@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { login } from '@/features/auth/api'
+import { useAuthStore } from '@/features/auth/store'
 import { Button, Card, Field, Input } from '@/components/ui'
 
 const loginSchema = z.object({
@@ -19,6 +20,18 @@ const DEV_DEFAULTS: LoginInput = {
 }
 
 /**
+ * Reject anything that could send the user off-site (open-redirect guard).
+ * We only allow same-origin paths starting with a single `/`.
+ */
+export function safeReturnPath(raw: string | null | undefined): string {
+  if (!raw) return '/'
+  // protocol-relative or absolute URLs → unsafe
+  if (raw.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(raw)) return '/'
+  if (!raw.startsWith('/')) return '/'
+  return raw
+}
+
+/**
  * Login page. react-hook-form + zod for validation. On success, redirects
  * to the `?return=...` URL or `/`. Dev mode pre-fills the form with the
  * documented seed credentials.
@@ -29,9 +42,11 @@ const DEV_DEFAULTS: LoginInput = {
 export function LoginPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const returnTo = params.get('return') ?? '/'
+  const returnTo = safeReturnPath(params.get('return'))
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [remember, setRemember] = useState(true)
+  const user = useAuthStore((s) => s.user)
+  const hydrating = useAuthStore((s) => s.hydrating)
 
   const {
     register,
@@ -42,16 +57,36 @@ export function LoginPage() {
     defaultValues: import.meta.env.DEV ? DEV_DEFAULTS : { email: '', password: '' },
   })
 
+  // Already logged-in users shouldn't see the login form. Wait for the
+  // hydration probe to finish so we don't bounce a returning user back to
+  // the saved `?return=` path with a stale (cookie-less) state.
+  useEffect(() => {
+    if (!hydrating && user) {
+      navigate(returnTo, { replace: true })
+    }
+  }, [hydrating, user, returnTo, navigate])
+
   const onSubmit = handleSubmit(async (values) => {
     setSubmitError(null)
     try {
       await login(values.email, values.password)
       navigate(returnTo, { replace: true })
     } catch (err) {
-      const status = (err as { response?: { status?: number } })?.response?.status
-      setSubmitError(
-        status === 401 ? '이메일 또는 비밀번호가 올바르지 않습니다.' : '로그인 중 오류가 발생했습니다.',
-      )
+      const e = err as { response?: { status?: number; data?: { error?: { message?: string } } } }
+      const status = e.response?.status
+      if (status === 401) {
+        setSubmitError('이메일 또는 비밀번호가 올바르지 않습니다.')
+      } else if (status === 403) {
+        setSubmitError('계정이 비활성화되었습니다. 관리자에게 문의하세요.')
+      } else if (status === 429) {
+        setSubmitError('너무 많은 시도가 감지되었습니다. 잠시 후 다시 시도하세요.')
+      } else if (status == null) {
+        // Network / CORS / DNS — axios couldn't get a response at all.
+        setSubmitError('서버에 연결할 수 없습니다. 관리자에게 문의하세요.')
+      } else {
+        const msg = e.response?.data?.error?.message
+        setSubmitError(msg ?? '로그인 중 오류가 발생했습니다.')
+      }
     }
   })
 
@@ -86,6 +121,7 @@ export function LoginPage() {
             <Field label="이메일" htmlFor="login-email" error={errors.email?.message}>
               <Input
                 id="login-email"
+                data-testid="login-email"
                 type="email"
                 autoComplete="username"
                 placeholder="name@samsung.com"
@@ -97,6 +133,7 @@ export function LoginPage() {
             <Field label="비밀번호" htmlFor="login-password" error={errors.password?.message}>
               <Input
                 id="login-password"
+                data-testid="login-password"
                 type="password"
                 autoComplete="current-password"
                 placeholder="••••••••"
@@ -130,14 +167,25 @@ export function LoginPage() {
               </p>
             )}
 
-            <Button type="submit" loading={isSubmitting} fullWidth size="md">
-              로그인
+            <Button
+              type="submit"
+              data-testid="login-submit"
+              loading={isSubmitting}
+              disabled={isSubmitting}
+              fullWidth
+              size="md"
+            >
+              {isSubmitting ? '로그인 중…' : '로그인'}
             </Button>
 
             {import.meta.env.DEV && (
               <p className="pt-2 text-[11px] text-gray-500">
                 dev: <code>admin@mx.local</code> / <code>admin1234!</code> ·{' '}
                 <Link className="underline" to="/?dev">?dev 우회</Link>
+                <br />
+                <span className="text-gray-400">
+                  (?dev는 인증 없이 admin 데이터를 그대로 노출합니다 — 개발용)
+                </span>
               </p>
             )}
           </form>
