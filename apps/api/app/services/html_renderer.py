@@ -253,12 +253,29 @@ def _render_block(block: dict[str, Any], ctx: _Ctx) -> str:
             f"{html.escape(btype)}]</div>"
         )
     try:
-        return handler(block, ctx)
+        rendered = handler(block, ctx)
     except Exception as e:  # pragma: no cover — defensive
         return (
             f'<div class="block block-error">[블록 렌더 실패: '
             f"{html.escape(btype)} — {html.escape(str(e))}]</div>"
         )
+    # `meta.note === 'page-break-before'` => print/PDF page break before this
+    # block. Used by the "페이지 나누기" palette item. Empty paragraph carriers
+    # collapse to a zero-height div so they don't add visible whitespace.
+    meta = block.get("meta") or {}
+    if isinstance(meta, dict) and meta.get("note") == "page-break-before":
+        if btype == "paragraph" and not _str(block.get("text")):
+            return (
+                '<div class="b-page-break" '
+                'style="page-break-before: always; break-before: page; '
+                'height: 0;"></div>'
+            )
+        return (
+            '<div class="b-page-break" '
+            'style="page-break-before: always; break-before: page;">'
+            f"{rendered}</div>"
+        )
+    return rendered
 
 
 # ── Per-block-type handlers ──────────────────────────────────────────
@@ -513,15 +530,20 @@ def _b_image(block: dict[str, Any], ctx: _Ctx) -> str:
     caption = _str(block.get("caption"))
     alt = _str(block.get("alt") or caption)
     width = _str(block.get("width")) or "md"
+    # `meta.align` (left|center|right|full) → CSS class on the figure. `full`
+    # makes the figure stretch edge-to-edge regardless of `width`.
+    meta = block.get("meta") or {}
+    align = _str(meta.get("align")) if isinstance(meta, dict) else ""
+    align_cls = f" b-image-align-{html.escape(align)}" if align else ""
     src = _resolve_image_src(image_id, ctx)
     if not src:
         return (
-            f'<figure class="b-image b-image-{html.escape(width)}">'
+            f'<figure class="b-image b-image-{html.escape(width)}{align_cls}">'
             f'<div class="image-missing">[이미지 누락: {html.escape(image_id)}]</div>'
             f'<figcaption>{html.escape(caption)}</figcaption></figure>'
         )
     return (
-        f'<figure class="b-image b-image-{html.escape(width)}">'
+        f'<figure class="b-image b-image-{html.escape(width)}{align_cls}">'
         f'<img src="{src}" alt="{html.escape(alt)}" loading="lazy">'
         + (f'<figcaption>{html.escape(caption)}</figcaption>' if caption else "")
         + "</figure>"
@@ -944,6 +966,11 @@ body {
 .b-image-md img { max-width: 640px; }
 .b-image-lg img { max-width: 920px; }
 .b-image-full img { max-width: 100%; }
+.b-image-align-left  { text-align: left; }
+.b-image-align-center{ text-align: center; }
+.b-image-align-right { text-align: right; }
+.b-image-align-full  { text-align: center; }
+.b-image-align-full img { max-width: 100%; }
 .b-image figcaption { font-size: 12px; color: var(--gray-500); margin-top: 4px; }
 .image-missing { padding: 20px; background: var(--gray-100); color: var(--gray-500);
                  border-radius: 6px; }
@@ -982,6 +1009,7 @@ body {
   body { padding: 0; max-width: none; }
   .toc { page-break-after: always; }
   .sec-l1 { page-break-before: auto; }
+  .b-page-break { page-break-before: always; break-before: page; }
 }
 """
 

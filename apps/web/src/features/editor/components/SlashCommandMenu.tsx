@@ -24,6 +24,14 @@ export interface SlashMenuItem {
  */
 export const SLASH_ITEMS: SlashMenuItem[] = [
   { type: 'paragraph', label: '단락', emoji: 'T', build: () => ({ type: 'paragraph', id: ulid(), text: '' }) },
+  // Special: a page break is just an empty paragraph carrying meta.note.
+  // Export honors `page-break-before` to insert a CSS page-break.
+  {
+    type: 'paragraph',
+    label: '페이지 나누기',
+    emoji: '⤓',
+    build: () => ({ type: 'paragraph', id: ulid(), text: '', meta: { note: 'page-break-before' } }),
+  },
   { type: 'heading-4', label: '소제목 (H4)', emoji: 'H', build: () => ({ type: 'heading-4', id: ulid(), title: '' }) },
   { type: 'list', label: '목록', emoji: '•', build: () => ({ type: 'list', id: ulid(), style: 'bullet', items: [''] }) },
   { type: 'quote', label: '인용', emoji: '❝', build: () => ({ type: 'quote', id: ulid(), text: '' }) },

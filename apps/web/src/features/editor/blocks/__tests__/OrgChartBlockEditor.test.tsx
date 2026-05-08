@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import {
   OrgChartBlockEditor,
   addChild,
+  addSibling,
   removeNode,
   updateNode,
   reparent,
@@ -35,6 +36,19 @@ describe('addChild', () => {
     expect((a?.children ?? [])[1]?.id).toBe('a2')
     // immutability: original root untouched.
     expect(((root.children ?? [])[0]?.children ?? []).length).toBe(1)
+  })
+})
+
+describe('addSibling', () => {
+  it('inserts a sibling immediately after the target', () => {
+    const sib: OrgChartNode = { id: 'a-new', label: 'A-NEW' }
+    const next = addSibling(root, 'a', sib)
+    const labels = (next.children ?? []).map((c) => c.label)
+    expect(labels).toEqual(['A', 'A-NEW', 'B'])
+  })
+  it('skips when target is the root (no parent)', () => {
+    const sib: OrgChartNode = { id: 'r-sib', label: 'X' }
+    expect(addSibling(root, 'r', sib)).toBe(root)
   })
 })
 

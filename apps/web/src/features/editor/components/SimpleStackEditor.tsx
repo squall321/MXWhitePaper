@@ -22,6 +22,7 @@ import { patchSection, isPreconditionFailed, deleteBlock } from '../api'
 import { useEditorStore } from '../state'
 import { BlockHoverInserter } from './BlockHoverInserter'
 import { BlockInsertPalette, type PaletteItem } from './BlockInsertPalette'
+import { InlineFormattingToolbar } from './InlineFormattingToolbar'
 import { BlockRenderer } from '@/components/blocks/BlockRenderer'
 
 /**
@@ -242,6 +243,11 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
           onClose={() => setTailOpen(null)}
         />
       )}
+
+      {/* Floating inline-formatting toolbar — listens to selection changes
+          inside any [data-inline-text-editor] in this section. Renders a
+          single instance regardless of how many text blocks are present. */}
+      <InlineFormattingToolbar />
     </section>
   )
 }

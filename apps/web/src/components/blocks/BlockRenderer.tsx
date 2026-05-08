@@ -28,6 +28,7 @@ import { CalculatorBlockView } from './CalculatorBlock'
 import { OrgChartBlockView } from './OrgChartBlock'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { InlineTextBlockEditor } from '@/features/editor/components/InlineTextBlockEditor'
+import { ListBlockEditor } from '@/features/editor/components/ListBlockEditor'
 import { ImageBlockEditor } from '@/features/editor/blocks/ImageBlockEditor'
 import { GalleryBlockEditor } from '@/features/editor/blocks/GalleryBlockEditor'
 import { ChartBlockEditorWrapper } from '@/features/editor/blocks/ChartBlockEditorWrapper'
@@ -37,7 +38,20 @@ import { DashboardEmbedBlockEditor } from '@/features/editor/blocks/DashboardEmb
 import { CalculatorBlockEditor } from '@/features/editor/blocks/CalculatorBlockEditor'
 import { OrgChartBlockEditor } from '@/features/editor/blocks/OrgChartBlockEditor'
 import { FlowBlockEditor } from '@/features/editor/blocks/FlowBlockEditor'
+import { GanttBlockEditor } from '@/features/editor/blocks/GanttBlockEditor'
 import { KpiCardsBlockEditor } from '@/features/editor/blocks/KpiCardsBlockEditor'
+import { TableBlockEditor } from '@/features/editor/blocks/TableBlockEditor'
+import { CodeBlockEditor } from '@/features/editor/blocks/CodeBlockEditor'
+import { CalloutVariantPicker } from '@/features/editor/blocks/CalloutVariantPicker'
+import { VideoBlockEditor } from '@/features/editor/blocks/VideoBlockEditor'
+import { IframeBlockEditor } from '@/features/editor/blocks/IframeBlockEditor'
+import { FileBlockEditor } from '@/features/editor/blocks/FileBlockEditor'
+import { DocLinkCardBlockEditor } from '@/features/editor/blocks/DocLinkCardBlockEditor'
+import {
+  AccordionBlockEditor,
+  ColumnsBlockEditor,
+  TabsBlockEditor,
+} from '@/features/editor/blocks/ContainerBlockEditors'
 import { BlockBoundary } from './BlockBoundary'
 
 /**
@@ -79,6 +93,11 @@ function BlockRendererInner({ block }: { block: Block }) {
     // Text-only blocks: inline contentEditable so users can just click and
     // type without invoking the slash menu.
     if (block.type === 'paragraph') {
+      // Page-break sentinel: render the visual marker instead of an editor —
+      // the user shouldn't accidentally type into the page-break block.
+      if (block.meta?.note === 'page-break-before') {
+        return <ParagraphBlockView block={block} />
+      }
       return (
         <InlineTextBlockEditor
           slug={editorSlug}
@@ -91,13 +110,23 @@ function BlockRendererInner({ block }: { block: Block }) {
       )
     }
     if (block.type === 'heading-4') {
+      // Schema-stored level lives in meta.level; default 4 keeps prior docs
+      // looking the same.
+      const lvl = (block.meta?.level ?? 4) as 2 | 3 | 4
+      const cls =
+        lvl === 2
+          ? 'text-2xl font-semibold text-smsg-900'
+          : lvl === 3
+            ? 'text-xl font-semibold text-smsg-900'
+            : 'text-lg font-semibold text-gray-700'
       return (
         <InlineTextBlockEditor
           slug={editorSlug}
           blockId={block.id}
           blockType="heading-4"
+          level={lvl}
           initialText={block.title}
-          className="text-lg font-semibold text-gray-700 min-h-[1.5rem] py-1"
+          className={`${cls} min-h-[1.5rem] py-1`}
           placeholder="제목을 입력하세요…"
         />
       )
@@ -127,6 +156,7 @@ function BlockRendererInner({ block }: { block: Block }) {
               : 'border-smsg-300 bg-smsg-50'
       return (
         <div className={`rounded-md border-l-4 px-3 py-2 ${tone}`}>
+          <CalloutVariantPicker slug={editorSlug} block={block} />
           <InlineTextBlockEditor
             slug={editorSlug}
             blockId={block.id}
@@ -165,8 +195,41 @@ function BlockRendererInner({ block }: { block: Block }) {
     if (block.type === 'flow') {
       return <FlowBlockEditor slug={editorSlug} block={block} />
     }
+    if (block.type === 'gantt') {
+      return <GanttBlockEditor slug={editorSlug} block={block} />
+    }
     if (block.type === 'kpi-cards') {
       return <KpiCardsBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'table') {
+      return <TableBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'code') {
+      return <CodeBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'video') {
+      return <VideoBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'iframe') {
+      return <IframeBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'file') {
+      return <FileBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'doc-link-card') {
+      return <DocLinkCardBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'tabs') {
+      return <TabsBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'accordion') {
+      return <AccordionBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'columns') {
+      return <ColumnsBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'list') {
+      return <ListBlockEditor slug={editorSlug} block={block} />
     }
   }
 

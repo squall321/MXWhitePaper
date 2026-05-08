@@ -38,8 +38,16 @@ const SECTIONS: { title: string; rows: ShortcutRow[] }[] = [
       { keys: '⌘ B', desc: '굵게' },
       { keys: '⌘ I', desc: '기울임' },
       { keys: '⌘ U', desc: '밑줄' },
-      { keys: '⌘ K', desc: '링크 삽입' },
+      { keys: '⌘ E', desc: '인라인 코드' },
+      { keys: '⌘ K', desc: '링크 삽입 ([[slug]] 또는 https://…)' },
       { keys: '⌘ ⇧ X', desc: '취소선' },
+    ],
+  },
+  {
+    title: '찾기 / 바꾸기',
+    rows: [
+      { keys: '⌘ F', desc: '현재 문서에서 찾기 / 바꾸기' },
+      { keys: 'Esc', desc: '찾기 창 닫기' },
     ],
   },
   {

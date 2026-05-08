@@ -67,6 +67,16 @@ class Permission(Enum):
     admin = 'admin'
 
 
+class Level(Enum):
+    """
+    Heading 블록(heading-4 type)에서 실제 보여줄 단계. 2=큰 제목, 3=중간 제목, 4=작은 제목(기본). 다른 블록 타입에서는 무시됨.
+    """
+
+    int_2 = 2
+    int_3 = 3
+    int_4 = 4
+
+
 class BlockMeta(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -76,6 +86,10 @@ class BlockMeta(BaseModel):
     locked: bool | None = None
     permission: Permission | None = None
     note: str | None = None
+    level: Level | None = None
+    """
+    Heading 블록(heading-4 type)에서 실제 보여줄 단계. 2=큰 제목, 3=중간 제목, 4=작은 제목(기본). 다른 블록 타입에서는 무시됨.
+    """
 
 
 class ParagraphBlock(BaseModel):

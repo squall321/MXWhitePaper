@@ -124,11 +124,16 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
     setConvertHint('샘플 데이터 적용됨')
   }
 
-  const onCsvPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const text = e.clipboardData.getData('text/plain')
+  // Convert raw CSV text → chart data. Pulled out of the paste handler so
+  // both `onPaste` AND the explicit "적용" button share the same code path.
+  // Without the button, users who *typed* into the textarea (or used Ctrl+V
+  // into a sub-element of the textarea) had no way to commit the change.
+  const applyCsvText = (text: string): boolean => {
     const parsed = parseCsv(text)
-    if (!parsed) return // fall through
-    e.preventDefault()
+    if (!parsed) {
+      setConvertHint('CSV 형식이 아닙니다 — 첫 줄=헤더, 첫 칸=라벨로 입력하세요')
+      return false
+    }
     const labels = parsed.rows.map((r) => r[0] ?? '')
     const seriesCount = Math.max(0, parsed.headers.length - 1)
     const series = Array.from({ length: seriesCount }, (_, sIdx) => ({
@@ -139,7 +144,27 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
       }),
     }))
     onChange({ ...block, data: { labels, series } })
-    setConvertHint(`CSV 적용됨 — ${parsed.rows.length}행`)
+    setConvertHint(`CSV 적용됨 — ${parsed.rows.length}행 × ${seriesCount}계열`)
+    return true
+  }
+
+  const onCsvPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = e.clipboardData.getData('text/plain')
+    if (applyCsvText(text)) e.preventDefault()
+  }
+
+  const [csvDraft, setCsvDraft] = useState('')
+  const onApplyClick = () => {
+    if (!csvDraft.trim()) {
+      setConvertHint('붙여넣을 텍스트가 비어 있습니다')
+      return
+    }
+    applyCsvText(csvDraft)
+  }
+  const onLoadExample = () => {
+    const ex = '월,매출,비용\n1월,120,80\n2월,150,90\n3월,180,110\n4월,210,130\n5월,240,140'
+    setCsvDraft(ex)
+    applyCsvText(ex)
   }
 
   return (
@@ -283,15 +308,56 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
         )}
       </div>
 
-      <details className="rounded border border-gray-200 bg-white p-2 text-xs">
-        <summary className="cursor-pointer text-gray-600">CSV 붙여넣기</summary>
-        <textarea
-          aria-label="csv-paste"
-          rows={4}
-          placeholder="여기에 CSV 또는 TSV를 붙여넣으세요"
-          onPaste={onCsvPaste}
-          className="mt-2 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-[11px]"
-        />
+      <details className="rounded border border-gray-200 bg-white p-2 text-xs" open>
+        <summary className="cursor-pointer text-gray-600">CSV 붙여넣기 / 직접 입력</summary>
+        <div className="mt-2 space-y-2">
+          <p className="rounded bg-gray-50 p-2 text-[11px] leading-relaxed text-gray-600">
+            <strong className="font-semibold text-gray-800">형식:</strong>{' '}
+            첫 줄 = 헤더(첫 칸은 라벨, 나머지는 계열명), 다음 줄부터 = 데이터.
+            엑셀 표를 그대로 복사 → 붙여넣기도 됩니다 (탭 구분자 자동 인식).
+            <br />
+            <span className="font-mono text-[10px] text-gray-500">
+              월,매출,비용{'\n'}1월,120,80{'\n'}2월,150,90
+            </span>
+          </p>
+          <textarea
+            aria-label="csv-paste"
+            rows={5}
+            value={csvDraft}
+            onChange={(e) => setCsvDraft(e.target.value)}
+            placeholder={'월,매출,비용\n1월,120,80\n2월,150,90\n3월,180,110'}
+            onPaste={onCsvPaste}
+            className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-[11px] focus:border-smsg-500 focus:outline-none"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onApplyClick}
+              data-action="apply-csv"
+              className="rounded bg-smsg-700 px-3 py-1 text-[11px] font-semibold text-white hover:bg-smsg-900 disabled:opacity-50"
+            >
+              차트에 적용
+            </button>
+            <button
+              type="button"
+              onClick={onLoadExample}
+              data-action="load-csv-example"
+              className="rounded border border-gray-300 px-3 py-1 text-[11px] text-gray-700 hover:border-smsg-500 hover:text-smsg-900"
+            >
+              예시 채우기
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCsvDraft('')
+                setConvertHint(null)
+              }}
+              className="rounded border border-gray-300 px-3 py-1 text-[11px] text-gray-500 hover:border-red-300 hover:text-red-600"
+            >
+              지우기
+            </button>
+          </div>
+        </div>
       </details>
 
       <ChartBlockView block={block} />

@@ -10,6 +10,7 @@ import {
 import type { ImageRecord } from '@/features/upload/api'
 import { SaveStatusPill } from './SaveStatusPill'
 import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
+import { FindReplaceModal } from './FindReplaceModal'
 import { PartPicker } from './PartPicker'
 
 interface EditorToolbarProps {
@@ -46,8 +47,24 @@ export function EditorToolbar({
   const dropzoneRef = useRef<ImageDropzoneHandle>(null)
 
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [findOpen, setFindOpen] = useState(false)
   const [manualLabel, setManualLabel] = useState<string | null>(null)
   const lastStatusRef = useRef(status)
+
+  // Override Ctrl/Cmd+F: the browser's native find can't see across our
+  // contentEditable swarm + only highlights one block at a time. Capture
+  // phase so we beat any contentEditable that might preventDefault first.
+  useEffect(() => {
+    function onKey(ev: KeyboardEvent) {
+      const mod = ev.metaKey || ev.ctrlKey
+      if (mod && (ev.key === 'f' || ev.key === 'F')) {
+        ev.preventDefault()
+        setFindOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
 
   const isEditing = editorSelectors.isEditing({
     ...useEditorStore.getState(),
@@ -270,6 +287,19 @@ export function EditorToolbar({
           </a>
           <button
             type="button"
+            onClick={() => setFindOpen(true)}
+            className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus"
+            title="찾기 / 바꾸기 (Ctrl+F)"
+            data-testid="open-find-replace"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M11 11l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            찾기
+          </button>
+          <button
+            type="button"
             onClick={onToggleVersions}
             className="inline-flex h-8 items-center rounded-md border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus"
           >
@@ -294,6 +324,12 @@ export function EditorToolbar({
       <KeyboardShortcutsModal
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
+      />
+
+      <FindReplaceModal
+        open={findOpen}
+        onClose={() => setFindOpen(false)}
+        slug={slug}
       />
     </>
   )

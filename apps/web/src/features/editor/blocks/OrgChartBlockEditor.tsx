@@ -133,6 +133,32 @@ export function updateNode(
   return next
 }
 
+/**
+ * Add a sibling under the parent of `targetId`. Skips silently when the
+ * target is the root (root has no siblings) so the editor button can stay
+ * disabled rather than throw.
+ */
+export function addSibling(
+  root: OrgChartNode,
+  targetId: string,
+  sibling: OrgChartNode,
+): OrgChartNode {
+  if (root.id === targetId) return root
+  const next = cloneTree(root)
+  function visit(parent: OrgChartNode): boolean {
+    const kids = parent.children ?? []
+    const idx = kids.findIndex((c) => c.id === targetId)
+    if (idx >= 0) {
+      parent.children = [...kids.slice(0, idx + 1), sibling, ...kids.slice(idx + 1)]
+      return true
+    }
+    for (const c of kids) if (visit(c)) return true
+    return false
+  }
+  visit(next)
+  return next
+}
+
 /** True if `ancestor` contains `id` in its subtree. */
 function descendantOf(root: OrgChartNode, ancestorId: string, id: string): boolean {
   function find(n: OrgChartNode): OrgChartNode | null {
@@ -186,7 +212,8 @@ interface NodeRowProps {
   node: OrgChartNode
   depth: number
   isRoot: boolean
-  onAdd: (parentId: string) => void
+  onAddChild: (parentId: string) => void
+  onAddSibling: (siblingOfId: string) => void
   onRemove: (id: string) => void
   onUpdate: (id: string, patch: Partial<OrgChartNode>) => void
 }
@@ -223,7 +250,15 @@ function DroppableSlot({ id, children }: { id: string; children: React.ReactNode
   )
 }
 
-function NodeRow({ node, depth, isRoot, onAdd, onRemove, onUpdate }: NodeRowProps) {
+function NodeRow({
+  node,
+  depth,
+  isRoot,
+  onAddChild,
+  onAddSibling,
+  onRemove,
+  onUpdate,
+}: NodeRowProps) {
   return (
     <div className="space-y-1" style={{ paddingLeft: depth * 16 }}>
       <DroppableSlot id={node.id}>
@@ -243,9 +278,26 @@ function NodeRow({ node, depth, isRoot, onAdd, onRemove, onUpdate }: NodeRowProp
             aria-label={`node ${node.id} role`}
             className="w-32"
           />
-          <IconButton aria-label={`add child to ${node.id}`} onClick={() => onAdd(node.id)}>
-            +
-          </IconButton>
+          <button
+            type="button"
+            onClick={() => onAddChild(node.id)}
+            aria-label={`add child to ${node.id}`}
+            className="rounded-md border border-gray-300 bg-white px-2 py-0.5 text-[11px] hover:border-smsg-300 hover:bg-smsg-50"
+            title="이 노드 아래에 자식 추가"
+          >
+            + 자식 추가
+          </button>
+          {!isRoot && (
+            <button
+              type="button"
+              onClick={() => onAddSibling(node.id)}
+              aria-label={`add sibling of ${node.id}`}
+              className="rounded-md border border-gray-300 bg-white px-2 py-0.5 text-[11px] hover:border-smsg-300 hover:bg-smsg-50"
+              title="같은 레벨에 형제 추가"
+            >
+              + 형제 추가
+            </button>
+          )}
           {!isRoot && (
             <IconButton aria-label={`remove ${node.id}`} onClick={() => onRemove(node.id)}>
               ×
@@ -259,7 +311,8 @@ function NodeRow({ node, depth, isRoot, onAdd, onRemove, onUpdate }: NodeRowProp
           node={c}
           depth={depth + 1}
           isRoot={false}
-          onAdd={onAdd}
+          onAddChild={onAddChild}
+          onAddSibling={onAddSibling}
           onRemove={onRemove}
           onUpdate={onUpdate}
         />
@@ -297,9 +350,13 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
     }
   }
 
-  const onAdd = (parentId: string) => {
+  const onAddChild = (parentId: string) => {
     const child: OrgChartNode = { id: ulid(), label: '신규' }
     void push({ ...local, root: addChild(local.root, parentId, child) })
+  }
+  const onAddSibling = (siblingOfId: string) => {
+    const sib: OrgChartNode = { id: ulid(), label: '신규' }
+    void push({ ...local, root: addSibling(local.root, siblingOfId, sib) })
   }
   const onRemove = (id: string) => void push({ ...local, root: removeNode(local.root, id) })
   const onUpdate = (id: string, patch: Partial<OrgChartNode>) =>
@@ -342,7 +399,8 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
         node={local.root}
         depth={0}
         isRoot
-        onAdd={onAdd}
+        onAddChild={onAddChild}
+        onAddSibling={onAddSibling}
         onRemove={onRemove}
         onUpdate={onUpdate}
       />
@@ -394,11 +452,21 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
       )}
 
       <details className="rounded border border-gray-200 bg-white p-2 text-xs">
-        <summary className="cursor-pointer text-gray-600">엑셀에서 붙여넣기 (Manager,Subordinate)</summary>
+        <summary className="cursor-pointer font-semibold text-gray-700">
+          엑셀/CSV 붙여넣기로 한 번에 만들기
+        </summary>
+        <p className="mt-2 text-[11px] text-gray-600">
+          첫 줄은 <code className="rounded bg-gray-100 px-1">Manager,Subordinate</code> 헤더,
+          이후 줄에는 <em>관리자, 부하</em> 형식으로 한 쌍씩. 예시:
+        </p>
+        <pre className="mt-1 rounded bg-gray-50 p-2 font-mono text-[10px] text-gray-700">{`Manager,Subordinate
+CEO,COO
+CEO,CTO
+CTO,Eng-Lead`}</pre>
         <textarea
           aria-label="org-csv-paste"
           rows={4}
-          placeholder={'Manager,Subordinate\nCEO,COO\nCEO,CTO'}
+          placeholder={'여기에 붙여넣기 (Cmd/Ctrl + V)'}
           onPaste={onCsvPaste}
           className="mt-2 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-[11px]"
         />

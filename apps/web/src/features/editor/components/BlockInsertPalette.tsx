@@ -25,8 +25,46 @@ export interface PaletteItem {
 
 export const PALETTE_ITEMS: PaletteItem[] = [
   { kind: 'paragraph', label: '글', icon: '¶', build: () => ({ type: 'paragraph', id: ulid(), text: '' }) },
-  { kind: 'heading-4', label: '제목', icon: 'H', build: () => ({ type: 'heading-4', id: ulid(), title: '' }) },
-  { kind: 'list', label: '목록', icon: '•', build: () => ({ type: 'list', id: ulid(), style: 'bullet', items: [''] }) },
+  // Heading levels 2 / 3 / 4 — schema stores them all as heading-4 blocks
+  // with `meta.level` distinguishing the visual size. The renderer picks
+  // the right CSS based on level (text-2xl / text-xl / text-lg).
+  {
+    kind: 'heading-2',
+    label: '큰 제목',
+    icon: 'H₂',
+    build: () => ({ type: 'heading-4', id: ulid(), title: '', meta: { level: 2 } }),
+  },
+  {
+    kind: 'heading-3',
+    label: '중간 제목',
+    icon: 'H₃',
+    build: () => ({ type: 'heading-4', id: ulid(), title: '', meta: { level: 3 } }),
+  },
+  {
+    kind: 'heading-4',
+    label: '작은 제목',
+    icon: 'H₄',
+    build: () => ({ type: 'heading-4', id: ulid(), title: '', meta: { level: 4 } }),
+  },
+  // Lists — split per style so users pick up-front instead of cycling later.
+  {
+    kind: 'bullet-list',
+    label: '글머리 목록',
+    icon: '•',
+    build: () => ({ type: 'list', id: ulid(), style: 'bullet', items: [''] }),
+  },
+  {
+    kind: 'numbered-list',
+    label: '번호 목록',
+    icon: '1.',
+    build: () => ({ type: 'list', id: ulid(), style: 'number', items: [''] }),
+  },
+  {
+    kind: 'check-list',
+    label: '체크리스트',
+    icon: '☑',
+    build: () => ({ type: 'list', id: ulid(), style: 'check', items: [''] }),
+  },
   { kind: 'callout', label: '콜아웃', icon: '!', build: () => ({ type: 'callout', id: ulid(), variant: 'info', text: '' }) },
   { kind: 'quote', label: '인용', icon: '“', build: () => ({ type: 'quote', id: ulid(), text: '' }) },
   { kind: 'code', label: '코드', icon: '<>', build: () => ({ type: 'code', id: ulid(), code: '', language: 'text' }) },

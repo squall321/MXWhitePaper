@@ -100,6 +100,10 @@ export interface BlockMeta {
   locked?: boolean
   permission?: 'all' | 'editor' | 'admin'
   note?: string
+  /**
+   * Heading 블록(heading-4 type)에서 실제 보여줄 단계. 2=큰 제목, 3=중간 제목, 4=작은 제목(기본). 다른 블록 타입에서는 무시됨.
+   */
+  level?: 2 | 3 | 4
 }
 export interface Heading4Block {
   type: 'heading-4'

@@ -299,6 +299,41 @@ def test_renderer_mermaid_cdn_opt_in() -> None:
     assert "class=\"b-flow mermaid\"" in out_on
 
 
+def test_renderer_page_break_block_emits_css_break() -> None:
+    """Empty paragraph with `meta.note='page-break-before'` becomes a CSS page break."""
+    blocks = [
+        {"type": "paragraph", "id": "01" + "P" * 24, "text": "before"},
+        {
+            "type": "paragraph",
+            "id": "01" + "Q" * 24,
+            "text": "",
+            "meta": {"note": "page-break-before"},
+        },
+        {"type": "paragraph", "id": "01" + "R" * 24, "text": "after"},
+    ]
+    out = render_namuwiki_html(_doc(blocks))
+    assert "b-page-break" in out
+    assert "page-break-before: always" in out
+
+
+def test_renderer_image_align_emits_alignment_class() -> None:
+    """`meta.align` propagates to a CSS class on the figure."""
+    blocks = [
+        {
+            "type": "image",
+            "id": "01" + "I" * 24,
+            "imageId": "01" + "M" * 24,
+            "meta": {"align": "right"},
+        }
+    ]
+
+    def resolver(_: str) -> dict:
+        return {"url": "https://example.com/x.png"}
+
+    out = render_namuwiki_html(_doc(blocks), options=RenderOptions(image_resolver=resolver))
+    assert "b-image-align-right" in out
+
+
 def test_renderer_glossary_and_references_appear() -> None:
     doc = _doc()
     doc["glossary"] = [{"term": "RBAC", "definition": "Role-Based Access Control"}]
