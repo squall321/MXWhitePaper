@@ -13,6 +13,7 @@ import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
 import { FindReplaceModal } from './FindReplaceModal'
 import { PartPicker } from './PartPicker'
 import { SectionLinkPicker } from './SectionLinkPicker'
+import { ExportMenu } from '@/features/export/ExportMenu'
 
 interface EditorToolbarProps {
   slug: Slug
@@ -301,16 +302,7 @@ export function EditorToolbar({
 
         <div className="ml-auto flex items-center gap-1.5">
           <span className="hidden truncate font-mono text-[11px] text-gray-500 md:inline">{slug}</span>
-          <a
-            href={`/api/v1/documents/${encodeURIComponent(slug)}/export.html?style=namuwiki`}
-            target="_blank"
-            rel="noopener"
-            className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus"
-            title="현재 문서를 단일 HTML 파일로 내보내기"
-            data-testid="export-html-link"
-          >
-            <span aria-hidden>⤓</span> HTML 내보내기
-          </a>
+          <ExportMenu slug={slug} />
           <a
             href={`/present/${encodeURIComponent(slug)}`}
             target="_blank"

@@ -23,6 +23,8 @@ interface InlineProps {
  *   `~~strike~~`   → <s>
  *   `*italic*`     → <em>
  *   `` `code` ``   → <code>
+ *   `[^N]`         → <sup><a href="#fn-N" id="fnref-N">[N]</a></sup>
+ *                    (pandoc-style footnote reference; tag is alphanumeric/hyphen)
  *
  * Sprint 6: glossary terms in plain-text fragments are wrapped in a
  * `<GlossaryTooltip>` so hovering shows their definition.
@@ -120,6 +122,38 @@ function renderMarkdownLite(text: string, glossary: boolean): ReactNode[] {
         out.push(<em key={`i${key++}`}>{text.slice(i + 1, close)}</em>)
         i = close + 1
         continue
+      }
+    }
+    // Footnote reference `[^X]` — alphanumeric / hyphen tag. Renders as a
+    // clickable superscript that jumps to the matching `#fn-X` definition.
+    // The reference itself carries `id="fnref-X"` so the definition's `↩`
+    // back-link can return the reader to the inline citation.
+    // Note: code spans short-circuit before this branch (they consume the
+    // whole `…` blob), so `[^N]` inside `\`code\`` stays literal.
+    if (text[i] === '[' && text[i + 1] === '^') {
+      const close = text.indexOf(']', i + 2)
+      if (close > i + 2) {
+        const tag = text.slice(i + 2, close)
+        if (/^[A-Za-z0-9-]+$/.test(tag)) {
+          flush()
+          out.push(
+            <sup
+              key={`fn${key++}`}
+              id={`fnref-${tag}`}
+              className="text-[0.75em]"
+            >
+              <a
+                href={`#fn-${tag}`}
+                className="text-link no-underline hover:underline"
+                aria-label={`각주 ${tag}`}
+              >
+                [{tag}]
+              </a>
+            </sup>,
+          )
+          i = close + 1
+          continue
+        }
       }
     }
     buf += text[i]

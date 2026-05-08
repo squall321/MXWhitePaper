@@ -1,0 +1,7 @@
+- generic [ref=e2]:
+  - status [ref=e3]:
+    - strong [ref=e4]: MXWP boot
+    - text: · API
+    - code [ref=e5]: http://127.0.0.1:8800/api/v1
+    - text: · online · 오후 4:34:49
+  - generic [ref=e6]: 불러오는 중…

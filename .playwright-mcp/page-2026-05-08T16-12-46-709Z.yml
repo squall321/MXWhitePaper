@@ -1,0 +1,121 @@
+- generic [ref=e33]:
+  - link "본문으로 건너뛰기" [ref=e34] [cursor=pointer]:
+    - /url: "#main"
+  - banner [ref=e35]:
+    - generic [ref=e36]:
+      - link "MX White Paper" [ref=e37] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e38]: MX
+        - generic [ref=e39]: White Paper
+      - generic [ref=e41]:
+        - generic:
+          - img
+        - searchbox "검색" [ref=e42]
+        - generic: ⌘K
+      - navigation "주요 메뉴" [ref=e43]:
+        - button "더 보기" [ref=e45] [cursor=pointer]:
+          - text: 더 보기
+          - img [ref=e46]
+        - link "+ 새 문서" [ref=e48] [cursor=pointer]:
+          - /url: /docs/new
+        - button "알림 1건" [ref=e50] [cursor=pointer]:
+          - img [ref=e51]
+          - generic [ref=e54]: "1"
+        - button "프로필 메뉴" [ref=e56] [cursor=pointer]: M
+  - navigation "현재 위치" [ref=e58]:
+    - list [ref=e59]:
+      - listitem [ref=e60]:
+        - generic [ref=e61]: 홈
+  - generic [ref=e62]:
+    - complementary [ref=e63]:
+      - generic [ref=e64]:
+        - heading "조직" [level=2] [ref=e65]
+        - generic [ref=e66]:
+          - generic [ref=e68]:
+            - generic [ref=e69]: 조직 검색
+            - searchbox "조직 검색" [ref=e70]
+            - img
+          - tree [ref=e71]:
+            - treeitem "MX 사업부" [ref=e72]:
+              - button "MX 사업부" [ref=e73] [cursor=pointer]:
+                - generic [ref=e74]: ▸
+                - generic [ref=e75]: MX 사업부
+    - main [ref=e76]:
+      - generic [ref=e78]:
+        - generic [ref=e79]:
+          - generic [ref=e80]:
+            - heading "최근 업데이트된 문서" [level=1] [ref=e81]
+            - paragraph [ref=e82]: 가장 최근에 갱신된 백서 12건입니다.
+          - generic [ref=e83]:
+            - link "+ 새 문서 작성" [ref=e84] [cursor=pointer]:
+              - /url: /docs/new
+            - link "전체 보기 →" [ref=e85] [cursor=pointer]:
+              - /url: /orgs
+        - list [ref=e86]:
+          - listitem [ref=e87]:
+            - link "월결산 프로세스 월간 재무 결산의 표준 절차와 R&R 정의 month-end-closing 오늘" [ref=e88] [cursor=pointer]:
+              - /url: /docs/month-end-closing
+              - generic [ref=e89]:
+                - generic [ref=e90]:
+                  - generic [ref=e91]: 월
+                  - heading "월결산 프로세스" [level=2] [ref=e93]
+                - paragraph [ref=e94]: 월간 재무 결산의 표준 절차와 R&R 정의
+                - generic [ref=e95]:
+                  - generic [ref=e96]: month-end-closing
+                  - time [ref=e97]: 오늘
+            - button "월결산 프로세스 즐겨찾기에 추가" [ref=e99] [cursor=pointer]:
+              - img [ref=e100]
+          - listitem [ref=e102]:
+            - link "신규 입사자 온보딩 가이드 MX 사업부 신규 입사자가 첫 4주 동안 따라야 할 절차 onboarding-guide 오늘" [ref=e103] [cursor=pointer]:
+              - /url: /docs/onboarding-guide
+              - generic [ref=e104]:
+                - generic [ref=e105]:
+                  - generic [ref=e106]: 신
+                  - heading "신규 입사자 온보딩 가이드" [level=2] [ref=e108]
+                - paragraph [ref=e109]: MX 사업부 신규 입사자가 첫 4주 동안 따라야 할 절차
+                - generic [ref=e110]:
+                  - generic [ref=e111]: onboarding-guide
+                  - time [ref=e112]: 오늘
+            - button "신규 입사자 온보딩 가이드 즐겨찾기에 추가" [ref=e114] [cursor=pointer]:
+              - img [ref=e115]
+          - listitem [ref=e117]:
+            - link "팀 미팅 템플릿 team-meeting-template 어제" [ref=e118] [cursor=pointer]:
+              - /url: /docs/team-meeting-template
+              - generic [ref=e119]:
+                - generic [ref=e120]:
+                  - generic [ref=e121]: 팀
+                  - heading "팀 미팅 템플릿" [level=2] [ref=e123]
+                - generic [ref=e124]:
+                  - generic [ref=e125]: team-meeting-template
+                  - time [ref=e126]: 어제
+            - button "팀 미팅 템플릿 즐겨찾기에 추가" [ref=e128] [cursor=pointer]:
+              - img [ref=e129]
+          - listitem [ref=e131]:
+            - link "제품 촬영 가이드 MX 제품의 마케팅용 촬영 표준 — 각도/조명/배경 product-photo-guide 어제" [ref=e132] [cursor=pointer]:
+              - /url: /docs/product-photo-guide
+              - generic [ref=e133]:
+                - generic [ref=e134]:
+                  - generic [ref=e135]: 제
+                  - heading "제품 촬영 가이드" [level=2] [ref=e137]
+                - paragraph [ref=e138]: MX 제품의 마케팅용 촬영 표준 — 각도/조명/배경
+                - generic [ref=e139]:
+                  - generic [ref=e140]: product-photo-guide
+                  - time [ref=e141]: 어제
+            - button "제품 촬영 가이드 즐겨찾기에 추가" [ref=e143] [cursor=pointer]:
+              - img [ref=e144]
+          - listitem [ref=e146]:
+            - link "사업부 KPI 대시보드 가이드 MX KPI 정의, 계산식, 그리고 대시보드 사용 방법 kpi-dashboard-guide 어제" [ref=e147] [cursor=pointer]:
+              - /url: /docs/kpi-dashboard-guide
+              - generic [ref=e148]:
+                - generic [ref=e149]:
+                  - generic [ref=e150]: 사
+                  - heading "사업부 KPI 대시보드 가이드" [level=2] [ref=e152]
+                - paragraph [ref=e153]: MX KPI 정의, 계산식, 그리고 대시보드 사용 방법
+                - generic [ref=e154]:
+                  - generic [ref=e155]: kpi-dashboard-guide
+                  - time [ref=e156]: 어제
+            - button "사업부 KPI 대시보드 가이드 즐겨찾기에 추가" [ref=e158] [cursor=pointer]:
+              - img [ref=e159]
+  - button "측면 패널 열기" [ref=e161] [cursor=pointer]:
+    - img [ref=e162]
+    - text: 측면 패널

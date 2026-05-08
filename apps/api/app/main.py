@@ -21,12 +21,14 @@ from .routers.auth import router as auth_router
 from .routers.comments import router_doc as comments_doc_router
 from .routers.comments import router_one as comments_one_router
 from .routers.documents import router as documents_router
+from .routers.exports import router as exports_router
 from .routers.files import router as files_router
 from .routers.glossary import router as glossary_router
 from .routers.imports import router as imports_router
 from .routers.links_graph import router as links_graph_router
 from .routers.orgs import router as orgs_router
 from .routers.search import router as search_router
+from .routers.tags import router as tags_router
 from .routers.uploads import images_router, uploads_router
 from .routers.users import router as users_router
 from .routers.widgets import router as widgets_router
@@ -106,6 +108,20 @@ TAGS_METADATA: list[dict[str, str]] = [
         "name": "links",
         "description": "위키 링크 그래프 — BFS 그래프 / 전역 그래프.",
     },
+    {
+        "name": "exports",
+        "description": (
+            "문서 내보내기 — Markdown(GFM) / PDF(WeasyPrint). "
+            "HTML 은 /api/v1/documents/{slug}/export.html 에서 직접 다운로드."
+        ),
+    },
+    {
+        "name": "tags",
+        "description": (
+            "태그 자동완성 + 태그 매니저. metadata.tags 를 집계해 prefix 검색 + count 를 제공하고, "
+            "rename/delete 로 모든 문서의 metadata.tags 를 일괄 갱신한다."
+        ),
+    },
 ]
 
 
@@ -175,6 +191,10 @@ def create_app() -> FastAPI:
     app.include_router(comments_doc_router)
     app.include_router(comments_one_router)
     app.include_router(links_graph_router)
+    # Markdown / PDF export (HTML export 는 documents 라우터에 인라인)
+    app.include_router(exports_router)
+    # 태그 자동완성 + 태그 매니저
+    app.include_router(tags_router)
 
     return app
 

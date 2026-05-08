@@ -9,6 +9,7 @@ import { Button, Card, Field, Input, Select, cn } from '@/components/ui'
 import type { AppOutletContext } from '@/App'
 import { TemplateGallery } from '@/features/templates/TemplateGallery'
 import { findTemplate, templateToSections, type TemplateDef } from '@/features/templates/templates'
+import { TagAutocomplete } from '@/features/tags/TagAutocomplete'
 
 /**
  * 새 문서 생성 마법사 — 슬러그 + 제목 + 소속 파트 + 기밀도.
@@ -61,6 +62,7 @@ export function DocumentNewPage() {
   const [title, setTitle] = useState('')
   const [partId, setPartId] = useState<string>('')
   const [confidentiality, setConf] = useState<'internal' | 'public' | 'restricted'>('internal')
+  const [tags, setTags] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -125,7 +127,7 @@ export function DocumentNewPage() {
         metadata: {
           division: 'MX',
           owners: [user?.id ?? 'admin'],
-          tags: [],
+          tags: tags.slice(),
           confidentiality,
         },
         sections,
@@ -226,6 +228,16 @@ export function DocumentNewPage() {
             <option value="public">public — 사외 공개 가능</option>
             <option value="restricted">restricted — 지정 인원만</option>
           </Select>
+        </Field>
+
+        <Field label="태그" htmlFor="doc-tags" hint="입력 후 Enter 또는 쉼표로 추가 — 기존 태그가 자동완성됩니다.">
+          <TagAutocomplete
+            id="doc-tags"
+            value={tags}
+            onChange={setTags}
+            placeholder="예: kpi, monthly"
+            data-testid="doc-tags-input"
+          />
         </Field>
 
         {error && (

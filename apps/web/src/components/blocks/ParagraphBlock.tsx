@@ -2,6 +2,25 @@ import type { ParagraphBlock } from '@/types/document'
 import { Inline } from '../wiki/Inline'
 
 /**
+ * Footnote definition pattern. A paragraph whose text starts with `[^TAG]: `
+ * is treated as a footnote definition (pandoc-style). The capture groups are
+ * `[1]=tag` and `[2]=body`.
+ */
+const FOOTNOTE_DEF_RE = /^\[\^([A-Za-z0-9-]+)\]:\s+([\s\S]+)$/
+
+/**
+ * Detect a footnote-definition paragraph. Exported so SectionRenderer can
+ * collect definitions across all paragraphs in a section.
+ */
+export function parseFootnoteDefinition(
+  text: string,
+): { tag: string; body: string } | null {
+  const m = text.match(FOOTNOTE_DEF_RE)
+  if (!m) return null
+  return { tag: m[1] ?? '', body: m[2] ?? '' }
+}
+
+/**
  * Paragraph block — `\n\n` separates paragraphs. Each paragraph runs through
  * the inline parser (markdown-lite + WikiLink).
  *
@@ -9,6 +28,12 @@ import { Inline } from '../wiki/Inline'
  * rendered as a visible separator in the editor; the HTML export adds the
  * CSS `page-break-before: always` directly. We keep the dotted line so the
  * author can see where pages will split.
+ *
+ * Footnote definitions: a paragraph whose text starts with `[^TAG]: …` is a
+ * pandoc-style footnote definition. By default we hide it from the read-mode
+ * output because `<SectionRenderer>` already collects all definitions into a
+ * "각주" mini-list at the bottom of the section (no duplication). Edit-mode
+ * surfaces (`InlineTextBlockEditor`) still see the raw text untouched.
  */
 export function ParagraphBlockView({ block }: { block: ParagraphBlock }) {
   if (block.meta?.note === 'page-break-before') {
@@ -24,6 +49,16 @@ export function ParagraphBlockView({ block }: { block: ParagraphBlock }) {
       </div>
     )
   }
+
+  // If the entire paragraph is a footnote definition, render nothing here —
+  // SectionRenderer handles it in its section-bottom "각주" list. Keeping the
+  // raw markdown out of the read view avoids visual duplication while leaving
+  // the source unchanged for the editor.
+  const fnDef = parseFootnoteDefinition(block.text)
+  if (fnDef) {
+    return null
+  }
+
   const paragraphs = block.text.split(/\n{2,}/)
   return (
     <div className="space-y-3 text-[15px] leading-7 text-smsg-900">

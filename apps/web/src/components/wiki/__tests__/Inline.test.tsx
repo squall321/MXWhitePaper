@@ -57,3 +57,41 @@ describe('<Inline /> wiki anchor links', () => {
     expect(html).toContain(' b')
   })
 })
+
+describe('<Inline /> pandoc-style footnote references', () => {
+  it('renders `[^1]` as a superscript anchor pointing at #fn-1', () => {
+    const html = render('이 통계는 2025년 4분기 기준이다 [^1].')
+    // `<sup>` wrapper carries the back-link target id.
+    expect(html).toContain('id="fnref-1"')
+    // `<a>` jumps to the matching definition.
+    expect(html).toContain('href="#fn-1"')
+    // Visible label is `[1]` (kept human-readable for screen readers).
+    expect(html).toContain('[1]')
+  })
+
+  it('accepts alphabetic tags (`[^a]`)', () => {
+    const html = render('see [^a] above')
+    expect(html).toContain('id="fnref-a"')
+    expect(html).toContain('href="#fn-a"')
+  })
+
+  it('accepts hyphenated tags (`[^my-tag]`)', () => {
+    const html = render('see [^my-tag] above')
+    expect(html).toContain('id="fnref-my-tag"')
+    expect(html).toContain('href="#fn-my-tag"')
+  })
+
+  it('does not render `[^x]` inside a code span (code wins)', () => {
+    const html = render('`see [^1] in code`')
+    // Inside `<code>` the literal `[^1]` survives — no `<sup>` wrapper.
+    expect(html).not.toContain('href="#fn-1"')
+    expect(html).toContain('[^1]')
+  })
+
+  it('leaves malformed footnote-like tokens intact', () => {
+    const html = render('a [^] b [^?] c')
+    // Empty tag and `?` (not in the alphanumeric/hyphen set) — no anchors.
+    expect(html).not.toContain('href="#fn-')
+    expect(html).toContain('[^]')
+  })
+})

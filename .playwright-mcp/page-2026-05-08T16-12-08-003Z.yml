@@ -1,0 +1,40 @@
+- generic [ref=e7]:
+  - generic:
+    - img
+  - generic [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: MX
+      - heading "White Paper" [level=1] [ref=e11]
+      - paragraph [ref=e12]: 사내 백서 시스템
+    - generic [ref=e13]:
+      - heading "로그인" [level=2] [ref=e14]
+      - paragraph [ref=e15]: 사내 계정으로 로그인하세요.
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - generic [ref=e18]: 이메일
+          - textbox "이메일" [ref=e19]:
+            - /placeholder: name@samsung.com
+            - text: admin@mx.local
+        - generic [ref=e20]:
+          - generic [ref=e21]: 비밀번호
+          - textbox "비밀번호" [ref=e22]:
+            - /placeholder: ••••••••
+            - text: admin1234!
+        - generic [ref=e23]:
+          - generic [ref=e24] [cursor=pointer]:
+            - checkbox "최근 로그인 ID 기억" [checked] [ref=e25]
+            - text: 최근 로그인 ID 기억
+          - link "비밀번호를 잊으셨나요?" [ref=e26] [cursor=pointer]:
+            - /url: "#"
+        - alert [ref=e33]: 서버에 연결할 수 없습니다. 관리자에게 문의하세요.
+        - button "로그인" [ref=e27] [cursor=pointer]
+        - paragraph [ref=e28]:
+          - text: "dev:"
+          - code [ref=e29]: admin@mx.local
+          - text: /
+          - code [ref=e30]: admin1234!
+          - text: ·
+          - link "?dev 우회" [ref=e31] [cursor=pointer]:
+            - /url: /?dev
+          - text: (?dev는 인증 없이 admin 데이터를 그대로 노출합니다 — 개발용)
+    - paragraph [ref=e32]: © Samsung MX · 문서는 사내 전용입니다.

@@ -33,6 +33,15 @@ const SECTIONS: { title: string; rows: ShortcutRow[] }[] = [
     ],
   },
   {
+    title: '블록 일괄 선택',
+    rows: [
+      { keys: '⌘ A', desc: '현재 섹션의 모든 블록 선택' },
+      { keys: '⌘ D', desc: '선택한 블록 복제' },
+      { keys: 'Delete / Backspace', desc: '선택한 블록 삭제' },
+      { keys: 'Esc', desc: '블록 선택 해제' },
+    ],
+  },
+  {
     title: '텍스트 서식',
     rows: [
       { keys: '⌘ B', desc: '굵게' },

@@ -9,6 +9,7 @@ import { Input, Select } from '@/components/ui/Input'
 import { toast } from '@/components/ui/Toast'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { AdminOrgsPage } from './AdminOrgs'
+import { TagManagerPage } from './TagManager'
 import {
   type AdminAuditEntry,
   type AdminHealth,
@@ -20,7 +21,7 @@ import {
   runMaintenance,
 } from '@/features/admin/api'
 
-type TabKey = 'users' | 'audit' | 'health' | 'maintenance' | 'orgs'
+type TabKey = 'users' | 'audit' | 'health' | 'maintenance' | 'orgs' | 'tags'
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'users', label: '사용자' },
@@ -28,6 +29,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'health', label: '시스템 상태' },
   { key: 'maintenance', label: '유지보수' },
   { key: 'orgs', label: '조직' },
+  { key: 'tags', label: '태그' },
 ]
 
 const ROLE_OPTIONS = [
@@ -94,6 +96,11 @@ export function AdminDashboardPage() {
       {tab === 'orgs' && (
         <div data-testid="admin-tab-orgs-content">
           <AdminOrgsPage />
+        </div>
+      )}
+      {tab === 'tags' && (
+        <div data-testid="admin-tab-tags-content">
+          <TagManagerPage />
         </div>
       )}
     </div>

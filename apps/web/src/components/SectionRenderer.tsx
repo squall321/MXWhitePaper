@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Slug, SectionLevel1, SectionLevel2, SectionLevel3 } from '@/types/document'
 import { BlockRenderer } from './blocks/BlockRenderer'
+import { parseFootnoteDefinition } from './blocks/ParagraphBlock'
+import { Inline } from './wiki/Inline'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { SectionQuickEdit } from '@/features/editor/components/SectionQuickEdit'
 import { SimpleStackEditor } from '@/features/editor/components/SimpleStackEditor'
@@ -115,6 +117,12 @@ export function SectionRenderer({
     ? () => toggleCollapsed(slugForCollapse, section.id)
     : undefined
 
+  // Collect pandoc-style footnote definitions from this section's direct
+  // paragraph blocks. We render them as a numbered list at the bottom of the
+  // section so inline `[^N]` superscripts have a stable jump target. The
+  // ParagraphBlock view hides the source paragraphs to avoid duplication.
+  const footnotes = collectFootnotes(section.blocks ?? [])
+
   return (
     <section data-section-level={section.level} data-section-id={section.id}>
       <SectionHeading
@@ -137,6 +145,8 @@ export function SectionRenderer({
           ))}
         </div>
 
+        {footnotes.length > 0 && <FootnoteList footnotes={footnotes} />}
+
         {subsections.length > 0 && (
           <div className="mt-4 space-y-6">
             {subsections.map((sub) => (
@@ -151,6 +161,64 @@ export function SectionRenderer({
         )}
       </CollapsiblePanel>
     </section>
+  )
+}
+
+interface FootnoteEntry {
+  tag: string
+  body: string
+}
+
+/**
+ * Walk a section's direct blocks and pull every paragraph whose text matches
+ * the footnote-definition pattern (`[^TAG]: …`). Order = source order;
+ * duplicate tags keep the first occurrence (silently — markdown-lite has no
+ * concept of "valid"; the renderer should not throw).
+ */
+function collectFootnotes(blocks: readonly { type?: string; text?: string }[]): FootnoteEntry[] {
+  const seen = new Set<string>()
+  const out: FootnoteEntry[] = []
+  for (const b of blocks) {
+    if (b.type !== 'paragraph') continue
+    const text = b.text ?? ''
+    const def = parseFootnoteDefinition(text)
+    if (!def) continue
+    if (seen.has(def.tag)) continue
+    seen.add(def.tag)
+    out.push(def)
+  }
+  return out
+}
+
+/**
+ * Section-bottom 각주 mini-list. Each entry carries `id="fn-TAG"` so the
+ * inline `<sup><a href="#fn-TAG">` can scroll-jump to it; a `↩` back-link
+ * targets `#fnref-TAG` so the reader returns to the citation.
+ */
+function FootnoteList({ footnotes }: { footnotes: FootnoteEntry[] }) {
+  return (
+    <aside
+      data-footnote-list
+      className="mt-6 border-t border-smsg-100 pt-3 text-xs text-gray-600"
+      aria-label="각주"
+    >
+      <div className="mb-1 font-semibold text-gray-700">각주</div>
+      <ol className="list-none space-y-1 pl-0">
+        {footnotes.map((fn) => (
+          <li key={fn.tag} id={`fn-${fn.tag}`} className="leading-5">
+            <span className="mr-1 font-mono text-gray-500">[{fn.tag}]</span>
+            <Inline text={fn.body} />
+            <a
+              href={`#fnref-${fn.tag}`}
+              className="ml-1 text-link no-underline hover:underline"
+              aria-label={`각주 ${fn.tag} 본문으로 돌아가기`}
+            >
+              ↩
+            </a>
+          </li>
+        ))}
+      </ol>
+    </aside>
   )
 }
 

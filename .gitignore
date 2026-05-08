@@ -69,3 +69,4 @@ infra/logs/e2e-report/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/.playwright/
+new-ux-overview.png

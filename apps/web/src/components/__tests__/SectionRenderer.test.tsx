@@ -110,6 +110,77 @@ describe('<SectionRenderer />', () => {
     useSectionCollapseStore.getState().expandAll('test-slug')
   })
 
+  it('round-trips pandoc-style footnotes — `[^1]` ref + `[^1]: …` def', () => {
+    const section: SectionLevel1 = {
+      id: '01ABCDEFGHJKMNPQRSTVWXYZFN',
+      number: '4',
+      level: 1,
+      title: '각주 섹션',
+      blocks: [
+        {
+          type: 'paragraph',
+          id: '01ABCDEFGHJKMNPQRSTVWXY401',
+          text: '이 통계는 2025년 4분기 기준이다 [^1].',
+        },
+        {
+          type: 'paragraph',
+          id: '01ABCDEFGHJKMNPQRSTVWXY402',
+          text: '[^1]: 출처 — 2025 Q4 KPI dashboard.',
+        },
+      ],
+      subsections: [],
+    }
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <SectionRenderer section={section} />
+      </MemoryRouter>,
+    )
+
+    // Inline reference becomes a superscript anchor jumping to `#fn-1`.
+    expect(html).toContain('id="fnref-1"')
+    expect(html).toContain('href="#fn-1"')
+
+    // Section-bottom 각주 list owns the definition target id and back-link.
+    expect(html).toContain('id="fn-1"')
+    expect(html).toContain('href="#fnref-1"')
+    expect(html).toContain('출처 — 2025 Q4 KPI dashboard.')
+
+    // The original `[^1]: …` paragraph is suppressed in read mode (no
+    // duplicate body text outside the `<aside data-footnote-list>`).
+    const matches = html.match(/출처 — 2025 Q4 KPI dashboard/g) ?? []
+    expect(matches.length).toBe(1)
+
+    // Footnote panel landmark.
+    expect(html).toContain('data-footnote-list')
+  })
+
+  it('skips the 각주 panel when no definitions are present', () => {
+    const section: SectionLevel1 = {
+      id: '01ABCDEFGHJKMNPQRSTVWXYZNF',
+      number: '5',
+      level: 1,
+      title: '각주 없음',
+      blocks: [
+        {
+          type: 'paragraph',
+          id: '01ABCDEFGHJKMNPQRSTVWXY501',
+          text: '본문에 [^1] 참조만 있고 정의는 없다.',
+        },
+      ],
+      subsections: [],
+    }
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <SectionRenderer section={section} />
+      </MemoryRouter>,
+    )
+    // Inline ref still renders…
+    expect(html).toContain('href="#fn-1"')
+    // …but no panel because nothing matched the definition pattern.
+    expect(html).not.toContain('data-footnote-list')
+  })
+
   it('renders a missing-link variant when the existence hook returns false', async () => {
     // Re-stub the hook for this test only.
     vi.resetModules()

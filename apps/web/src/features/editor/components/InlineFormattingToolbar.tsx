@@ -35,7 +35,15 @@ import { SectionLinkPicker } from './SectionLinkPicker'
  *  selection 이 사라지므로 saved Range 재주입이 필수.)
  */
 
-type Cmd = 'bold' | 'italic' | 'underline' | 'strikeThrough' | 'code' | 'link' | 'clear'
+type Cmd =
+  | 'bold'
+  | 'italic'
+  | 'underline'
+  | 'strikeThrough'
+  | 'code'
+  | 'link'
+  | 'footnote'
+  | 'clear'
 
 interface Props {
   /**
@@ -60,6 +68,10 @@ export function InlineFormattingToolbar({
   const [linkPromptOpen, setLinkPromptOpen] = useState(false)
   const [linkUrlDraft, setLinkUrlDraft] = useState('')
   const [sectionPickerOpen, setSectionPickerOpen] = useState(false)
+  // Footnote tag prompt state. Defaults to the next available numeric tag
+  // (scanned from the current draft's paragraph text).
+  const [footnotePromptOpen, setFootnotePromptOpen] = useState(false)
+  const [footnoteTagDraft, setFootnoteTagDraft] = useState('')
   // Range stashed BEFORE the modal opens so we can restore the caret after
   // the modal steals focus and dispatch execCommand at the right spot.
   const savedRangeRef = useRef<Range | null>(null)
@@ -157,6 +169,15 @@ export function InlineFormattingToolbar({
       setLinkUrlDraft(initial)
       setLinkPromptOpen(true)
       return
+    } else if (cmd === 'footnote') {
+      // Save selection so the prompt-modal's input doesn't lose the caret.
+      savedRangeRef.current = range.cloneRange()
+      savedEditorRef.current = editor
+      // Default tag = next available numeric tag, scanned from the draft's
+      // paragraph blocks (covers existing `[^1]` / `[^2]: …` references).
+      setFootnoteTagDraft(String(nextFootnoteNumber()))
+      setFootnotePromptOpen(true)
+      return
     } else if (cmd === 'clear') {
       document.execCommand('removeFormat')
       // removeFormat doesn't strip <a>; do it manually.
@@ -190,6 +211,30 @@ export function InlineFormattingToolbar({
     setPickerDoc(null)
     savedRangeRef.current = null
     savedEditorRef.current = null
+  }
+
+  const closeFootnotePrompt = () => {
+    setFootnotePromptOpen(false)
+    setFootnoteTagDraft('')
+    savedRangeRef.current = null
+    savedEditorRef.current = null
+  }
+
+  /** Insert `[^TAG]` at the saved caret position. */
+  const applyFootnote = () => {
+    const tag = footnoteTagDraft.trim()
+    if (!tag || !/^[A-Za-z0-9-]+$/.test(tag)) {
+      closeFootnotePrompt()
+      return
+    }
+    const editor = savedEditorRef.current
+    if (!restoreSavedSelection() || !editor) {
+      closeFootnotePrompt()
+      return
+    }
+    document.execCommand('insertText', false, `[^${tag}]`)
+    editor.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    closeFootnotePrompt()
   }
 
   /** Apply the URL the user typed (free-form path). Mirrors the previous
@@ -228,7 +273,7 @@ export function InlineFormattingToolbar({
     closeLinkPrompt()
   }
 
-  if (!pos && !linkPromptOpen && !sectionPickerOpen) return null
+  if (!pos && !linkPromptOpen && !sectionPickerOpen && !footnotePromptOpen) return null
 
   const Btn = ({
     label,
@@ -295,6 +340,9 @@ export function InlineFormattingToolbar({
                 strokeLinecap="round"
               />
             </svg>
+          </Btn>
+          <Btn label="각주" title="각주 삽입" cmd="footnote">
+            <span className="text-[11px] font-mono">[^]</span>
           </Btn>
           <span className="mx-0.5 h-4 w-px bg-gray-200" aria-hidden="true" />
           <Btn label="서식 지우기" title="서식 지우기" cmd="clear">
@@ -387,8 +435,113 @@ export function InlineFormattingToolbar({
           onCancel={() => setSectionPickerOpen(false)}
         />
       )}
+
+      {footnotePromptOpen && (
+        <div
+          className="fixed inset-0 z-modal flex items-start justify-center bg-black/30 pt-24"
+          role="dialog"
+          aria-modal="true"
+          aria-label="각주 태그 입력"
+          data-testid="inline-footnote-prompt"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeFootnotePrompt()
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              closeFootnotePrompt()
+            }
+          }}
+        >
+          <div className="w-full max-w-md rounded-md border border-gray-200 bg-white p-3 shadow-lg">
+            <label
+              htmlFor="inline-footnote-prompt-tag"
+              className="mb-1.5 block text-xs font-medium text-gray-600"
+            >
+              각주 태그 — 숫자(1, 2, …) 또는 영숫자/하이픈 (예: src-1)
+            </label>
+            <input
+              id="inline-footnote-prompt-tag"
+              type="text"
+              autoFocus
+              value={footnoteTagDraft}
+              onChange={(e) => setFootnoteTagDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  applyFootnote()
+                }
+              }}
+              placeholder="1"
+              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-smsg-500 focus:outline-none"
+              data-testid="inline-footnote-prompt-input"
+            />
+            <p className="mt-2 text-[11px] text-gray-500">
+              본문에 <code className="font-mono">[^태그]</code>를 삽입합니다.
+              아래에 별도 단락으로{' '}
+              <code className="font-mono">[^태그]: 정의</code>를 작성하면
+              섹션 하단에 각주 목록으로 정리됩니다.
+            </p>
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeFootnotePrompt}
+                className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={applyFootnote}
+                className="rounded bg-smsg-600 px-3 py-1 text-xs font-medium text-white hover:bg-smsg-700"
+                data-testid="inline-footnote-prompt-apply"
+              >
+                삽입
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
+}
+
+/**
+ * Scan the current draft document for paragraph blocks and find the largest
+ * existing numeric footnote tag. Returns the next available number (1 by
+ * default). Non-numeric tags (`[^src-1]`) are ignored — the user can override
+ * the default in the prompt.
+ */
+function nextFootnoteNumber(): number {
+  const draft = useEditorStore.getState().draft
+  if (!draft) return 1
+  const numericTags = new Set<number>()
+  const visit = (
+    blocks: readonly { type?: string; text?: string }[] | undefined,
+  ) => {
+    if (!blocks) return
+    for (const b of blocks) {
+      if (b.type !== 'paragraph') continue
+      const text = b.text ?? ''
+      // Match both `[^N]` references and `[^N]: …` definitions.
+      const re = /\[\^([0-9]+)\]/g
+      let m: RegExpExecArray | null
+      while ((m = re.exec(text)) !== null) {
+        const n = Number(m[1])
+        if (Number.isFinite(n)) numericTags.add(n)
+      }
+    }
+  }
+  // Walk every section's blocks (level 1 → level 3). Cheaper than a recursive
+  // type narrow — duck-type on `blocks` / `subsections`.
+  type Walkable = { blocks?: readonly { type?: string; text?: string }[]; subsections?: readonly Walkable[] }
+  const walkSection = (s: Walkable) => {
+    visit(s.blocks)
+    s.subsections?.forEach(walkSection)
+  }
+  ;(draft.sections ?? []).forEach((s) => walkSection(s as unknown as Walkable))
+  if (numericTags.size === 0) return 1
+  return Math.max(...numericTags) + 1
 }
 
 /**

@@ -2830,6 +2830,90 @@
         ]
       }
     },
+    "/api/v1/exports/markdown": {
+      "post": {
+        "description": "DocumentJSON 본문을 GitHub-flavoured Markdown 으로 변환해 다운로드.\n차트/Gantt/Flow 는 mermaid 코드블록으로, 그 외 동적 블록은 텍스트 요약으로 보존된다.",
+        "operationId": "export_markdown_api_v1_exports_markdown_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서를 Markdown 으로 내보내기",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
+    "/api/v1/exports/pdf": {
+      "post": {
+        "description": "WeasyPrint 가 설치된 환경에서만 동작한다.\n설치되지 않은 경우 501 을 돌려주며, FE 는 print-friendly 페이지로 폴백한다.",
+        "operationId": "export_pdf_api_v1_exports_pdf_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서를 PDF 로 내보내기 (WeasyPrint)",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
     "/api/v1/files/finalize": {
       "post": {
         "operationId": "files_finalize_api_v1_files_finalize_post",
@@ -4050,6 +4134,232 @@
         ]
       }
     },
+    "/api/v1/tags": {
+      "get": {
+        "description": "모든 비-archived 문서의 `metadata.tags` 를 집계해 (name, count) 로 반환한다. `q` 가 주어지면 prefix(case-insensitive)로 필터링한다.",
+        "operationId": "list_tags_api_v1_tags_get",
+        "parameters": [
+          {
+            "description": "태그 prefix 필터 (case-insensitive)",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "태그 prefix 필터 (case-insensitive)",
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Tags Api V1 Tags Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "태그 자동완성 — prefix 매칭 + 사용 횟수",
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v1/tags/delete": {
+      "post": {
+        "description": "모든 비-archived 문서의 `metadata.tags` 에서 주어진 tag 를 제거.",
+        "operationId": "delete_tag_api_v1_tags_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Tag Api V1 Tags Delete Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "태그 일괄 삭제",
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v1/tags/rename": {
+      "post": {
+        "description": "모든 비-archived 문서의 `metadata.tags` 에서 `from` 을 `to` 로 치환. 이미 `to` 가 같은 문서에 있으면 dedupe. document version 이 +1 된다.",
+        "operationId": "rename_tag_api_v1_tags_rename_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rename Tag Api V1 Tags Rename Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "태그 일괄 rename — from → to",
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v1/tags/{tag}/documents": {
+      "get": {
+        "description": "`metadata.tags` 에 주어진 태그가 포함된 문서 카드 리스트를 반환.",
+        "operationId": "list_documents_for_tag_api_v1_tags__tag__documents_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tag",
+            "required": true,
+            "schema": {
+              "title": "Tag",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Documents For Tag Api V1 Tags  Tag  Documents Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "특정 태그가 달린 문서 목록",
+        "tags": [
+          "tags"
+        ]
+      }
+    },
     "/api/v1/teams": {
       "get": {
         "operationId": "list_teams_api_v1_teams_get",
@@ -4615,6 +4925,14 @@
     {
       "description": "위키 링크 그래프 — BFS 그래프 / 전역 그래프.",
       "name": "links"
+    },
+    {
+      "description": "문서 내보내기 — Markdown(GFM) / PDF(WeasyPrint). HTML 은 /api/v1/documents/{slug}/export.html 에서 직접 다운로드.",
+      "name": "exports"
+    },
+    {
+      "description": "태그 자동완성 + 태그 매니저. metadata.tags 를 집계해 prefix 검색 + count 를 제공하고, rename/delete 로 모든 문서의 metadata.tags 를 일괄 갱신한다.",
+      "name": "tags"
     }
   ]
 }

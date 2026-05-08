@@ -10,6 +10,7 @@ import { SectionRenderer } from './SectionRenderer'
 import { Badge } from '@/components/ui'
 import { FavoriteStar } from '@/features/favorites/components/FavoriteStar'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
+import { BulkActionsBar } from '@/features/editor/components/BulkActionsBar'
 
 interface WikiArticleProps {
   document: DocumentJSONV10
@@ -128,6 +129,10 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           ))}
         </div>
       </div>
+      {/* Floating bulk-actions bar — renders only when the bulk-selection
+          store has at least one block. Lives at the article level so its
+          fixed-position pill doesn't multiply across nested sections. */}
+      {editableSlug && <BulkActionsBar slug={editableSlug} />}
     </article>
   )
 }

@@ -1,0 +1,401 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e29]:
+    - link "본문으로 건너뛰기" [ref=e30] [cursor=pointer]:
+      - /url: "#main"
+    - banner [ref=e31]:
+      - generic [ref=e32]:
+        - link "MX White Paper" [ref=e33] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e34]: MX
+          - generic [ref=e35]: White Paper
+        - generic [ref=e37]:
+          - generic:
+            - img
+          - searchbox "검색" [ref=e38]
+          - generic: ⌘K
+        - navigation "주요 메뉴" [ref=e39]:
+          - button "더 보기" [ref=e41] [cursor=pointer]:
+            - text: 더 보기
+            - img [ref=e42]
+          - link "+ 새 문서" [ref=e44] [cursor=pointer]:
+            - /url: /docs/new
+          - button "알림 1건" [ref=e46] [cursor=pointer]:
+            - img [ref=e47]
+            - generic [ref=e50]: "1"
+          - button "프로필 메뉴" [ref=e52] [cursor=pointer]: M
+    - navigation "현재 위치" [ref=e54]:
+      - list [ref=e55]:
+        - listitem [ref=e56]:
+          - link "홈" [ref=e57] [cursor=pointer]:
+            - /url: /
+        - listitem [ref=e58]:
+          - generic [ref=e59]: /
+          - generic [ref=e60]: MX
+        - listitem [ref=e61]:
+          - generic [ref=e62]: /
+          - generic [ref=e63]: 재무팀
+        - listitem [ref=e64]:
+          - generic [ref=e65]: /
+          - generic [ref=e66]: 회계그룹
+        - listitem [ref=e67]:
+          - generic [ref=e68]: /
+          - generic [ref=e69]: 결산파트
+        - listitem [ref=e70]:
+          - generic [ref=e71]: /
+          - generic [ref=e72]: 월결산 프로세스
+    - main [ref=e74]:
+      - generic [ref=e76]:
+        - generic [ref=e77]:
+          - button "미리보기" [ref=e78] [cursor=pointer]
+          - button "저장" [disabled] [ref=e79]
+          - button "실행 취소" [ref=e80] [cursor=pointer]:
+            - img [ref=e81]
+          - button "다시 실행" [ref=e84] [cursor=pointer]:
+            - img [ref=e85]
+          - button "이미지" [ref=e88] [cursor=pointer]:
+            - img [ref=e89]
+            - text: 이미지
+          - generic [ref=e94] [cursor=pointer]:
+            - checkbox "자동저장" [checked] [ref=e95]
+            - text: 자동저장
+          - generic [ref=e96]:
+            - generic [ref=e97]: 분류
+            - combobox "문서 분류" [ref=e98]:
+              - option "미배치" [selected]
+              - option "MX 사업부 / 개발실 / HE팀 / CAE그룹"
+          - generic [ref=e101]: 동기화됨
+          - generic [ref=e102]:
+            - generic [ref=e103]: month-end-closing
+            - link "HTML 내보내기" [ref=e104] [cursor=pointer]:
+              - /url: /api/v1/documents/month-end-closing/export.html?style=namuwiki
+              - generic [ref=e105]: ⤓
+              - text: HTML 내보내기
+            - link "프레젠테이션" [ref=e106] [cursor=pointer]:
+              - /url: /present/month-end-closing
+              - generic [ref=e107]: ⛶
+              - text: 프레젠테이션
+            - button "버전 이력" [ref=e108] [cursor=pointer]
+            - button "단축키 안내" [ref=e109] [cursor=pointer]: "?"
+            - generic [ref=e110]: fullEdit
+        - generic [ref=e111]:
+          - heading "아웃라인" [level=3] [ref=e112]
+          - generic [ref=e113]:
+            - generic [ref=e114]:
+              - button "+ 섹션" [ref=e115] [cursor=pointer]
+              - button "+ 하위" [ref=e116] [cursor=pointer]
+              - button "복제" [ref=e117] [cursor=pointer]
+              - button "삭제" [ref=e118] [cursor=pointer]
+            - list [ref=e119]:
+              - listitem [ref=e120]:
+                - button "끌어서 재정렬" [ref=e121]:
+                  - img [ref=e122]
+                - textbox "level 1 섹션 제목" [ref=e129]: 개요
+              - listitem [ref=e130]:
+                - button "끌어서 재정렬" [ref=e131]:
+                  - img [ref=e132]
+                - textbox "level 2 섹션 제목" [ref=e139]: 결산 일정
+              - listitem [ref=e140]:
+                - button "끌어서 재정렬" [ref=e141]:
+                  - img [ref=e142]
+                - textbox "level 3 섹션 제목" [ref=e149]: 월결산 상세 일정
+            - status [ref=e150]
+        - article [ref=e152]:
+          - generic [ref=e153]:
+            - generic [ref=e154]:
+              - generic [ref=e155]: /month-end-closing
+              - generic [ref=e156]: internal
+              - generic [ref=e157]: "#결산"
+              - generic [ref=e158]: "#프로세스"
+              - generic [ref=e159]: "#R&R"
+            - generic [ref=e160]:
+              - heading "월결산 프로세스" [level=1] [ref=e161]
+              - button "월결산 프로세스 즐겨찾기에 추가" [ref=e162] [cursor=pointer]:
+                - img [ref=e163]
+            - paragraph [ref=e165]: 월간 재무 결산의 표준 절차와 R&R 정의
+            - paragraph [ref=e166]:
+              - text: MX / 재무팀 / 회계그룹 / 결산파트·
+              - generic [ref=e167]:
+                - text: "마지막 편집:"
+                - time [ref=e168]: 2026-05-08
+          - generic [ref=e169]:
+            - complementary [ref=e170]:
+              - generic [ref=e171]: 주요 정보
+              - table [ref=e172]:
+                - rowgroup [ref=e173]:
+                  - row "주기 월간" [ref=e174]:
+                    - rowheader "주기" [ref=e175]
+                    - cell "월간" [ref=e176]
+                  - row "관련 시스템 SAP Hyperion" [ref=e177]:
+                    - rowheader "관련 시스템" [ref=e178]
+                    - cell "SAP Hyperion" [ref=e179]:
+                      - list [ref=e180]:
+                        - listitem [ref=e181]: SAP
+                        - listitem [ref=e182]: Hyperion
+                  - row "주요 산출물 재무제표" [ref=e183]:
+                    - rowheader "주요 산출물" [ref=e184]
+                    - cell "재무제표" [ref=e185]
+            - generic [ref=e187]:
+              - generic [ref=e188]:
+                - generic [ref=e189]:
+                  - generic [ref=e190]: "1"
+                  - textbox "섹션 제목" [ref=e191]: 개요
+                - generic [ref=e192]:
+                  - button "이 블록 위에 추가 블록 이동 (드래그) 블록 삭제 월결산은 매월 5영업일 내에 완료한다. [[quarterly-closing|분기결산]]의 선행 작업이다. 이 블록 아래에 추가" [ref=e193] [cursor=pointer]:
+                    - generic [ref=e194]:
+                      - button "이 블록 위에 추가" [ref=e195]:
+                        - generic:
+                          - generic: +
+                      - button "블록 이동 (드래그)" [ref=e196]:
+                        - img [ref=e197]
+                      - button "블록 삭제" [ref=e204]:
+                        - img [ref=e205]
+                      - textbox "블록 텍스트 편집" [ref=e207]
+                      - button "이 블록 아래에 추가" [ref=e208]:
+                        - generic:
+                          - generic: +
+                  - button "이 블록 위에 추가 블록 이동 (드래그) 블록 삭제 본 절차는 분기마다 재검토된다. 이 블록 아래에 추가" [ref=e209] [cursor=pointer]:
+                    - generic [ref=e210]:
+                      - button "이 블록 위에 추가" [ref=e211]:
+                        - generic:
+                          - generic: +
+                      - button "블록 이동 (드래그)" [ref=e212]:
+                        - img [ref=e213]
+                      - button "블록 삭제" [ref=e220]:
+                        - img [ref=e221]
+                      - textbox "블록 텍스트 편집" [ref=e224]
+                      - button "이 블록 아래에 추가" [ref=e225]:
+                        - generic:
+                          - generic: +
+                  - button "이 블록 위에 추가 블록 이동 (드래그) 블록 삭제 이 블록 아래에 추가" [ref=e226] [cursor=pointer]:
+                    - generic [ref=e227]:
+                      - button "이 블록 위에 추가" [ref=e228]:
+                        - generic:
+                          - generic: +
+                      - button "블록 이동 (드래그)" [ref=e229]:
+                        - img [ref=e230]
+                      - button "블록 삭제" [ref=e237]:
+                        - img [ref=e238]
+                      - textbox "블록 텍스트 편집" [ref=e241]: 콜아웃 텍스트…
+                      - button "이 블록 아래에 추가" [ref=e242]:
+                        - generic:
+                          - generic: +
+                  - button "이 블록 위에 추가 블록 이동 (드래그) 블록 삭제 열 1 열 2 표를 차트로 변환 이 블록 아래에 추가" [ref=e243] [cursor=pointer]:
+                    - generic [ref=e244]:
+                      - button "이 블록 위에 추가" [ref=e245]:
+                        - generic:
+                          - generic: +
+                      - button "블록 이동 (드래그)" [ref=e246]:
+                        - img [ref=e247]
+                      - button "블록 삭제" [ref=e254]:
+                        - img [ref=e255]
+                      - generic [ref=e257]:
+                        - table [ref=e259]:
+                          - rowgroup [ref=e260]:
+                            - row "열 1 열 2" [ref=e261]:
+                              - columnheader "열 1" [ref=e262]
+                              - columnheader "열 2" [ref=e263]
+                          - rowgroup [ref=e264]:
+                            - row [ref=e265]:
+                              - cell [ref=e266]
+                              - cell [ref=e267]
+                        - button "표를 차트로 변환" [ref=e268]:
+                          - generic [ref=e269]: 📊
+                          - generic [ref=e270]: 차트로
+                      - button "이 블록 아래에 추가" [ref=e271]:
+                        - generic:
+                          - generic: +
+                - status [ref=e272]
+                - button "블록 추가" [ref=e274] [cursor=pointer]:
+                  - generic [ref=e275]: +
+                  - text: 블록 추가
+              - generic [ref=e277]:
+                - heading "1.1 결산 일정 섹션 링크 복사" [level=3] [ref=e278]:
+                  - generic [ref=e279]: "1.1"
+                  - generic [ref=e280]: 결산 일정
+                  - link "섹션 링크 복사" [ref=e281] [cursor=pointer]:
+                    - /url: "#section-1.1"
+                    - text: "#"
+                - generic [ref=e283]:
+                  - table [ref=e285]:
+                    - rowgroup [ref=e286]:
+                      - row "단계 D-day 담당" [ref=e287]:
+                        - columnheader "단계" [ref=e288]
+                        - columnheader "D-day" [ref=e289]
+                        - columnheader "담당" [ref=e290]
+                    - rowgroup [ref=e291]:
+                      - row "취합 D-3 결산팀" [ref=e292]:
+                        - cell "취합" [ref=e293]
+                        - cell "D-3" [ref=e294]
+                        - cell "결산팀" [ref=e295]
+                      - row "검토 D-1 감사팀" [ref=e296]:
+                        - cell "검토" [ref=e297]
+                        - cell "D-1" [ref=e298]
+                        - cell "감사팀" [ref=e299]
+                      - row "확정 D 팀장" [ref=e300]:
+                        - cell "확정" [ref=e301]
+                        - cell "D" [ref=e302]
+                        - cell "팀장" [ref=e303]
+                  - button "표를 차트로 변환" [ref=e304] [cursor=pointer]:
+                    - generic [ref=e305]: 📊
+                    - generic [ref=e306]: 차트로
+                - generic [ref=e308]:
+                  - heading "1.1.1 월결산 상세 일정 섹션 링크 복사" [level=4] [ref=e309]:
+                    - generic [ref=e310]: 1.1.1
+                    - generic [ref=e311]: 월결산 상세 일정
+                    - link "섹션 링크 복사" [ref=e312] [cursor=pointer]:
+                      - /url: "#section-1.1.1"
+                      - text: "#"
+                  - generic [ref=e315]:
+                    - generic [ref=e316]:
+                      - generic [ref=e317]:
+                        - generic [ref=e318]: 제목
+                        - textbox "제목" [ref=e319]: 월별 결산 소요 일수
+                      - generic [ref=e320]:
+                        - generic [ref=e321]: 차트 종류
+                        - combobox "차트 종류" [ref=e322]:
+                          - option "line" [selected]
+                          - option "bar"
+                          - option "pie"
+                          - option "area"
+                          - option "radar"
+                          - option "scatter"
+                    - radiogroup "차트 종류 미리보기" [ref=e323]:
+                      - radio "선" [checked] [ref=e324] [cursor=pointer]:
+                        - generic [ref=e325]: ╱╲╱
+                        - generic [ref=e326]: 선
+                      - radio "막대" [ref=e327] [cursor=pointer]:
+                        - generic [ref=e328]: ▁▄▆█
+                        - generic [ref=e329]: 막대
+                      - radio "원" [ref=e330] [cursor=pointer]:
+                        - generic [ref=e331]: ◔◑◕●
+                        - generic [ref=e332]: 원
+                      - radio "면적" [ref=e333] [cursor=pointer]:
+                        - generic [ref=e334]: ▁▃▅▇
+                        - generic [ref=e335]: 면적
+                      - radio "레이더" [ref=e336] [cursor=pointer]:
+                        - generic [ref=e337]: ⌬
+                        - generic [ref=e338]: 레이더
+                      - radio "산점" [ref=e339] [cursor=pointer]:
+                        - generic [ref=e340]: · · · ·
+                        - generic [ref=e341]: 산점
+                    - table [ref=e343]:
+                      - rowgroup [ref=e344]:
+                        - row "label 실적 목표" [ref=e345]:
+                          - columnheader "label" [ref=e346]
+                          - columnheader "실적" [ref=e347]:
+                            - textbox [ref=e348]: 실적
+                          - columnheader "목표" [ref=e349]:
+                            - textbox [ref=e350]: 목표
+                          - columnheader [ref=e351]
+                      - rowgroup [ref=e352]:
+                        - row "1월 5 5 row 1 remove" [ref=e353]:
+                          - cell "1월" [ref=e354]:
+                            - textbox [ref=e355]: 1월
+                          - cell "5" [ref=e356]:
+                            - spinbutton [ref=e357]: "5"
+                          - cell "5" [ref=e358]:
+                            - spinbutton [ref=e359]: "5"
+                          - cell "row 1 remove" [ref=e360]:
+                            - button "row 1 remove" [ref=e361] [cursor=pointer]: ×
+                        - row "2월 4.5 5 row 2 remove" [ref=e362]:
+                          - cell "2월" [ref=e363]:
+                            - textbox [ref=e364]: 2월
+                          - cell "4.5" [ref=e365]:
+                            - spinbutton [ref=e366]: "4.5"
+                          - cell "5" [ref=e367]:
+                            - spinbutton [ref=e368]: "5"
+                          - cell "row 2 remove" [ref=e369]:
+                            - button "row 2 remove" [ref=e370] [cursor=pointer]: ×
+                        - row "3월 4.8 5 row 3 remove" [ref=e371]:
+                          - cell "3월" [ref=e372]:
+                            - textbox [ref=e373]: 3월
+                          - cell "4.8" [ref=e374]:
+                            - spinbutton [ref=e375]: "4.8"
+                          - cell "5" [ref=e376]:
+                            - spinbutton [ref=e377]: "5"
+                          - cell "row 3 remove" [ref=e378]:
+                            - button "row 3 remove" [ref=e379] [cursor=pointer]: ×
+                        - row "4월 4.2 5 row 4 remove" [ref=e380]:
+                          - cell "4월" [ref=e381]:
+                            - textbox [ref=e382]: 4월
+                          - cell "4.2" [ref=e383]:
+                            - spinbutton [ref=e384]: "4.2"
+                          - cell "5" [ref=e385]:
+                            - spinbutton [ref=e386]: "5"
+                          - cell "row 4 remove" [ref=e387]:
+                            - button "row 4 remove" [ref=e388] [cursor=pointer]: ×
+                    - generic [ref=e389]:
+                      - button "+ 행" [ref=e390] [cursor=pointer]
+                      - button "+ 시리즈" [ref=e391] [cursor=pointer]
+                      - button "표 → 차트" [ref=e392] [cursor=pointer]
+                      - button "샘플 데이터 사용" [ref=e393] [cursor=pointer]
+                    - group [ref=e394]:
+                      - generic "CSV 붙여넣기" [ref=e395] [cursor=pointer]
+                    - figure "월별 결산 소요 일수" [ref=e396]:
+                      - generic [ref=e397]: 월별 결산 소요 일수
+                      - generic [ref=e400]:
+                        - list [ref=e402]:
+                          - listitem [ref=e403]:
+                            - img "목표 legend icon" [ref=e404]
+                            - text: 목표
+                          - listitem [ref=e406]:
+                            - img "실적 legend icon" [ref=e407]
+                            - text: 실적
+                        - application [ref=e409]:
+                          - generic [ref=e425]:
+                            - generic [ref=e426]:
+                              - generic [ref=e428]: 1월
+                              - generic [ref=e430]: 2월
+                              - generic [ref=e432]: 3월
+                              - generic [ref=e434]: 4월
+                            - generic [ref=e435]:
+                              - generic [ref=e437]: "0"
+                              - generic [ref=e439]: "2"
+                              - generic [ref=e441]: "4"
+                              - generic [ref=e443]: "6"
+                              - generic [ref=e445]: "8"
+        - toolbar "빠른 블록 삽입" [ref=e446]:
+          - button "글" [ref=e447] [cursor=pointer]:
+            - generic [ref=e448]: ¶
+            - generic [ref=e449]: 글
+          - button "표" [ref=e450] [cursor=pointer]:
+            - generic [ref=e451]: ▦
+            - generic [ref=e452]: 표
+          - button "차트" [ref=e453] [cursor=pointer]:
+            - generic [ref=e454]: 📊
+            - generic [ref=e455]: 차트
+          - button "이미지" [ref=e456] [cursor=pointer]:
+            - generic [ref=e457]: 🖼
+            - generic [ref=e458]: 이미지
+          - button "갤러리" [ref=e459] [cursor=pointer]:
+            - generic [ref=e460]: 🖻
+            - generic [ref=e461]: 갤러리
+          - button "콜아웃" [ref=e462] [cursor=pointer]:
+            - generic [ref=e463]: "!"
+            - generic [ref=e464]: 콜아웃
+          - button "코드" [ref=e465] [cursor=pointer]:
+            - generic [ref=e466]: <>
+            - generic [ref=e467]: 코드
+          - button "인용" [ref=e468] [cursor=pointer]:
+            - generic [ref=e469]: “”
+            - generic [ref=e470]: 인용
+          - button "체크리스트" [ref=e471] [cursor=pointer]:
+            - generic [ref=e472]: ☑
+            - generic [ref=e473]: 체크리스트
+          - button "수식" [ref=e474] [cursor=pointer]:
+            - generic [ref=e475]: ∑
+            - generic [ref=e476]: 수식
+          - button "영상" [ref=e477] [cursor=pointer]:
+            - generic [ref=e478]: ▶
+            - generic [ref=e479]: 영상
+          - button "파일" [ref=e480] [cursor=pointer]:
+            - generic [ref=e481]: 📎
+            - generic [ref=e482]: 파일
+        - generic [ref=e483]: 단축키 ?
+        - button "조직 트리 열기" [ref=e484] [cursor=pointer]:
+          - img [ref=e485]
+          - text: 조직
+    - button "측면 패널 열기" [ref=e487] [cursor=pointer]:
+      - img [ref=e488]
+      - text: 측면 패널
+  - generic [ref=e490]: "0"
