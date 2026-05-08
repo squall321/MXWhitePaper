@@ -1,6 +1,80 @@
 {
   "components": {
     "schemas": {
+      "CommentIn": {
+        "properties": {
+          "anchor_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Id"
+          },
+          "anchor_kind": {
+            "pattern": "^(document|section|block)$",
+            "title": "Anchor Kind",
+            "type": "string"
+          },
+          "body_md": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Body Md",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          }
+        },
+        "required": [
+          "anchor_kind",
+          "body_md"
+        ],
+        "title": "CommentIn",
+        "type": "object"
+      },
+      "CommentPatchIn": {
+        "properties": {
+          "body_md": {
+            "anyOf": [
+              {
+                "maxLength": 10000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Md"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "pattern": "^(visible|hidden|deleted)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "title": "CommentPatchIn",
+        "type": "object"
+      },
       "DivisionCreate": {
         "additionalProperties": false,
         "properties": {
@@ -209,6 +283,54 @@
               }
             ],
             "title": "Name"
+          },
+          "target_division_slug": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,99}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Division Slug"
+          },
+          "target_group_slug": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,99}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Group Slug"
+          },
+          "target_slug": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,99}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Slug"
+          },
+          "target_team_slug": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,99}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Team Slug"
           }
         },
         "title": "PartUpdate",
@@ -262,6 +384,35 @@
         "title": "TeamUpdate",
         "type": "object"
       },
+      "UserPatch": {
+        "properties": {
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "pattern": "^(reader|editor|owner|admin)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          }
+        },
+        "title": "UserPatch",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -311,6 +462,419 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/audit": {
+      "get": {
+        "operationId": "list_audit_api_v1_admin_audit_get",
+        "parameters": [
+          {
+            "description": "prefix or exact match",
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "prefix or exact match",
+              "title": "Action"
+            }
+          },
+          {
+            "description": "user uuid 또는 email 부분일치",
+            "in": "query",
+            "name": "user",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "user uuid 또는 email 부분일치",
+              "title": "User"
+            }
+          },
+          {
+            "description": "ISO timestamp; 이 시점 이후 로그만 반환",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO timestamp; 이 시점 이후 로그만 반환",
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Audit Api V1 Admin Audit Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "감사 로그 조회",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/health": {
+      "get": {
+        "operationId": "admin_health_api_v1_admin_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Admin Health Api V1 Admin Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "시스템 헬스/카운터",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/maintenance/run": {
+      "post": {
+        "operationId": "run_maintenance_api_v1_admin_maintenance_run_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Maintenance Api V1 Admin Maintenance Run Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "유지보수 일괄 실행",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "operationId": "list_users_api_v1_admin_users_get",
+        "parameters": [
+          {
+            "description": "이름/이메일 부분 검색",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "이름/이메일 부분 검색",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "reader/editor/owner/admin",
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "reader/editor/owner/admin",
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Users Api V1 Admin Users Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "유저 목록 (검색/role 필터)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{user_id}": {
+      "patch": {
+        "operationId": "patch_user_api_v1_admin_users__user_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch User Api V1 Admin Users  User Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "유저 role/활성 갱신",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/analytics/daily": {
+      "get": {
+        "operationId": "daily_api_v1_analytics_daily_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 180,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Daily Api V1 Analytics Daily Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "일별 활성 / 쓰기 / 읽기 / 검색 카운트",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/v1/analytics/overview": {
+      "get": {
+        "operationId": "overview_api_v1_analytics_overview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Overview Api V1 Analytics Overview Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "대시보드 오버뷰",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/v1/analytics/top-views": {
+      "get": {
+        "operationId": "top_views_api_v1_analytics_top_views_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "maximum": 180,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Top Views Api V1 Analytics Top Views Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "최근 N일 가장 많이 조회된 문서 top 10",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login_api_v1_auth_login_post",
@@ -388,6 +952,98 @@
         "summary": "Refresh",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/comments/{cid}": {
+      "delete": {
+        "operationId": "delete_comment_api_v1_comments__cid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "댓글 삭제 — soft delete (작성자 OR admin)",
+        "tags": [
+          "comments"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_comment_api_v1_comments__cid__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Comment Api V1 Comments  Cid  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "댓글 수정 (작성자 OR admin)",
+        "tags": [
+          "comments"
         ]
       }
     },
@@ -1509,6 +2165,214 @@
         ]
       }
     },
+    "/api/v1/documents/{slug}/comments": {
+      "get": {
+        "operationId": "list_comments_api_v1_documents__slug__comments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Comments Api V1 Documents  Slug  Comments Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "댓글 목록 (anchor 별 그룹)",
+        "tags": [
+          "comments"
+        ]
+      },
+      "post": {
+        "operationId": "create_comment_api_v1_documents__slug__comments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-mxwp-user",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Comment Api V1 Documents  Slug  Comments Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "댓글 작성 (editor+)",
+        "tags": [
+          "comments"
+        ]
+      }
+    },
+    "/api/v1/documents/{slug}/export.html": {
+      "get": {
+        "description": "DocumentJSON 본문을 자체 완비형(self-contained) HTML 로 렌더한다.\n\n- `style=namuwiki` (현재 유일 — 추후 academic/minimal 등 추가 예정)\n- `inline_images=1` 이미지 base64 인라인 (파일 크기 폭증 주의)\n- `katex=cdn` math 블록을 KaTeX CDN 으로 렌더\n- `mermaid=cdn` flow(mermaid) 블록을 mermaid CDN 으로 렌더",
+        "operationId": "export_document_html_api_v1_documents__slug__export_html_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "style",
+            "required": false,
+            "schema": {
+              "default": "namuwiki",
+              "title": "Style",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "inline_images",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Inline Images",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "katex",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Katex"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mermaid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mermaid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서를 단일 HTML 파일로 내보내기 (나무위키 스타일)",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/documents/{slug}/sections/reorder": {
       "post": {
         "description": "payload: `{outline: [{id, children?: [...]}]}` — 모든 기존 섹션 id 가 포함되어야 한다.",
@@ -1889,6 +2753,42 @@
           }
         },
         "summary": "이전 버전 복원 (의도적 If-Match 면제)",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/documents/{slug}/view": {
+      "post": {
+        "description": "문서 본문 조회 시 FE 가 호출. audit_logs 에 'document.view' 1건 기록.\n\n중복 호출 자체는 막지 않지만, FE 가 mount 1회 호출만 하므로 폭주는 없다.\n혹시 모를 폭주를 막기 위해 같은 user+slug 가 60초 내 또 들어오면 skip.",
+        "operationId": "ping_view_api_v1_documents__slug__view_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 조회 ping (analytics 용)",
         "tags": [
           "documents"
         ]
@@ -2317,6 +3217,70 @@
         ]
       }
     },
+    "/api/v1/links/graph": {
+      "get": {
+        "description": "root 가 주어지면 depth 까지 BFS 확장. 미지정시 degree 상위 200 노드 + 그 사이의 엣지를 반환.",
+        "operationId": "get_graph_api_v1_links_graph_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "root",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Root"
+            }
+          },
+          {
+            "in": "query",
+            "name": "depth",
+            "required": false,
+            "schema": {
+              "default": 2,
+              "maximum": 4,
+              "minimum": 1,
+              "title": "Depth",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Graph Api V1 Links Graph Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wiki link 그래프 (BFS)",
+        "tags": [
+          "links"
+        ]
+      }
+    },
     "/api/v1/me": {
       "get": {
         "operationId": "me_api_v1_me_get",
@@ -2619,6 +3583,7 @@
         ]
       },
       "put": {
+        "description": "Rename and/or move a part.\n\nSupports three independent operations in one call:\n  1. Rename display name (`name`).\n  2. Rename slug (`target_slug`) within the (possibly new) parent group.\n  3. Move to a different group (`target_division_slug` /\n     `target_team_slug` / `target_group_slug` — all three required\n     together).",
         "operationId": "update_part_api_v1_parts__slug__put",
         "parameters": [
           {
@@ -3362,6 +4327,22 @@
     {
       "description": "위젯 데이터 (표/차트/KPI) 엔드포인트.",
       "name": "widgets"
+    },
+    {
+      "description": "관리자 대시보드 — 유저/감사/헬스/유지보수.",
+      "name": "admin"
+    },
+    {
+      "description": "사용량 분석 — MAU/일별 활동/탑 검색/탑 조회 문서.",
+      "name": "analytics"
+    },
+    {
+      "description": "문서/섹션/블록 단위 댓글. 작성자/admin 만 수정·삭제 (soft delete) 가능.",
+      "name": "comments"
+    },
+    {
+      "description": "위키 링크 그래프 — BFS 그래프 / 전역 그래프.",
+      "name": "links"
     }
   ]
 }

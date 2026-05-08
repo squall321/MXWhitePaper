@@ -52,8 +52,9 @@ async def _fetch_nodes(
             SELECT d.slug, d.title, d.status,
                    COALESCE(t.slug, '') AS team_slug
             FROM documents d
-            LEFT JOIN parts p ON p.id = d.part_id
-            LEFT JOIN teams t ON t.id = p.team_id
+            LEFT JOIN parts p  ON p.id = d.part_id
+            LEFT JOIN groups g ON g.id = p.group_id
+            LEFT JOIN teams t  ON t.id = g.team_id
             WHERE d.slug = ANY(:slugs) AND d.status != 'archived'
         """),
         {"slugs": list(slugs)},

@@ -1,0 +1,269 @@
+/**
+ * Wiki Graph page (Tier 2C).
+ *
+ * Force-directed visualisation of inter-document wiki links.
+ *
+ *   - Lazy-loaded: this module imports `d3-force` / `d3-zoom`, which is a
+ *     non-trivial bundle, so the route in `main.tsx` wraps it in `lazy()`.
+ *   - Renders an 800×600 (responsive) SVG, panned + zoomed via `d3-zoom`.
+ *   - Edge thickness scales with `count`; missing nodes are coloured red.
+ *   - Limits the visible set to the top 50 nodes by degree to keep the
+ *     simulation cheap and the layout legible.
+ *   - A search box highlights matching nodes (slug or title contains query).
+ *   - Clicking a node navigates to `/docs/<slug>` (only for non-missing).
+ */
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import {
+  forceCenter,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
+  type Simulation,
+  type SimulationLinkDatum,
+  type SimulationNodeDatum,
+} from 'd3-force'
+import { select } from 'd3-selection'
+import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom'
+import { fetchGraph, type GraphEdge, type GraphNode } from '@/features/graph/api'
+
+interface SimNode extends SimulationNodeDatum {
+  slug: string
+  title: string
+  status: string
+  degree: number
+  isMissing: boolean
+}
+
+type SimLink = SimulationLinkDatum<SimNode> & { count: number }
+
+const WIDTH = 800
+const HEIGHT = 600
+const MAX_NODES = 50
+
+function buildSim(
+  rawNodes: GraphNode[],
+  rawEdges: GraphEdge[],
+): { nodes: SimNode[]; links: SimLink[] } {
+  // Degree map across the full payload first.
+  const deg = new Map<string, number>()
+  for (const e of rawEdges) {
+    deg.set(e.source, (deg.get(e.source) ?? 0) + e.count)
+    deg.set(e.target, (deg.get(e.target) ?? 0) + e.count)
+  }
+  const sorted = [...rawNodes].sort(
+    (a, b) => (deg.get(b.slug) ?? 0) - (deg.get(a.slug) ?? 0),
+  )
+  const top = sorted.slice(0, MAX_NODES)
+  const keep = new Set(top.map((n) => n.slug))
+
+  const nodes: SimNode[] = top.map((n) => ({
+    slug: n.slug,
+    title: n.title,
+    status: n.status,
+    degree: deg.get(n.slug) ?? 0,
+    isMissing: n.status === 'missing',
+  }))
+  const links: SimLink[] = rawEdges
+    .filter((e) => keep.has(e.source) && keep.has(e.target))
+    .map((e) => ({ source: e.source, target: e.target, count: e.count }))
+  return { nodes, links }
+}
+
+export interface GraphCanvasProps {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  highlight?: string
+  onPickNode?: (slug: string) => void
+}
+
+/** Pure rendering layer — exported so unit tests can render it without
+ *  the data-fetching layer. */
+export function GraphCanvas({
+  nodes: rawNodes,
+  edges: rawEdges,
+  highlight,
+  onPickNode,
+}: GraphCanvasProps) {
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const gRef = useRef<SVGGElement | null>(null)
+  const simRef = useRef<Simulation<SimNode, SimLink> | null>(null)
+
+  const { nodes, links } = useMemo(
+    () => buildSim(rawNodes, rawEdges),
+    [rawNodes, rawEdges],
+  )
+
+  // Force simulation tick — updates SVG attributes directly via d3-selection
+  // for performance; React only owns the static SVG/g scaffolding.
+  useEffect(() => {
+    if (!gRef.current) return
+    const g = select(gRef.current)
+    const sim = forceSimulation<SimNode>(nodes)
+      .force(
+        'link',
+        forceLink<SimNode, SimLink>(links)
+          .id((d) => d.slug)
+          .distance(80)
+          .strength(0.6),
+      )
+      .force('charge', forceManyBody<SimNode>().strength(-180))
+      .force('center', forceCenter(WIDTH / 2, HEIGHT / 2))
+
+    simRef.current = sim
+
+    const linkSel = g
+      .select<SVGGElement>('g.links')
+      .selectAll<SVGLineElement, SimLink>('line')
+      .data(links, (d) => `${(d.source as SimNode).slug ?? d.source}->${(d.target as SimNode).slug ?? d.target}`)
+      .join('line')
+      .attr('stroke', '#94a3b8')
+      .attr('stroke-opacity', 0.7)
+      .attr('stroke-width', (d) => 1 + Math.min(d.count, 5))
+
+    const nodeSel = g
+      .select<SVGGElement>('g.nodes')
+      .selectAll<SVGGElement, SimNode>('g.node')
+      .data(nodes, (d) => d.slug)
+      .join((enter) => {
+        const ng = enter.append('g').attr('class', 'node').style('cursor', 'pointer')
+        ng.append('circle')
+          .attr('r', (d) => 5 + Math.min(d.degree, 8))
+          .attr('fill', (d) => (d.isMissing ? '#dc2626' : '#0c4a6e'))
+          .attr('stroke', '#fff')
+          .attr('stroke-width', 1.5)
+        ng.append('title').text((d) => `${d.title} (${d.slug})`)
+        ng.append('text')
+          .attr('dx', 10)
+          .attr('dy', 4)
+          .attr('font-size', 11)
+          .attr('fill', '#1f2937')
+          .text((d) => d.title)
+        return ng
+      })
+
+    nodeSel.on('click', (_, d) => {
+      if (!d.isMissing && onPickNode) onPickNode(d.slug)
+    })
+
+    sim.on('tick', () => {
+      linkSel
+        .attr('x1', (d) => (d.source as SimNode).x ?? 0)
+        .attr('y1', (d) => (d.source as SimNode).y ?? 0)
+        .attr('x2', (d) => (d.target as SimNode).x ?? 0)
+        .attr('y2', (d) => (d.target as SimNode).y ?? 0)
+      nodeSel.attr('transform', (d) => `translate(${d.x ?? 0},${d.y ?? 0})`)
+    })
+
+    return () => {
+      sim.stop()
+      simRef.current = null
+    }
+  }, [nodes, links, onPickNode])
+
+  // Highlight effect — overlay opacity instead of restarting the simulation.
+  useEffect(() => {
+    if (!gRef.current) return
+    const g = select(gRef.current)
+    const q = (highlight ?? '').trim().toLowerCase()
+    g.selectAll<SVGGElement, SimNode>('g.node')
+      .style('opacity', (d) =>
+        !q || d.slug.toLowerCase().includes(q) || d.title.toLowerCase().includes(q)
+          ? 1
+          : 0.2,
+      )
+  }, [highlight, nodes])
+
+  // Pan + zoom.
+  useEffect(() => {
+    if (!svgRef.current || !gRef.current) return
+    const svg = select<SVGSVGElement, unknown>(svgRef.current)
+    const inner = select<SVGGElement, unknown>(gRef.current)
+    const z: ZoomBehavior<SVGSVGElement, unknown> = zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.2, 4])
+      .on('zoom', (event) => {
+        inner.attr('transform', event.transform.toString())
+      })
+    svg.call(z)
+    svg.call(z.transform, zoomIdentity)
+    return () => {
+      svg.on('.zoom', null)
+    }
+  }, [])
+
+  return (
+    <svg
+      ref={svgRef}
+      data-testid="graph-svg"
+      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+      preserveAspectRatio="xMidYMid meet"
+      className="h-[600px] w-full rounded border border-gray-200 bg-white"
+    >
+      <g ref={gRef}>
+        <g className="links" />
+        <g className="nodes" />
+      </g>
+    </svg>
+  )
+}
+
+export function GraphPage() {
+  const { slug } = useParams<{ slug?: string }>()
+  const navigate = useNavigate()
+  const [query, setQuery] = useState('')
+
+  const { data, isPending, isError, error } = useQuery({
+    queryKey: ['graph', slug ?? '__global__'],
+    queryFn: () => fetchGraph(slug ?? null, 2),
+    staleTime: 30_000,
+  })
+
+  return (
+    <div className="space-y-3" data-testid="graph-page">
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-lg font-semibold text-smsg-900">위키 그래프</h1>
+          <p className="text-xs text-gray-500">
+            {slug ? `루트: ${slug} · 깊이 2` : '전역 그래프 (degree 상위 50)'}
+          </p>
+        </div>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="노드 검색…"
+          aria-label="노드 검색"
+          data-testid="graph-search"
+          className="w-48 rounded border border-gray-200 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none"
+        />
+      </header>
+
+      {isPending ? (
+        <p className="text-sm text-gray-500">불러오는 중…</p>
+      ) : isError ? (
+        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          그래프를 불러오지 못했습니다: {(error as Error).message}
+        </p>
+      ) : !data ? (
+        <p className="text-sm text-gray-500">데이터 없음.</p>
+      ) : data.nodes.length === 0 ? (
+        <p className="text-sm text-gray-500">표시할 노드가 없습니다.</p>
+      ) : (
+        <GraphCanvas
+          nodes={data.nodes}
+          edges={data.edges}
+          highlight={query}
+          onPickNode={(s) => navigate(`/docs/${encodeURIComponent(s)}`)}
+        />
+      )}
+
+      <p className="text-[11px] text-gray-500">
+        스크롤로 줌, 드래그로 이동, 노드 클릭으로 문서 열기. 빨간 노드는 아직 작성되지 않은
+        링크입니다.
+      </p>
+    </div>
+  )
+}
+
+export default GraphPage

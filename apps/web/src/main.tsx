@@ -91,6 +91,9 @@ const NotFoundPage = lazyLogged('NotFound', () =>
 const PresentationPage = lazyLogged('Presentation', () =>
   import('./pages/Presentation').then((m) => ({ default: m.PresentationPage })),
 )
+const GraphPage = lazyLogged('Graph', () =>
+  import('./pages/Graph').then((m) => ({ default: m.GraphPage })),
+)
 const DiagPage = lazyLogged('Diag', () =>
   import('./pages/Diag').then((m) => ({ default: m.DiagPage })),
 )
@@ -201,6 +204,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
                 <Route path="settings" element={<Boundaried name="settings"><SettingsPage /></Boundaried>} />
+                <Route path="graph" element={<Boundaried name="graph"><GraphPage /></Boundaried>} />
+                <Route path="graph/:slug" element={<Boundaried name="graph/:slug"><GraphPage /></Boundaried>} />
                 <Route path="tags/:tag" element={<Boundaried name="tags"><TagPage mode="tag" /></Boundaried>} />
                 <Route path="category/:cat" element={<Boundaried name="category"><TagPage mode="category" /></Boundaried>} />
                 <Route path="*" element={<Boundaried name="not-found"><NotFoundPage /></Boundaried>} />

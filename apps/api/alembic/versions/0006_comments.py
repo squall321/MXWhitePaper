@@ -1,6 +1,6 @@
 """comments — linear thread per document/section/block (Tier 2C).
 
-Revision ID: 0005_comments
+Revision ID: 0006_comments
 Revises: 0005_admin_dashboard
 Create Date: 2026-05-08 12:00:00
 
@@ -14,7 +14,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "0005_comments"
+revision: str = "0006_comments"
 down_revision: str | Sequence[str] | None = "0005_admin_dashboard"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
