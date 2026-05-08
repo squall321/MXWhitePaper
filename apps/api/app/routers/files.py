@@ -96,13 +96,18 @@ async def files_finalize(
 async def files_download(
     file_id: str,
     s: AsyncSession = Depends(get_db),
-    _user: dict = Depends(require_reader),
+    user: dict = Depends(require_reader),
 ) -> RedirectResponse:
     """Issue a fresh 1-day presigned GET URL and 302-redirect.
 
-    인증된 reader+ 이면 다운로드 허용 — 문서별 ACL 은 추후 도입. (현재 본
-    문서들은 조직 전체에서 reader+ 권한이면 모두 열람 가능한 구조이므로
-    문서-파일 연결 검사는 over-engineering.)
+    Authz: the requester must either own the file OR have read access to at
+    least one non-archived document that references it (lazy walk via
+    `jsonb_path_exists`). The reader+ role check above is necessary but
+    insufficient — without the per-document check, any authenticated reader
+    could download an unattached / orphaned file by guessing a ULID.
     """
-    url = await file_service.issue_download_url(s, file_id=file_id)
+    requester_id = str(user.get("id")) if user.get("id") else None
+    url = await file_service.issue_download_url(
+        s, file_id=file_id, requester_user_id=requester_id
+    )
     return RedirectResponse(url=url, status_code=302)

@@ -1,20 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
-import type { DocumentJSONV10 } from '@/types/document'
+import type { DocumentJSONV10, SectionLevel1 } from '@/types/document'
 import { ulid } from '@/features/editor/ulid'
 import { postDocument } from '@/features/editor/api'
 import { useOrgTree } from '@/features/org/hooks/useOrgTree'
 import { useAuthStore } from '@/features/auth/store'
 import { Button, Card, Field, Input, Select, cn } from '@/components/ui'
 import type { AppOutletContext } from '@/App'
+import { TemplateGallery } from '@/features/templates/TemplateGallery'
+import { findTemplate, templateToSections, type TemplateDef } from '@/features/templates/templates'
 
 /**
  * 새 문서 생성 마법사 — 슬러그 + 제목 + 소속 파트 + 기밀도.
  *
- * Visual: stepper at the top (1 정보 → 2 게시), restyled fields using the new
- * primitives. Form is a single screen but the stepper hints the next stage
- * is the full editor.
+ * Visual: tabs at the top toggle between "빈 문서" and "템플릿에서 시작".
+ * Picking a template pre-fills the title and uses the template's blocks as
+ * the initial sections array; the user can still tweak title/slug/part
+ * before submitting.
  */
+type Mode = 'blank' | 'template'
+
 export function DocumentNewPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
@@ -48,6 +53,10 @@ export function DocumentNewPage() {
     return opts
   }, [tree])
 
+  const initialMode: Mode = params.get('template') ? 'template' : 'blank'
+  const [mode, setMode] = useState<Mode>(initialMode)
+  const [templateId, setTemplateId] = useState<string>(params.get('template') ?? '')
+
   const [slug, setSlug] = useState(params.get('slug') ?? '')
   const [title, setTitle] = useState('')
   const [partId, setPartId] = useState<string>('')
@@ -61,6 +70,13 @@ export function DocumentNewPage() {
       setPartId(partOptions[0]!.id)
     }
   }, [partOptions, partId])
+
+  // When a template is selected pre-fill the title (only if user hasn't typed
+  // their own yet) so the form feels like a one-click action.
+  const onPickTemplate = (tpl: TemplateDef) => {
+    setTemplateId(tpl.id)
+    if (!title.trim()) setTitle(tpl.title)
+  }
 
   // Polish D — slug 에 한글 음절(가-힣)도 허용. 백엔드 JSON Schema 와 동일.
   const slugIsValid = /^[a-z0-9가-힣][a-z0-9가-힣-]{0,99}$/.test(slug)
@@ -79,6 +95,27 @@ export function DocumentNewPage() {
     setBusy(true)
     setError(null)
     try {
+      let sections: SectionLevel1[]
+      if (mode === 'template' && templateId) {
+        const tpl = findTemplate(templateId)
+        if (!tpl) {
+          setError('선택한 템플릿을 찾을 수 없습니다.')
+          setBusy(false)
+          return
+        }
+        sections = templateToSections(tpl)
+      } else {
+        sections = [
+          {
+            id: ulid(),
+            level: 1,
+            number: '1',
+            title: '개요',
+            blocks: [],
+            subsections: [],
+          },
+        ]
+      }
       const doc: DocumentJSONV10 = {
         schema_version: '1.0',
         id: ulid(),
@@ -91,16 +128,7 @@ export function DocumentNewPage() {
           tags: [],
           confidentiality,
         },
-        sections: [
-          {
-            id: ulid(),
-            level: 1,
-            number: '1',
-            title: '개요',
-            blocks: [],
-            subsections: [],
-          },
-        ],
+        sections,
       }
       const selected = partOptions.find((p) => p.id === partId)
       if (selected) doc.metadata.part = selected.slug
@@ -125,17 +153,34 @@ export function DocumentNewPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 py-6 sm:py-10">
+    <div className="mx-auto max-w-3xl space-y-6 py-6 sm:py-10">
       <header>
         <Stepper steps={['기본 정보', '본문 편집']} current={0} />
         <h1 className="mt-3 text-2xl font-semibold tracking-tight text-smsg-900 sm:text-3xl">
           새 문서 작성
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          기본 정보를 입력하면 즉시 편집 모드로 진입합니다. 본문은 다음 화면의 BlockNote
-          편집기에서 작성하세요.
+          빈 문서로 시작하거나, 미리 만들어진 템플릿을 골라 즉시 본문 편집으로 진입하세요.
         </p>
       </header>
+
+      <div role="tablist" aria-label="문서 시작 방식" className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+        <TabButton active={mode === 'blank'} onClick={() => setMode('blank')}>
+          빈 문서
+        </TabButton>
+        <TabButton active={mode === 'template'} onClick={() => setMode('template')}>
+          템플릿에서 시작
+        </TabButton>
+      </div>
+
+      {mode === 'template' && (
+        <Card padded="lg" className="space-y-3">
+          <p className="text-xs text-gray-500">
+            마음에 드는 템플릿을 고르면 제목과 본문이 자동으로 채워집니다. 제목·슬러그는 아래에서 자유롭게 변경 가능합니다.
+          </p>
+          <TemplateGallery onPick={onPickTemplate} selectedId={templateId} />
+        </Card>
+      )}
 
       <Card padded="lg" className="space-y-5">
         <Field
@@ -192,11 +237,38 @@ export function DocumentNewPage() {
         <div className="flex flex-col-reverse items-stretch justify-end gap-2 pt-2 sm:flex-row sm:items-center">
           <Button variant="outline" onClick={() => navigate(-1)} className="sm:w-auto">취소</Button>
           <Button onClick={() => void create()} disabled={!canSubmit} loading={busy} className="sm:w-auto">
-            생성하고 편집 시작
+            {mode === 'template' && templateId ? '템플릿으로 생성' : '생성하고 편집 시작'}
           </Button>
         </div>
       </Card>
     </div>
+  )
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+        active
+          ? 'border-smsg-700 text-smsg-900 dark:text-gray-100'
+          : 'border-transparent text-gray-500 hover:text-smsg-900 dark:hover:text-gray-100',
+      )}
+    >
+      {children}
+    </button>
   )
 }
 

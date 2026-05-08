@@ -1,7 +1,8 @@
-import { useState, useCallback, type ReactNode, type MouseEvent as ReactMouseEvent } from 'react'
+import { useState, useCallback, useEffect, useRef, type ReactNode, type MouseEvent as ReactMouseEvent } from 'react'
 import type { Block, Slug, Ulid } from '@/types/document'
 import { insertBlock, isPreconditionFailed } from '../api'
 import { useEditorStore } from '../state'
+import { useUxHintStore } from '../uxHintStore'
 import { BlockInsertPalette, type PaletteItem } from './BlockInsertPalette'
 import { BlockResizeWrapper } from './BlockResizeWrapper'
 
@@ -23,6 +24,9 @@ import { BlockResizeWrapper } from './BlockResizeWrapper'
  * too. Drag-to-reorder is provided by the parent (`SimpleStackEditor`) via
  * dnd-kit; this component just renders a `data-drag-handle` button that the
  * parent's `useSortable` hook attaches to.
+ *
+ * The first hover (per browser) also pops a 4-second hint chip explaining
+ * the three affordances — once dismissed, it never returns.
  */
 interface Props {
   slug: Slug
@@ -62,6 +66,16 @@ export function BlockHoverInserter({
   // block at a time.
   type Open = { side: 'before' | 'after'; anchor: { x: number; y: number } }
   const [open, setOpen] = useState<Open | null>(null)
+
+  // First-time-only affordance hint. The chip auto-fades after 4s.
+  const [hintVisible, setHintVisible] = useState(false)
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (hintTimer.current) clearTimeout(hintTimer.current)
+    }
+  }, [])
 
   const onPick = useCallback(
     async (it: PaletteItem) => {
@@ -110,6 +124,23 @@ export function BlockHoverInserter({
     [],
   )
 
+  const onWrapperEnter = useCallback(() => {
+    if (!active) return
+    // shouldShow returns true the very first time and persists the dismissal.
+    const fire = useUxHintStore.getState().shouldShow('block-affordances')
+    if (!fire) return
+    setHintVisible(true)
+    hintTimer.current = setTimeout(() => setHintVisible(false), 4000)
+  }, [active])
+
+  const dismissHint = useCallback(() => {
+    setHintVisible(false)
+    if (hintTimer.current) {
+      clearTimeout(hintTimer.current)
+      hintTimer.current = null
+    }
+  }, [])
+
   if (!active) {
     // Reader / quick-edit mode: skip the +/drag/delete affordances. Still apply
     // any persisted width/height via the resize wrapper (handles disabled when
@@ -125,6 +156,7 @@ export function BlockHoverInserter({
     <div
       data-block-hover-inserter
       data-block-index={index}
+      onMouseEnter={onWrapperEnter}
       className="group/block relative"
     >
       {/* Top + rail. Visible on hover/focus-within OR while the palette is
@@ -133,6 +165,7 @@ export function BlockHoverInserter({
       <button
         type="button"
         aria-label="이 블록 위에 추가"
+        title="이 블록 위에 새 블록을 추가합니다"
         data-rail="top"
         onClick={onRailClick('before')}
         className={`absolute -top-3 left-0 right-0 z-10 flex h-3 items-center justify-center opacity-0 transition-opacity group-hover/block:opacity-100 group-focus-within/block:opacity-100 focus-visible:opacity-100 ${
@@ -154,6 +187,7 @@ export function BlockHoverInserter({
           type="button"
           ref={(el) => dragSetActivatorRef?.(el)}
           aria-label="블록 이동 (드래그)"
+          title="끌어서 블록 순서 변경"
           data-drag-handle
           {...(dragListeners as Record<string, never>)}
           className="absolute -left-7 top-1 inline-flex h-6 w-6 cursor-grab items-center justify-center rounded text-gray-400 opacity-0 transition-opacity hover:bg-gray-100 hover:text-smsg-700 group-hover/block:opacity-100 active:cursor-grabbing dark:hover:bg-gray-800"
@@ -175,6 +209,7 @@ export function BlockHoverInserter({
         <button
           type="button"
           aria-label="블록 삭제"
+          title="이 블록 삭제"
           onClick={onRequestDelete}
           className="absolute -right-7 top-1 inline-flex h-6 w-6 items-center justify-center rounded text-gray-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover/block:opacity-100"
         >
@@ -192,6 +227,7 @@ export function BlockHoverInserter({
       <button
         type="button"
         aria-label="이 블록 아래에 추가"
+        title="이 블록 아래에 새 블록을 추가합니다"
         data-rail="bottom"
         onClick={onRailClick('after')}
         className={`absolute -bottom-3 left-0 right-0 z-10 flex h-3 items-center justify-center opacity-0 transition-opacity group-hover/block:opacity-100 group-focus-within/block:opacity-100 focus-visible:opacity-100 ${
@@ -206,6 +242,43 @@ export function BlockHoverInserter({
           <span className="h-px flex-1 bg-smsg-300" />
         </span>
       </button>
+
+      {/* First-time-only hint chip. Sits above the block so it doesn't
+          obscure the content. Auto-fades after 4s; the X dismisses early.
+          We render two stacked lines: one for the affordance row, one for
+          the resize handles below. */}
+      {hintVisible && (
+        <div
+          role="status"
+          aria-live="polite"
+          data-testid="block-affordance-hint"
+          className="pointer-events-none absolute -top-10 left-0 right-0 z-20 flex justify-center"
+        >
+          <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-smsg-300 bg-white/95 px-3 py-1 text-[11px] text-smsg-900 shadow-md backdrop-blur dark:border-gray-700 dark:bg-gray-900/95 dark:text-gray-100">
+            <span aria-hidden>💡</span>
+            <span>← 클릭으로 위에 추가  ·  끌어 옮기기  ·  삭제 →</span>
+            <button
+              type="button"
+              aria-label="힌트 닫기"
+              onClick={dismissHint}
+              className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+      {hintVisible && (
+        <div
+          aria-hidden="true"
+          data-testid="block-affordance-hint-resize"
+          className="pointer-events-none absolute -bottom-10 left-0 right-0 z-20 flex justify-center"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full border border-smsg-200 bg-white/95 px-3 py-1 text-[11px] text-smsg-700 shadow-md backdrop-blur dark:border-gray-700 dark:bg-gray-900/95 dark:text-gray-300">
+            ↗ 모서리 끌어서 크기 조정
+          </div>
+        </div>
+      )}
 
       {open && (
         <BlockInsertPalette

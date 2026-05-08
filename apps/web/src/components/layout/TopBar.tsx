@@ -202,31 +202,14 @@ export function TopBar({
             )}
           </div>
 
-          {/* Primary group: + 새 문서 */}
+          {/* Primary group: + 새 문서 (dropdown 으로 Word 가져오기 옵션 추가) */}
           {canWrite && (
-            <>
-              {/* Mobile: icon-only Link */}
-              <Link
-                to="/docs/new"
-                aria-label={t('topbar.newDoc.aria')}
-                data-testid="topbar-new-doc"
-                aria-current={isActive('/docs/new') ? 'page' : undefined}
-                className="grid h-11 w-11 place-items-center rounded-md bg-white text-smsg-700 transition-all duration-base hover:bg-smsg-100 hover:no-underline hover:shadow-md focus-visible:outline-none focus-visible:shadow-focus sm:hidden"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </Link>
-              {/* Tablet+: text button */}
-              <Link
-                to="/docs/new"
-                data-testid="topbar-new-doc-text"
-                aria-current={isActive('/docs/new') ? 'page' : undefined}
-                className="hidden rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-smsg-700 transition-all duration-base hover:-translate-y-px hover:bg-smsg-100 hover:no-underline hover:shadow-md sm:inline-flex"
-              >
-                {t('topbar.newDoc')}
-              </Link>
-            </>
+            <NewDocMenu
+              tNewDocLabel={t('topbar.newDoc')}
+              tNewDocAria={t('topbar.newDoc.aria')}
+              isActiveNew={isActive('/docs/new')}
+              isActiveImport={isActive('/docs/import')}
+            />
           )}
 
           <NetworkStatusPill />
@@ -253,6 +236,101 @@ export function TopBar({
         </nav>
       </div>
     </header>
+  )
+}
+
+/**
+ * 새 문서 작성 + Word 가져오기 옵션을 묶은 dropdown.
+ *
+ * 모바일: 아이콘 1개 → 누르면 메뉴 열림. Tablet+: 텍스트 버튼 + ▾ 화살표.
+ */
+function NewDocMenu({
+  tNewDocLabel,
+  tNewDocAria,
+  isActiveNew,
+  isActiveImport,
+}: {
+  tNewDocLabel: string
+  tNewDocAria: string
+  isActiveNew: boolean
+  isActiveImport: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const isAnyActive = isActiveNew || isActiveImport
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  return (
+    <div ref={ref} className="relative">
+      {/* Mobile: icon-only button */}
+      <button
+        type="button"
+        aria-label={tNewDocAria}
+        data-testid="topbar-new-doc"
+        aria-current={isAnyActive ? 'page' : undefined}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="grid h-11 w-11 place-items-center rounded-md bg-white text-smsg-700 transition-all duration-base hover:bg-smsg-100 hover:shadow-md focus-visible:outline-none focus-visible:shadow-focus sm:hidden"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
+      {/* Tablet+: text + caret */}
+      <button
+        type="button"
+        data-testid="topbar-new-doc-text"
+        aria-current={isAnyActive ? 'page' : undefined}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="hidden items-center gap-1 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-smsg-700 transition-all duration-base hover:-translate-y-px hover:bg-smsg-100 hover:shadow-md sm:inline-flex"
+      >
+        {tNewDocLabel}
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M2.5 4.5l3.5 3.5 3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-11 z-popover w-56 overflow-hidden rounded-lg border border-gray-200 bg-white text-smsg-900 shadow-lg animate-slide-up dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+        >
+          <Link
+            to="/docs/new"
+            role="menuitem"
+            data-testid="topbar-new-doc-blank"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-2 text-sm hover:bg-smsg-50 hover:no-underline"
+          >
+            + 새 문서
+          </Link>
+          <Link
+            to="/docs/import"
+            role="menuitem"
+            data-testid="topbar-new-doc-import"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-2 text-sm hover:bg-smsg-50 hover:no-underline"
+          >
+            📄 Word 가져오기
+          </Link>
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -32,12 +32,12 @@ import { useEditorStore } from '../state'
  * future tools or imports set sizes without the UI letting users drag.
  */
 
-const SNAP = 8
-const MIN_W = 120
-const MIN_H = 60
-const MAX_W = 4000
-const MAX_H = 4000
-const LIFT_OFF = 4 // px the pointer must move before we treat it as a resize
+export const SNAP = 8
+export const MIN_W = 120
+export const MIN_H = 60
+export const MAX_W = 4000
+export const MAX_H = 4000
+export const LIFT_OFF = 4 // px the pointer must move before we treat it as a resize
 
 /** Block types that show resize handles. Others can still carry meta.width/height
  *  but won't render the drag affordances. Exported so the block-collapse
@@ -83,12 +83,68 @@ export const COLLAPSIBLE_BLOCK_TYPES: ReadonlySet<Block['type']> = new Set<Block
   'org-chart',
 ])
 
-function snap(px: number): number {
+export function snap(px: number): number {
   return Math.round(px / SNAP) * SNAP
 }
 
-function clamp(v: number, lo: number, hi: number): number {
+export function clamp(v: number, lo: number, hi: number): number {
   return Math.min(Math.max(v, lo), hi)
+}
+
+/**
+ * Pure version of the pointer-move math used by `BlockResizeWrapper`. Given
+ * the active drag and a delta, return the next snapped+clamped (w,h) and
+ * whether the pointer has crossed the lift-off threshold yet. Returning
+ * `liftedOff: false` means the caller should NOT update local draft state
+ * and the eventual pointerup must NOT call `patchBlock`.
+ *
+ * Exported so the unit-test can verify the threshold + snap behaviour
+ * without spinning up a DOM (the project intentionally has no jsdom — see
+ * the existing `auto-save.test.ts` rationale).
+ */
+export interface ResizeDragInput {
+  kind: 'right' | 'bottom' | 'corner'
+  startW: number
+  startH: number
+  liftedOff: boolean
+}
+
+export interface ResizeDragMoveResult {
+  liftedOff: boolean
+  w?: number
+  h?: number
+}
+
+export function computeDragMove(
+  drag: ResizeDragInput,
+  dx: number,
+  dy: number,
+): ResizeDragMoveResult {
+  const liftedOff =
+    drag.liftedOff || Math.abs(dx) >= LIFT_OFF || Math.abs(dy) >= LIFT_OFF
+  if (!liftedOff) return { liftedOff: false }
+  const out: ResizeDragMoveResult = { liftedOff: true }
+  if (drag.kind !== 'bottom') {
+    out.w = clamp(snap(drag.startW + dx), MIN_W, MAX_W)
+  }
+  if (drag.kind !== 'right') {
+    out.h = clamp(snap(drag.startH + dy), MIN_H, MAX_H)
+  }
+  return out
+}
+
+/**
+ * Pure decision helper for `endDrag`: returns `true` only when the wrapper
+ * should fire `patchBlock`. The two no-persist branches are:
+ *   - `cancel === true` (user pressed Esc)
+ *   - the pointer never moved past `LIFT_OFF` (an accidental click)
+ */
+export function shouldPersistOnEnd(
+  drag: ResizeDragInput,
+  cancel: boolean,
+): boolean {
+  if (cancel) return false
+  return drag.liftedOff
 }
 
 function prefersReducedMotion(): boolean {
@@ -181,7 +237,7 @@ export function BlockResizeWrapper({ slug, block, active, children }: Props) {
       dragRef.current = null
       setIsResizing(false)
       if (!drag) return
-      if (cancel || !drag.liftedOff) {
+      if (!shouldPersistOnEnd(drag, cancel)) {
         // Esc or accidental click → restore original visuals, no BE call.
         setDraftW(undefined)
         setDraftH(undefined)
@@ -223,18 +279,11 @@ export function BlockResizeWrapper({ slug, block, active, children }: Props) {
       if (!drag) return
       const dx = e.clientX - drag.startX
       const dy = e.clientY - drag.startY
-      if (!drag.liftedOff) {
-        if (Math.abs(dx) < LIFT_OFF && Math.abs(dy) < LIFT_OFF) return
-        drag.liftedOff = true
-      }
-      if (drag.kind !== 'bottom') {
-        const w = clamp(snap(drag.startW + dx), MIN_W, MAX_W)
-        setDraftW(w)
-      }
-      if (drag.kind !== 'right') {
-        const h = clamp(snap(drag.startH + dy), MIN_H, MAX_H)
-        setDraftH(h)
-      }
+      const result = computeDragMove(drag, dx, dy)
+      if (!result.liftedOff) return
+      drag.liftedOff = true
+      if (result.w !== undefined) setDraftW(result.w)
+      if (result.h !== undefined) setDraftH(result.h)
     }
     const onUp = () => endDrag(false)
     const onKey = (e: KeyboardEvent) => {

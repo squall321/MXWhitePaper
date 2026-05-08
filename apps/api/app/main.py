@@ -23,6 +23,7 @@ from .routers.comments import router_one as comments_one_router
 from .routers.documents import router as documents_router
 from .routers.files import router as files_router
 from .routers.glossary import router as glossary_router
+from .routers.imports import router as imports_router
 from .routers.links_graph import router as links_graph_router
 from .routers.orgs import router as orgs_router
 from .routers.search import router as search_router
@@ -67,6 +68,13 @@ TAGS_METADATA: list[dict[str, str]] = [
     {
         "name": "files",
         "description": "일반 파일 첨부 업로드 — presigned PUT + finalize + 1일 GET.",
+    },
+    {
+        "name": "imports",
+        "description": (
+            "Word(.docx) 가져오기. 멀티파트 업로드 → DocumentJSON v1.0 변환 → "
+            "FE 가 받은 결과를 별도로 POST /documents 로 영구화."
+        ),
     },
     {
         "name": "search",
@@ -151,6 +159,8 @@ def create_app() -> FastAPI:
     app.include_router(images_router)
     # Sprint 7 — generic file upload pipeline (FileBlock attachments)
     app.include_router(files_router)
+    # Sprint 7+ — Word .docx import → DocumentJSON
+    app.include_router(imports_router)
     # Sprint 6 — auth, search, glossary, widgets
     app.include_router(auth_router)
     app.include_router(search_router)

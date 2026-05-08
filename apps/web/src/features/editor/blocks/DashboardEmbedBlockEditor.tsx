@@ -4,6 +4,7 @@ import { Button, Field, IconButton, Input, Select } from '@/components/ui'
 import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { DashboardEmbedBlockView } from '@/components/blocks/DashboardEmbedBlock'
+import { BlockHelpDrawer } from '@/features/editor/components/BlockHelpDrawer'
 
 const PROVIDERS: DashboardEmbedBlock['provider'][] = ['grafana', 'tableau', 'superset']
 
@@ -41,6 +42,7 @@ export function DashboardEmbedBlockEditor({ slug, block }: Props) {
   const [local, setLocal] = useState<DashboardEmbedBlock>(block)
   const [rows, setRows] = useState<ParamRow[]>(() => paramsToRows(block.params))
   const [error, setError] = useState<string | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const push = async (next: DashboardEmbedBlock) => {
     setLocal(next)
@@ -60,8 +62,36 @@ export function DashboardEmbedBlockEditor({ slug, block }: Props) {
     void push({ ...local, params: rowsToParams(next) })
   }
 
+  const isEmpty = !local.panelId.trim()
+
   return (
     <div className="space-y-3 rounded border border-smsg-100 bg-smsg-100/40 p-3">
+      {isEmpty && (
+        <div
+          data-testid="dashboard-embed-empty-state"
+          className="rounded-md border border-dashed border-smsg-300 bg-white p-4 text-center dark:bg-gray-900"
+        >
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            이 블록은 <strong>외부 대시보드 패널</strong>(Grafana / Tableau / Superset)을 임베드합니다.
+          </p>
+          <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row">
+            <Button
+              size="sm"
+              type="button"
+              onClick={() => setLocal({ ...local, panelId: '' })}
+            >
+              URL 입력
+            </Button>
+            <button
+              type="button"
+              className="text-xs text-link hover:underline"
+              onClick={() => setHelpOpen(true)}
+            >
+              도움말 보기
+            </button>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <Field label="제공자">
           <Select
@@ -139,6 +169,23 @@ export function DashboardEmbedBlockEditor({ slug, block }: Props) {
         </p>
         <DashboardEmbedBlockView block={local} />
       </div>
+      <BlockHelpDrawer
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        content={{
+          title: '대시보드 임베드 블록',
+          description: [
+            'Grafana / Tableau / Superset 등 외부 대시보드 패널을 iframe 으로 임베드합니다.',
+            '`panelId` 는 보통 `dashboard-uid/panel-id` 형식이며, 추가 파라미터(예: `from=now-24h`) 는 key/value 로 입력하세요.',
+          ],
+          examples: [
+            {
+              title: '예시',
+              body: 'provider: grafana\npanelId: ops-dashboard/cpu\nparams:\n  from: now-24h\n  to: now',
+            },
+          ],
+        }}
+      />
     </div>
   )
 }

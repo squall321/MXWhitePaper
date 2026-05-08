@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { DataSourceBlock, Slug } from '@/types/document'
-import { Field, Input, Select } from '@/components/ui'
+import { Button, Field, Input, Select } from '@/components/ui'
 import { listWidgets, type WidgetRegistryEntry } from '@/features/search/api'
 import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { DataSourceBlockView } from '@/components/blocks/DataSourceBlock'
+import { BlockHelpDrawer } from '@/features/editor/components/BlockHelpDrawer'
 
 const RENDER_OPTIONS: DataSourceBlock['render'][] = ['table', 'chart', 'kpi-cards']
 const RENDER_LABEL: Record<DataSourceBlock['render'], string> = {
@@ -40,6 +41,7 @@ export function DataSourceBlockEditor({ slug, block }: Props) {
     JSON.stringify(block.params ?? {}, null, 2),
   )
   const [paramsErr, setParamsErr] = useState<string | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const registry = useQuery({
     queryKey: ['widgets-registry'],
@@ -87,8 +89,39 @@ export function DataSourceBlockEditor({ slug, block }: Props) {
     }
   }
 
+  const isEmpty = !local.endpoint.trim()
+
+  // Quick "샘플" — pick the first registry entry as a one-click starter so
+  // users get a working dashboard without reading the docs first.
+  const sampleEntry = registry.data?.[0]
+  const onUseSample = () => {
+    if (sampleEntry) onPickRegistry(sampleEntry.type)
+  }
+
   return (
     <div className="space-y-3 rounded border border-smsg-100 bg-smsg-100/40 p-3">
+      {isEmpty && (
+        <div
+          data-testid="data-source-empty-state"
+          className="rounded-md border border-dashed border-smsg-300 bg-white p-4 text-center dark:bg-gray-900"
+        >
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            이 블록은 <strong>실시간 위젯 데이터</strong>(표 / 차트 / KPI)를 보여줍니다.
+          </p>
+          <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row">
+            <Button size="sm" type="button" onClick={onUseSample} disabled={!sampleEntry}>
+              {sampleEntry ? `샘플 데이터 사용 (${sampleEntry.name})` : '데이터 연결'}
+            </Button>
+            <button
+              type="button"
+              className="text-xs text-link hover:underline"
+              onClick={() => setHelpOpen(true)}
+            >
+              도움말 보기
+            </button>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <Field label="위젯 레지스트리" hint={registry.isLoading ? '불러오는 중…' : undefined}>
           <Select
@@ -164,6 +197,23 @@ export function DataSourceBlockEditor({ slug, block }: Props) {
         </p>
         <DataSourceBlockView block={local} />
       </div>
+      <BlockHelpDrawer
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        content={{
+          title: '데이터 소스 블록',
+          description: [
+            '`endpoint` 로 가리키는 위젯 API 의 응답을 자동 폴링해 표/차트/KPI 카드 중 하나로 렌더링합니다.',
+            '`refreshInterval` (초 단위, 30~3600) 로 갱신 주기를 조절하세요. 위젯 레지스트리에서 사전에 등록된 항목만 선택할 수 있습니다.',
+          ],
+          examples: [
+            {
+              title: '예시',
+              body: 'endpoint: /widgets/kpi/finance-daily\nrender: kpi-cards\nrefreshInterval: 60',
+            },
+          ],
+        }}
+      />
     </div>
   )
 }

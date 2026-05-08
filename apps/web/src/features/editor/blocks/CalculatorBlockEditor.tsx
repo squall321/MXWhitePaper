@@ -5,6 +5,7 @@ import { Button, Field, IconButton, Input, Select } from '@/components/ui'
 import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { CalculatorBlockView } from '@/components/blocks/CalculatorBlock'
+import { BlockHelpDrawer } from '@/features/editor/components/BlockHelpDrawer'
 
 const KINDS: NonNullable<CalculatorBlock['inputs'][number]['kind']>[] = [
   'number',
@@ -100,6 +101,7 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [templateId, setTemplateId] = useState<string>('')
   const [unit, setUnit] = useState<string>('')
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const formulaCheck = useMemo(() => validateFormula(local.formula), [local.formula])
 
@@ -146,8 +148,36 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
     })
   }
 
+  const isEmpty = local.inputs.length === 0 && !local.formula.trim()
+
   return (
     <div className="space-y-3 rounded border border-smsg-100 bg-smsg-100/40 p-3">
+      {isEmpty && (
+        <div
+          data-testid="calculator-empty-state"
+          className="rounded-md border border-dashed border-smsg-300 bg-white p-4 text-center dark:bg-gray-900"
+        >
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            이 블록은 <strong>입력값을 받아 수식을 계산</strong>해 결과를 보여줍니다.
+          </p>
+          <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row">
+            <Button
+              size="sm"
+              type="button"
+              onClick={() => applyTemplate('roi')}
+            >
+              수식 + 입력 변수 추가 (ROI 예시)
+            </Button>
+            <button
+              type="button"
+              className="text-xs text-link hover:underline"
+              onClick={() => setHelpOpen(true)}
+            >
+              도움말 보기
+            </button>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Field label="결과 라벨">
           <Input
@@ -272,6 +302,23 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
           </p>
         )}
       </div>
+      <BlockHelpDrawer
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        content={{
+          title: '계산기 블록',
+          description: [
+            '`inputs[]` 로 변수를 정의하고 `formula` 에 mathjs 호환 수식을 작성합니다. 미리보기가 즉시 결과를 계산해 보여줘요.',
+            '입력 변수에는 `name` (수식에서 참조), `label` (UI 표시), `kind` (number/text/select), `default` 가 있습니다.',
+          ],
+          examples: [
+            {
+              title: '예시 — ROI',
+              body: 'inputs:\n  - name: gain, label: 이익, kind: number\n  - name: cost, label: 비용, kind: number\nformula: (gain - cost) / cost * 100',
+            },
+          ],
+        }}
+      />
     </div>
   )
 }

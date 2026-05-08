@@ -12,6 +12,7 @@ import { OutlinePanel } from '@/features/editor/components/OutlinePanel'
 import { VersionHistoryPanel } from '@/features/editor/components/VersionHistoryPanel'
 import { ConflictMergeModal } from '@/features/editor/components/ConflictMergeModal'
 import { OnboardingTour } from '@/features/editor/components/OnboardingTour'
+import { EditorHelpButton } from '@/features/editor/components/EditorHelpButton'
 import { ArticleDropSurface } from '@/features/upload/components/ArticleDropSurface'
 import { OrgTree } from '@/features/org/components/OrgTree'
 import { Drawer } from '@/components/ui/Drawer'
@@ -262,6 +263,7 @@ export function DocumentReaderPage() {
 
       {conflict && <ConflictMergeModal slug={slug} />}
       {isFullEditing && <OnboardingTour />}
+      <EditorHelpButton />
 
       {isFullEditing && (
         <div className="fixed bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 shadow-sm">

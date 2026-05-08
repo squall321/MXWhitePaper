@@ -144,6 +144,69 @@ POST 한 번이면 다음이 모두 자동으로 수행됩니다:
 
 자세한 입출력은 Swagger `/docs` 페이지에서 확인할 수 있습니다 (각 엔드포인트에 한국어 요약 + 예시).
 
+## Word(.docx) 가져오기
+
+`POST /api/v1/imports/docx` (FE: `/docs/import`) — .docx 파일을 업로드하면
+DocumentJSON v1.0 으로 변환합니다.
+
+지원 (블록 변환표):
+
+| docx feature | DocumentJSON 결과 |
+| --- | --- |
+| Heading 1/2/3 | `SectionLevel1/2/3` (스택 추적 + 자동 부모 보강) |
+| Heading 4+ | `heading-4` 블록 |
+| 일반 단락 | `paragraph` (markdown-lite: `**bold**`, `*italic*`, `~~strike~~`, `__underline__`) |
+| 하이퍼링크 | `[label](url)` 인라인 |
+| 표 | `table` 블록 (1행=headers, Caption 스타일 단락 → `meta.note`) |
+| 그림(drawing) | `image` 블록 (sha256 dedup, `meta.width/height` 는 EMU→px) |
+| OOXML 수식(`m:oMath`) | `math` 블록 (디스플레이) 또는 `$…$` (인라인) |
+| 번호/불릿 리스트 | `list` 블록 (depth 는 2-space 들여쓰기) |
+| 페이지 브레이크 | 빈 단락 + `meta.note='page-break-before'` |
+| 각주 | 본문 끝 "각주" level-1 섹션 |
+
+알려진 한계 / 폴백:
+
+- **SmartArt** → 텍스트만 보존, 도형/관계는 손실됨.
+- **임베디드 차트** → drawing 안의 raster image 만 추출 (chart 블록으로
+  자동 변환 안 함).
+- **복잡 수식** (matrix, accent, function with limits over) → 변환 실패 시
+  `code` 블록 (`language='omml-xml'`) 으로 폴백.
+- **Track changes / 코멘트** → 무시 (현재 텍스트만 사용).
+- **헤더/푸터** → 본문에 포함하지 않음.
+- **이미지 영속화**: 현 구현은 import 응답 시점에 placeholder ULID 만
+  발급. 실제 MinIO 영속화는 추후 백그라운드 잡으로 분리 예정 (대량 이미지가
+  포함된 .docx 의 import 지연을 피하기 위해).
+
+제약:
+
+- 크기 한도: **30 MB**
+- 권한: editor 이상
+- 레이트 리밋: **5/min/user**
+- 응답은 DB 미기록. FE 가 받은 DocumentJSON 을 사용자 확인 후 별도로
+  `POST /documents` 로 영구화한다 (이중 확인 UX).
+
+## 전체 검증 (한 번에 schema + tsc + build + vitest)
+
+`apps/web/scripts/check-all.sh` 는 회로(circuit) 4개를 차례로 돌려 “지금
+스택이 통째로 컴파일 가능한가”를 한 번에 확인합니다. 새 widget·sample을
+추가하거나 schema/렌더러를 손본 직후 마지막 게이트로 쓰세요.
+
+```bash
+chmod +x apps/web/scripts/check-all.sh   # 최초 1회
+./apps/web/scripts/check-all.sh
+# ▶ 1/4  Validate DocumentJSON samples       (pnpm --filter @mx/shared run validate)
+# ▶ 2/4  TypeScript typecheck (@mx/web)
+# ▶ 3/4  Vite build (@mx/web)
+# ▶ 4/4  Vitest                              (apps/web — unit+integration, no e2e)
+```
+
+운영 노트:
+
+- **샘플 9개 모두 valid** (`packages/shared/samples/01..09-*.json`) — schema 변경 시 가장 먼저 깨지는 게이트.
+- **AllBlocksRender** (26 tests) + **AllBlockEditors** (21 tests) 가 SSOT 26 block
+  타입의 read-mode/edit-mode 컴파일을 한 번에 보장합니다.
+- BE에 샘플을 즉시 반영하려면 `python -m apps.api.scripts.seed_samples` (orgs/admin은 `app.scripts.seed`가 먼저 깔려있어야 함).
+
 ## 라이선스
 
 사내 전용 (UNLICENSED)

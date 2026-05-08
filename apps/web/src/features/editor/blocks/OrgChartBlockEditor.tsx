@@ -15,6 +15,7 @@ import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { OrgChartBlockView } from '@/components/blocks/OrgChartBlock'
 import { parseCsv } from '@/features/editor/extensions/csv-paste'
+import { BlockHelpDrawer } from '@/features/editor/components/BlockHelpDrawer'
 
 /**
  * Parse a 2-column CSV (Manager, Subordinate) into an org-chart tree. Pure;
@@ -333,6 +334,7 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
   const [jsonMode, setJsonMode] = useState(false)
   const [jsonText, setJsonText] = useState(() => JSON.stringify(block.root, null, 2))
   const [jsonErr, setJsonErr] = useState<string | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
@@ -409,8 +411,40 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
     [local.root],
   )
 
+  // "Empty" state — root has no label and no children. The schema always
+  // demands a root node so we don't omit the form; we just nudge the user to
+  // start with a clear label.
+  const treeIsEmpty =
+    !local.root.label.trim() && (!local.root.children || local.root.children.length === 0)
+
+  const seedRoot = () => {
+    void push({ ...local, root: { ...local.root, label: '대표' } })
+  }
+
   return (
     <div className="space-y-3 rounded border border-smsg-100 bg-smsg-100/40 p-3">
+      {treeIsEmpty && (
+        <div
+          data-testid="org-chart-empty-state"
+          className="rounded-md border border-dashed border-smsg-300 bg-white p-4 text-center dark:bg-gray-900"
+        >
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            이 블록은 <strong>조직도 트리</strong>를 보여줍니다.
+          </p>
+          <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row">
+            <Button size="sm" type="button" onClick={seedRoot}>
+              루트 노드 추가
+            </Button>
+            <button
+              type="button"
+              className="text-xs text-link hover:underline"
+              onClick={() => setHelpOpen(true)}
+            >
+              도움말 보기
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <Field label="레이아웃">
           <Select
@@ -480,6 +514,27 @@ CTO,Eng-Lead`}</pre>
         </p>
         <OrgChartBlockView block={local} />
       </div>
+      <BlockHelpDrawer
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        content={{
+          title: '조직도 블록',
+          description: [
+            '`root` 노드와 그 아래 `children` 트리로 조직 구조를 시각화합니다. 노드마다 `label` (이름)과 `role` (역할)을 가질 수 있어요.',
+            'CSV 붙여넣기로 `Manager,Subordinate` 헤더의 표를 한 번에 트리로 변환할 수 있습니다.',
+          ],
+          examples: [
+            {
+              title: '예시 — JSON',
+              body: '{\n  "id": "r",\n  "label": "CEO",\n  "children": [\n    { "id": "a", "label": "CTO" }\n  ]\n}',
+            },
+            {
+              title: '예시 — CSV',
+              body: 'Manager,Subordinate\nCEO,CTO\nCEO,COO\nCTO,Eng-Lead',
+            },
+          ],
+        }}
+      />
     </div>
   )
 }

@@ -1,0 +1,254 @@
+{
+  "schema_version": "1.0",
+  "id": "01K08D5R0000000000000000A1",
+  "slug": "mx-q1-2026-analytics-report",
+  "title": "MX 2026년 1분기 데이터 분석 리포트",
+  "summary": "라이브 대시보드, 비용 계산기, 부록 자료를 한 문서에 통합한 분기 분석 리포트",
+  "metadata": {
+    "division": "MX",
+    "team": "데이터분석팀",
+    "group": "비즈니스인텔리전스그룹",
+    "part": "리포팅파트",
+    "owners": ["u-data-lead", "u-analyst-jane"],
+    "reviewers": ["u-cfo-staff"],
+    "tags": ["분석", "Q1", "2026", "대시보드"],
+    "category": "분석",
+    "confidentiality": "restricted"
+  },
+  "infobox": {
+    "분석 기간": "2026-01-01 ~ 2026-03-31",
+    "데이터 소스": ["SAP", "Adobe Analytics", "Salesforce"],
+    "최종 갱신": "2026-04-12"
+  },
+  "sections": [
+    {
+      "id": "01K08D5R0000000000000000S1",
+      "number": "1",
+      "level": 1,
+      "title": "실시간 지표",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "01K08D5R0000000000000B0001",
+          "text": "본 섹션의 모든 위젯은 사내 위젯 레지스트리에서 동적으로 갱신된다. 마지막 갱신 시각은 각 위젯 헤더에 표시된다."
+        },
+        {
+          "type": "data-source",
+          "id": "01K08D5R0000000000000B0002",
+          "endpoint": "/api/v1/widgets/kpi/finance-daily",
+          "params": { "metric": "revenue", "period": "Q1-2026" },
+          "render": "kpi-cards",
+          "refreshInterval": 120
+        },
+        {
+          "type": "data-source",
+          "id": "01K08D5R0000000000000B0003",
+          "endpoint": "/api/v1/widgets/chart/sales-trend",
+          "params": { "granularity": "weekly" },
+          "render": "chart",
+          "refreshInterval": 300
+        },
+        {
+          "type": "data-source",
+          "id": "01K08D5R0000000000000B0004",
+          "endpoint": "/api/v1/widgets/table/region-breakdown",
+          "render": "table"
+        },
+        {
+          "type": "dashboard-embed",
+          "id": "01K08D5R0000000000000B0005",
+          "provider": "grafana",
+          "panelId": "mx-q1-overview",
+          "params": { "from": "now-90d", "to": "now" }
+        },
+        {
+          "type": "dashboard-embed",
+          "id": "01K08D5R0000000000000B0006",
+          "provider": "tableau",
+          "panelId": "mx-revenue-by-region"
+        }
+      ],
+      "subsections": [
+        {
+          "id": "01K08D5R0000000000000000S2",
+          "number": "1.1",
+          "level": 2,
+          "title": "투자 회수 시뮬레이터",
+          "blocks": [
+            {
+              "type": "calculator",
+              "id": "01K08D5R0000000000000B0007",
+              "label": "ROI(%)",
+              "inputs": [
+                { "name": "revenue", "label": "예상 매출 (M원)", "kind": "number", "default": 500 },
+                { "name": "cost", "label": "총 투자비 (M원)", "kind": "number", "default": 120 },
+                { "name": "discount", "label": "할인율 (%)", "kind": "number", "default": 5 }
+              ],
+              "formula": "((revenue - cost) / cost) * 100 - discount"
+            }
+          ],
+          "subsections": []
+        }
+      ]
+    },
+    {
+      "id": "01K08D5R0000000000000000S3",
+      "number": "2",
+      "level": 1,
+      "title": "심층 분석 — 부록",
+      "blocks": [
+        {
+          "type": "tabs",
+          "id": "01K08D5R0000000000000B0008",
+          "tabs": [
+            {
+              "label": "고객 세그먼트",
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "id": "01K08D5R0000000000000B0009",
+                  "text": "주요 4개 세그먼트 — 프리미엄, 중가, 보급형, B2B."
+                },
+                {
+                  "type": "table",
+                  "id": "01K08D5R0000000000000B0010",
+                  "headers": ["세그먼트", "비중", "MoM"],
+                  "rows": [
+                    ["프리미엄", "32%", "+1.2pp"],
+                    ["중가", "41%", "-0.4pp"],
+                    ["보급형", "19%", "-0.9pp"],
+                    ["B2B", "8%", "+0.1pp"]
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "지역별 매출",
+              "blocks": [
+                {
+                  "type": "chart",
+                  "id": "01K08D5R0000000000000B0011",
+                  "chartType": "bar",
+                  "title": "지역별 분기 매출",
+                  "data": {
+                    "labels": ["KR", "US", "EU", "SEA", "ETC"],
+                    "series": [
+                      { "name": "Q1 매출", "values": [180, 320, 240, 110, 60] }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "label": "캠페인 성과",
+              "blocks": [
+                {
+                  "type": "kpi-cards",
+                  "id": "01K08D5R0000000000000B0012",
+                  "items": [
+                    { "label": "노출", "value": "42M", "delta": "+8%", "trend": "up" },
+                    { "label": "CTR", "value": "3.4%", "delta": "+0.2pp", "trend": "up" },
+                    { "label": "획득단가", "value": "$1.8", "delta": "-$0.1", "trend": "down" }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "accordion",
+          "id": "01K08D5R0000000000000B0013",
+          "items": [
+            {
+              "label": "데이터 신뢰성 검증 절차",
+              "blocks": [
+                {
+                  "type": "list",
+                  "id": "01K08D5R0000000000000B0014",
+                  "style": "number",
+                  "items": [
+                    "원천 시스템 추출 검증 (SAP)",
+                    "ETL 파이프라인 행수 비교",
+                    "DW 적재 후 합계 검증",
+                    "BI 대시보드 샘플 5개 무작위 검증"
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "FAQ — 자주 묻는 질문",
+              "blocks": [
+                {
+                  "type": "callout",
+                  "id": "01K08D5R0000000000000B0015",
+                  "variant": "info",
+                  "title": "Q. 매출 정의?",
+                  "text": "본 리포트의 매출은 GAAP 기준 인식 매출이며, 환율은 분기 평균환율을 적용했다."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "columns",
+          "id": "01K08D5R0000000000000B0016",
+          "columns": [
+            [
+              {
+                "type": "heading-4",
+                "id": "01K08D5R0000000000000B0017",
+                "title": "동영상 브리핑",
+                "meta": { "level": 4 }
+              },
+              {
+                "type": "video",
+                "id": "01K08D5R0000000000000B0018",
+                "url": "https://intra.example.com/videos/q1-briefing.mp4",
+                "title": "Q1 분석 브리핑 (15분)",
+                "provider": "intra"
+              }
+            ],
+            [
+              {
+                "type": "heading-4",
+                "id": "01K08D5R0000000000000B0019",
+                "title": "원본 자료",
+                "meta": { "level": 4 }
+              },
+              {
+                "type": "file",
+                "id": "01K08D5R0000000000000B0020",
+                "fileId": "01K08D5RF000000000000F0001",
+                "name": "MX_Q1_2026_분석_원본.xlsx",
+                "size": 4194304,
+                "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              },
+              {
+                "type": "file",
+                "id": "01K08D5R0000000000000B0021",
+                "fileId": "01K08D5RF000000000000F0002",
+                "name": "Q1_피처_데크.pdf",
+                "size": 2097152,
+                "mime": "application/pdf"
+              }
+            ]
+          ]
+        }
+      ],
+      "subsections": []
+    }
+  ],
+  "related_documents": [
+    { "slug": "kpi-dashboard-guide", "relation": "선행" },
+    { "slug": "galaxy-flip-2026-launch-plan", "relation": "참고" }
+  ],
+  "glossary": [
+    { "term": "MoM", "definition": "Month-over-Month — 전월 대비" },
+    { "term": "CTR", "definition": "Click-Through Rate — 클릭률" }
+  ],
+  "references": [
+    { "type": "internal", "label": "BI 대시보드 거버넌스 v1.5" },
+    { "type": "external", "label": "Grafana Embed Docs", "url": "https://grafana.com/docs/grafana/latest/dashboards/share-dashboards-panels/" }
+  ],
+  "see_also": ["kpi-dashboard-guide"]
+}

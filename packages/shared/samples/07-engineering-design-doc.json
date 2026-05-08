@@ -1,0 +1,230 @@
+{
+  "schema_version": "1.0",
+  "id": "01K07ENG0000000000000000A1",
+  "slug": "white-paper-realtime-edit-design",
+  "title": "White Paper 실시간 편집 동기화 설계",
+  "summary": "ETag 기반 PATCH + 서버 스냅샷 동기화의 상세 엔지니어링 설계 문서",
+  "metadata": {
+    "division": "MX",
+    "team": "플랫폼개발팀",
+    "group": "프론트엔드그룹",
+    "part": "에디터파트",
+    "owners": ["u-fe-tech-lead", "u-be-staff-engineer"],
+    "reviewers": ["u-architect", "u-qa-lead"],
+    "tags": ["설계", "동기화", "ETag", "에디터"],
+    "category": "기술문서",
+    "confidentiality": "internal"
+  },
+  "infobox": {
+    "버전": "0.3-draft",
+    "관련 컴포넌트": ["BlockNote", "patchBlock API", "Postgres JSONB"],
+    "성능 목표": "P95 ≤ 80ms"
+  },
+  "sections": [
+    {
+      "id": "01K07ENG0000000000000000S1",
+      "number": "1",
+      "level": 1,
+      "title": "동기화 알고리즘",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "01K07ENG00000000000000B001",
+          "text": "에디터는 블록 단위 PATCH를 ETag와 함께 전송한다. 서버는 충돌 시 412 Precondition Failed를 반환하고, 클라이언트는 마지막 스냅샷으로 롤백 후 재시도한다."
+        },
+        {
+          "type": "math",
+          "id": "01K07ENG00000000000000B002",
+          "expression": "P_{conflict} \\approx 1 - e^{-\\lambda \\cdot t}",
+          "display": "block"
+        },
+        {
+          "type": "callout",
+          "id": "01K07ENG00000000000000B003",
+          "variant": "danger",
+          "title": "주의 — 단일 작가 가정",
+          "text": "이 알고리즘은 동시 작가가 ≤ 2명이라는 전제 위에 동작한다. 실시간 협업이 필요하면 Phase 2의 CRDT 트랙을 따라야 한다."
+        }
+      ],
+      "subsections": [
+        {
+          "id": "01K07ENG0000000000000000S2",
+          "number": "1.1",
+          "level": 2,
+          "title": "프로토콜 시퀀스",
+          "blocks": [
+            {
+              "type": "flow",
+              "id": "01K07ENG00000000000000B004",
+              "engine": "mermaid",
+              "source": "sequenceDiagram\n  participant C as Client\n  participant A as API\n  participant D as DB\n  C->>A: PATCH /documents/:slug/blocks/:id (If-Match)\n  A->>D: SELECT etag FROM documents\n  alt etag matches\n    A->>D: UPDATE content_json\n    A-->>C: 200 + new etag + snapshot\n  else mismatch\n    A-->>C: 412 Precondition Failed\n  end"
+            },
+            {
+              "type": "flow",
+              "id": "01K07ENG00000000000000B005",
+              "engine": "mermaid",
+              "source": "graph LR\n  Q[유저 입력] --> P[Pending Patch]\n  P --> S{ETag 검증}\n  S -- OK --> A[Apply Snapshot]\n  S -- 412 --> R[로컬 롤백]\n  R --> P\n  A --> N[다음 입력]"
+            }
+          ],
+          "subsections": []
+        },
+        {
+          "id": "01K07ENG0000000000000000S3",
+          "number": "1.2",
+          "level": 2,
+          "title": "구현 코드",
+          "blocks": [
+            {
+              "type": "code",
+              "id": "01K07ENG00000000000000B006",
+              "language": "typescript",
+              "filename": "patchBlock.ts",
+              "code": "export async function patchBlock(slug: string, blockId: string, next: Block, etag: string, summary?: string) {\n  const res = await api.patch<{ document: Document; etag: string }>(\n    `/documents/${slug}/blocks/${blockId}`,\n    { block: next, summary },\n    { headers: { 'If-Match': etag } },\n  )\n  return { document: res.data.document, etag: res.headers['etag'] ?? '' }\n}"
+            },
+            {
+              "type": "code",
+              "id": "01K07ENG00000000000000B007",
+              "language": "python",
+              "filename": "documents.py",
+              "code": "@router.patch('/{slug}/blocks/{block_id}')\nasync def patch_block(slug: str, block_id: str, body: PatchBody, if_match: str = Header(...)):\n    async with session_scope() as s:\n        cur = await s.execute(SELECT_DOC_FOR_UPDATE, {'slug': slug})\n        doc = cur.one()\n        if doc.etag != if_match:\n            raise HTTPException(412, 'ETag mismatch')\n        new_doc = replace_block(doc.content_json, block_id, body.block)\n        new_etag = sha256(new_doc).hexdigest()[:16]\n        await s.execute(UPDATE_DOC, {'slug': slug, 'content': json.dumps(new_doc), 'etag': new_etag})\n        return {'document': new_doc, 'etag': new_etag}"
+            },
+            {
+              "type": "code",
+              "id": "01K07ENG00000000000000B008",
+              "language": "sql",
+              "filename": "schema.sql",
+              "code": "ALTER TABLE documents\n  ADD COLUMN etag TEXT NOT NULL DEFAULT '';\nCREATE INDEX idx_documents_etag ON documents (slug, etag);"
+            },
+            {
+              "type": "code",
+              "id": "01K07ENG00000000000000B009",
+              "language": "bash",
+              "filename": "smoke_test.sh",
+              "code": "#!/usr/bin/env bash\nset -e\nETAG=$(curl -sI \"$API/documents/$SLUG\" | awk -F': ' '/etag/{print $2}' | tr -d '\\r')\ncurl -X PATCH \"$API/documents/$SLUG/blocks/$BID\" \\\n  -H \"If-Match: $ETAG\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"block\":{\"type\":\"paragraph\",\"id\":\"'$BID'\",\"text\":\"hello\"}}'"
+            },
+            {
+              "type": "code",
+              "id": "01K07ENG00000000000000B010",
+              "language": "yaml",
+              "filename": ".github/workflows/api.yml",
+              "code": "name: api-ci\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: pnpm install\n      - run: pnpm --filter @mx/api test"
+            }
+          ],
+          "subsections": [
+            {
+              "id": "01K07ENG0000000000000000S4",
+              "number": "1.2.1",
+              "level": 3,
+              "title": "검증 — 단위 테스트 코드",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "01K07ENG00000000000000B011",
+                  "language": "json",
+                  "filename": "patchBlock.fixture.json",
+                  "code": "{\n  \"input\": { \"block\": { \"type\": \"paragraph\", \"id\": \"X\", \"text\": \"hi\" } },\n  \"if_match\": \"abc123\",\n  \"expected_status\": 200\n}"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "01K07ENG0000000000000000S5",
+      "number": "2",
+      "level": 1,
+      "title": "팀 구성 & 외부 자료",
+      "blocks": [
+        {
+          "type": "heading-4",
+          "id": "01K07ENG00000000000000B012",
+          "title": "에디터 파트 R&R",
+          "meta": { "level": 2 }
+        },
+        {
+          "type": "org-chart",
+          "id": "01K07ENG00000000000000B013",
+          "layout": "tree",
+          "root": {
+            "id": "n-1",
+            "label": "에디터 파트",
+            "role": "Part Lead",
+            "children": [
+              {
+                "id": "n-2",
+                "label": "프론트엔드 셀",
+                "role": "FE Tech Lead",
+                "children": [
+                  { "id": "n-3", "label": "BlockNote 통합", "role": "Sr. Engineer" },
+                  { "id": "n-4", "label": "동기화 레이어", "role": "Engineer" }
+                ]
+              },
+              {
+                "id": "n-5",
+                "label": "백엔드 셀",
+                "role": "BE Tech Lead",
+                "children": [
+                  { "id": "n-6", "label": "Document API", "role": "Engineer" },
+                  { "id": "n-7", "label": "Storage", "role": "Engineer" }
+                ]
+              },
+              {
+                "id": "n-8",
+                "label": "QA 셀",
+                "role": "QA Lead",
+                "children": [
+                  { "id": "n-9", "label": "테스트 자동화", "role": "QA Engineer" }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "heading-4",
+          "id": "01K07ENG00000000000000B014",
+          "title": "참고 자료 임베드",
+          "meta": { "level": 3 }
+        },
+        {
+          "type": "iframe",
+          "id": "01K07ENG00000000000000B015",
+          "src": "https://docs.example.com/specs/etag-protocol",
+          "title": "ETag 프로토콜 명세 (사내)",
+          "height": 480
+        },
+        {
+          "type": "doc-link-card",
+          "id": "01K07ENG00000000000000B016",
+          "slug": "month-end-closing",
+          "showSummary": true
+        },
+        {
+          "type": "doc-link-card",
+          "id": "01K07ENG00000000000000B017",
+          "slug": "kpi-dashboard-guide"
+        },
+        {
+          "type": "quote",
+          "id": "01K07ENG00000000000000B018",
+          "text": "동기화는 모든 비동기 시스템의 가장 어려운 문제이다.",
+          "cite": "Leslie Lamport"
+        }
+      ],
+      "subsections": []
+    }
+  ],
+  "related_documents": [
+    { "slug": "kpi-dashboard-guide", "relation": "참고" },
+    { "slug": "month-end-closing", "relation": "유사" }
+  ],
+  "glossary": [
+    { "term": "ETag", "definition": "Entity Tag — HTTP 캐시·동시성 제어용 식별자" },
+    { "term": "CRDT", "definition": "Conflict-free Replicated Data Type — 분산 협업 데이터 구조" }
+  ],
+  "references": [
+    { "type": "internal", "label": "사내 API 가이드라인 v2.1" },
+    { "type": "external", "label": "RFC 7232 — Conditional Requests", "url": "https://datatracker.ietf.org/doc/html/rfc7232" }
+  ],
+  "see_also": ["editor-architecture", "concurrency-patterns"]
+}

@@ -4,6 +4,7 @@ import { Button, Field, IconButton, Input } from '@/components/ui'
 import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { KpiCardsBlockView } from '@/components/blocks/KpiCardsBlock'
+import { BlockHelpDrawer } from '@/features/editor/components/BlockHelpDrawer'
 
 interface Props {
   slug: Slug
@@ -40,6 +41,7 @@ export function KpiCardsBlockEditor({ slug, block }: Props) {
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const [local, setLocal] = useState<KpiCardsBlock>(block)
   const [error, setError] = useState<string | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const push = async (next: KpiCardsBlock) => {
     setLocal(next)
@@ -74,8 +76,30 @@ export function KpiCardsBlockEditor({ slug, block }: Props) {
     void push({ ...local, items: local.items.filter((_, i) => i !== idx) })
   }
 
+  const isEmpty = local.items.length === 0
+
   return (
     <div className="space-y-3 rounded border border-smsg-100 bg-smsg-100/40 p-3">
+      {isEmpty && (
+        <div
+          data-testid="kpi-empty-state"
+          className="rounded-md border border-dashed border-smsg-300 bg-white p-4 text-center dark:bg-gray-900"
+        >
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            이 블록은 <strong>핵심 지표(KPI) 카드</strong>를 보여줍니다.
+          </p>
+          <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row">
+            <Button size="sm" type="button" onClick={addItem}>+ 카드 추가</Button>
+            <button
+              type="button"
+              className="text-xs text-link hover:underline"
+              onClick={() => setHelpOpen(true)}
+            >
+              도움말 보기
+            </button>
+          </div>
+        </div>
+      )}
       <div className="space-y-2">
         <p className="text-xs font-medium text-gray-700">KPI 항목</p>
         {local.items.map((it, i) => (
@@ -126,6 +150,23 @@ export function KpiCardsBlockEditor({ slug, block }: Props) {
         </p>
         <KpiCardsBlockView block={local} />
       </div>
+      <BlockHelpDrawer
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        content={{
+          title: 'KPI 카드 블록',
+          description: [
+            '핵심 지표(KPI)를 카드 형태로 보여줍니다. 라벨(label), 값(value), 증감(delta)이 한 카드의 기본 구성입니다.',
+            '`delta` 값은 부호에 따라 자동으로 ▲/▼/= 트렌드 화살표가 붙어요. 직접 `trend` 를 지정하면 자동 추론보다 우선합니다.',
+          ],
+          examples: [
+            {
+              title: '예시 1 — 매출 / NPS',
+              body: 'label: 매출\nvalue: 1200\ndelta: +8%\n\nlabel: NPS\nvalue: 42\ndelta: +5',
+            },
+          ],
+        }}
+      />
     </div>
   )
 }

@@ -53,6 +53,9 @@ const DocumentReaderPage = lazyLogged('DocumentReader', () =>
 const DocumentNewPage = lazyLogged('DocumentNew', () =>
   import('./pages/DocumentNew').then((m) => ({ default: m.DocumentNewPage })),
 )
+const DocumentImportPage = lazyLogged('DocumentImport', () =>
+  import('./pages/DocumentImport').then((m) => ({ default: m.DocumentImportPage })),
+)
 const OrgsPage = lazyLogged('Orgs', () =>
   import('./pages/Orgs').then((m) => ({ default: m.OrgsPage })),
 )
@@ -197,6 +200,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               >
                 <Route index element={<Boundaried name="home"><HomePage /></Boundaried>} />
                 <Route path="docs/new" element={<Boundaried name="docs/new"><DocumentNewPage /></Boundaried>} />
+                <Route path="docs/import" element={<Boundaried name="docs/import"><DocumentImportPage /></Boundaried>} />
                 <Route path="docs/:slug" element={<Boundaried name="docs/:slug"><DocumentReaderPage /></Boundaried>} />
                 <Route path="orgs" element={<Boundaried name="orgs"><OrgsPage /></Boundaried>} />
                 <Route path="admin/orgs" element={<Boundaried name="admin/orgs"><AdminOrgsPage /></Boundaried>} />

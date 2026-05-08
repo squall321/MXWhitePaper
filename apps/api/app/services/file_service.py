@@ -285,15 +285,88 @@ async def finalize(
 
 
 # ── download ─────────────────────────────────────────────────────────
-async def issue_download_url(s: AsyncSession, *, file_id: str) -> str:
+async def _file_is_referenced_by_any_doc(
+    s: AsyncSession, *, file_id: str
+) -> bool:
+    """Walk every non-archived document's content_json to find a
+    `{type: "file", fileId: <file_id>}` block anywhere in the tree.
+
+    Uses Postgres `jsonb_path_exists` with recursive descent (`**`) so the
+    query catches blocks nested under columns / tabs / accordions without
+    hand-coded traversal. Indexed on `documents.status` (existing partial
+    index from 0001_init); the jsonb walk is per-row and we cap with LIMIT 1
+    so the query short-circuits at the first match.
+
+    Slower than a dedicated `file_document_links` join table but avoids the
+    migration + back-fill, and the editor's typical doc set is small enough
+    that this is a non-issue in practice.
+    """
+    # asyncpg can't infer the type of a bare bind, so we must cast :fid to
+    # text BEFORE handing it to jsonb_build_object — otherwise the driver
+    # raises `IndeterminateDatatypeError: could not determine data type of
+    # parameter $1`. The cast is a no-op cost-wise and keeps the SQL
+    # portable.
+    row = (await s.execute(
+        text("""
+            SELECT 1
+            FROM documents d
+            WHERE d.status != 'archived'
+              AND jsonb_path_exists(
+                d.content_json,
+                '$.** ? (@.type == "file" && @.fileId == $fid)'::jsonpath,
+                jsonb_build_object('fid', CAST(:fid AS text))
+              )
+            LIMIT 1
+        """),
+        {"fid": file_id},
+    )).first()
+    return row is not None
+
+
+async def issue_download_url(
+    s: AsyncSession,
+    *,
+    file_id: str,
+    requester_user_id: str | None = None,
+) -> str:
+    """Resolve `file_id` → presigned 1-day GET URL with per-doc authorization.
+
+    Authz policy:
+      - The file's owner (`files.owner_user_id == requester_user_id`) always
+        bypasses the document check (so an editor can re-download their own
+        upload even before pasting it into a doc).
+      - Otherwise, allow only when at least one non-archived document
+        references this `file_id` via a `type: "file"` block. The reader+
+        gate on the route already ensures the requester can read every
+        non-archived document, so a reference is sufficient evidence of
+        access. Returning 403 otherwise keeps file URLs from leaking even
+        to authenticated readers when the file isn't actually attached
+        anywhere.
+      - Unknown file → 404 (existing behaviour).
+    """
     if not isinstance(file_id, str) or not _ULID_RE.match(file_id):
         raise NotFound(f"file not found: {file_id}")
     row = (await s.execute(
-        text("SELECT id, storage_key FROM files WHERE id = :id"),
+        text("""
+            SELECT id, storage_key, CAST(owner_user_id AS text)
+            FROM files WHERE id = :id
+        """),
         {"id": file_id},
     )).first()
     if not row:
         raise NotFound(f"file not found: {file_id}")
+
+    is_owner = (
+        requester_user_id is not None
+        and str(row[2]) == str(requester_user_id)
+    )
+    if not is_owner:
+        if not await _file_is_referenced_by_any_doc(s, file_id=file_id):
+            raise Forbidden(
+                "this file is not attached to any document you can read",
+                details={"file_id": file_id},
+            )
+
     bucket = get_settings().minio_bucket_files
     return _presigned_get_url(bucket, row[1])
 
@@ -315,5 +388,3 @@ def _ensure_router_rate_limit_reset_hook() -> None:
     return None
 
 
-# Forbidden is unused but kept for future ACL extension; suppress lint.
-_ = Forbidden

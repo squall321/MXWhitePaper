@@ -1,6 +1,42 @@
 {
   "components": {
     "schemas": {
+      "Body_import_docx_api_v1_imports_docx_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_docx_api_v1_imports_docx_post",
+        "type": "object"
+      },
       "CommentIn": {
         "properties": {
           "anchor_id": {
@@ -2922,7 +2958,7 @@
     },
     "/api/v1/files/{file_id}/download": {
       "get": {
-        "description": "Issue a fresh 1-day presigned GET URL and 302-redirect.\n\n인증된 reader+ 이면 다운로드 허용 — 문서별 ACL 은 추후 도입. (현재 본\n문서들은 조직 전체에서 reader+ 권한이면 모두 열람 가능한 구조이므로\n문서-파일 연결 검사는 over-engineering.)",
+        "description": "Issue a fresh 1-day presigned GET URL and 302-redirect.\n\nAuthz: the requester must either own the file OR have read access to at\nleast one non-archived document that references it (lazy walk via\n`jsonb_path_exists`). The reader+ role check above is necessary but\ninsufficient — without the per-document check, any authenticated reader\ncould download an unattached / orphaned file by guessing a ULID.",
         "operationId": "files_download_api_v1_files__file_id__download_get",
         "parameters": [
           {
@@ -3381,6 +3417,67 @@
         "summary": "Get Image",
         "tags": [
           "images"
+        ]
+      }
+    },
+    "/api/v1/imports/docx": {
+      "post": {
+        "operationId": "import_docx_api_v1_imports_docx_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_docx_api_v1_imports_docx_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Import Docx Api V1 Imports Docx Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Docx",
+        "tags": [
+          "imports"
         ]
       }
     },
@@ -4486,6 +4583,10 @@
     {
       "description": "일반 파일 첨부 업로드 — presigned PUT + finalize + 1일 GET.",
       "name": "files"
+    },
+    {
+      "description": "Word(.docx) 가져오기. 멀티파트 업로드 → DocumentJSON v1.0 변환 → FE 가 받은 결과를 별도로 POST /documents 로 영구화.",
+      "name": "imports"
     },
     {
       "description": "Meilisearch 기반 전체검색 + 하이라이트.",

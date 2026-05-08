@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Slug, SectionLevel1, SectionLevel2, SectionLevel3 } from '@/types/document'
 import { BlockRenderer } from './blocks/BlockRenderer'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
@@ -263,11 +263,28 @@ function SectionHeading({
 }
 
 /**
- * CollapsiblePanel — wraps section body with a max-height transition. We use
- * `display: none` (via `hidden`) when fully collapsed so subtree DOM does
- * not affect anchor scroll / IO listeners. The animation is best-effort —
- * with content of unknown height we'd need a measure pass; the simpler
- * "fade + collapse" feels fine for section-level content.
+ * CollapsiblePanel — animates `max-height` between 0 and the panel's measured
+ * natural height so collapse/expand glide instead of snapping.
+ *
+ * Implementation:
+ *   - On mount + on every children change, `useLayoutEffect` reads the
+ *     panel's `scrollHeight` synchronously (still "measured" — `useEffect`
+ *     would race with paint).
+ *   - When `collapsed` toggles, we set `max-height` to either 0 or the
+ *     measured height, transitioning over `var(--duration-base)` (=200ms).
+ *   - After expand, `transitionend` clears `max-height` to `none` so future
+ *     content additions aren't clipped.
+ *   - `prefers-reduced-motion: reduce` skips the transition entirely.
+ *
+ * SSR / no-DOM fallback: when the panel hasn't measured yet (`measured=0`),
+ * the expanded state simply has no max-height (children flow naturally) and
+ * the collapsed state hides via `display:none`. This keeps
+ * `renderToStaticMarkup` snapshots stable and avoids 0-height flashes.
+ *
+ * Note: we keep children mounted both ways. Hiding via `max-height: 0` +
+ * `overflow: hidden` is intentional — popping children out of the tree
+ * would lose IntersectionObserver state on charts/images and re-trigger
+ * lazy-load each time.
  */
 function CollapsiblePanel({
   id,
@@ -278,13 +295,130 @@ function CollapsiblePanel({
   collapsed: boolean
   children: ReactNode
 }) {
-  if (collapsed) {
-    // SSR-safe: just don't render children. The hidden attr keeps the panel
-    // discoverable via aria-controls without leaking to assistive tech.
-    return <div id={id} hidden aria-hidden="true" />
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  // Initialise max-height to 0 if the section starts collapsed so the first
+  // post-mount paint doesn't flash the body at full height. Subsequent
+  // toggles flow through the useEffect transition pipeline.
+  const [maxHeight, setMaxHeight] = useState<string | undefined>(
+    collapsed ? '0px' : undefined,
+  )
+  const animatingRef = useRef<boolean>(false)
+  const prevCollapsedRef = useRef<boolean>(collapsed)
+  // Cached natural height measured by the layout effect below. Used as a
+  // fallback when the toggle effect runs before the panel has had a chance
+  // to lay out (e.g. when content is still mounting).
+  const measuredRef = useRef<number>(0)
+  // Track whether we've ever mounted on a real DOM. Until then we keep the
+  // legacy "unmount children when collapsed" behaviour so:
+  //   1) SSR / `renderToStaticMarkup` snapshots stay byte-identical to the
+  //      pre-transition build (existing SectionRenderer.test.tsx asserts on
+  //      collapsed-state body absence).
+  //   2) Initial paint after navigation doesn't briefly flash a 0-height
+  //      panel for a freshly-collapsed section.
+  // Once `mounted=true`, we keep children rendered and drive the open/close
+  // via a `max-height` CSS transition.
+  const [mounted, setMounted] = useState<boolean>(false)
+  const reduceMotion =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    (() => {
+      try {
+        return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      } catch {
+        return false
+      }
+    })()
+
+  // Flip `mounted` once after first paint so subsequent toggles animate.
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Measure the panel's natural height after every layout. We cache it on a
+  // ref (no re-render) so the toggle effect below can pick up the freshest
+  // value even when content has been added since the last open/close.
+  useLayoutEffect(() => {
+    if (!mounted) return
+    const el = panelRef.current
+    if (!el) return
+    if (animatingRef.current) return
+    if (collapsed) return
+    measuredRef.current = el.scrollHeight
+  })
+
+  // React to collapse/expand transitions.
+  useEffect(() => {
+    if (!mounted) return
+    // Skip the very first effect call when the state didn't actually change
+    // (initial paint after hydration with the same collapsed value as SSR).
+    if (prevCollapsedRef.current === collapsed) return
+    prevCollapsedRef.current = collapsed
+    const el = panelRef.current
+    if (!el) return
+    if (reduceMotion) {
+      // Skip the animation: snap directly to final state.
+      setMaxHeight(collapsed ? '0px' : undefined)
+      return
+    }
+    if (collapsed) {
+      // Two-phase: 1st set to current measured height (so `none` baseline
+      // transitions), then on next frame collapse to 0.
+      const current = el.scrollHeight || measuredRef.current
+      animatingRef.current = true
+      setMaxHeight(`${current}px`)
+      requestAnimationFrame(() => {
+        setMaxHeight('0px')
+      })
+    } else {
+      // Expand: from 0 (current draft) to measured natural height. The
+      // `transitionend` handler below clears max-height when we land.
+      animatingRef.current = true
+      const target = el.scrollHeight || measuredRef.current
+      setMaxHeight(`${target}px`)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collapsed, reduceMotion, mounted])
+
+  const onTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
+    if (e.propertyName !== 'max-height') return
+    animatingRef.current = false
+    if (!collapsed) {
+      // Once expanded, drop the cap so future child additions aren't clipped.
+      setMaxHeight(undefined)
+    }
   }
+
+  // Pre-mount path — preserve the legacy unmount behaviour so SSR and the
+  // first reader paint match prior snapshots.
+  if (!mounted) {
+    if (collapsed) {
+      return <div id={id} hidden aria-hidden="true" />
+    }
+    return (
+      <div id={id} ref={panelRef} data-collapsible-panel>
+        {children}
+      </div>
+    )
+  }
+
+  const style: React.CSSProperties = {
+    overflow: 'hidden',
+    transition: reduceMotion
+      ? 'none'
+      : 'max-height var(--duration-base, 200ms) ease',
+    ...(maxHeight !== undefined ? { maxHeight } : null),
+  }
+
   return (
-    <div id={id} data-collapsible-panel>
+    <div
+      id={id}
+      ref={panelRef}
+      data-collapsible-panel
+      data-collapsed={collapsed ? 'true' : 'false'}
+      aria-hidden={collapsed ? 'true' : undefined}
+      style={style}
+      onTransitionEnd={onTransitionEnd}
+    >
       {children}
     </div>
   )
