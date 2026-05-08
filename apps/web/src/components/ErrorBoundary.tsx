@@ -26,10 +26,27 @@ export class ErrorBoundary extends Component<Props, State> {
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     // eslint-disable-next-line no-console
     console.error('[ErrorBoundary]', error, info)
+    try {
+      // 진단 보조: 사용자가 페이지 캡처해 보낼 수 있도록 stack 을 dom 에 박는다.
+      const root = document.getElementById('mxwp-error-trace')
+      if (root) root.textContent = `${error.message}\n\n${error.stack ?? ''}\n\n${info.componentStack ?? ''}`
+    } catch {
+      /* no-op */
+    }
   }
 
   handleReset = (): void => {
     this.setState({ error: null })
+  }
+
+  handleHardReset = (): void => {
+    try {
+      window.sessionStorage.clear()
+      window.localStorage.clear()
+    } catch {
+      /* private mode */
+    }
+    location.assign('/')
   }
 
   override render(): ReactNode {
@@ -46,7 +63,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <p className="mt-3 text-xs text-gray-500">
               새로고침으로 복구되는 경우가 많습니다. 반복되면 콘솔 로그를 확인해 주세요.
             </p>
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => location.reload()}
@@ -54,6 +71,21 @@ export class ErrorBoundary extends Component<Props, State> {
               >
                 새로고침
               </button>
+              <button
+                type="button"
+                onClick={this.handleHardReset}
+                className="rounded bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700"
+                title="모든 세션/로컬 스토리지를 비우고 홈으로 이동합니다"
+              >
+                전체 초기화 (스토리지 비우기)
+              </button>
+              <Link
+                to="/diag"
+                onClick={this.handleReset}
+                className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                진단 페이지
+              </Link>
               <Link
                 to="/"
                 onClick={this.handleReset}
@@ -62,16 +94,17 @@ export class ErrorBoundary extends Component<Props, State> {
                 홈으로
               </Link>
             </div>
-            {import.meta.env.DEV && this.state.error.stack && (
-              <details className="mt-4">
-                <summary className="cursor-pointer text-xs text-gray-500">
-                  스택 트레이스 (개발 모드)
-                </summary>
-                <pre className="mt-2 overflow-auto rounded bg-white p-2 text-[11px] text-gray-700">
-                  {this.state.error.stack}
-                </pre>
-              </details>
-            )}
+            <details className="mt-4" open={import.meta.env.DEV}>
+              <summary className="cursor-pointer text-xs text-gray-500">
+                스택 트레이스 / 진단
+              </summary>
+              <pre
+                id="mxwp-error-trace"
+                className="mt-2 max-h-80 overflow-auto rounded bg-white p-2 text-[11px] text-gray-700"
+              >
+                {this.state.error.stack ?? this.state.error.message}
+              </pre>
+            </details>
           </div>
         </div>
       )

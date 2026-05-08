@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { TopBar } from './TopBar'
 import { OrgTree } from '@/features/org/components/OrgTree'
 import { Drawer } from '@/components/ui/Drawer'
+import { RailBoundary } from '@/components/blocks/BlockBoundary'
 
 interface AppShellProps {
   children: ReactNode
@@ -71,7 +72,7 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
         {hasLeft && (
           <aside className="hidden border-r border-gray-200 bg-white md:block">
             <div className="sticky top-[var(--header-h)] max-h-[calc(100vh-var(--header-h))] overflow-y-auto py-3">
-              {leftNode}
+              <RailBoundary name="조직 트리">{leftNode}</RailBoundary>
             </div>
           </aside>
         )}
@@ -91,7 +92,7 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
         {hasRight && (
           <aside className="hidden border-l border-gray-200 bg-white lg:block">
             <div className="sticky top-[var(--header-h)] max-h-[calc(100vh-var(--header-h))] overflow-y-auto py-3">
-              {right}
+              <RailBoundary name="우측 패널">{right}</RailBoundary>
             </div>
           </aside>
         )}

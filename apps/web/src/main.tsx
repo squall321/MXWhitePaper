@@ -39,6 +39,7 @@ const NotFoundPage = lazy(() =>
 const PresentationPage = lazy(() =>
   import('./pages/Presentation').then((m) => ({ default: m.PresentationPage })),
 )
+const DiagPage = lazy(() => import('./pages/Diag').then((m) => ({ default: m.DiagPage })))
 
 function PageFallback() {
   return (
@@ -54,7 +55,29 @@ const queryClient = new QueryClient({
   },
 })
 
-bootstrapAuth()
+// `?reset` URL flag: 사용자가 망가진 클라이언트 상태를 한 번에 비울 수
+// 있게 한다. 흰 화면이 떴을 때 콘솔 못 열어도 URL 만으로 회복 가능.
+function maybeResetAndRedirect(): boolean {
+  try {
+    const sp = new URLSearchParams(window.location.search)
+    if (!sp.has('reset')) return false
+    window.sessionStorage.clear()
+    window.localStorage.clear()
+    sp.delete('reset')
+    const q = sp.toString()
+    location.replace(window.location.pathname + (q ? `?${q}` : ''))
+    return true
+  } catch {
+    return false
+  }
+}
+
+if (!maybeResetAndRedirect()) {
+  bootstrapAuth()
+  mountReact()
+}
+
+function mountReact() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -66,6 +89,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route
                 path="/login"
                 element={<Boundaried name="login"><LoginPage /></Boundaried>}
+              />
+              <Route
+                path="/diag"
+                element={<Boundaried name="diag"><DiagPage /></Boundaried>}
               />
               <Route
                 path="/present/:slug"
@@ -97,3 +124,4 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 )
+}
