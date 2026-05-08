@@ -6,6 +6,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { login } from '@/features/auth/api'
 import { useAuthStore } from '@/features/auth/store'
 import { Button, Card, Field, Input } from '@/components/ui'
+import { useLocale } from '@/lib/i18n'
 
 const loginSchema = z.object({
   email: z.string().email('이메일 형식이 아닙니다'),
@@ -40,6 +41,7 @@ export function safeReturnPath(raw: string | null | undefined): string {
  * MX badge, "최근 로그인 ID 기억" toggle, and a stub "비밀번호를 잊으셨나요?" link.
  */
 export function LoginPage() {
+  const { t } = useLocale()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const returnTo = safeReturnPath(params.get('return'))
@@ -109,16 +111,16 @@ export function LoginPage() {
           <span className="rounded-md bg-white px-3 py-1.5 text-base font-bold text-smsg-700 shadow-md">
             MX
           </span>
-          <h1 className="text-xl font-semibold text-white">White Paper</h1>
-          <p className="text-xs text-white/70">사내 백서 시스템</p>
+          <h1 className="text-xl font-semibold text-white">{t('login.title')}</h1>
+          <p className="text-xs text-white/70">{t('login.subtitle')}</p>
         </div>
 
-        <Card padded="lg" className="bg-white/95 backdrop-blur-sm">
-          <h2 className="mb-1 text-base font-semibold text-smsg-900">로그인</h2>
-          <p className="mb-5 text-xs text-gray-500">사내 계정으로 로그인하세요.</p>
+        <Card padded="lg" className="bg-white/95 backdrop-blur-sm dark:bg-gray-900/95">
+          <h2 className="mb-1 text-base font-semibold text-smsg-900 dark:text-gray-100">{t('login.heading')}</h2>
+          <p className="mb-5 text-xs text-gray-500 dark:text-gray-400">{t('login.helper')}</p>
 
           <form className="space-y-4" onSubmit={onSubmit}>
-            <Field label="이메일" htmlFor="login-email" error={errors.email?.message}>
+            <Field label={t('login.email')} htmlFor="login-email" error={errors.email?.message}>
               <Input
                 id="login-email"
                 data-testid="login-email"
@@ -130,7 +132,7 @@ export function LoginPage() {
               />
             </Field>
 
-            <Field label="비밀번호" htmlFor="login-password" error={errors.password?.message}>
+            <Field label={t('login.password')} htmlFor="login-password" error={errors.password?.message}>
               <Input
                 id="login-password"
                 data-testid="login-password"
@@ -150,14 +152,14 @@ export function LoginPage() {
                   onChange={(e) => setRemember(e.target.checked)}
                   className="h-3.5 w-3.5 rounded border-gray-300 text-smsg-700 focus:ring-smsg-500"
                 />
-                최근 로그인 ID 기억
+                {t('login.remember')}
               </label>
               <a
                 href="#"
                 onClick={(e) => e.preventDefault()}
                 className="text-xs text-link hover:underline"
               >
-                비밀번호를 잊으셨나요?
+                {t('login.forgot')}
               </a>
             </div>
 
@@ -175,7 +177,7 @@ export function LoginPage() {
               fullWidth
               size="md"
             >
-              {isSubmitting ? '로그인 중…' : '로그인'}
+              {isSubmitting ? t('login.submitting') : t('login.submit')}
             </Button>
 
             {import.meta.env.DEV && (

@@ -71,7 +71,7 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
       : 'grid-cols-1'
 
   return (
-    <div className="min-h-screen bg-white text-smsg-900">
+    <div className="min-h-screen bg-white text-smsg-900 dark:bg-gray-950 dark:text-gray-100">
       <a href="#main" className="skip-to-content">본문으로 건너뛰기</a>
 
       <TopBar
@@ -85,15 +85,16 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
 
       {/* Sticky breadcrumb directly under the TopBar (auto-hides on routes
           without a meaningful trail, e.g. /login which lives outside this
-          shell anyway). */}
-      <div className="fixed inset-x-0 top-[var(--header-h)] z-sticky">
+          shell anyway). 명시적 white background + border-bottom 로 본문이
+          비치지 않도록 + shadow 로 시각 분리. */}
+      <div className="fixed inset-x-0 top-[var(--header-h)] z-sticky border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/90">
         <Breadcrumb />
       </div>
 
       <div className={`grid min-h-[calc(100vh-var(--header-h))] pt-[calc(var(--header-h)+2rem)] ${gridCls}`}>
         {/* Left tree — visible md+ only when the page provides a left slot. */}
         {hasLeft && (
-          <aside className="hidden border-r border-gray-200 bg-white md:block">
+          <aside className="hidden border-r border-gray-200 bg-white md:block dark:border-gray-800 dark:bg-gray-900">
             <div className="sticky top-[calc(var(--header-h)+2rem)] max-h-[calc(100vh-var(--header-h)-2rem)] overflow-y-auto py-3">
               <RailBoundary name="조직 트리">{leftNode}</RailBoundary>
             </div>
@@ -110,7 +111,7 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
 
         {/* Right rail — visible lg+ only. md hides; mobile uses Drawer. */}
         {hasRight && (
-          <aside className="hidden border-l border-gray-200 bg-white lg:block">
+          <aside className="hidden border-l border-gray-200 bg-white lg:block dark:border-gray-800 dark:bg-gray-900">
             <div className="sticky top-[calc(var(--header-h)+2rem)] max-h-[calc(100vh-var(--header-h)-2rem)] overflow-y-auto py-3">
               <RailBoundary name="우측 패널">{right}</RailBoundary>
             </div>
@@ -120,13 +121,16 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
 
       {/* Floating "측면 패널" button on mobile when the page has supplied
           right-rail content. Renamed from "목차" since DocumentReader pushes
-          custom content here too (VersionHistoryPanel, related docs, etc). */}
+          custom content here too (VersionHistoryPanel, related docs, etc).
+          `bottom` uses a CSS calc that respects iOS safe-area + tries to
+          stay above the visual viewport when the soft keyboard is open. */}
       {hasRight && (
         <button
           type="button"
           onClick={() => setTocOpen(true)}
           aria-label="측면 패널 열기"
-          className="fixed bottom-4 right-4 z-drawer inline-flex items-center gap-1.5 rounded-full bg-smsg-700 px-4 py-2 text-sm font-medium text-white shadow-lg transition-all duration-base ease-out-soft hover:-translate-y-0.5 hover:bg-smsg-900 lg:hidden"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+          className="fixed right-4 z-drawer inline-flex items-center gap-1.5 rounded-full bg-smsg-700 px-4 py-2 text-sm font-medium text-white shadow-lg transition-all duration-base ease-out-soft hover:-translate-y-0.5 hover:bg-smsg-900 lg:hidden"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M2 3h12v2H2zM2 7h12v2H2zM2 11h12v2H2z" fill="currentColor" />

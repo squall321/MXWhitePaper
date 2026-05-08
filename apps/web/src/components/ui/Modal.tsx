@@ -64,7 +64,7 @@ export function Modal({ open, onClose, title, titleHidden, staticBackdrop, size 
 
   return (
     <div
-      className="fixed inset-0 z-modal flex items-center justify-center bg-black/40 px-4 py-6 anim-fade"
+      className="fixed inset-0 z-modal flex items-center justify-center bg-black/40 px-4 py-6 anim-fade dark:bg-black/60"
       onMouseDown={(e) => {
         if (!staticBackdrop && e.target === e.currentTarget) onClose()
       }}
@@ -76,20 +76,20 @@ export function Modal({ open, onClose, title, titleHidden, staticBackdrop, size 
         aria-label={typeof title === 'string' ? title : undefined}
         tabIndex={-1}
         className={cn(
-          'relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-lg outline-none',
+          'relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-lg outline-none dark:bg-gray-900 dark:text-gray-100',
           'animate-slide-up',
           SIZE_CLS[size],
           className,
         )}
       >
         {title && !titleHidden && (
-          <header className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
-            <h2 className="text-base font-semibold text-smsg-900">{title}</h2>
+          <header className="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-gray-800">
+            <h2 className="text-base font-semibold text-smsg-900 dark:text-gray-100">{title}</h2>
             <button
               type="button"
               onClick={onClose}
               aria-label="닫기"
-              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:shadow-focus"
+              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:shadow-focus dark:hover:bg-gray-800 dark:hover:text-gray-200"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M3.7 3.7l8.6 8.6M12.3 3.7l-8.6 8.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -99,7 +99,7 @@ export function Modal({ open, onClose, title, titleHidden, staticBackdrop, size 
         )}
         <div className="flex-1 overflow-auto">{children}</div>
         {footer && (
-          <footer className="border-t border-gray-200 bg-gray-50/80 px-5 py-3">{footer}</footer>
+          <footer className="border-t border-gray-200 bg-gray-50/80 px-5 py-3 dark:border-gray-800 dark:bg-gray-950/60">{footer}</footer>
         )}
       </div>
     </div>

@@ -10,6 +10,7 @@ import { FavoriteStar } from '@/features/favorites/components/FavoriteStar'
 import { RailBoundary } from '@/components/blocks/BlockBoundary'
 import { SlowFetchBanner, useSlowFetch } from '@/lib/api/useSlowFetch'
 import { toApiError } from '@/lib/api/envelope'
+import { useLocale } from '@/lib/i18n'
 import type { AppOutletContext } from '@/App'
 
 /**
@@ -22,6 +23,7 @@ import type { AppOutletContext } from '@/App'
  * the team breadcrumb, title, summary and last-updated label.
  */
 export function HomePage() {
+  const { t } = useLocale()
   const { data, isPending, isError, error, refetch, isFetching } = useDocumentList({ limit: 12 })
   const slowFetch = useSlowFetch(isPending || isFetching)
   const user = useAuthStore((s) => s.user)
@@ -63,35 +65,35 @@ export function HomePage() {
     <section className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-smsg-900 sm:text-3xl">
-            최근 업데이트된 문서
+          <h1 className="text-2xl font-semibold tracking-tight text-smsg-900 sm:text-3xl dark:text-gray-100">
+            {t('home.hero.title')}
           </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            가장 최근에 갱신된 백서 12건입니다.
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {t('home.hero.subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2">
           {canWrite && (
             <Link
               to="/docs/new"
-              className="inline-flex h-9 items-center gap-2 rounded-md bg-smsg-700 px-3.5 text-sm font-semibold text-white transition-all duration-base hover:-translate-y-px hover:bg-smsg-900 hover:no-underline hover:shadow-md focus-visible:outline-none focus-visible:shadow-focus"
+              className="inline-flex h-11 items-center gap-2 rounded-md bg-smsg-700 px-3.5 text-sm font-semibold text-white transition-all duration-base hover:-translate-y-px hover:bg-smsg-900 hover:no-underline hover:shadow-md focus-visible:outline-none focus-visible:shadow-focus sm:h-9"
             >
-              + 새 문서 작성
+              {t('home.hero.newDoc')}
             </Link>
           )}
           <Link to="/orgs" className="text-sm text-link hover:underline">
-            전체 보기 →
+            {t('home.hero.viewAll')}
           </Link>
         </div>
       </header>
 
       {teams.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">필터</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('home.filter')}</span>
           <FilterChip
             active={activeTeam === null}
             onClick={() => setActiveTeam(null)}
-            label="전체"
+            label={t('home.filter.all')}
           />
           {teams.map((t) => (
             <FilterChip
@@ -149,13 +151,13 @@ export function HomePage() {
             type="button"
             onClick={() => setRecentMobileOpen((v) => !v)}
             aria-expanded={recentMobileOpen}
-            className="flex w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-smsg-900 hover:border-smsg-300"
+            className="flex min-h-[44px] w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-smsg-900 hover:border-smsg-300 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
           >
             <span>최근 본 문서 ({Math.min(recentItems.length, 10)})</span>
-            <span aria-hidden="true" className="text-gray-400">{recentMobileOpen ? '▾' : '▸'}</span>
+            <span aria-hidden="true" className="text-gray-400 dark:text-gray-500">{recentMobileOpen ? '▾' : '▸'}</span>
           </button>
           {recentMobileOpen && (
-            <div className="mt-2 rounded-md border border-gray-200 bg-white py-2">
+            <div className="mt-2 rounded-md border border-gray-200 bg-white py-2 dark:border-gray-800 dark:bg-gray-900">
               <RecentRail showSeeAll />
             </div>
           )}
@@ -171,10 +173,10 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-full border px-3 py-1 text-xs font-medium transition-all duration-fast',
+        'min-h-[32px] rounded-full border px-3 py-1 text-xs font-medium transition-all duration-fast',
         active
           ? 'border-smsg-700 bg-smsg-700 text-white shadow-sm'
-          : 'border-gray-300 bg-white text-gray-700 hover:border-smsg-300 hover:text-smsg-900',
+          : 'border-gray-300 bg-white text-gray-700 hover:border-smsg-300 hover:text-smsg-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-smsg-300/50 dark:hover:text-gray-100',
       )}
     >
       {label}
@@ -210,17 +212,17 @@ function DocumentCardItem({ doc }: { doc: DocumentCard }) {
             </span>
             <div className="min-w-0 flex-1">
               {doc.team && <Badge tone="muted" size="sm">{doc.team}</Badge>}
-              <h2 className="mt-1 line-clamp-2 text-base font-semibold text-smsg-900 group-hover:text-smsg-700">
+              <h2 className="mt-1 line-clamp-2 text-base font-semibold text-smsg-900 group-hover:text-smsg-700 dark:text-gray-100">
                 {doc.title}
               </h2>
             </div>
           </div>
 
           {doc.summary && (
-            <p className="line-clamp-3 text-sm text-gray-600">{doc.summary}</p>
+            <p className="line-clamp-3 text-sm text-gray-600 dark:text-gray-400">{doc.summary}</p>
           )}
 
-          <div className="mt-auto flex items-center justify-between text-xs text-gray-500">
+          <div className="mt-auto flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
             <span className="truncate">{path || doc.slug}</span>
             {doc.updated_at && (
               <time className="ml-2 shrink-0">{formatDate(doc.updated_at)}</time>

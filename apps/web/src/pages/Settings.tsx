@@ -1,21 +1,27 @@
 import { useEffect } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { Card } from '@/components/ui'
-import { useSettingsStore, type UiSettings } from '@/features/settings/store'
+import { useSettingsStore, type ThemeMode, type UiSettings } from '@/features/settings/store'
+import { useLocale } from '@/lib/i18n'
 import type { AppOutletContext } from '@/App'
 
 /**
  * "/settings" — cosmetic preference toggles persisted in localStorage.
  *
- * All toggles are wired into the Zustand store directly. The dark-mode
- * switch only flips the boolean; the actual theme application is staged
- * for a later sprint (tokens are already dark-ready).
+ * Tier 1 dark-mode: a "테마: 라이트 / 다크 / 시스템" radio group writes
+ * `themeMode` and the legacy `darkMode` boolean is kept in sync (so the
+ * Quick Settings modal switch keeps working).
+ *
+ * Tier 2 i18n: a Language select between Korean / English. The select
+ * writes `language`; copy on this page is translated via `useLocale()`.
  */
 export function SettingsPage() {
+  const { t } = useLocale()
   const notifications = useSettingsStore((s) => s.notifications)
   const autoSave = useSettingsStore((s) => s.autoSave)
   const codeFade = useSettingsStore((s) => s.codeFade)
   const darkMode = useSettingsStore((s) => s.darkMode)
+  const themeMode = useSettingsStore((s) => s.themeMode)
   const language = useSettingsStore((s) => s.language)
   const setOne = useSettingsStore((s) => s.set)
   const reset = useSettingsStore((s) => s.reset)
@@ -33,51 +39,72 @@ export function SettingsPage() {
   return (
     <section className="space-y-6" data-testid="settings-page">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-smsg-900 sm:text-3xl">
-          환경설정
+        <h1 className="text-2xl font-semibold tracking-tight text-smsg-900 sm:text-3xl dark:text-gray-100">
+          {t('settings.title')}
         </h1>
-        <p className="mt-1 text-sm text-gray-500">
-          이 브라우저에만 저장되는 표시 설정입니다.
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          {t('settings.subtitle')}
         </p>
       </header>
 
       <Card padded="md">
-        <dl className="divide-y divide-gray-100">
+        <dl className="divide-y divide-gray-100 dark:divide-gray-800">
           <ToggleRow
-            label="알림"
-            description="저장/오류 알림 토스트를 표시합니다."
+            label={t('settings.notifications')}
+            description={t('settings.notifications.help')}
             checked={notifications}
             onChange={(v) => setOne('notifications', v)}
             testId="settings-toggle-notifications"
           />
           <ToggleRow
-            label="자동 저장"
-            description="편집 중 변경사항을 주기적으로 자동 저장합니다."
+            label={t('settings.autoSave')}
+            description={t('settings.autoSave.help')}
             checked={autoSave}
             onChange={(v) => setOne('autoSave', v)}
             testId="settings-toggle-autosave"
           />
           <ToggleRow
-            label="코드블록 fade"
-            description="긴 코드블록의 하단을 흐리게 표시합니다."
+            label={t('settings.codeFade')}
+            description={t('settings.codeFade.help')}
             checked={codeFade}
             onChange={(v) => setOne('codeFade', v)}
             testId="settings-toggle-codefade"
           />
           <ToggleRow
-            label="다크 모드"
+            label={t('settings.theme.dark')}
             description="아직 베타입니다. 토큰만 준비되어 있어요."
             checked={darkMode}
-            onChange={(v) => setOne('darkMode', v)}
+            onChange={(v) => {
+              setOne('darkMode', v)
+              setOne('themeMode', v ? 'dark' : 'light')
+            }}
             testId="settings-toggle-darkmode"
           />
+          <ThemeRadioRow
+            label={t('settings.theme')}
+            description={t('settings.theme.help')}
+            value={themeMode}
+            options={[
+              { value: 'light', label: t('settings.theme.light') },
+              { value: 'dark', label: t('settings.theme.dark') },
+              { value: 'system', label: t('settings.theme.system') },
+            ]}
+            onChange={(v) => {
+              setOne('themeMode', v)
+              // Mirror the legacy boolean so the Quick Settings switch stays
+              // in sync. `system` leaves the boolean untouched.
+              if (v === 'dark') setOne('darkMode', true)
+              else if (v === 'light') setOne('darkMode', false)
+            }}
+            testId="settings-theme-radio"
+          />
           <SelectRow
-            label="언어"
-            description="추후 영어/한국어 전환을 지원합니다."
+            label={t('settings.language')}
+            description={t('settings.language.help')}
             value={language}
             options={[
-              { value: 'ko', label: '한국어' },
-              { value: 'en', label: 'English (예정)' },
+              { value: 'ko', label: t('settings.language.ko') },
+              { value: 'en', label: t('settings.language.en') },
             ]}
             onChange={(v) => setOne('language', v as UiSettings['language'])}
             testId="settings-select-language"
@@ -89,10 +116,10 @@ export function SettingsPage() {
         <button
           type="button"
           onClick={() => reset()}
-          className="rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 transition-colors hover:border-smsg-500 hover:text-smsg-900"
+          className="min-h-[44px] rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 transition-colors hover:border-smsg-500 hover:text-smsg-900 dark:border-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
           data-testid="settings-reset"
         >
-          기본값으로 되돌리기
+          {t('settings.reset')}
         </button>
       </div>
     </section>
@@ -111,8 +138,8 @@ function ToggleRow({ label, description, checked, onChange, testId }: ToggleRowP
   return (
     <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
       <div className="min-w-0">
-        <dt className="text-sm font-medium text-smsg-900">{label}</dt>
-        <dd className="mt-0.5 text-xs text-gray-500">{description}</dd>
+        <dt className="text-sm font-medium text-smsg-900 dark:text-gray-100">{label}</dt>
+        <dd className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{description}</dd>
       </div>
       <button
         type="button"
@@ -121,13 +148,13 @@ function ToggleRow({ label, description, checked, onChange, testId }: ToggleRowP
         aria-label={label}
         onClick={() => onChange(!checked)}
         data-testid={testId}
-        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-fast ${
-          checked ? 'bg-smsg-700' : 'bg-gray-300'
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-fast ${
+          checked ? 'bg-smsg-700' : 'bg-gray-300 dark:bg-gray-700'
         }`}
       >
         <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-fast ${
-            checked ? 'translate-x-4' : 'translate-x-0.5'
+          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-fast ${
+            checked ? 'translate-x-5' : 'translate-x-0.5'
           }`}
         />
       </button>
@@ -148,15 +175,15 @@ function SelectRow({ label, description, value, options, onChange, testId }: Sel
   return (
     <div className="flex items-center justify-between gap-4 py-3">
       <div className="min-w-0">
-        <dt className="text-sm font-medium text-smsg-900">{label}</dt>
-        <dd className="mt-0.5 text-xs text-gray-500">{description}</dd>
+        <dt className="text-sm font-medium text-smsg-900 dark:text-gray-100">{label}</dt>
+        <dd className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{description}</dd>
       </div>
       <select
         aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         data-testid={testId}
-        className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-800 focus-visible:outline-none focus-visible:shadow-focus"
+        className="min-h-[40px] rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-800 focus-visible:outline-none focus-visible:shadow-focus dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -164,6 +191,53 @@ function SelectRow({ label, description, value, options, onChange, testId }: Sel
           </option>
         ))}
       </select>
+    </div>
+  )
+}
+
+interface ThemeRadioRowProps {
+  label: string
+  description: string
+  value: ThemeMode
+  options: { value: ThemeMode; label: string }[]
+  onChange: (v: ThemeMode) => void
+  testId?: string
+}
+
+function ThemeRadioRow({ label, description, value, options, onChange, testId }: ThemeRadioRowProps) {
+  return (
+    <div className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <dt className="text-sm font-medium text-smsg-900 dark:text-gray-100">{label}</dt>
+        <dd className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{description}</dd>
+      </div>
+      <div
+        role="radiogroup"
+        aria-label={label}
+        data-testid={testId}
+        className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 p-0.5 text-xs dark:border-gray-700 dark:bg-gray-800"
+      >
+        {options.map((o) => {
+          const active = o.value === value
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              data-testid={`settings-theme-${o.value}`}
+              onClick={() => onChange(o.value)}
+              className={`min-h-[36px] rounded-full px-3 py-1 transition-colors ${
+                active
+                  ? 'bg-smsg-700 text-white shadow-sm'
+                  : 'text-gray-700 hover:text-smsg-900 dark:text-gray-300 dark:hover:text-gray-100'
+              }`}
+            >
+              {o.label}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

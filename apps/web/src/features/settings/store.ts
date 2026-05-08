@@ -6,12 +6,21 @@ import { create } from 'zustand'
  * "알림 / 자동저장 / 코드블록 fade" are wired into nothing yet. They round-trip
  * through localStorage so the toggles in /settings persist across reloads.
  */
+/** Tri-state theme preference. `system` follows `prefers-color-scheme`. */
+export type ThemeMode = 'light' | 'dark' | 'system'
+
 export interface UiSettings {
   notifications: boolean
   autoSave: boolean
   codeFade: boolean
+  /**
+   * Legacy boolean toggle. Kept for back-compat with persisted state and the
+   * Quick Settings modal. `themeMode` is the canonical source of truth.
+   */
   darkMode: boolean
-  /** Reserved for future i18n. */
+  /** 'light' | 'dark' | 'system' — applied by the ThemeProvider. */
+  themeMode: ThemeMode
+  /** UI language. ko default, en secondary. */
   language: 'ko' | 'en'
 }
 
@@ -28,6 +37,7 @@ const DEFAULTS: UiSettings = {
   autoSave: true,
   codeFade: true,
   darkMode: false,
+  themeMode: 'system',
   language: 'ko',
 }
 
@@ -69,6 +79,6 @@ export const useSettingsStore = create<UiSettings & SettingsActions>((set, get) 
 
 function stripActions(o: UiSettings & Partial<SettingsActions>): UiSettings {
   // Avoid persisting function references.
-  const { notifications, autoSave, codeFade, darkMode, language } = o
-  return { notifications, autoSave, codeFade, darkMode, language }
+  const { notifications, autoSave, codeFade, darkMode, themeMode, language } = o
+  return { notifications, autoSave, codeFade, darkMode, themeMode, language }
 }

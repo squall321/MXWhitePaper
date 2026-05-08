@@ -215,13 +215,13 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
         role="dialog"
         aria-modal="true"
         aria-label="명령 팔레트"
-        className="fixed inset-0 z-modal flex items-start justify-center bg-black/40 px-4 pt-[10vh] anim-fade backdrop-blur-sm"
+        className="fixed inset-0 z-modal flex items-end justify-center bg-black/40 anim-fade backdrop-blur-sm sm:items-start sm:px-4 sm:pt-[10vh] dark:bg-black/60"
         onMouseDown={(e) => {
           if (e.target === e.currentTarget) onClose()
         }}
       >
-        <div className="w-full max-w-xl overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg animate-slide-up">
-          <div className="flex items-center gap-2 border-b border-gray-200 px-3 py-3">
+        <div className="w-full max-w-xl overflow-hidden rounded-t-xl border border-gray-200 bg-white shadow-lg animate-slide-up sm:rounded-xl dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100">
+          <div className="flex items-center gap-2 border-b border-gray-200 px-3 py-3 dark:border-gray-800">
             <SearchIcon className="text-gray-400" />
             <input
               ref={inputRef}
@@ -231,7 +231,7 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
               placeholder={
                 tab === 'commands' ? '명령어를 입력하세요...' : '문서, 위젯, 명령어를 검색하세요...'
               }
-              className="min-w-0 flex-1 bg-transparent px-1 py-1 text-base text-gray-900 placeholder-gray-400 outline-none"
+              className="min-w-0 flex-1 bg-transparent px-1 py-1 text-base text-gray-900 placeholder-gray-400 outline-none dark:text-gray-100 dark:placeholder-gray-500"
               role="combobox"
               aria-expanded
               aria-controls={listboxId}
@@ -239,12 +239,12 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
               aria-autocomplete="list"
               data-testid="palette-input"
             />
-            <kbd className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+            <kbd className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
               Esc
             </kbd>
           </div>
 
-          <div className="flex border-b border-gray-200 text-xs" role="tablist" aria-label="검색 영역">
+          <div className="flex border-b border-gray-200 text-xs dark:border-gray-800" role="tablist" aria-label="검색 영역">
             <TabBtn
               active={tab === 'docs'}
               onClick={() => setTab('docs')}
@@ -309,7 +309,7 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
             )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
+          <div className="safe-bottom flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-400">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="flex items-center gap-1"><Hint>↑↓</Hint> 이동</span>
               <span className="flex items-center gap-1"><Hint>Enter</Hint> 선택</span>

@@ -7,6 +7,7 @@ import { AuthGuard } from './components/AuthGuard'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { RouteBoundary } from './components/RouteBoundary'
 import { BootBanner } from './components/BootBanner'
+import { ThemeProvider } from './features/theme/ThemeProvider'
 import { bootstrapAuth } from './bootstrap'
 import './styles/tokens.css'
 
@@ -57,6 +58,12 @@ const OrgsPage = lazyLogged('Orgs', () =>
 )
 const AdminOrgsPage = lazyLogged('AdminOrgs', () =>
   import('./pages/AdminOrgs').then((m) => ({ default: m.AdminOrgsPage })),
+)
+const AdminDashboardPage = lazyLogged('AdminDashboard', () =>
+  import('./pages/AdminDashboard').then((m) => ({ default: m.AdminDashboardPage })),
+)
+const AnalyticsPage = lazyLogged('Analytics', () =>
+  import('./pages/Analytics').then((m) => ({ default: m.AnalyticsPage })),
 )
 const RecentPage = lazyLogged('Recent', () =>
   import('./pages/Recent').then((m) => ({ default: m.RecentPage })),
@@ -157,6 +164,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
+        <ThemeProvider>
         <BrowserRouter>
           <BootBanner />
           <Suspense fallback={<PageFallback />}>
@@ -189,6 +197,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="docs/:slug" element={<Boundaried name="docs/:slug"><DocumentReaderPage /></Boundaried>} />
                 <Route path="orgs" element={<Boundaried name="orgs"><OrgsPage /></Boundaried>} />
                 <Route path="admin/orgs" element={<Boundaried name="admin/orgs"><AdminOrgsPage /></Boundaried>} />
+                <Route path="admin/dashboard" element={<Boundaried name="admin/dashboard"><AdminDashboardPage /></Boundaried>} />
+                <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
                 <Route path="settings" element={<Boundaried name="settings"><SettingsPage /></Boundaried>} />
                 <Route path="tags/:tag" element={<Boundaried name="tags"><TagPage mode="tag" /></Boundaried>} />
@@ -198,6 +208,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             </Routes>
           </Suspense>
         </BrowserRouter>
+        </ThemeProvider>
       </ErrorBoundary>
     </QueryClientProvider>
   </React.StrictMode>,

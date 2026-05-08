@@ -30,8 +30,9 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
       ref={ref}
       className={cn(
         'rounded-lg border border-gray-200 bg-white shadow-sm',
+        'dark:border-gray-800 dark:bg-gray-900',
         'transition-all duration-base ease-out-soft',
-        hover && 'hover:-translate-y-0.5 hover:border-smsg-300 hover:shadow-md',
+        hover && 'hover:-translate-y-0.5 hover:border-smsg-300 hover:shadow-md dark:hover:border-smsg-300/50',
         padKey && PAD_CLS[padKey],
         className,
       )}

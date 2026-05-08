@@ -144,7 +144,7 @@ export function Drawer({
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}
-      className="fixed inset-0 z-drawer bg-black/40 anim-fade"
+      className="fixed inset-0 z-drawer bg-black/40 anim-fade dark:bg-black/60"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
@@ -153,7 +153,7 @@ export function Drawer({
         ref={panelRef}
         tabIndex={-1}
         className={cn(
-          'absolute bg-white shadow-lg overflow-y-auto outline-none',
+          'absolute bg-white shadow-lg overflow-y-auto outline-none dark:bg-gray-900 dark:text-gray-100',
           panelPos,
           className,
         )}

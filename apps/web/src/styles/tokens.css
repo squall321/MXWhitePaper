@@ -75,6 +75,52 @@
   --layout-toc-w: 280px;
   --layout-tablet-sidebar-w: 240px;
   --header-h: 3.5rem;
+
+  /* Component surfaces — used by raw CSS in this file. Tailwind classes
+     should prefer Tailwind tokens; these are for editor-surface / wiki bits. */
+  --smsg-surface: #FFFFFF;
+  --smsg-surface-muted: var(--smsg-gray-050);
+  --smsg-text: var(--smsg-gray-900);
+  --smsg-border: var(--smsg-gray-200);
+}
+
+/* ── Dark mode tokens ──────────────────────────────────────────────────
+   Activated by either `data-theme="dark"` (set by ThemeProvider) or the
+   Tailwind `.dark` class (so `dark:` utilities work). Brand blues are
+   slightly lifted for AA contrast on a dark canvas; neutrals invert. */
+:root.dark,
+[data-theme='dark'] {
+  /* Slightly brighter brand for dark surfaces so 4.5:1 contrast holds. */
+  --smsg-blue-900: #C7D2FE;
+  --smsg-blue-700: #93A5FF;
+  --smsg-blue-500: #6E8BFF;
+  --smsg-blue-300: #3D5FE0;
+  --smsg-blue-100: #1F2A55;
+  --smsg-blue-050: #161B36;
+
+  /* Inverted neutrals — gray-900 becomes near-white text; gray-050 becomes
+     deepest panel. */
+  --smsg-gray-900: #E5E7EB;
+  --smsg-gray-700: #C7CCD3;
+  --smsg-gray-500: #9CA3AF;
+  --smsg-gray-300: #4B5563;
+  --smsg-gray-200: #374151;
+  --smsg-gray-100: #1F2937;
+  --smsg-gray-050: #111827;
+
+  --smsg-bg: #0B1220;
+  --smsg-surface: #111827;
+  --smsg-surface-muted: #0F172A;
+  --smsg-text: #E5E7EB;
+  --smsg-border: #243044;
+
+  --smsg-link: var(--smsg-blue-500);
+  --smsg-link-missing: #FCA5A5;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, .45);
+  --shadow-lg: 0 10px 32px rgba(0, 0, 0, .55);
+  --shadow-focus: 0 0 0 3px rgba(110, 139, 255, .35);
 }
 
 /* basic typography */
@@ -150,8 +196,17 @@ a.wiki-missing { color: var(--smsg-link-missing); }
   font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
   font-size: var(--text-base);
   line-height: var(--leading-relaxed);
-  color: var(--smsg-gray-900);
+  color: var(--smsg-text);
   padding: 12px 16px;
+}
+
+/* iOS / Android: keep a comfortable bottom inset so the floating "측면 패널"
+   button and the QuickInsertBar don't sit under the home indicator. */
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.5rem);
+}
+.safe-bottom-lg {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
 }
 
 /* Side menu (drag handle) -- Samsung Blue accent on hover. */

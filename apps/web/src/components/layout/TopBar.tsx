@@ -7,6 +7,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { Badge } from '@/components/ui/Badge'
 import { NetworkStatusPill } from '@/components/NetworkStatusPill'
 import { NotificationBell } from '@/features/notifications/components/NotificationBell'
+import { useLocale } from '@/lib/i18n'
 
 interface TopBarProps {
   onOpenPalette?: (q?: string) => void
@@ -37,10 +38,12 @@ export function TopBar({
   onOpenRecent,
   onOpenHelp,
 }: TopBarProps) {
+  const { t } = useLocale()
   const user = useAuthStore((s) => s.user)
   const role = user?.role ?? ''
   const canWrite = !!user && ['editor', 'owner', 'admin'].includes(role)
   const isAdmin = !!user && role === 'admin'
+  const canSeeAnalytics = !!user && ['owner', 'admin'].includes(role)
   const location = useLocation()
 
   const [overflowOpen, setOverflowOpen] = useState(false)
@@ -78,7 +81,7 @@ export function TopBar({
       <div className="flex h-[var(--header-h)] items-center gap-2 px-3 sm:gap-4 sm:px-6">
         {/* Mobile hamburger */}
         <IconButton
-          aria-label="메뉴 열기"
+          aria-label={t('topbar.menu.label')}
           data-testid="topbar-nav"
           variant="ghost"
           size="md"
@@ -108,7 +111,7 @@ export function TopBar({
         <nav className="ml-auto flex items-center gap-1.5 text-sm sm:gap-3" aria-label="주요 메뉴">
           {/* Mobile search button */}
           <IconButton
-            aria-label="검색"
+            aria-label={t('topbar.search.label')}
             variant="ghost"
             size="md"
             onClick={() => onOpenPalette?.()}
@@ -122,18 +125,26 @@ export function TopBar({
 
           {/* Secondary group — visible on lg+, collapsed into overflow on md/sm */}
           <div className="hidden items-center gap-1.5 lg:flex">
-            <NavLinkPill to="/orgs" label="조직" active={isActive('/orgs')} />
-            <NavLinkPill to="/recent" label="최근" active={isActive('/recent')} />
+            <NavLinkPill to="/orgs" label={t('topbar.org')} active={isActive('/orgs')} />
+            <NavLinkPill to="/recent" label={t('topbar.recent')} active={isActive('/recent')} />
+            {canSeeAnalytics && (
+              <NavLinkPill
+                to="/analytics"
+                label="분석"
+                active={isActive('/analytics')}
+              />
+            )}
             {isAdmin && (
               <Link
-                to="/admin/orgs"
-                aria-current={isActive('/admin/orgs') ? 'page' : undefined}
+                to="/admin/dashboard"
+                data-testid="topbar-admin-dashboard"
+                aria-current={isActive('/admin/dashboard') ? 'page' : undefined}
                 className={`rounded-md border border-white/30 bg-white/10 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/20 hover:no-underline ${
-                  isActive('/admin/orgs') ? 'bg-white/25' : ''
+                  isActive('/admin/dashboard') ? 'bg-white/25' : ''
                 }`}
-                aria-label="조직 관리"
+                aria-label="관리자 대시보드"
               >
-                ⚙ 조직
+                ⚙ 관리
               </Link>
             )}
           </div>
@@ -144,12 +155,12 @@ export function TopBar({
               type="button"
               data-testid="topbar-overflow"
               onClick={() => setOverflowOpen((v) => !v)}
-              aria-label="더 보기"
+              aria-label={t('topbar.more')}
               aria-haspopup="menu"
               aria-expanded={overflowOpen}
               className="hidden h-9 items-center gap-1 rounded-md px-2 text-sm text-white/85 transition-colors hover:bg-white/15 hover:text-white sm:inline-flex"
             >
-              더 보기
+              {t('topbar.more')}
               <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                 <path d="M2.5 4.5l3.5 3.5 3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
@@ -157,7 +168,7 @@ export function TopBar({
             {overflowOpen && (
               <div
                 role="menu"
-                className="absolute right-0 top-11 z-popover w-48 overflow-hidden rounded-lg border border-gray-200 bg-white text-smsg-900 shadow-lg animate-slide-up"
+                className="absolute right-0 top-11 z-popover w-48 overflow-hidden rounded-lg border border-gray-200 bg-white text-smsg-900 shadow-lg animate-slide-up dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
               >
                 <OverflowItem
                   to="/orgs"
@@ -171,11 +182,19 @@ export function TopBar({
                   current={isActive('/recent')}
                   onClick={() => setOverflowOpen(false)}
                 />
+                {canSeeAnalytics && (
+                  <OverflowItem
+                    to="/analytics"
+                    label="분석"
+                    current={isActive('/analytics')}
+                    onClick={() => setOverflowOpen(false)}
+                  />
+                )}
                 {isAdmin && (
                   <OverflowItem
-                    to="/admin/orgs"
-                    label="⚙ 조직 관리"
-                    current={isActive('/admin/orgs')}
+                    to="/admin/dashboard"
+                    label="⚙ 관리자 대시보드"
+                    current={isActive('/admin/dashboard')}
                     onClick={() => setOverflowOpen(false)}
                   />
                 )}
@@ -189,10 +208,10 @@ export function TopBar({
               {/* Mobile: icon-only Link */}
               <Link
                 to="/docs/new"
-                aria-label="새 문서 작성"
+                aria-label={t('topbar.newDoc.aria')}
                 data-testid="topbar-new-doc"
                 aria-current={isActive('/docs/new') ? 'page' : undefined}
-                className="grid h-9 w-9 place-items-center rounded-md bg-white text-smsg-700 transition-all duration-base hover:bg-smsg-100 hover:no-underline hover:shadow-md focus-visible:outline-none focus-visible:shadow-focus sm:hidden"
+                className="grid h-11 w-11 place-items-center rounded-md bg-white text-smsg-700 transition-all duration-base hover:bg-smsg-100 hover:no-underline hover:shadow-md focus-visible:outline-none focus-visible:shadow-focus sm:hidden"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -205,7 +224,7 @@ export function TopBar({
                 aria-current={isActive('/docs/new') ? 'page' : undefined}
                 className="hidden rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-smsg-700 transition-all duration-base hover:-translate-y-px hover:bg-smsg-100 hover:no-underline hover:shadow-md sm:inline-flex"
               >
-                + 새 문서
+                {t('topbar.newDoc')}
               </Link>
             </>
           )}
@@ -228,7 +247,7 @@ export function TopBar({
               to="/login"
               className="rounded px-2 py-1 text-white/90 transition-colors hover:bg-white/15 hover:text-white"
             >
-              로그인
+              {t('topbar.login')}
             </Link>
           )}
         </nav>
@@ -288,6 +307,7 @@ function OverflowItem({
 }
 
 function SearchTrigger({ onOpenPalette }: { onOpenPalette?: (q?: string) => void }) {
+  const { t } = useLocale()
   const [value, setValue] = useState('')
   return (
     <div className="relative">
@@ -307,8 +327,8 @@ function SearchTrigger({ onOpenPalette }: { onOpenPalette?: (q?: string) => void
         onKeyDown={(e) => {
           if (e.key === 'Enter') onOpenPalette?.(value)
         }}
-        placeholder="검색 (⌘K)"
-        aria-label="검색"
+        placeholder={t('topbar.search.placeholder')}
+        aria-label={t('topbar.search.label')}
         className="w-full rounded-md bg-white/10 py-1.5 pl-8 pr-12 text-sm text-white placeholder-white/60 outline-none transition-colors duration-fast hover:bg-white/15 focus:bg-white/20 focus:shadow-focus"
       />
       <kbd
@@ -334,6 +354,7 @@ function ProfileMenu({
   onOpenRecent,
   onOpenHelp,
 }: ProfileMenuProps) {
+  const { t } = useLocale()
   const user = useAuthStore((s) => s.user)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -369,8 +390,8 @@ function ProfileMenu({
         type="button"
         data-testid="topbar-profile"
         onClick={() => setOpen((v) => !v)}
-        className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-sm font-semibold transition-colors hover:bg-white/25 focus-visible:outline-none focus-visible:shadow-focus"
-        aria-label="프로필 메뉴"
+        className="grid h-11 w-11 place-items-center rounded-full bg-white/15 text-sm font-semibold transition-colors hover:bg-white/25 focus-visible:outline-none focus-visible:shadow-focus sm:h-9 sm:w-9"
+        aria-label={t('topbar.profile.label')}
         aria-haspopup="menu"
         aria-expanded={open}
       >
