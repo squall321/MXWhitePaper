@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import { CommandPalette } from './features/search/components/CommandPalette'
 import { ToastProvider } from './components/ui/Toast'
+import { useNotificationsStore } from './features/notifications/store'
 
 /**
  * Outlet context shape. Pages can call `setRightRail(node)` / `setLeftRail(node)`
@@ -52,6 +53,24 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Boot greeting — only fires once per browser, never re-introduces if the
+  // user已 cleared the notifications.
+  useEffect(() => {
+    const KEY = 'mxwp.notifications.welcomed'
+    if (typeof window === 'undefined') return
+    try {
+      if (window.localStorage.getItem(KEY)) return
+      window.localStorage.setItem(KEY, '1')
+    } catch {
+      return
+    }
+    useNotificationsStore.getState().push({
+      category: 'system',
+      message: 'MX White Paper 에 오신 것을 환영합니다',
+      detail: '⌘K로 어디든 이동할 수 있어요.',
+    })
   }, [])
 
   return (

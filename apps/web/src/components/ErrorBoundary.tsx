@@ -1,9 +1,13 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
 
 interface Props {
   children: ReactNode
 }
+
+// 주의: 이 boundary 는 `<BrowserRouter>` 보다 *바깥*에 마운트된다 (main.tsx).
+// 따라서 fallback 안에서는 react-router 의 `<Link>` 를 쓸 수 없다.
+// 라우터 컨텍스트가 없어 `Cannot destructure 'basename' of useContext(...) === null`
+// 로 fallback 자체가 또 죽는다. 평범한 `<a href>` 만 사용한다.
 
 interface State {
   error: Error | null
@@ -79,20 +83,18 @@ export class ErrorBoundary extends Component<Props, State> {
               >
                 전체 초기화 (스토리지 비우기)
               </button>
-              <Link
-                to="/diag"
-                onClick={this.handleReset}
+              <a
+                href="/diag"
                 className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
               >
                 진단 페이지
-              </Link>
-              <Link
-                to="/"
-                onClick={this.handleReset}
+              </a>
+              <a
+                href="/"
                 className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
               >
                 홈으로
-              </Link>
+              </a>
             </div>
             <details className="mt-4" open={import.meta.env.DEV}>
               <summary className="cursor-pointer text-xs text-gray-500">

@@ -39,14 +39,34 @@ export function useWidgetRegistry() {
 }
 
 const RECENT_KEY = 'mxwp.recent_search'
-const RECENT_MAX = 5
+const RECENT_MAX = 20
 
+/** One row in the persisted search history. */
+export interface RecentSearchItem {
+  q: string
+  /** Epoch ms when the user last submitted this query. */
+  ts: number
+}
+
+/**
+ * Persistent search history. Keeps the last 20 unique queries with timestamps.
+ * Click → re-runs the query; "지우기" supported per row + bulk.
+ */
 export function useRecentSearches() {
-  const [items, setItems] = useState<string[]>(() => readRecent())
+  const [items, setItems] = useState<RecentSearchItem[]>(() => readRecent())
+
   const push = (q: string) => {
     const trimmed = q.trim()
     if (!trimmed) return
-    const next = [trimmed, ...items.filter((x) => x !== trimmed)].slice(0, RECENT_MAX)
+    const next = [
+      { q: trimmed, ts: Date.now() },
+      ...items.filter((it) => it.q !== trimmed),
+    ].slice(0, RECENT_MAX)
+    setItems(next)
+    writeRecent(next)
+  }
+  const remove = (q: string) => {
+    const next = items.filter((it) => it.q !== q)
     setItems(next)
     writeRecent(next)
   }
@@ -54,22 +74,38 @@ export function useRecentSearches() {
     setItems([])
     writeRecent([])
   }
-  return useMemo(() => ({ items, push, clear }), [items])
+  return useMemo(() => ({ items, push, remove, clear }), [items])
 }
 
-function readRecent(): string[] {
+function readRecent(): RecentSearchItem[] {
   if (typeof window === 'undefined') return []
   try {
     const raw = window.localStorage.getItem(RECENT_KEY)
     if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.slice(0, RECENT_MAX) : []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    // Tolerate the legacy shape (`string[]`) by upgrading on the fly so
+    // returning users don't lose their list.
+    const upgraded: RecentSearchItem[] = []
+    for (const row of parsed) {
+      if (typeof row === 'string' && row.trim()) {
+        upgraded.push({ q: row, ts: 0 })
+      } else if (
+        row &&
+        typeof row === 'object' &&
+        typeof (row as { q?: unknown }).q === 'string' &&
+        typeof (row as { ts?: unknown }).ts === 'number'
+      ) {
+        upgraded.push({ q: (row as { q: string }).q, ts: (row as { ts: number }).ts })
+      }
+    }
+    return upgraded.slice(0, RECENT_MAX)
   } catch {
     return []
   }
 }
 
-function writeRecent(items: string[]) {
+function writeRecent(items: RecentSearchItem[]) {
   if (typeof window === 'undefined') return
   try {
     window.localStorage.setItem(RECENT_KEY, JSON.stringify(items))
@@ -77,3 +113,6 @@ function writeRecent(items: string[]) {
     /* ignore */
   }
 }
+
+export const RECENT_SEARCH_STORAGE_KEY = RECENT_KEY
+export const RECENT_SEARCH_MAX = RECENT_MAX

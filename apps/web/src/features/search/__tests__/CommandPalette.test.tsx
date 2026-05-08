@@ -42,4 +42,39 @@ describe('<CommandPalette />', () => {
     // Footer hint references ⌘K shortcut help.
     expect(html).toContain('Esc')
   })
+
+  it('renders all three tabs (문서 / 위젯 / 명령)', () => {
+    const html = renderToStaticMarkup(
+      withProviders(<CommandPalette open onClose={() => {}} />),
+    )
+    expect(html).toContain('문서')
+    expect(html).toContain('위젯')
+    expect(html).toContain('명령')
+  })
+
+  it('exposes the combobox + listbox ARIA wiring', () => {
+    const html = renderToStaticMarkup(
+      withProviders(<CommandPalette open onClose={() => {}} />),
+    )
+    expect(html).toContain('role="combobox"')
+    expect(html).toContain('aria-expanded')
+    expect(html).toContain('aria-controls')
+    expect(html).toContain('aria-autocomplete="list"')
+  })
+
+  it('renders the keyboard hint footer with ⌘ Enter / Tab', () => {
+    const html = renderToStaticMarkup(
+      withProviders(<CommandPalette open onClose={() => {}} />),
+    )
+    expect(html).toContain('Tab')
+    expect(html).toContain('⌘ Enter')
+  })
+
+  it('renders the recent-search empty state when no query', () => {
+    const html = renderToStaticMarkup(
+      withProviders(<CommandPalette open onClose={() => {}} />),
+    )
+    // No recent items initially → placeholder copy.
+    expect(html).toContain('검색어를 입력하세요')
+  })
 })

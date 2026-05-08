@@ -6,6 +6,7 @@ import type { DocumentCard } from '@/features/document/api'
 import { Badge, Button, Card, Skeleton, EmptyState, ErrorState, cn } from '@/components/ui'
 import { RecentRail } from '@/features/recent/components/RecentRail'
 import { useRecentStore } from '@/features/recent/store'
+import { FavoriteStar } from '@/features/favorites/components/FavoriteStar'
 import { RailBoundary } from '@/components/blocks/BlockBoundary'
 import { SlowFetchBanner, useSlowFetch } from '@/lib/api/useSlowFetch'
 import { toApiError } from '@/lib/api/envelope'
@@ -193,7 +194,7 @@ function DocumentCardItem({ doc }: { doc: DocumentCard }) {
   const initial = (doc.title || doc.slug || '?').slice(0, 1).toUpperCase()
   const path = [doc.division, doc.team, doc.group, doc.part].filter(Boolean).join(' / ')
   return (
-    <li>
+    <li className="relative">
       <Link
         to={`/docs/${encodeURIComponent(doc.slug)}`}
         className="block h-full hover:no-underline"
@@ -227,6 +228,17 @@ function DocumentCardItem({ doc }: { doc: DocumentCard }) {
           </div>
         </Card>
       </Link>
+      {/* Top-right star, absolutely positioned so it doesn't expand the
+          card row. `stopPropagation` prevents the parent <Link> from
+          navigating when the user toggles the star. */}
+      <div className="absolute right-2 top-2">
+        <FavoriteStar
+          slug={doc.slug}
+          title={doc.title}
+          size="sm"
+          stopPropagation
+        />
+      </div>
     </li>
   )
 }

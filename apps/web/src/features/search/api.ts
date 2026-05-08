@@ -11,10 +11,16 @@ export interface DocSearchHit {
     title?: string
     summary?: string
     text?: string
+    tags?: string[]
   }
   /** Free-form snippet excerpted from body. */
   snippet?: string
   score?: number
+  /** Optional facet fields surfaced by the BE (best-effort filtering). */
+  team?: string
+  category?: string
+  confidentiality?: 'public' | 'internal' | 'restricted'
+  tags?: string[]
 }
 
 /**

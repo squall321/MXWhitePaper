@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useConnectionStore, deriveStatus } from '@/features/auth/connectionStore'
 
+// 주의: Zustand v5 의 기본 selector 비교는 Object.is.
+// `(s) => ({ ...slice })` 처럼 매 렌더에서 새 객체를 만들어 반환하면
+// 항상 prev !== next 로 판정되어 무한 리렌더 → "Maximum update depth"
+// → 흰 화면. 따라서 아래에서는 반드시 *스칼라* 필드만 개별 selector 로 읽는다.
+
 /**
  * Compact connection-status pill rendered inside the TopBar. Three states:
  *
@@ -17,11 +22,9 @@ export function NetworkStatusPill() {
   const [browserOnline, setBrowserOnline] = useState<boolean>(() =>
     typeof navigator === 'undefined' ? true : navigator.onLine,
   )
-  const conn = useConnectionStore((s) => ({
-    lastSuccessAt: s.lastSuccessAt,
-    lastFailureAt: s.lastFailureAt,
-    consecutiveFailures: s.consecutiveFailures,
-  }))
+  const lastSuccessAt = useConnectionStore((s) => s.lastSuccessAt)
+  const lastFailureAt = useConnectionStore((s) => s.lastFailureAt)
+  const consecutiveFailures = useConnectionStore((s) => s.consecutiveFailures)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -35,7 +38,9 @@ export function NetworkStatusPill() {
     }
   }, [])
 
-  const status = !browserOnline ? 'offline' : deriveStatus(conn)
+  const status = !browserOnline
+    ? 'offline'
+    : deriveStatus({ lastSuccessAt, lastFailureAt, consecutiveFailures })
   if (status === 'online') return null
 
   const isOffline = status === 'offline'

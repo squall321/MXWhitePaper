@@ -6,8 +6,31 @@ import { App } from './App'
 import { AuthGuard } from './components/AuthGuard'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { RouteBoundary } from './components/RouteBoundary'
+import { BootBanner } from './components/BootBanner'
 import { bootstrapAuth } from './bootstrap'
 import './styles/tokens.css'
+
+/**
+ * `lazy()` 로 코드 스플릿된 청크는 네트워크/배포 문제로 로드 실패 시
+ * 그냥 사라져 흰 화면이 된다. 사용자가 무엇이 안 떴는지 알 수 있도록
+ * 실패 청크의 이름을 콘솔에 남긴다.
+ */
+// `lazy` 호출에 청크 로드 실패 로깅을 끼워넣는 헬퍼. lazy 의 시그니처가
+// `ComponentType<any>` 를 요구해서, 호출처에서 prop 타입(예: TagPage 의
+// `mode`)이 살아 있도록 lazy 의 반환을 동일 타입으로 단언한다.
+function lazyLogged<T extends React.ComponentType<never>>(
+  name: string,
+  factory: () => Promise<{ default: T }>,
+): T {
+  const wrapped = lazy(() =>
+    factory().catch((err: unknown) => {
+      // eslint-disable-next-line no-console
+      console.error(`[mxwp] lazy chunk failed: ${name}`, err)
+      throw err
+    }) as unknown as Promise<{ default: React.ComponentType<unknown> }>,
+  )
+  return wrapped as unknown as T
+}
 
 /**
  * Wrap a lazy route in a `<RouteBoundary>` so a render error inside that
@@ -20,26 +43,50 @@ function Boundaried({ name, children }: { name: string; children: React.ReactNod
 
 // Route-level code-split: heavy pages (editor/reader/new doc) load on demand
 // so the initial bundle stays small. Login is also lazy because it's a leaf.
-const HomePage = lazy(() => import('./pages/Home').then((m) => ({ default: m.HomePage })))
-const DocumentReaderPage = lazy(() =>
+const HomePage = lazyLogged('Home', () =>
+  import('./pages/Home').then((m) => ({ default: m.HomePage })),
+)
+const DocumentReaderPage = lazyLogged('DocumentReader', () =>
   import('./pages/DocumentReader').then((m) => ({ default: m.DocumentReaderPage })),
 )
-const DocumentNewPage = lazy(() =>
+const DocumentNewPage = lazyLogged('DocumentNew', () =>
   import('./pages/DocumentNew').then((m) => ({ default: m.DocumentNewPage })),
 )
-const OrgsPage = lazy(() => import('./pages/Orgs').then((m) => ({ default: m.OrgsPage })))
-const AdminOrgsPage = lazy(() =>
+const OrgsPage = lazyLogged('Orgs', () =>
+  import('./pages/Orgs').then((m) => ({ default: m.OrgsPage })),
+)
+const AdminOrgsPage = lazyLogged('AdminOrgs', () =>
   import('./pages/AdminOrgs').then((m) => ({ default: m.AdminOrgsPage })),
 )
-const RecentPage = lazy(() => import('./pages/Recent').then((m) => ({ default: m.RecentPage })))
-const LoginPage = lazy(() => import('./pages/Login').then((m) => ({ default: m.LoginPage })))
-const NotFoundPage = lazy(() =>
+const RecentPage = lazyLogged('Recent', () =>
+  import('./pages/Recent').then((m) => ({ default: m.RecentPage })),
+)
+const SettingsPage = lazyLogged('Settings', () =>
+  import('./pages/Settings').then((m) => ({ default: m.SettingsPage })),
+)
+// `TagPage` accepts a `mode` prop, which doesn't fit `lazyLogged`'s
+// component-with-no-props generic. Use `React.lazy` directly + manual log.
+const TagPage = lazy(() =>
+  import('./pages/TagPage')
+    .then((m) => ({ default: m.TagPage }))
+    .catch((err: unknown) => {
+      // eslint-disable-next-line no-console
+      console.error('[mxwp] lazy chunk failed: TagPage', err)
+      throw err
+    }),
+)
+const LoginPage = lazyLogged('Login', () =>
+  import('./pages/Login').then((m) => ({ default: m.LoginPage })),
+)
+const NotFoundPage = lazyLogged('NotFound', () =>
   import('./pages/NotFound').then((m) => ({ default: m.NotFoundPage })),
 )
-const PresentationPage = lazy(() =>
+const PresentationPage = lazyLogged('Presentation', () =>
   import('./pages/Presentation').then((m) => ({ default: m.PresentationPage })),
 )
-const DiagPage = lazy(() => import('./pages/Diag').then((m) => ({ default: m.DiagPage })))
+const DiagPage = lazyLogged('Diag', () =>
+  import('./pages/Diag').then((m) => ({ default: m.DiagPage })),
+)
 
 function PageFallback() {
   return (
@@ -73,8 +120,35 @@ function maybeResetAndRedirect(): boolean {
 }
 
 if (!maybeResetAndRedirect()) {
-  bootstrapAuth()
-  mountReact()
+  try {
+    bootstrapAuth()
+    mountReact()
+  } catch (err) {
+    // 마운트 자체가 실패하면 React 가 아직 안 깔린 상태이므로 평범한
+    // HTML 로 진단 메시지를 박아 사용자에게 흰 화면이 아닌 "원인 + /diag
+    // 링크" 를 보여 준다.
+    // eslint-disable-next-line no-console
+    console.error('[mxwp] mount failed', err)
+    const root = document.getElementById('root')
+    const e = err as Error
+    if (root) {
+      root.innerHTML =
+        '<div style="font:13px/1.5 system-ui;padding:24px;max-width:640px;margin:0 auto">' +
+        '<h1 style="color:#b91c1c">화면을 그리지 못했습니다 (mount failed)</h1>' +
+        `<pre style="white-space:pre-wrap;background:#fef2f2;border:1px solid #fecaca;padding:8px;border-radius:6px">${escapeHtml(e?.message ?? String(err))}\n\n${escapeHtml(e?.stack ?? '')}</pre>` +
+        '<p>· <a href="/diag">진단 페이지 열기</a></p>' +
+        '<p>· <a href="/?reset">스토리지 비우고 새로고침</a></p>' +
+        '</div>'
+    }
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 function mountReact() {
@@ -84,6 +158,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <BrowserRouter>
+          <BootBanner />
           <Suspense fallback={<PageFallback />}>
             <Routes>
               <Route
@@ -115,6 +190,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="orgs" element={<Boundaried name="orgs"><OrgsPage /></Boundaried>} />
                 <Route path="admin/orgs" element={<Boundaried name="admin/orgs"><AdminOrgsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
+                <Route path="settings" element={<Boundaried name="settings"><SettingsPage /></Boundaried>} />
+                <Route path="tags/:tag" element={<Boundaried name="tags"><TagPage mode="tag" /></Boundaried>} />
+                <Route path="category/:cat" element={<Boundaried name="category"><TagPage mode="category" /></Boundaried>} />
                 <Route path="*" element={<Boundaried name="not-found"><NotFoundPage /></Boundaried>} />
               </Route>
             </Routes>

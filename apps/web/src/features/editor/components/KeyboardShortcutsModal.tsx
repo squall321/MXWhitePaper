@@ -29,6 +29,7 @@ const SECTIONS: { title: string; rows: ShortcutRow[] }[] = [
       { keys: '⌘ ↑ / ⌘ ↓', desc: '블록 위/아래로 이동' },
       { keys: '[[', desc: '문서 위키링크 자동완성' },
       { keys: '@', desc: '용어 참조 자동완성' },
+      { keys: ':emoji', desc: '이모지 자동완성' },
     ],
   },
   {
@@ -42,11 +43,21 @@ const SECTIONS: { title: string; rows: ShortcutRow[] }[] = [
     ],
   },
   {
-    title: '이동',
+    title: '이동 (G 코드)',
     rows: [
-      { keys: '⌘ J', desc: '명령 팔레트' },
-      { keys: '⌘ K', desc: '검색' },
-      { keys: 'g h', desc: '홈으로 이동' },
+      { keys: '⌘ K', desc: '검색 / 명령 팔레트' },
+      { keys: 'G H', desc: '홈으로 이동' },
+      { keys: 'G O', desc: '조직 페이지' },
+      { keys: 'G R', desc: '최근 본 문서' },
+      { keys: 'G N', desc: '새 문서 작성' },
+      { keys: 'G S', desc: '환경설정' },
+    ],
+  },
+  {
+    title: '아티클',
+    rows: [
+      { keys: 'J / K', desc: '다음 / 이전 섹션' },
+      { keys: '★', desc: '즐겨찾기 토글' },
     ],
   },
 ]

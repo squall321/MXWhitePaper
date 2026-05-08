@@ -5,6 +5,7 @@ import {
   type ImageRecord,
 } from './api'
 import { hashFile } from './sha256'
+import { pushNotification } from '@/features/notifications/store'
 
 export interface UploadImageOptions {
   /**
@@ -51,6 +52,11 @@ export async function uploadImage(
     if (debug) console.debug('[uploadImage] dedupe hit', init.image.image_id)
     onProgress?.('uploading', 100)
     onProgress?.('finalizing', 100)
+    pushNotification({
+      category: 'activity',
+      message: '이미지 업로드 완료',
+      detail: file.name,
+    })
     return init.image
   }
 
@@ -66,5 +72,10 @@ export async function uploadImage(
   onProgress?.('finalizing', 0)
   const record = await finalizeImageUpload(init.uploadId)
   onProgress?.('finalizing', 100)
+  pushNotification({
+    category: 'activity',
+    message: '이미지 업로드 완료',
+    detail: file.name,
+  })
   return record
 }

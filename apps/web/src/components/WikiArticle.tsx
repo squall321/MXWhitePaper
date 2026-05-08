@@ -3,6 +3,7 @@ import type { DocumentMetaEnvelope, DocumentRow } from '@/features/document/api'
 import { Infobox } from './Infobox'
 import { SectionRenderer } from './SectionRenderer'
 import { Badge } from '@/components/ui'
+import { FavoriteStar } from '@/features/favorites/components/FavoriteStar'
 
 interface WikiArticleProps {
   document: DocumentJSONV10
@@ -42,9 +43,12 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
             <Badge key={t} tone="muted" size="sm">#{t}</Badge>
           ))}
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-smsg-900 sm:text-4xl">
-          {document.title}
-        </h1>
+        <div className="flex items-start gap-2">
+          <h1 className="flex-1 text-3xl font-semibold tracking-tight text-smsg-900 sm:text-4xl">
+            {document.title}
+          </h1>
+          <FavoriteStar slug={document.slug} title={document.title} />
+        </div>
         {document.summary && (
           <p className="text-base leading-relaxed text-gray-700">{document.summary}</p>
         )}

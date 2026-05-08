@@ -1,11 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   useDocumentSearch,
   useRecentSearches,
   useWidgetRegistry,
+  type RecentSearchItem,
 } from '../hooks/useSearch'
 import type { DocSearchHit, WidgetRegistryEntry } from '../api'
+import { useAuthStore } from '@/features/auth/store'
+import { KeyboardShortcutsModal } from '@/features/editor/components/KeyboardShortcutsModal'
 import { cn } from '@/components/ui/cn'
 
 interface CommandPaletteProps {
@@ -15,25 +26,57 @@ interface CommandPaletteProps {
   initialQuery?: string
 }
 
-type Tab = 'docs' | 'widgets'
+type Tab = 'docs' | 'widgets' | 'commands'
+
+/** Filter chip state for the 문서 tab. */
+interface DocFilters {
+  team: string | null
+  category: string | null
+  confidentiality: 'public' | 'internal' | 'restricted' | null
+}
+
+const EMPTY_FILTERS: DocFilters = { team: null, category: null, confidentiality: null }
 
 /**
- * ⌘K command palette — keyboard-first, Mac-style. Two tabs:
- *   - 문서: full-text search via `/search`, debounced 200ms
- *   - 위젯: lists `/widgets/registry`, filtered client-side by name+desc
+ * ⌘K command palette — keyboard-first, Mac-style. Three tabs:
+ *   - 문서: full-text search via `/search` (debounced 200ms),
+ *           grouped by 제목/본문/태그 매칭, filter chips for 팀/카테고리/기밀도.
+ *   - 위젯: lists `/widgets/registry`, filtered client-side.
+ *   - 명령: app-level commands (새 문서, 환경설정, 도움말, …).
  *
- * ESC closes. Click on a hit navigates to /docs/<slug>.
+ * Keyboard:
+ *   - ↑↓: navigate through the merged list of options
+ *   - Enter: open the focused option
+ *   - ⌘ Enter / Ctrl Enter: open in a new tab (docs only)
+ *   - Tab / ⇧ Tab: switch tabs
+ *   - Esc: close
  */
 export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPaletteProps) {
   const [tab, setTab] = useState<Tab>('docs')
   const [q, setQ] = useState(initialQuery)
+  const [filters, setFilters] = useState<DocFilters>(EMPTY_FILTERS)
+  const [activeIdx, setActiveIdx] = useState(0)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const listboxId = useId()
   const navigate = useNavigate()
+  const location = useLocation()
   const recent = useRecentSearches()
+  const user = useAuthStore((s) => s.user)
+  const isAdmin = !!user && user.role === 'admin'
 
-  const { data: docHits = [], isFetching: docsFetching } = useDocumentSearch(q)
+  const { data: docHitsRaw = [], isFetching: docsFetching } = useDocumentSearch(q)
+  const docHits = useMemo(
+    () => filterDocs(docHitsRaw as DocSearchHit[], filters),
+    [docHitsRaw, filters],
+  )
+  const grouped = useMemo(() => groupHits(q, docHits), [q, docHits])
+  const flatDocs = useMemo(
+    () => [...grouped.title, ...grouped.body, ...grouped.tag],
+    [grouped],
+  )
+
   const { data: widgetList = [] } = useWidgetRegistry()
-
   const widgetMatches = useMemo(() => {
     const needle = q.trim().toLowerCase()
     if (!needle) return widgetList
@@ -45,17 +88,72 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
     )
   }, [widgetList, q])
 
+  const commands = useMemo(
+    () => buildCommands({ canAdmin: isAdmin, location: location.pathname }),
+    [isAdmin, location.pathname],
+  )
+  const commandMatches = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    if (!needle) return commands
+    return commands.filter(
+      (c) =>
+        c.label.toLowerCase().includes(needle) ||
+        (c.hint ?? '').toLowerCase().includes(needle),
+    )
+  }, [commands, q])
+
+  // The list the keyboard cursor walks. Recomputed when the tab/data shifts.
+  const optionCount =
+    tab === 'docs' ? flatDocs.length : tab === 'widgets' ? widgetMatches.length : commandMatches.length
+
+  const goDoc = useCallback(
+    (hit: DocSearchHit, newTab = false) => {
+      recent.push(q)
+      const url = `/docs/${encodeURIComponent(hit.slug)}`
+      if (newTab) {
+        try {
+          window.open(url, '_blank', 'noopener,noreferrer')
+        } catch {
+          /* ignore */
+        }
+        onClose()
+        return
+      }
+      onClose()
+      navigate(url)
+    },
+    [q, recent, onClose, navigate],
+  )
+
+  const runCommand = useCallback(
+    (cmd: CommandItem) => {
+      onClose()
+      cmd.run({ navigate, openShortcuts: () => setShortcutsOpen(true) })
+    },
+    [navigate, onClose],
+  )
+
   // Reset on open.
   useEffect(() => {
     if (open) {
       setQ(initialQuery)
       setTab('docs')
+      setFilters(EMPTY_FILTERS)
+      setActiveIdx(0)
       const t = window.setTimeout(() => inputRef.current?.focus(), 0)
       return () => window.clearTimeout(t)
     }
   }, [open, initialQuery])
 
-  // ESC + click-outside.
+  // Whenever the filtered list changes, clamp the cursor.
+  useEffect(() => {
+    setActiveIdx((idx) => {
+      if (optionCount === 0) return 0
+      return Math.min(idx, optionCount - 1)
+    })
+  }, [optionCount, tab])
+
+  // ESC closes.
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -70,67 +168,164 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
 
   if (!open) return null
 
-  const goDoc = (hit: DocSearchHit) => {
-    recent.push(q)
-    onClose()
-    navigate(`/docs/${encodeURIComponent(hit.slug)}`)
+  const onInputKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIdx((idx) => (optionCount === 0 ? 0 : (idx + 1) % optionCount))
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIdx((idx) => (optionCount === 0 ? 0 : (idx - 1 + optionCount) % optionCount))
+      return
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      const order: Tab[] = ['docs', 'widgets', 'commands']
+      const i = order.indexOf(tab)
+      const dir = e.shiftKey ? -1 : 1
+      const next = order[(i + dir + order.length) % order.length]!
+      setTab(next)
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const newTab = e.metaKey || e.ctrlKey
+      if (tab === 'docs') {
+        const hit = flatDocs[activeIdx]
+        if (hit) goDoc(hit, newTab)
+        else if (q.trim()) recent.push(q.trim())
+        return
+      }
+      if (tab === 'commands') {
+        const cmd = commandMatches[activeIdx]
+        if (cmd) runCommand(cmd)
+        return
+      }
+      // widgets tab — there's no nav action, but we still register the search.
+      if (q.trim()) recent.push(q.trim())
+    }
   }
 
+  const optionId = (i: number) => `${listboxId}-opt-${i}`
+
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="명령 팔레트"
-      className="fixed inset-0 z-modal flex items-start justify-center bg-black/40 px-4 pt-[10vh] anim-fade backdrop-blur-sm"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
-      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg animate-slide-up">
-        <div className="flex items-center gap-2 border-b border-gray-200 px-3 py-3">
-          <SearchIcon className="text-gray-400" />
-          <input
-            ref={inputRef}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="문서, 위젯, 명령어를 검색하세요..."
-            className="min-w-0 flex-1 bg-transparent px-1 py-1 text-base text-gray-900 placeholder-gray-400 outline-none"
-          />
-          <kbd className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
-            Esc
-          </kbd>
-        </div>
-
-        <div className="flex border-b border-gray-200 text-xs">
-          <TabBtn active={tab === 'docs'} onClick={() => setTab('docs')} label="문서" count={docHits.length} />
-          <TabBtn active={tab === 'widgets'} onClick={() => setTab('widgets')} label="위젯" count={widgetMatches.length} />
-        </div>
-
-        <div className="max-h-80 overflow-y-auto p-2">
-          {tab === 'docs' ? (
-            <DocResults
-              q={q}
-              hits={docHits}
-              loading={docsFetching}
-              recent={recent.items}
-              onUseRecent={(s) => setQ(s)}
-              onPick={goDoc}
+    <>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="명령 팔레트"
+        className="fixed inset-0 z-modal flex items-start justify-center bg-black/40 px-4 pt-[10vh] anim-fade backdrop-blur-sm"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) onClose()
+        }}
+      >
+        <div className="w-full max-w-xl overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg animate-slide-up">
+          <div className="flex items-center gap-2 border-b border-gray-200 px-3 py-3">
+            <SearchIcon className="text-gray-400" />
+            <input
+              ref={inputRef}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={onInputKeyDown}
+              placeholder={
+                tab === 'commands' ? '명령어를 입력하세요...' : '문서, 위젯, 명령어를 검색하세요...'
+              }
+              className="min-w-0 flex-1 bg-transparent px-1 py-1 text-base text-gray-900 placeholder-gray-400 outline-none"
+              role="combobox"
+              aria-expanded
+              aria-controls={listboxId}
+              aria-activedescendant={optionCount > 0 ? optionId(activeIdx) : undefined}
+              aria-autocomplete="list"
+              data-testid="palette-input"
             />
-          ) : (
-            <WidgetResults items={widgetMatches} />
-          )}
-        </div>
-
-        <div className="flex items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1"><Hint>↑↓</Hint> 이동</span>
-            <span className="flex items-center gap-1"><Hint>Enter</Hint> 선택</span>
-            <span className="flex items-center gap-1"><Hint>Esc</Hint> 닫기</span>
+            <kbd className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+              Esc
+            </kbd>
           </div>
-          <span className="hidden sm:inline">MX White Paper</span>
+
+          <div className="flex border-b border-gray-200 text-xs" role="tablist" aria-label="검색 영역">
+            <TabBtn
+              active={tab === 'docs'}
+              onClick={() => setTab('docs')}
+              label="문서"
+              count={flatDocs.length}
+            />
+            <TabBtn
+              active={tab === 'widgets'}
+              onClick={() => setTab('widgets')}
+              label="위젯"
+              count={widgetMatches.length}
+            />
+            <TabBtn
+              active={tab === 'commands'}
+              onClick={() => setTab('commands')}
+              label="명령"
+              count={commandMatches.length}
+            />
+          </div>
+
+          {tab === 'docs' && (
+            <FilterChipRow
+              hits={docHitsRaw as DocSearchHit[]}
+              filters={filters}
+              onChange={setFilters}
+            />
+          )}
+
+          <div className="max-h-80 overflow-y-auto p-2">
+            {tab === 'docs' ? (
+              <DocResults
+                q={q}
+                grouped={grouped}
+                loading={docsFetching}
+                recent={recent.items}
+                onUseRecent={(s) => setQ(s)}
+                onRemoveRecent={(s) => recent.remove(s)}
+                onClearRecent={() => recent.clear()}
+                onPick={goDoc}
+                activeIdx={activeIdx}
+                onActivate={setActiveIdx}
+                listboxId={listboxId}
+                optionId={optionId}
+              />
+            ) : tab === 'widgets' ? (
+              <WidgetResults
+                items={widgetMatches}
+                activeIdx={activeIdx}
+                onActivate={setActiveIdx}
+                listboxId={listboxId}
+                optionId={optionId}
+              />
+            ) : (
+              <CommandResults
+                items={commandMatches}
+                onRun={runCommand}
+                activeIdx={activeIdx}
+                onActivate={setActiveIdx}
+                listboxId={listboxId}
+                optionId={optionId}
+              />
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="flex items-center gap-1"><Hint>↑↓</Hint> 이동</span>
+              <span className="flex items-center gap-1"><Hint>Enter</Hint> 선택</span>
+              <span className="flex items-center gap-1"><Hint>Esc</Hint> 닫기</span>
+              <span className="flex items-center gap-1"><Hint>Tab</Hint> 탭 전환</span>
+              <span className="flex items-center gap-1"><Hint>⌘ Enter</Hint> 새 탭</span>
+            </div>
+            <span className="hidden sm:inline">MX White Paper</span>
+          </div>
         </div>
       </div>
-    </div>
+      <KeyboardShortcutsModal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
+    </>
   )
 }
 
@@ -142,10 +337,22 @@ function Hint({ children }: { children: React.ReactNode }) {
   )
 }
 
-function TabBtn({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count?: number }) {
+function TabBtn({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean
+  onClick: () => void
+  label: string
+  count?: number
+}) {
   return (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
       className={cn(
         'flex items-center gap-1.5 px-3 py-2 transition-colors',
@@ -156,10 +363,12 @@ function TabBtn({ active, onClick, label, count }: { active: boolean; onClick: (
     >
       {label}
       {typeof count === 'number' && count > 0 && (
-        <span className={cn(
-          'rounded-full px-1.5 py-px text-[10px] font-medium',
-          active ? 'bg-smsg-700 text-white' : 'bg-gray-100 text-gray-500',
-        )}>
+        <span
+          className={cn(
+            'rounded-full px-1.5 py-px text-[10px] font-medium',
+            active ? 'bg-smsg-700 text-white' : 'bg-gray-100 text-gray-500',
+          )}
+        >
           {count}
         </span>
       )}
@@ -205,36 +414,220 @@ function HistoryIcon() {
   )
 }
 
+interface GroupedDocs {
+  title: DocSearchHit[]
+  body: DocSearchHit[]
+  tag: DocSearchHit[]
+}
+
+function groupHits(q: string, hits: DocSearchHit[]): GroupedDocs {
+  const needle = q.trim().toLowerCase()
+  if (!needle) return { title: hits, body: [], tag: [] }
+  const title: DocSearchHit[] = []
+  const body: DocSearchHit[] = []
+  const tag: DocSearchHit[] = []
+  for (const h of hits) {
+    const tHit =
+      (h._formatted?.title && h._formatted.title.includes('<em>')) ||
+      h.title.toLowerCase().includes(needle)
+    const tagHit =
+      (Array.isArray(h._formatted?.tags) && h._formatted!.tags!.some((t) => t.includes('<em>'))) ||
+      (Array.isArray(h.tags) && h.tags.some((t) => t.toLowerCase().includes(needle)))
+    if (tHit) title.push(h)
+    else if (tagHit) tag.push(h)
+    else body.push(h)
+  }
+  return { title, body, tag }
+}
+
+function filterDocs(hits: DocSearchHit[], f: DocFilters): DocSearchHit[] {
+  if (!f.team && !f.category && !f.confidentiality) return hits
+  return hits.filter((h) => {
+    if (f.team && h.team !== f.team) return false
+    if (f.category && h.category !== f.category) return false
+    if (f.confidentiality && h.confidentiality !== f.confidentiality) return false
+    return true
+  })
+}
+
+function FilterChipRow({
+  hits,
+  filters,
+  onChange,
+}: {
+  hits: DocSearchHit[]
+  filters: DocFilters
+  onChange: (f: DocFilters) => void
+}) {
+  const teams = uniqueDefined(hits.map((h) => h.team))
+  const categories = uniqueDefined(hits.map((h) => h.category))
+  const confs = uniqueDefined(hits.map((h) => h.confidentiality)) as DocFilters['confidentiality'][]
+  if (teams.length === 0 && categories.length === 0 && confs.length === 0) return null
+  const hasAny = filters.team || filters.category || filters.confidentiality
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-b border-gray-100 bg-white px-3 py-2">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">필터</span>
+      {teams.length > 0 && (
+        <Dropdown
+          label="팀"
+          value={filters.team}
+          options={teams}
+          onChange={(v) => onChange({ ...filters, team: v })}
+        />
+      )}
+      {categories.length > 0 && (
+        <Dropdown
+          label="카테고리"
+          value={filters.category}
+          options={categories}
+          onChange={(v) => onChange({ ...filters, category: v })}
+        />
+      )}
+      {confs.length > 0 && (
+        <Dropdown
+          label="기밀도"
+          value={filters.confidentiality}
+          options={confs as string[]}
+          onChange={(v) =>
+            onChange({
+              ...filters,
+              confidentiality: (v as DocFilters['confidentiality']) ?? null,
+            })
+          }
+          renderOption={confidentialityLabel}
+        />
+      )}
+      {hasAny && (
+        <button
+          type="button"
+          onClick={() => onChange(EMPTY_FILTERS)}
+          className="ml-auto rounded-full px-2 py-0.5 text-[11px] font-medium text-smsg-700 hover:bg-smsg-50"
+        >
+          필터 초기화
+        </button>
+      )}
+    </div>
+  )
+}
+
+function uniqueDefined<T>(arr: (T | undefined | null)[]): T[] {
+  const out = new Set<T>()
+  for (const v of arr) if (v != null) out.add(v as T)
+  return Array.from(out).sort()
+}
+
+function confidentialityLabel(v: string): string {
+  if (v === 'public') return '공개'
+  if (v === 'internal') return '사내'
+  if (v === 'restricted') return '제한'
+  return v
+}
+
+function Dropdown({
+  label,
+  value,
+  options,
+  onChange,
+  renderOption,
+}: {
+  label: string
+  value: string | null | undefined
+  options: string[]
+  onChange: (v: string | null) => void
+  renderOption?: (v: string) => string
+}) {
+  const display = value ? `${label}: ${renderOption ? renderOption(value) : value}` : label
+  return (
+    <label className="relative inline-flex">
+      <span className="sr-only">{label}</span>
+      <select
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || null)}
+        className={cn(
+          'appearance-none rounded-full border px-2.5 py-0.5 pr-6 text-[11px] font-medium transition-colors',
+          value
+            ? 'border-smsg-700 bg-smsg-700 text-white'
+            : 'border-gray-300 bg-white text-gray-700 hover:border-smsg-300',
+        )}
+      >
+        <option value="">{label}: 전체</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {renderOption ? renderOption(o) : o}
+          </option>
+        ))}
+      </select>
+      <span aria-hidden="true" className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-[10px]">
+        {display ? '▾' : '▾'}
+      </span>
+    </label>
+  )
+}
+
 function DocResults({
   q,
-  hits,
+  grouped,
   loading,
   recent,
   onUseRecent,
+  onRemoveRecent,
+  onClearRecent,
   onPick,
+  activeIdx,
+  onActivate,
+  listboxId,
+  optionId,
 }: {
   q: string
-  hits: DocSearchHit[]
+  grouped: GroupedDocs
   loading: boolean
-  recent: string[]
+  recent: RecentSearchItem[]
   onUseRecent: (s: string) => void
-  onPick: (hit: DocSearchHit) => void
+  onRemoveRecent: (s: string) => void
+  onClearRecent: () => void
+  onPick: (hit: DocSearchHit, newTab: boolean) => void
+  activeIdx: number
+  onActivate: (i: number) => void
+  listboxId: string
+  optionId: (i: number) => string
 }) {
   if (!q.trim()) {
     return (
       <div className="text-xs text-gray-500">
         {recent.length > 0 ? (
           <>
-            <p className="mb-1 px-2 pt-1 font-semibold uppercase tracking-wide">최근 검색</p>
+            <div className="mb-1 flex items-center justify-between px-2 pt-1">
+              <p className="font-semibold uppercase tracking-wide">최근 검색</p>
+              <button
+                type="button"
+                onClick={onClearRecent}
+                className="rounded px-1.5 py-0.5 text-[11px] font-medium text-smsg-700 hover:bg-smsg-50"
+              >
+                전체 지우기
+              </button>
+            </div>
             <ul>
-              {recent.map((s) => (
-                <li key={s}>
+              {recent.slice(0, 10).map((s) => (
+                <li key={s.q} className="flex items-center gap-1">
                   <button
-                    onClick={() => onUseRecent(s)}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-smsg-50"
+                    onClick={() => onUseRecent(s.q)}
+                    className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-smsg-50"
                   >
                     <HistoryIcon />
-                    <span className="truncate">{s}</span>
+                    <span className="truncate">{s.q}</span>
+                    {s.ts > 0 && (
+                      <time className="ml-auto text-[10px] text-gray-400">{formatRelativeShort(s.ts)}</time>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`${s.q} 기록 지우기`}
+                    onClick={() => onRemoveRecent(s.q)}
+                    className="mr-1 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M3.7 3.7l8.6 8.6M12.3 3.7l-8.6 8.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    </svg>
                   </button>
                 </li>
               ))}
@@ -246,75 +639,285 @@ function DocResults({
       </div>
     )
   }
-  if (loading && hits.length === 0) {
+  const total = grouped.title.length + grouped.body.length + grouped.tag.length
+  if (loading && total === 0) {
     return <p className="px-2 py-4 text-center text-xs text-gray-500">검색 중…</p>
   }
-  if (hits.length === 0) {
+  if (total === 0) {
     return <p className="px-2 py-6 text-center text-xs text-gray-400">결과 없음</p>
   }
+
+  let cursor = 0
+  const renderGroup = (label: string, list: DocSearchHit[]) => {
+    if (list.length === 0) return null
+    const node = (
+      <section key={label}>
+        <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+          {label}
+        </p>
+        <ul role="listbox" id={cursor === 0 ? listboxId : undefined} aria-label={label}>
+          {list.map((hit) => {
+            const i = cursor++
+            const active = i === activeIdx
+            return (
+              <li key={hit.slug + i}>
+                <button
+                  type="button"
+                  role="option"
+                  id={optionId(i)}
+                  aria-selected={active}
+                  onMouseEnter={() => onActivate(i)}
+                  onClick={(e) => onPick(hit, e.metaKey || e.ctrlKey)}
+                  className={cn(
+                    'flex w-full items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors',
+                    active ? 'bg-smsg-100' : 'hover:bg-smsg-50',
+                  )}
+                >
+                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-smsg-50">
+                    <DocIcon />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span
+                      className="block truncate text-sm font-semibold text-smsg-900"
+                      dangerouslySetInnerHTML={{ __html: sanitizeHighlight(hit._formatted?.title ?? hit.title) }}
+                    />
+                    {(hit._formatted?.summary || hit._formatted?.text || hit.snippet || hit.summary) && (
+                      <span
+                        className="mt-0.5 block truncate text-xs text-gray-600"
+                        dangerouslySetInnerHTML={{
+                          __html: sanitizeHighlight(
+                            hit._formatted?.summary ?? hit._formatted?.text ?? hit.snippet ?? hit.summary ?? '',
+                          ),
+                        }}
+                      />
+                    )}
+                    <span className="mt-0.5 block truncate font-mono text-[10px] text-gray-400">/{hit.slug}</span>
+                  </div>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </section>
+    )
+    return node
+  }
+
   return (
-    <ul className="space-y-1">
-      {hits.map((hit) => (
-        <li key={hit.slug}>
-          <button
-            onClick={() => onPick(hit)}
-            className="flex w-full items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-smsg-50"
-          >
-            <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-smsg-50">
-              <DocIcon />
-            </span>
-            <div className="min-w-0 flex-1">
-              <span
-                className="block truncate text-sm font-semibold text-smsg-900"
-                dangerouslySetInnerHTML={{ __html: sanitizeHighlight(hit._formatted?.title ?? hit.title) }}
-              />
-              {(hit._formatted?.summary || hit._formatted?.text || hit.snippet || hit.summary) && (
-                <span
-                  className="mt-0.5 block truncate text-xs text-gray-600"
-                  dangerouslySetInnerHTML={{
-                    __html: sanitizeHighlight(
-                      hit._formatted?.summary ?? hit._formatted?.text ?? hit.snippet ?? hit.summary ?? '',
-                    ),
-                  }}
-                />
-              )}
-              <span className="mt-0.5 block truncate font-mono text-[10px] text-gray-400">/{hit.slug}</span>
-            </div>
-            <kbd className="ml-2 mt-1 hidden rounded border border-gray-200 bg-white px-1 py-0.5 font-mono text-[10px] font-medium text-gray-500 group-hover:inline-block">
-              ↵
-            </kbd>
-          </button>
-        </li>
-      ))}
-    </ul>
+    <div>
+      {renderGroup('제목 매칭', grouped.title)}
+      {renderGroup('본문 매칭', grouped.body)}
+      {renderGroup('태그 매칭', grouped.tag)}
+    </div>
   )
 }
 
-function WidgetResults({ items }: { items: WidgetRegistryEntry[] }) {
+function WidgetResults({
+  items,
+  activeIdx,
+  onActivate,
+  listboxId,
+  optionId,
+}: {
+  items: WidgetRegistryEntry[]
+  activeIdx: number
+  onActivate: (i: number) => void
+  listboxId: string
+  optionId: (i: number) => string
+}) {
   if (items.length === 0) {
     return <p className="px-2 py-6 text-center text-xs text-gray-400">위젯 없음</p>
   }
   return (
-    <ul className="space-y-1">
-      {items.map((w) => (
-        <li
-          key={w.type}
-          className="flex items-start gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-smsg-50"
-        >
-          <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-smsg-50">
-            <WidgetIcon />
-          </span>
-          <div className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold text-smsg-900">{w.name}</span>
-            {w.description && (
-              <span className="mt-0.5 block truncate text-xs text-gray-600">{w.description}</span>
+    <ul role="listbox" id={listboxId} aria-label="위젯 결과" className="space-y-1">
+      {items.map((w, i) => {
+        const active = i === activeIdx
+        return (
+          <li
+            key={w.type}
+            role="option"
+            id={optionId(i)}
+            aria-selected={active}
+            onMouseEnter={() => onActivate(i)}
+            className={cn(
+              'flex items-start gap-2.5 rounded-md px-2 py-2 transition-colors',
+              active ? 'bg-smsg-100' : 'hover:bg-smsg-50',
             )}
-            <span className="mt-0.5 block truncate font-mono text-[10px] text-gray-400">{w.type}</span>
-          </div>
-        </li>
-      ))}
+          >
+            <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-smsg-50">
+              <WidgetIcon />
+            </span>
+            <div className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-smsg-900">{w.name}</span>
+              {w.description && (
+                <span className="mt-0.5 block truncate text-xs text-gray-600">{w.description}</span>
+              )}
+              <span className="mt-0.5 block truncate font-mono text-[10px] text-gray-400">{w.type}</span>
+            </div>
+          </li>
+        )
+      })}
     </ul>
   )
+}
+
+interface CommandRunCtx {
+  navigate: (to: string) => void
+  openShortcuts: () => void
+}
+
+interface CommandItem {
+  id: string
+  label: string
+  hint?: string
+  icon: string
+  run: (ctx: CommandRunCtx) => void
+}
+
+function buildCommands({ canAdmin, location }: { canAdmin: boolean; location: string }): CommandItem[] {
+  const list: CommandItem[] = [
+    {
+      id: 'new-doc',
+      label: '+ 새 문서',
+      hint: '새로운 백서를 작성합니다',
+      icon: '+',
+      run: ({ navigate }) => navigate('/docs/new'),
+    },
+    {
+      id: 'settings',
+      label: '환경설정',
+      hint: '계정 및 표시 설정',
+      icon: '⚙',
+      run: ({ navigate }) => navigate('/settings'),
+    },
+    {
+      id: 'shortcuts',
+      label: '도움말 / 단축키',
+      hint: 'Cmd+? 로도 열 수 있습니다',
+      icon: '?',
+      run: ({ openShortcuts }) => openShortcuts(),
+    },
+    {
+      id: 'present',
+      label: '프레젠테이션 모드',
+      hint: location.startsWith('/docs/') ? '현재 문서를 슬라이드로 봅니다' : '프레젠테이션 페이지로 이동',
+      icon: '▶',
+      run: ({ navigate }) => {
+        const m = location.match(/^\/docs\/([^/]+)/)
+        if (m && m[1]) navigate(`/present/${m[1]}`)
+        else navigate('/recent')
+      },
+    },
+    {
+      id: 'fullscreen',
+      label: '전체 화면',
+      hint: 'F11 와 동일한 효과',
+      icon: '⛶',
+      run: () => {
+        try {
+          if (document.fullscreenElement) {
+            void document.exitFullscreen()
+          } else {
+            void document.documentElement.requestFullscreen()
+          }
+        } catch {
+          /* ignore */
+        }
+      },
+    },
+    {
+      id: 'theme',
+      label: '테마 전환',
+      hint: '라이트 / 다크 (시각적 토글)',
+      icon: '◑',
+      run: () => {
+        try {
+          const root = document.documentElement
+          root.classList.toggle('dark')
+        } catch {
+          /* ignore */
+        }
+      },
+    },
+  ]
+  if (canAdmin) {
+    list.splice(1, 0, {
+      id: 'admin-orgs',
+      label: '조직 관리',
+      hint: '관리자 전용',
+      icon: '⚙',
+      run: ({ navigate }) => navigate('/admin/orgs'),
+    })
+  }
+  return list
+}
+
+function CommandResults({
+  items,
+  onRun,
+  activeIdx,
+  onActivate,
+  listboxId,
+  optionId,
+}: {
+  items: CommandItem[]
+  onRun: (cmd: CommandItem) => void
+  activeIdx: number
+  onActivate: (i: number) => void
+  listboxId: string
+  optionId: (i: number) => string
+}) {
+  if (items.length === 0) {
+    return <p className="px-2 py-6 text-center text-xs text-gray-400">명령 없음</p>
+  }
+  return (
+    <ul role="listbox" id={listboxId} aria-label="명령 결과" className="space-y-1">
+      {items.map((c, i) => {
+        const active = i === activeIdx
+        return (
+          <li key={c.id}>
+            <button
+              type="button"
+              role="option"
+              id={optionId(i)}
+              aria-selected={active}
+              onMouseEnter={() => onActivate(i)}
+              onClick={() => onRun(c)}
+              className={cn(
+                'flex w-full items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors',
+                active ? 'bg-smsg-100' : 'hover:bg-smsg-50',
+              )}
+            >
+              <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-smsg-50 text-sm font-bold text-smsg-700">
+                {c.icon}
+              </span>
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-smsg-900">{c.label}</span>
+                {c.hint && <span className="mt-0.5 block truncate text-xs text-gray-600">{c.hint}</span>}
+              </div>
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function formatRelativeShort(ts: number, now: number = Date.now()): string {
+  if (!Number.isFinite(ts) || ts <= 0) return ''
+  const diff = Math.max(0, now - ts)
+  const min = 60_000
+  const hour = 60 * min
+  const day = 24 * hour
+  if (diff < min) return '방금'
+  if (diff < hour) return `${Math.floor(diff / min)}분 전`
+  if (diff < day) return `${Math.floor(diff / hour)}시간 전`
+  if (diff < 7 * day) return `${Math.floor(diff / day)}일 전`
+  try {
+    return new Date(ts).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
+  } catch {
+    return ''
+  }
 }
 
 /**
@@ -329,6 +932,6 @@ function sanitizeHighlight(input: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
   return escaped
-    .replace(/&lt;em&gt;/g, '<em class="bg-yellow-100 not-italic font-semibold">')
+    .replace(/&lt;em&gt;/g, '<em class="bg-smsg-100 not-italic font-semibold">')
     .replace(/&lt;\/em&gt;/g, '</em>')
 }

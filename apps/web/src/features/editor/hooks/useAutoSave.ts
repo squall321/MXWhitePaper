@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useEditorStore } from '../state'
 import { putDocument, isPreconditionFailed, type EditorMutationResult } from '../api'
 import { getDocument } from '@/features/document/api'
+import { pushNotification } from '@/features/notifications/store'
 
 /** Auto-save policy parameters. */
 const IDLE_MS = 5_000
@@ -61,12 +62,24 @@ export function useAutoSave(slug: string | undefined, opts: AutoSaveOptions = {}
       )
       applySnapshot(result.document, result.etag)
       charsSinceSave.current = 0
+      pushNotification({
+        category: 'activity',
+        message: '문서가 저장되었습니다',
+        detail: slug,
+        slug,
+      })
     } catch (err) {
       if (isPreconditionFailed(err)) {
         // Re-fetch remote so the modal can show both sides.
         try {
           const remote = await getDocument(slug)
           setConflict(remote.document, remote.meta.etag ?? null)
+          pushNotification({
+            category: 'system',
+            message: '충돌이 감지되었습니다',
+            detail: slug,
+            slug,
+          })
         } catch {
           setStatus('error')
         }
