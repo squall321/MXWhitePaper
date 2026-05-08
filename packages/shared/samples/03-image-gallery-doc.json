@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "id": "01J9X1Y2Z3A4B5C6D7E8F9G0H3",
+  "slug": "product-photo-guide",
+  "title": "제품 촬영 가이드",
+  "summary": "MX 제품의 마케팅용 촬영 표준 — 각도/조명/배경",
+  "metadata": {
+    "division": "MX",
+    "team": "마케팅팀",
+    "owners": ["u-marketing-lead"],
+    "tags": ["촬영", "마케팅", "이미지"],
+    "category": "가이드",
+    "confidentiality": "internal"
+  },
+  "sections": [
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9G3S1",
+      "number": "1",
+      "level": 1,
+      "title": "권장 각도",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9G3B1",
+          "text": "정면 / 45° / 후면 3개 각도가 표준이다. 보조 각도는 [[product-photo-accessories|제품 촬영 부속]] 참고."
+        },
+        {
+          "type": "gallery",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9G3B2",
+          "layout": "grid",
+          "items": [
+            {
+              "imageId": "01J9X1Y2Z3A4B5C6D7E8F9G3M1",
+              "caption": "정면 (0°)",
+              "alt": "제품 정면 사진"
+            },
+            {
+              "imageId": "01J9X1Y2Z3A4B5C6D7E8F9G3M2",
+              "caption": "45°",
+              "alt": "제품 45도 측면 사진"
+            },
+            {
+              "imageId": "01J9X1Y2Z3A4B5C6D7E8F9G3M3",
+              "caption": "후면 (180°)",
+              "alt": "제품 후면 사진"
+            }
+          ]
+        }
+      ],
+      "subsections": []
+    },
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9G3S2",
+      "number": "2",
+      "level": 1,
+      "title": "조명 셋업",
+      "blocks": [
+        {
+          "type": "image",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9G3B3",
+          "imageId": "01J9X1Y2Z3A4B5C6D7E8F9G3M4",
+          "caption": "3-point 조명 다이어그램",
+          "alt": "메인·필·백 라이트 배치도",
+          "width": "lg"
+        },
+        {
+          "type": "callout",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9G3B4",
+          "variant": "tip",
+          "text": "메인 라이트는 45° 각도 + 디퓨저 사용. 백라이트로 윤곽선 강조."
+        }
+      ],
+      "subsections": []
+    }
+  ],
+  "related_documents": [],
+  "glossary": [],
+  "references": [],
+  "see_also": []
+}

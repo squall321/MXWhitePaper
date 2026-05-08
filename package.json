@@ -1,0 +1,30 @@
+{
+  "name": "mx-white-paper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MX 사업부 지식 창고 — 나무위키 스타일 + 1/1.1/1.1.1 계층 + Block 위젯 + JSON-First",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "schema:gen": "pnpm --filter @mx/shared run gen",
+    "schema:validate": "pnpm --filter @mx/shared run validate",
+    "format": "prettier --write .",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.5.0",
+    "@commitlint/config-conventional": "^19.5.0",
+    "husky": "^9.1.6",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
+  },
+  "packageManager": "pnpm@9.12.0"
+}

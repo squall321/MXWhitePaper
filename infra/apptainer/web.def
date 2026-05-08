@@ -1,0 +1,38 @@
+Bootstrap: docker
+From: node:20-bookworm-slim
+
+%labels
+    Maintainer  squall321@gmail.com
+    Component   mxwp-web
+    Version     0.1.0
+
+%post
+    set -eux
+    apt-get update
+    apt-get install -y --no-install-recommends git ca-certificates
+    rm -rf /var/lib/apt/lists/*
+    corepack enable
+    corepack prepare pnpm@9.12.0 --activate
+    mkdir -p /workspace
+
+%environment
+    export PATH=/usr/local/bin:$PATH
+    export PNPM_HOME=/root/.local/share/pnpm
+    export PATH=$PNPM_HOME:$PATH
+
+%runscript
+    cd /workspace
+    pnpm install --frozen-lockfile=false
+    pnpm schema:gen
+    exec pnpm --filter @mx/web dev --host 0.0.0.0 --port 5173 "$@"
+
+%startscript
+    cd /workspace
+    pnpm install --frozen-lockfile=false >/tmp/pnpm-install.log 2>&1
+    pnpm schema:gen >>/tmp/pnpm-install.log 2>&1
+    exec pnpm --filter @mx/web dev --host 0.0.0.0 --port 5173
+
+%help
+    MX White Paper Web (Vite dev) container.
+    Build:   apptainer build infra/apptainer/web.sif infra/apptainer/web.def
+    Run:     apptainer instance start --bind <repo>:/workspace infra/apptainer/web.sif mxwp_web

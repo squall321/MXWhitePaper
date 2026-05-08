@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "id": "01J9X1Y2Z3A4B5C6D7E8F9G0H5",
+  "slug": "team-meeting-template",
+  "title": "팀 미팅 템플릿",
+  "metadata": {
+    "division": "MX",
+    "owners": ["u-anyone"],
+    "tags": ["템플릿", "미팅"],
+    "confidentiality": "internal"
+  },
+  "sections": [
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9G5S1",
+      "number": "1",
+      "level": 1,
+      "title": "안건",
+      "blocks": [
+        {
+          "type": "list",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9G5B1",
+          "style": "number",
+          "items": ["주간 진척", "이슈 공유", "다음 주 계획"]
+        }
+      ],
+      "subsections": []
+    }
+  ]
+}

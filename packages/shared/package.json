@@ -1,0 +1,23 @@
+{
+  "name": "@mx/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DocumentJSON v1.0 SSOT — JSON Schema + TS/Python type generation",
+  "type": "module",
+  "exports": {
+    "./schema": "./schemas/document.json",
+    "./types": "./generated/document.ts"
+  },
+  "scripts": {
+    "gen": "node codegen/generate-ts.mjs && python3 codegen/generate-py.py",
+    "gen:ts": "node codegen/generate-ts.mjs",
+    "gen:py": "python3 codegen/generate-py.py",
+    "validate": "node codegen/validate-samples.mjs",
+    "test": "node --test tests/"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "json-schema-to-typescript": "^15.0.2"
+  }
+}

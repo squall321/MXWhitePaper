@@ -1,0 +1,162 @@
+import { apiClient } from '@/lib/api/client'
+import type { DocumentJSONV10, Slug } from '@/types/document'
+
+interface ApiEnvelope<T> {
+  data: T
+  meta?: Record<string, unknown>
+  error?: { code: string; message: string } | null
+}
+
+export interface DocumentMetaEnvelope {
+  version?: number
+  etag?: string
+  updated_at?: string
+  owners?: { id: string; name: string }[]
+}
+
+/**
+ * Server response row for `GET /documents/:slug`. The DocumentJSON v1.0 body
+ * lives under `content` per the BE contract; the surrounding fields are the
+ * `documents` table row.
+ */
+export interface DocumentRow {
+  id: string
+  slug: Slug
+  title: string
+  summary?: string | null
+  status?: string
+  version?: number
+  schema_ver?: string
+  owner_id?: string
+  part_id?: string | null
+  created_at?: string
+  updated_at?: string
+  content: DocumentJSONV10
+}
+
+export interface DocumentResult {
+  /** DocumentJSON v1.0 — pulled out of `data.content` for ergonomics. */
+  document: DocumentJSONV10
+  /** The full row (so callers can read `updated_at`, `owner_id`, …). */
+  row: DocumentRow
+  meta: DocumentMetaEnvelope
+}
+
+export interface ListDocumentsParams {
+  limit?: number
+  offset?: number
+  part?: string
+  tag?: string
+  q?: string
+}
+
+/**
+ * Light "card" shape for document lists.
+ */
+export interface DocumentCard {
+  id: string
+  slug: Slug
+  title: string
+  summary?: string
+  division?: string
+  team?: string
+  group?: string
+  part?: string
+  updated_at?: string
+}
+
+/**
+ * GET /api/v1/documents/:slug
+ * Envelope: `{ data: { ...row, content: DocumentJSON }, meta: { etag } }`.
+ */
+export async function getDocument(slug: Slug): Promise<DocumentResult> {
+  const res = await apiClient.get<ApiEnvelope<DocumentRow>>(
+    `/documents/${encodeURIComponent(slug)}`,
+  )
+  const row = res.data.data
+  return {
+    document: row.content,
+    row,
+    meta: (res.data.meta ?? {}) as DocumentMetaEnvelope,
+  }
+}
+
+/**
+ * GET /api/v1/documents?limit&offset&part&tag&q
+ */
+export async function listDocuments(
+  params: ListDocumentsParams = {},
+): Promise<DocumentCard[]> {
+  try {
+    const res = await apiClient.get<ApiEnvelope<DocumentCard[]>>('/documents', {
+      params,
+    })
+    return res.data.data ?? []
+  } catch (err) {
+    if ((err as { response?: { status?: number } })?.response?.status === 404) {
+      return []
+    }
+    throw err
+  }
+}
+
+/**
+ * Backlink row from `GET /api/v1/documents/:slug/backlinks`.
+ */
+export interface BacklinkRow {
+  slug: Slug
+  title: string
+  summary?: string | null
+  anchor?: string | null
+  sections_referenced: number
+}
+
+/**
+ * Backlinks response — items + a flag indicating whether the *target* doc
+ * (i.e., the slug we asked about) actually exists. The BE puts the flag in
+ * `meta.target_exists`; we surface it on the FE result so callers can render
+ * a "이 문서 작성하기" CTA when the target doesn't exist yet.
+ */
+export interface BacklinksResult {
+  items: BacklinkRow[]
+  /** True when the target slug points at a real (non-archived) document. */
+  targetExists: boolean
+}
+
+export async function getBacklinks(slug: Slug): Promise<BacklinksResult> {
+  try {
+    const res = await apiClient.get<
+      ApiEnvelope<BacklinkRow[]> & { meta?: { target_exists?: boolean } }
+    >(`/documents/${encodeURIComponent(slug)}/backlinks`)
+    return {
+      items: res.data.data ?? [],
+      // Default to true so a transient error never paints the "missing" CTA.
+      targetExists: res.data.meta?.target_exists !== false,
+    }
+  } catch (err) {
+    const status = (err as { response?: { status?: number } })?.response?.status
+    if (status === 404 || status === 500) {
+      // 404 here means the BE could not even resolve the slug — the doc is
+      // missing and there are no backlinks.
+      return { items: [], targetExists: status !== 404 }
+    }
+    throw err
+  }
+}
+
+/**
+ * Cheap existence check used by WikiLink. The backend has no HEAD endpoint,
+ * so we issue GET and translate 404 → false. TanStack Query will cache
+ * the result; the WikiLink hook sets a 5-minute stale time.
+ */
+export async function checkDocumentExists(slug: Slug): Promise<boolean> {
+  try {
+    await apiClient.get(`/documents/${encodeURIComponent(slug)}`)
+    return true
+  } catch (err) {
+    const status = (err as { response?: { status?: number } })?.response?.status
+    if (status === 404) return false
+    // 5xx / network — treat as "exists" so we don't paint everything red.
+    return true
+  }
+}

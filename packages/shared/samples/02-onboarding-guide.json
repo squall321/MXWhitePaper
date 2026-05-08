@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "id": "01J9X1Y2Z3A4B5C6D7E8F9G0H2",
+  "slug": "onboarding-guide",
+  "title": "신규 입사자 온보딩 가이드",
+  "summary": "MX 사업부 신규 입사자가 첫 4주 동안 따라야 할 절차",
+  "metadata": {
+    "division": "MX",
+    "team": "인사팀",
+    "owners": ["u-hr-lead"],
+    "tags": ["온보딩", "HR", "입사"],
+    "category": "가이드",
+    "confidentiality": "internal"
+  },
+  "infobox": {
+    "대상": "신규 입사자",
+    "기간": "4주",
+    "담당팀": "인사팀"
+  },
+  "sections": [
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9G2S1",
+      "number": "1",
+      "level": 1,
+      "title": "1주차 — 환경 셋업",
+      "blocks": [
+        {
+          "type": "list",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9G2B1",
+          "style": "check",
+          "items": [
+            "사번 및 이메일 발급",
+            "노트북 수령 및 보안 SW 설치",
+            "[[security-policy|보안수칙]] 숙지",
+            "팀 소개 미팅 참여"
+          ]
+        },
+        {
+          "type": "video",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9G2B2",
+          "url": "https://intra/video/welcome",
+          "title": "MX 환영 영상 (10분)",
+          "provider": "intra"
+        }
+      ],
+      "subsections": []
+    },
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9G2S2",
+      "number": "2",
+      "level": 1,
+      "title": "주요 도구",
+      "blocks": [
+        {
+          "type": "table",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9G2B3",
+          "headers": ["도구", "용도", "신청 방법"],
+          "rows": [
+            ["Slack", "팀 커뮤니케이션", "IT 헬프데스크"],
+            ["Jira",  "태스크 관리",     "팀장 승인"],
+            ["MX White Paper", "지식 검색·작성", "자동 발급"]
+          ]
+        }
+      ],
+      "subsections": []
+    }
+  ],
+  "related_documents": [
+    { "slug": "security-policy", "relation": "참고" }
+  ],
+  "glossary": [],
+  "references": [],
+  "see_also": []
+}

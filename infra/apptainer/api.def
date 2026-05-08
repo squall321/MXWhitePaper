@@ -1,0 +1,45 @@
+Bootstrap: docker
+From: python:3.12-slim
+
+%labels
+    Maintainer  squall321@gmail.com
+    Component   mxwp-api
+    Version     0.1.0
+
+%post
+    set -eux
+    apt-get update
+    apt-get install -y --no-install-recommends build-essential libpq-dev curl
+    rm -rf /var/lib/apt/lists/*
+    pip install --upgrade pip
+
+    mkdir -p /opt/mxwp
+    # The repo is bind-mounted at /workspace at runtime; source code is consumed
+    # from there. Only baseline tooling is baked into the image.
+    pip install --no-cache-dir \
+        "fastapi>=0.115" "uvicorn[standard]>=0.32" \
+        "sqlalchemy[asyncio]>=2.0.36" "alembic>=1.14" "asyncpg>=0.30" \
+        "pydantic>=2.9" "pydantic-settings>=2.6" \
+        "python-jose[cryptography]>=3.3" "argon2-cffi>=23.1" "python-multipart>=0.0.18" \
+        "boto3>=1.35" "Pillow>=11.0" "meilisearch>=0.31" "slowapi>=0.1.9" \
+        "structlog>=24.4" "httpx>=0.28" "ulid-py>=1.1" \
+        "datamodel-code-generator>=0.26"
+
+%environment
+    export PYTHONDONTWRITEBYTECODE=1
+    export PYTHONUNBUFFERED=1
+    export PYTHONPATH=/workspace/apps/api
+
+%runscript
+    PORT="${API_PORT:-8000}"
+    exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --app-dir /workspace/apps/api "$@"
+
+%startscript
+    PORT="${API_PORT:-8000}"
+    cd /workspace/apps/api
+    exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --reload --reload-dir /workspace/apps/api/app
+
+%help
+    MX White Paper API container.
+    Build:   apptainer build infra/apptainer/api.sif infra/apptainer/api.def
+    Run:     apptainer instance start --bind <repo>:/workspace --env-file .env infra/apptainer/api.sif mxwp_api

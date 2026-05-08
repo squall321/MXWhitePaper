@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+.venv
+*.egg-info
+__pycache__
+*.lock
+pnpm-lock.yaml
+uv.lock
+docs/archive
+.bkit

@@ -1,0 +1,648 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mx-white-paper.internal/schemas/document.v1.json",
+  "title": "DocumentJSON v1.0",
+  "description": "MX White Paper 단일 진실 공급원(SSOT). Section 트리(level 1~3) + Block 배열 본문. PROJECT_PLAN.md / Plan / Design / Do 문서의 모든 데이터 모델 참조처.",
+  "type": "object",
+  "required": ["schema_version", "id", "slug", "title", "metadata", "sections"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "id": { "$ref": "#/$defs/Ulid" },
+    "slug": { "$ref": "#/$defs/Slug" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "summary": { "type": "string", "maxLength": 500 },
+    "metadata": { "$ref": "#/$defs/DocumentMeta" },
+    "infobox": { "$ref": "#/$defs/Infobox" },
+    "sections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/SectionLevel1" },
+      "description": "최상위 섹션은 반드시 level=1"
+    },
+    "related_documents": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/RelatedDoc" },
+      "default": []
+    },
+    "glossary": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/GlossaryItem" },
+      "default": []
+    },
+    "references": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Reference" },
+      "default": []
+    },
+    "see_also": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Slug" },
+      "default": []
+    }
+  },
+
+  "$defs": {
+    "Ulid": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "Crockford base32 ULID"
+    },
+    "Slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9\\uAC00-\\uD7A3][a-z0-9\\uAC00-\\uD7A3-]{0,99}$",
+      "description": "url-safe identifier (lowercase ASCII, digits, hyphen, Hangul)"
+    },
+
+    "DocumentMeta": {
+      "type": "object",
+      "required": ["division", "owners", "tags", "confidentiality"],
+      "additionalProperties": false,
+      "properties": {
+        "division": { "type": "string", "minLength": 1 },
+        "team":     { "type": "string" },
+        "group":    { "type": "string" },
+        "part":     { "type": "string" },
+        "owners":   { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "reviewers":{ "type": "array", "items": { "type": "string" }, "default": [] },
+        "tags":     { "type": "array", "items": { "type": "string" }, "default": [] },
+        "category": { "type": "string" },
+        "confidentiality": { "enum": ["public", "internal", "restricted"] }
+      }
+    },
+
+    "Infobox": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "array", "items": { "type": "string" } }
+        ]
+      },
+      "description": "우상단 정보 박스. 키=라벨, 값=문자열 또는 문자열 배열"
+    },
+
+    "SectionLevel1": {
+      "type": "object",
+      "required": ["id", "level", "title", "blocks", "subsections"],
+      "additionalProperties": false,
+      "properties": {
+        "id":     { "$ref": "#/$defs/Ulid" },
+        "number": { "type": "string", "pattern": "^\\d+$" },
+        "level":  { "const": 1 },
+        "title":  { "type": "string", "minLength": 1, "maxLength": 200 },
+        "blocks": { "type": "array", "items": { "$ref": "#/$defs/Block" } },
+        "subsections": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SectionLevel2" }
+        }
+      }
+    },
+    "SectionLevel2": {
+      "type": "object",
+      "required": ["id", "level", "title", "blocks", "subsections"],
+      "additionalProperties": false,
+      "properties": {
+        "id":     { "$ref": "#/$defs/Ulid" },
+        "number": { "type": "string", "pattern": "^\\d+\\.\\d+$" },
+        "level":  { "const": 2 },
+        "title":  { "type": "string", "minLength": 1, "maxLength": 200 },
+        "blocks": { "type": "array", "items": { "$ref": "#/$defs/Block" } },
+        "subsections": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SectionLevel3" }
+        }
+      }
+    },
+    "SectionLevel3": {
+      "type": "object",
+      "required": ["id", "level", "title", "blocks"],
+      "additionalProperties": false,
+      "properties": {
+        "id":     { "$ref": "#/$defs/Ulid" },
+        "number": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "level":  { "const": 3 },
+        "title":  { "type": "string", "minLength": 1, "maxLength": 200 },
+        "blocks": { "type": "array", "items": { "$ref": "#/$defs/Block" } },
+        "subsections": {
+          "type": "array",
+          "maxItems": 0,
+          "default": [],
+          "description": "level 3은 더 깊은 섹션 불가 (heading-4 Block으로 표현)"
+        }
+      }
+    },
+
+    "BlockMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "align":      { "enum": ["left", "center", "right", "full"] },
+        "collapsed":  { "type": "boolean" },
+        "locked":     { "type": "boolean" },
+        "permission": { "enum": ["all", "editor", "admin"] },
+        "note":       { "type": "string" }
+      }
+    },
+
+    "Block": {
+      "oneOf": [
+        { "$ref": "#/$defs/ParagraphBlock" },
+        { "$ref": "#/$defs/Heading4Block" },
+        { "$ref": "#/$defs/ListBlock" },
+        { "$ref": "#/$defs/QuoteBlock" },
+        { "$ref": "#/$defs/CalloutBlock" },
+        { "$ref": "#/$defs/CodeBlock" },
+        { "$ref": "#/$defs/MathBlock" },
+        { "$ref": "#/$defs/TableBlock" },
+        { "$ref": "#/$defs/KpiCardsBlock" },
+        { "$ref": "#/$defs/ChartBlock" },
+        { "$ref": "#/$defs/GanttBlock" },
+        { "$ref": "#/$defs/FlowBlock" },
+        { "$ref": "#/$defs/OrgChartBlock" },
+        { "$ref": "#/$defs/IframeBlock" },
+        { "$ref": "#/$defs/VideoBlock" },
+        { "$ref": "#/$defs/ImageBlock" },
+        { "$ref": "#/$defs/GalleryBlock" },
+        { "$ref": "#/$defs/FileBlock" },
+        { "$ref": "#/$defs/DocLinkCardBlock" },
+        { "$ref": "#/$defs/GlossaryRefBlock" },
+        { "$ref": "#/$defs/ColumnsBlock" },
+        { "$ref": "#/$defs/TabsBlock" },
+        { "$ref": "#/$defs/AccordionBlock" },
+        { "$ref": "#/$defs/DataSourceBlock" },
+        { "$ref": "#/$defs/DashboardEmbedBlock" },
+        { "$ref": "#/$defs/CalculatorBlock" }
+      ]
+    },
+
+    "ParagraphBlock": {
+      "type": "object",
+      "required": ["type", "id", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "paragraph" },
+        "id":   { "$ref": "#/$defs/Ulid" },
+        "text": { "type": "string" },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "Heading4Block": {
+      "type": "object",
+      "required": ["type", "id", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "type":  { "const": "heading-4" },
+        "id":    { "$ref": "#/$defs/Ulid" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "meta":  { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "ListBlock": {
+      "type": "object",
+      "required": ["type", "id", "style", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "type":  { "const": "list" },
+        "id":    { "$ref": "#/$defs/Ulid" },
+        "style": { "enum": ["bullet", "number", "check"] },
+        "items": { "type": "array", "items": { "type": "string" } },
+        "meta":  { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "QuoteBlock": {
+      "type": "object",
+      "required": ["type", "id", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type":   { "const": "quote" },
+        "id":     { "$ref": "#/$defs/Ulid" },
+        "text":   { "type": "string" },
+        "cite":   { "type": "string" },
+        "meta":   { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "CalloutBlock": {
+      "type": "object",
+      "required": ["type", "id", "variant", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type":    { "const": "callout" },
+        "id":      { "$ref": "#/$defs/Ulid" },
+        "variant": { "enum": ["info", "warn", "danger", "tip"] },
+        "title":   { "type": "string" },
+        "text":    { "type": "string" },
+        "meta":    { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "CodeBlock": {
+      "type": "object",
+      "required": ["type", "id", "language", "code"],
+      "additionalProperties": false,
+      "properties": {
+        "type":     { "const": "code" },
+        "id":       { "$ref": "#/$defs/Ulid" },
+        "language": { "type": "string" },
+        "code":     { "type": "string" },
+        "filename": { "type": "string" },
+        "meta":     { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "MathBlock": {
+      "type": "object",
+      "required": ["type", "id", "expression"],
+      "additionalProperties": false,
+      "properties": {
+        "type":       { "const": "math" },
+        "id":         { "$ref": "#/$defs/Ulid" },
+        "expression": { "type": "string", "description": "LaTeX (KaTeX 호환)" },
+        "display":    { "enum": ["block", "inline"], "default": "block" },
+        "meta":       { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "TableBlock": {
+      "type": "object",
+      "required": ["type", "id", "headers", "rows"],
+      "additionalProperties": false,
+      "properties": {
+        "type":    { "const": "table" },
+        "id":      { "$ref": "#/$defs/Ulid" },
+        "headers": { "type": "array", "items": { "type": "string" } },
+        "rows":    { "type": "array", "items": { "type": "array", "items": { "type": "string" } } },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sortable":   { "type": "boolean" },
+            "searchable": { "type": "boolean" }
+          }
+        },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "KpiCardsBlock": {
+      "type": "object",
+      "required": ["type", "id", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "type":  { "const": "kpi-cards" },
+        "id":    { "$ref": "#/$defs/Ulid" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "value"],
+            "properties": {
+              "label": { "type": "string" },
+              "value": { "type": ["string", "number"] },
+              "delta": { "type": ["string", "number"] },
+              "trend": { "enum": ["up", "down", "flat"] }
+            }
+          }
+        },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "ChartBlock": {
+      "type": "object",
+      "required": ["type", "id", "chartType", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "type":      { "const": "chart" },
+        "id":        { "$ref": "#/$defs/Ulid" },
+        "chartType": { "enum": ["line", "bar", "pie", "area", "radar", "scatter"] },
+        "title":     { "type": "string" },
+        "data": {
+          "type": "object",
+          "required": ["labels", "series"],
+          "properties": {
+            "labels": { "type": "array", "items": { "type": "string" } },
+            "series": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "values"],
+                "properties": {
+                  "name":   { "type": "string" },
+                  "values": { "type": "array", "items": { "type": "number" } }
+                }
+              }
+            }
+          }
+        },
+        "options": { "type": "object" },
+        "meta":    { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "GanttBlock": {
+      "type": "object",
+      "required": ["type", "id", "tasks"],
+      "additionalProperties": false,
+      "properties": {
+        "type":  { "const": "gantt" },
+        "id":    { "$ref": "#/$defs/Ulid" },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "start", "end"],
+            "properties": {
+              "name":     { "type": "string" },
+              "start":    { "type": "string" },
+              "end":      { "type": "string" },
+              "progress": { "type": "number", "minimum": 0, "maximum": 100 }
+            }
+          }
+        },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "FlowBlock": {
+      "type": "object",
+      "required": ["type", "id", "engine", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "type":   { "const": "flow" },
+        "id":     { "$ref": "#/$defs/Ulid" },
+        "engine": { "enum": ["mermaid", "excalidraw"] },
+        "source": { "type": "string", "description": "Mermaid DSL 또는 excalidraw JSON" },
+        "meta":   { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "OrgChartBlock": {
+      "type": "object",
+      "required": ["type", "id", "root"],
+      "additionalProperties": false,
+      "properties": {
+        "type":   { "const": "org-chart" },
+        "id":     { "$ref": "#/$defs/Ulid" },
+        "root":   { "$ref": "#/$defs/OrgChartNode" },
+        "layout": { "enum": ["tree", "horizontal"], "default": "tree" },
+        "meta":   { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "OrgChartNode": {
+      "type": "object",
+      "required": ["id", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "id":       { "type": "string" },
+        "label":    { "type": "string" },
+        "role":     { "type": "string" },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/OrgChartNode" }, "default": [] }
+      }
+    },
+
+    "IframeBlock": {
+      "type": "object",
+      "required": ["type", "id", "src"],
+      "additionalProperties": false,
+      "properties": {
+        "type":   { "const": "iframe" },
+        "id":     { "$ref": "#/$defs/Ulid" },
+        "src":    { "type": "string", "format": "uri", "description": "사내 화이트리스트 도메인만" },
+        "title":  { "type": "string" },
+        "height": { "type": "integer", "minimum": 100, "maximum": 2000 },
+        "meta":   { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "VideoBlock": {
+      "type": "object",
+      "required": ["type", "id", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "type":     { "const": "video" },
+        "id":       { "$ref": "#/$defs/Ulid" },
+        "url":      { "type": "string", "format": "uri" },
+        "title":    { "type": "string" },
+        "provider": { "enum": ["intra", "youtube", "vimeo"], "default": "intra" },
+        "meta":     { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "ImageBlock": {
+      "type": "object",
+      "required": ["type", "id", "imageId"],
+      "additionalProperties": false,
+      "properties": {
+        "type":    { "const": "image" },
+        "id":      { "$ref": "#/$defs/Ulid" },
+        "imageId": { "$ref": "#/$defs/Ulid", "description": "FK to images table" },
+        "caption": { "type": "string", "maxLength": 500 },
+        "alt":     { "type": "string", "maxLength": 200 },
+        "width":   { "enum": ["sm", "md", "lg", "full"], "default": "md" },
+        "link":    { "type": "string", "description": "외부 URL 또는 위키 slug" },
+        "meta":    { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "GalleryBlock": {
+      "type": "object",
+      "required": ["type", "id", "layout", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "type":   { "const": "gallery" },
+        "id":     { "$ref": "#/$defs/Ulid" },
+        "layout": { "enum": ["grid", "carousel"], "default": "grid" },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["imageId"],
+            "additionalProperties": false,
+            "properties": {
+              "imageId": { "$ref": "#/$defs/Ulid" },
+              "caption": { "type": "string", "maxLength": 500 },
+              "alt":     { "type": "string", "maxLength": 200 }
+            }
+          }
+        },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "FileBlock": {
+      "type": "object",
+      "required": ["type", "id", "fileId", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "type":   { "const": "file" },
+        "id":     { "$ref": "#/$defs/Ulid" },
+        "fileId": { "$ref": "#/$defs/Ulid" },
+        "name":   { "type": "string" },
+        "size":   { "type": "integer", "minimum": 0 },
+        "mime":   { "type": "string" },
+        "meta":   { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "DocLinkCardBlock": {
+      "type": "object",
+      "required": ["type", "id", "slug"],
+      "additionalProperties": false,
+      "properties": {
+        "type":     { "const": "doc-link-card" },
+        "id":       { "$ref": "#/$defs/Ulid" },
+        "slug":     { "$ref": "#/$defs/Slug" },
+        "showSummary": { "type": "boolean", "default": true },
+        "meta":     { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "GlossaryRefBlock": {
+      "type": "object",
+      "required": ["type", "id", "term"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "glossary-ref" },
+        "id":   { "$ref": "#/$defs/Ulid" },
+        "term": { "type": "string" },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "ColumnsBlock": {
+      "type": "object",
+      "required": ["type", "id", "columns"],
+      "additionalProperties": false,
+      "properties": {
+        "type":    { "const": "columns" },
+        "id":      { "$ref": "#/$defs/Ulid" },
+        "columns": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": { "type": "array", "items": { "$ref": "#/$defs/Block" } }
+        },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "TabsBlock": {
+      "type": "object",
+      "required": ["type", "id", "tabs"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "tabs" },
+        "id":   { "$ref": "#/$defs/Ulid" },
+        "tabs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["label", "blocks"],
+            "additionalProperties": false,
+            "properties": {
+              "label":  { "type": "string" },
+              "blocks": { "type": "array", "items": { "$ref": "#/$defs/Block" } }
+            }
+          }
+        },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "AccordionBlock": {
+      "type": "object",
+      "required": ["type", "id", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "type":  { "const": "accordion" },
+        "id":    { "$ref": "#/$defs/Ulid" },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["label", "blocks"],
+            "additionalProperties": false,
+            "properties": {
+              "label":  { "type": "string" },
+              "blocks": { "type": "array", "items": { "$ref": "#/$defs/Block" } }
+            }
+          }
+        },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "DataSourceBlock": {
+      "type": "object",
+      "required": ["type", "id", "endpoint", "render"],
+      "additionalProperties": false,
+      "properties": {
+        "type":     { "const": "data-source" },
+        "id":       { "$ref": "#/$defs/Ulid" },
+        "endpoint": { "type": "string", "pattern": "^/api/v1/widgets/" },
+        "params":   { "type": "object" },
+        "render":   { "enum": ["table", "chart", "kpi-cards"] },
+        "refreshInterval": { "type": "integer", "minimum": 30, "maximum": 3600 },
+        "meta":     { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "DashboardEmbedBlock": {
+      "type": "object",
+      "required": ["type", "id", "provider", "panelId"],
+      "additionalProperties": false,
+      "properties": {
+        "type":     { "const": "dashboard-embed" },
+        "id":       { "$ref": "#/$defs/Ulid" },
+        "provider": { "enum": ["grafana", "tableau", "superset"] },
+        "panelId":  { "type": "string" },
+        "params":   { "type": "object" },
+        "meta":     { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "CalculatorBlock": {
+      "type": "object",
+      "required": ["type", "id", "inputs", "formula"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "calculator" },
+        "id":   { "$ref": "#/$defs/Ulid" },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "label"],
+            "properties": {
+              "name":    { "type": "string" },
+              "label":   { "type": "string" },
+              "default": { "type": ["string", "number", "boolean"] },
+              "kind":    { "enum": ["number", "text", "select"], "default": "number" }
+            }
+          }
+        },
+        "formula": { "type": "string", "description": "안전한 표현식 (mathjs 등)" },
+        "label":   { "type": "string" },
+        "meta":    { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "RelatedDoc": {
+      "type": "object",
+      "required": ["slug", "relation"],
+      "additionalProperties": false,
+      "properties": {
+        "slug":     { "$ref": "#/$defs/Slug" },
+        "relation": { "type": "string", "examples": ["참고", "선행", "후속", "유사"] }
+      }
+    },
+    "GlossaryItem": {
+      "type": "object",
+      "required": ["term", "definition"],
+      "additionalProperties": false,
+      "properties": {
+        "term":       { "type": "string", "minLength": 1 },
+        "definition": { "type": "string", "minLength": 1 }
+      }
+    },
+    "Reference": {
+      "type": "object",
+      "required": ["type", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "type":  { "enum": ["internal", "external"] },
+        "label": { "type": "string" },
+        "url":   { "type": "string", "format": "uri" }
+      }
+    }
+  }
+}

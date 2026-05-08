@@ -1,0 +1,34 @@
+pnpm -w schema:validate
+pnpm -r --if-present run typecheck
+
+# FR-17 codegen drift guard — fast (<5s) check that committed artifacts
+# match the SSOT. Skip silently if optional tooling is missing locally.
+ROOT="$(git rev-parse --show-toplevel)"
+
+# 1) Schema codegen drift (TS + Pydantic)
+if pnpm -w schema:gen >/dev/null 2>&1; then
+  if ! git diff --quiet -- "$ROOT/apps/web/src/types/document.ts" "$ROOT/apps/api/app/schemas/document.py"; then
+    echo "✗ Schema codegen drift detected. Run: make codegen && git add apps/web/src/types/document.ts apps/api/app/schemas/document.py"
+    exit 1
+  fi
+else
+  echo "⚠ pnpm schema:gen unavailable — skipping codegen drift check."
+fi
+
+# 2) OpenAPI runtime spec drift — prefers the running api container so the
+# hook stays under 5s. Skip if neither container nor local Python deps work.
+if apptainer instance list 2>/dev/null | grep -q mxwp_api; then
+  apptainer exec instance://mxwp_api /bin/sh -c "cd /workspace && python3 apps/api/app/scripts/dump_openapi.py" >/dev/null 2>&1 || true
+  if ! git diff --quiet -- "$ROOT/apps/api/openapi.json"; then
+    echo "✗ FastAPI OpenAPI drift detected. Run: make openapi-dump && git add apps/api/openapi.json"
+    exit 1
+  fi
+elif command -v python3 >/dev/null 2>&1 && python3 -c "import fastapi" 2>/dev/null; then
+  python3 "$ROOT/apps/api/app/scripts/dump_openapi.py" >/dev/null 2>&1 || true
+  if ! git diff --quiet -- "$ROOT/apps/api/openapi.json"; then
+    echo "✗ FastAPI OpenAPI drift detected. Run: make openapi-dump && git add apps/api/openapi.json"
+    exit 1
+  fi
+else
+  echo "⚠ python3 + fastapi not available locally — skipping OpenAPI drift check (CI will catch it)."
+fi

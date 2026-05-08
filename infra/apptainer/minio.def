@@ -1,0 +1,10 @@
+Bootstrap: localimage
+From: ./minio-base.sif
+
+%labels
+    Component  mxwp-minio
+    Wraps      minio/minio:RELEASE.2024-09-22T00-33-43Z
+
+%startscript
+    # MINIO_ROOT_USER / MINIO_ROOT_PASSWORD set via instance start --env.
+    exec /usr/bin/minio server /data --console-address ":9001"

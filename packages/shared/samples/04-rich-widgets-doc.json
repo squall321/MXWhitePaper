@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "id": "01J9X1Y2Z3A4B5C6D7E8F9G0H4",
+  "slug": "kpi-dashboard-guide",
+  "title": "사업부 KPI 대시보드 가이드",
+  "summary": "MX KPI 정의, 계산식, 그리고 대시보드 사용 방법",
+  "metadata": {
+    "division": "MX",
+    "team": "전략팀",
+    "owners": ["u-strategy-lead"],
+    "tags": ["KPI", "대시보드", "지표"],
+    "category": "가이드",
+    "confidentiality": "internal"
+  },
+  "sections": [
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9G4S1",
+      "number": "1",
+      "level": 1,
+      "title": "주요 지표 한눈에",
+      "blocks": [
+        {
+          "type": "kpi-cards",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9G4B1",
+          "items": [
+            { "label": "월 출하량",  "value": "1.2M",  "delta": "+3.4%", "trend": "up" },
+            { "label": "ASP",        "value": "$520",  "delta": "-1.2%", "trend": "down" },
+            { "label": "MoM 매출",   "value": "$0.62B","delta": "+2.1%", "trend": "up" }
+          ]
+        }
+      ],
+      "subsections": []
+    },
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9G4S2",
+      "number": "2",
+      "level": 1,
+      "title": "ASP 계산식",
+      "blocks": [
+        {
+          "type": "math",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9G4B2",
+          "expression": "ASP = \\frac{\\text{Total Revenue}}{\\text{Units Sold}}",
+          "display": "block"
+        },
+        {
+          "type": "code",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9G4B3",
+          "language": "sql",
+          "code": "SELECT SUM(revenue) / NULLIF(SUM(units), 0) AS asp\nFROM mx_sales_daily\nWHERE month = :month;",
+          "filename": "asp.sql"
+        }
+      ],
+      "subsections": []
+    },
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9G4S3",
+      "number": "3",
+      "level": 1,
+      "title": "프로세스 흐름",
+      "blocks": [
+        {
+          "type": "flow",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9G4B4",
+          "engine": "mermaid",
+          "source": "graph LR\n  A[원천 데이터] --> B[ETL]\n  B --> C[(DW)]\n  C --> D[대시보드]\n  D --> E((의사결정))"
+        }
+      ],
+      "subsections": []
+    }
+  ],
+  "related_documents": [],
+  "glossary": [
+    { "term": "ASP", "definition": "Average Selling Price — 평균 판매가" },
+    { "term": "MoM", "definition": "Month-over-Month — 전월 대비" }
+  ],
+  "references": [],
+  "see_also": []
+}

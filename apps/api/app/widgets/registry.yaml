@@ -1,0 +1,23 @@
+# MX White Paper — Widget Catalog (Sprint 6 stub)
+# DocumentJSON v1.0 의 data-source block 이 참조하는 widget 정의.
+widgets:
+  - id: kpi.finance-daily
+    name: 재무 일일 KPI
+    endpoint: /api/v1/widgets/kpi/finance-daily
+    render: kpi-cards
+    refreshInterval: 300
+    params:
+      - name: team
+        kind: string
+        default: finance
+    description: 재무팀의 일일 매출/지출 요약 (mock).
+  - id: kpi.month-end-progress
+    name: 월결산 진행률
+    endpoint: /api/v1/widgets/kpi/month-end-progress
+    render: chart
+    refreshInterval: 600
+    params:
+      - name: team
+        kind: string
+        default: finance
+    description: 월 결산 단계별 진행률 (mock).

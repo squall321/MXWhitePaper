@@ -1,0 +1,10 @@
+Bootstrap: localimage
+From: ./meili-base.sif
+
+%labels
+    Component  mxwp-meili
+    Wraps      getmeili/meilisearch:v1.10
+
+%startscript
+    # tini -> meilisearch.  MEILI_* env vars set via instance start --env.
+    exec tini -- /bin/sh -c "meilisearch"

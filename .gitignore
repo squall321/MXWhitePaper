@@ -1,0 +1,71 @@
+# dependencies
+node_modules/
+.pnpm-store/
+.venv/
+__pycache__/
+*.egg-info/
+*.pyc
+
+# build outputs
+dist/
+build/
+*.tsbuildinfo
+.tsbuild-node/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# misc
+.cache/
+coverage/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# bkit / claude
+.bkit/runtime/
+.bkit/snapshots/
+.koo-llm-sessions/
+
+# storage volumes (when binding locally)
+infra/data/
+
+# Apptainer build artefacts (100MB~210MB each — pulled/built locally)
+*.sif
+
+# bkit/PDCA local state (per-developer; not part of the repo contract)
+.bkit/state/
+
+# husky auto-generated
+.husky/_/
+
+# build/run logs (keep dir? no — flush via cron)
+infra/logs/*.log
+infra/logs/*.html
+infra/logs/_*.sh
+infra/logs/sprint*-render-check.mjs
+
+# playwright artefacts
+infra/logs/e2e-report/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/.playwright/

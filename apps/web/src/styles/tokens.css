@@ -1,0 +1,199 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design tokens (Design §5.7 Samsung Blue) ─────────────────────── */
+:root {
+  /* Brand */
+  --smsg-blue-900: #0A1F8F;
+  --smsg-blue-700: #1428A0;
+  --smsg-blue-500: #2E5BFF;
+  --smsg-blue-300: #5C7CFF;
+  --smsg-blue-100: #E8EEFF;
+  --smsg-blue-050: #F5F7FF;
+
+  /* Neutrals */
+  --smsg-gray-900: #1A1A1A;
+  --smsg-gray-700: #374151;
+  --smsg-gray-500: #6B7280;
+  --smsg-gray-300: #D1D5DB;
+  --smsg-gray-200: #E5E7EB;
+  --smsg-gray-100: #F3F4F6;
+  --smsg-gray-050: #F9FAFB;
+
+  /* Semantic */
+  --smsg-link: var(--smsg-blue-500);
+  --smsg-link-missing: #CC0000;
+  --smsg-bg: #FFFFFF;
+  --smsg-success: #10B981;
+  --smsg-warn: #F59E0B;
+  --smsg-error: #DC2626;
+
+  /* Typography scale */
+  --text-xs:  0.75rem;   /* 12 */
+  --text-sm:  0.875rem;  /* 14 */
+  --text-base:1rem;      /* 16 */
+  --text-lg:  1.125rem;  /* 18 */
+  --text-xl:  1.25rem;   /* 20 */
+  --text-2xl: 1.5rem;    /* 24 */
+  --text-3xl: 1.875rem;  /* 30 */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.7;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .05);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, .08);
+  --shadow-lg: 0 10px 32px rgba(15, 23, 42, .12);
+  --shadow-focus: 0 0 0 3px rgba(46, 91, 255, .25);
+
+  /* z-index — body widgets (Mantine/Recharts/Mermaid) self-assign 1~99,
+     so header+overlays must clearly outrank them. Header is in its own
+     stacking context (.app-header) so child popovers don't escape. */
+  --z-content:  0;
+  --z-sticky:   100;   /* TopBar / EditorToolbar */
+  --z-drawer:   200;
+  --z-modal:    300;
+  --z-popover:  400;   /* in-modal popovers, slash menus */
+  --z-toast:    500;
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --ease-out: cubic-bezier(.2,.8,.2,1);
+
+  /* Layout */
+  --layout-sidebar-w: 280px;
+  --layout-toc-w: 280px;
+  --layout-tablet-sidebar-w: 240px;
+  --header-h: 3.5rem;
+}
+
+/* basic typography */
+html, body {
+  font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--smsg-gray-900);
+  background: var(--smsg-bg);
+}
+
+a { color: var(--smsg-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+a.wiki-missing { color: var(--smsg-link-missing); }
+
+/* Focus-visible — used by primitives and any raw button/link. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-radius: var(--radius-sm);
+}
+
+/* Reduced-motion: skip transitions/animations. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Skip-to-content link, hidden until focused. */
+.skip-to-content {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 8px 14px;
+  background: var(--smsg-blue-700);
+  color: #fff;
+  font-size: var(--text-sm);
+  border-radius: 0 0 var(--radius-md) 0;
+}
+.skip-to-content:focus { left: 0; }
+
+/* Drawer/Modal animations */
+@keyframes fadeIn   { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideInL { from { transform: translateX(-100%) } to { transform: translateX(0) } }
+@keyframes slideInR { from { transform: translateX(100%) }  to { transform: translateX(0) } }
+@keyframes slideUp  { from { transform: translateY(8px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+.anim-fade   { animation: fadeIn var(--duration-base) var(--ease-out); }
+.anim-slideL { animation: slideInL var(--duration-base) var(--ease-out); }
+.anim-slideR { animation: slideInR var(--duration-base) var(--ease-out); }
+.anim-slideUp{ animation: slideUp var(--duration-base) var(--ease-out); }
+
+/* ── BlockNote (Mantine wrapper) editor surface — Sprint 7 polish ───── */
+.wp-editor-surface {
+  /* Inherit prose width so the editor blends into the article. */
+  max-width: 880px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.wp-editor-surface .bn-container,
+.wp-editor-surface .bn-editor {
+  background: transparent;
+}
+
+/* Match read-mode prose typography. */
+.wp-editor-surface .bn-editor {
+  font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--smsg-gray-900);
+  padding: 12px 16px;
+}
+
+/* Side menu (drag handle) -- Samsung Blue accent on hover. */
+.wp-editor-surface .bn-side-menu button[data-test="dragHandle"]:hover,
+.wp-editor-surface .bn-side-menu button[data-test="addBlock"]:hover {
+  color: var(--smsg-blue-700);
+  background: var(--smsg-blue-100);
+  border-radius: var(--radius-sm);
+}
+
+/* Slash menu / suggestion menu — match Samsung Blue. */
+.wp-editor-surface .bn-suggestion-menu,
+.wp-editor-surface .mantine-Menu-dropdown {
+  border: 1px solid var(--smsg-blue-100);
+  box-shadow: var(--shadow-md);
+}
+.wp-editor-surface .bn-suggestion-menu-item[aria-selected="true"],
+.wp-editor-surface .mantine-Menu-item[data-hovered="true"] {
+  background: var(--smsg-blue-100);
+  color: var(--smsg-blue-900);
+}
+
+/* Drop position indicator — bright smsg-500 line. */
+.wp-editor-surface .ProseMirror-dropcursor {
+  border-color: var(--smsg-blue-500) !important;
+  background: var(--smsg-blue-500) !important;
+  height: 2px !important;
+}
+
+/* Empty hint hides as soon as content is present (Prose mirror sets data attr). */
+.wp-editor-surface .bn-block-content[data-content-type="paragraph"]:not(:empty) ~ [data-empty-editor-hint],
+.wp-editor-surface:focus-within [data-empty-editor-hint] {
+  opacity: 0;
+}
+
+/* Focus pulse fired after a slash-menu insertion so the user sees where the
+   new block landed. */
+@keyframes wp-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(46, 91, 255, .35); }
+  60%  { box-shadow: 0 0 0 8px rgba(46, 91, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(46, 91, 255, 0); }
+}
+.wp-pulse {
+  animation: wp-pulse var(--duration-slow) var(--ease-out) 1;
+}

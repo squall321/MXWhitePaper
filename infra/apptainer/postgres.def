@@ -1,0 +1,11 @@
+Bootstrap: localimage
+From: ./postgres-base.sif
+
+%labels
+    Component  mxwp-postgres
+    Wraps      pgvector/pgvector:pg15
+
+%startscript
+    # docker-entrypoint.sh respects POSTGRES_USER, POSTGRES_PASSWORD,
+    # POSTGRES_DB, PGPORT, PGDATA from the environment (set via instance start --env).
+    exec docker-entrypoint.sh postgres

@@ -1,0 +1,39 @@
+import { Link } from 'react-router-dom'
+import type { DocLinkCardBlock } from '@/types/document'
+import { useDocument } from '@/features/document/hooks/useDocument'
+
+/**
+ * Doc-link card. Lazily fetches `/documents/:slug` via TanStack Query and
+ * shows a card with title + (optional) summary. 404 → red "missing" state.
+ */
+export function DocLinkCardBlockView({ block }: { block: DocLinkCardBlock }) {
+  const { data, isLoading, isError } = useDocument(block.slug)
+
+  if (isLoading) {
+    return (
+      <div className="rounded border border-gray-200 bg-white p-3 text-xs text-gray-500">
+        문서 불러오는 중…
+      </div>
+    )
+  }
+  if (isError || !data) {
+    return (
+      <div className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+        존재하지 않는 문서: <code>{block.slug}</code>
+      </div>
+    )
+  }
+  const showSummary = block.showSummary !== false
+  return (
+    <Link
+      to={`/docs/${encodeURIComponent(block.slug)}`}
+      className="block rounded border border-gray-200 bg-white p-3 hover:border-smsg-500"
+    >
+      <p className="text-sm font-semibold text-smsg-900">{data.document.title}</p>
+      {showSummary && data.document.summary && (
+        <p className="mt-1 text-xs text-gray-600">{data.document.summary}</p>
+      )}
+      <p className="mt-1 text-[11px] text-gray-400">/{block.slug}</p>
+    </Link>
+  )
+}
