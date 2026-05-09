@@ -85,6 +85,9 @@ const TagManagerPage = lazyLogged('TagManager', () =>
 const RecentPage = lazyLogged('Recent', () =>
   import('./pages/Recent').then((m) => ({ default: m.RecentPage })),
 )
+const ActivityFeedPage = lazyLogged('ActivityFeed', () =>
+  import('./pages/ActivityFeed').then((m) => ({ default: m.ActivityFeedPage })),
+)
 const ReadListPage = lazyLogged('ReadList', () =>
   import('./pages/ReadList').then((m) => ({ default: m.ReadListPage })),
 )
@@ -96,6 +99,12 @@ const SettingsPage = lazyLogged('Settings', () =>
 )
 const SnippetManagerPage = lazyLogged('SnippetManager', () =>
   import('./pages/SnippetManager').then((m) => ({ default: m.SnippetManagerPage })),
+)
+const SeriesManagerPage = lazyLogged('SeriesManager', () =>
+  import('./pages/SeriesManager').then((m) => ({ default: m.SeriesManagerPage })),
+)
+const SeriesDetailPage = lazyLogged('SeriesDetail', () =>
+  import('./pages/SeriesDetail').then((m) => ({ default: m.SeriesDetailPage })),
 )
 // `TagPage` accepts a `mode` prop, which doesn't fit `lazyLogged`'s
 // component-with-no-props generic. Use `React.lazy` directly + manual log.
@@ -262,10 +271,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="admin/tags" element={<Boundaried name="admin/tags"><TagManagerPage /></Boundaried>} />
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
+                <Route path="activity" element={<Boundaried name="activity"><ActivityFeedPage /></Boundaried>} />
                 <Route path="reads" element={<Boundaried name="reads"><ReadListPage /></Boundaried>} />
                 <Route path="reviews" element={<Boundaried name="reviews"><MyReviewsPage /></Boundaried>} />
                 <Route path="settings" element={<Boundaried name="settings"><SettingsPage /></Boundaried>} />
                 <Route path="snippets" element={<Boundaried name="snippets"><SnippetManagerPage /></Boundaried>} />
+                <Route path="series" element={<Boundaried name="series"><SeriesManagerPage /></Boundaried>} />
+                <Route path="series/:slug" element={<Boundaried name="series/:slug"><SeriesDetailPage /></Boundaried>} />
                 <Route path="graph" element={<Boundaried name="graph"><GraphPage /></Boundaried>} />
                 <Route path="graph/:slug" element={<Boundaried name="graph/:slug"><GraphPage /></Boundaried>} />
                 <Route path="tags/:tag" element={<Boundaried name="tags"><TagPage mode="tag" /></Boundaried>} />

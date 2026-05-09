@@ -3,6 +3,10 @@ import type { ParagraphBlock, Slug, Ulid } from '@/types/document'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { useEditorStore } from '../state'
 import { htmlToBlocks } from '../paste/htmlPaste'
+import {
+  detectLang,
+  useSpellcheckPref,
+} from '@/features/spellcheck/preferencesStore'
 
 /**
  * InlineTextBlockEditor — contentEditable for text-only blocks
@@ -33,6 +37,12 @@ interface Props {
   className?: string
   /** Placeholder shown when empty. */
   placeholder?: string
+  /**
+   * Browser-native spellcheck on the contentEditable surface. Defaults to
+   * `true` and is gated by the user's `mxwp:spellcheck-prefs:v1` preference
+   * — passing `false` here forces it off regardless of the global toggle.
+   */
+  spellCheck?: boolean
 }
 
 export function InlineTextBlockEditor({
@@ -44,10 +54,19 @@ export function InlineTextBlockEditor({
   level,
   className,
   placeholder = '텍스트를 입력하세요…',
+  spellCheck = true,
 }: Props) {
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
+  const spellPrefEnabled = useSpellcheckPref((s) => s.enabled)
+  const spellPrefAutoLang = useSpellcheckPref((s) => s.autoDetectLang)
+  // Effective spellcheck — both the prop AND the global pref must allow it.
+  const effectiveSpellCheck = spellCheck && spellPrefEnabled
+  // Auto-detect lang from current text; when auto-detect is off, fall back
+  // to the user's UI language… but UI language is read by the parent so we
+  // just pass `undefined` (browser uses its own heuristic).
+  const langAttr = spellPrefAutoLang ? detectLang(initialText) : undefined
 
   const ref = useRef<HTMLDivElement>(null)
   const [empty, setEmpty] = useState(initialText.length === 0)
@@ -201,6 +220,8 @@ export function InlineTextBlockEditor({
       aria-label="블록 텍스트 편집"
       contentEditable
       suppressContentEditableWarning
+      spellCheck={effectiveSpellCheck}
+      lang={langAttr}
       onInput={onInput}
       onBlur={() => void persist()}
       onKeyDown={onKeyDown}

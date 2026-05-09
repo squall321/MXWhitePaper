@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Outlet } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import { CommandPalette } from './features/search/components/CommandPalette'
+import { QuickSwitcher } from './features/quick-switcher/QuickSwitcher'
 import { ToastProvider } from './components/ui/Toast'
 import { useNotificationsStore } from './features/notifications/store'
 
@@ -32,6 +33,7 @@ export function App() {
   const [leftRail, setLeftRailState] = useState<ReactNode | null | undefined>(undefined)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteSeed, setPaletteSeed] = useState('')
+  const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false)
 
   const openPalette = useCallback((query?: string) => {
     setPaletteSeed(query ?? '')
@@ -42,17 +44,25 @@ export function App() {
     setLeftRailState(node)
   }, [])
 
-  // Global ⌘K / Ctrl+K handler.
+  // Global ⌘K / Ctrl+K handler + ⌘P / Ctrl+P quick switcher.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const isMeta = e.metaKey || e.ctrlKey
       if (isMeta && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault()
         setPaletteOpen((v) => !v)
+        return
+      }
+      // Ctrl+P / ⌘P → Quick Switcher. Capture-phase listener (see below)
+      // beats the browser's print dialog.
+      if (isMeta && (e.key === 'p' || e.key === 'P') && !e.shiftKey) {
+        e.preventDefault()
+        setQuickSwitcherOpen((v) => !v)
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    // Capture phase so we win the race against the browser's native print.
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [])
 
   // Boot greeting — only fires once per browser, never re-introduces if the
@@ -82,6 +92,11 @@ export function App() {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         initialQuery={paletteSeed}
+      />
+      <QuickSwitcher
+        open={quickSwitcherOpen}
+        onClose={() => setQuickSwitcherOpen(false)}
+        onOpenCommandPalette={() => setPaletteOpen(true)}
       />
       <ToastProvider />
     </AppShell>

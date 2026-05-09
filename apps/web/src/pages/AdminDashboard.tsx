@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Input, Select } from '@/components/ui/Input'
 import { toast } from '@/components/ui/Toast'
 import { ErrorState } from '@/components/ui/ErrorState'
+import { ActivityWidget } from '@/features/activity/ActivityWidget'
 import { AdminOrgsPage } from './AdminOrgs'
 import { TagManagerPage } from './TagManager'
 import {
@@ -64,6 +65,10 @@ export function AdminDashboardPage() {
           유저/감사/헬스/유지보수 — 운영 전용. 모든 변경은 audit_logs 에 남습니다.
         </p>
       </header>
+
+      <div className="mb-6" data-testid="admin-activity-widget-slot">
+        <ActivityWidget title="최근 활동 — 시스템 전체" />
+      </div>
 
       <nav
         role="tablist"

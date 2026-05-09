@@ -8,6 +8,7 @@ import { RecentRail } from '@/features/recent/components/RecentRail'
 import { useRecentStore } from '@/features/recent/store'
 import { FavoriteStar } from '@/features/favorites/components/FavoriteStar'
 import { RailBoundary } from '@/components/blocks/BlockBoundary'
+import { ActivityWidget } from '@/features/activity/ActivityWidget'
 import { SlowFetchBanner, useSlowFetch } from '@/lib/api/useSlowFetch'
 import { toApiError } from '@/lib/api/envelope'
 import { useLocale } from '@/lib/i18n'
@@ -35,13 +36,20 @@ export function HomePage() {
   const recentItems = Array.isArray(recentItemsRaw) ? recentItemsRaw : []
   const [recentMobileOpen, setRecentMobileOpen] = useState(false)
 
-  // HomePage uses the default left (OrgTree) and pushes RecentRail to right.
+  // HomePage uses the default left (OrgTree) and pushes RecentRail + ActivityWidget to right.
   useEffect(() => {
     setLeftRail(undefined)
     setRightRail(
-      <RailBoundary name="최근 본 문서">
-        <RecentRail />
-      </RailBoundary>,
+      <div className="space-y-4">
+        <RailBoundary name="최근 본 문서">
+          <RecentRail />
+        </RailBoundary>
+        <RailBoundary name="최근 활동">
+          <div className="px-3">
+            <ActivityWidget />
+          </div>
+        </RailBoundary>
+      </div>,
     )
     return () => {
       setRightRail(null)

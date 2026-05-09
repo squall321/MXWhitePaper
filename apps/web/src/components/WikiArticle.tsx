@@ -16,6 +16,8 @@ import { BulkActionsBar } from '@/features/editor/components/BulkActionsBar'
 import { SectionSwipe } from '@/features/mobile/SectionSwipe'
 import { ReviewersPanel } from '@/features/approvals/ReviewersPanel'
 import { WorkflowRibbon } from '@/features/approvals/WorkflowRibbon'
+import { SeriesNav } from '@/features/series/SeriesNav'
+import { AddToSeriesButton } from '@/features/series/AddToSeriesButton'
 import { useState } from 'react'
 import type { DocStatus } from '@/features/approvals/api'
 
@@ -87,6 +89,7 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           onTransitioned={(next) => setWorkflowStatus(next)}
         />
       )}
+      <SeriesNav slug={document.slug} placement="top" />
       <header className="space-y-3 border-b border-gray-200 pb-5">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded bg-smsg-50 px-2 py-0.5 font-mono text-[11px] text-smsg-700">
@@ -105,6 +108,9 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           <h1 className="flex-1 text-3xl font-semibold tracking-tight text-smsg-900 sm:text-4xl">
             {document.title}
           </h1>
+          {row?.id && (
+            <AddToSeriesButton slug={document.slug} documentId={row.id} />
+          )}
           <FavoriteStar slug={document.slug} title={document.title} />
           <BookmarkButton slug={document.slug} title={document.title} />
         </div>
@@ -163,6 +169,7 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           </div>
         </SectionSwipe>
       </div>
+      <SeriesNav slug={document.slug} placement="bottom" />
       {showApprovals && editableSlug && (
         <ReviewersPanel
           slug={editableSlug}

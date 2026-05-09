@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom'
 import { Card } from '@/components/ui'
 import { useSettingsStore, type ThemeMode, type UiSettings } from '@/features/settings/store'
 import { useLocale } from '@/lib/i18n'
+import { SpellcheckSettingsSection } from '@/features/spellcheck/SpellcheckSettingsSection'
 import type { AppOutletContext } from '@/App'
 
 /**
@@ -111,6 +112,8 @@ export function SettingsPage() {
           />
         </dl>
       </Card>
+
+      <SpellcheckSettingsSection />
 
       <div className="flex justify-end">
         <button

@@ -142,9 +142,10 @@ describe('<SettingsPage />', () => {
 
   it('renders aria-checked for every toggle and exposes role="switch"', () => {
     const html = renderSettings()
-    // Five toggles all expose role="switch" (excludes the language <select>).
+    // 4 cosmetic toggles + 2 spellcheck toggles (enabled, autoDetectLang).
+    // Excludes the language <select> and the theme radio group.
     const matches = html.match(/role="switch"/g) ?? []
-    expect(matches.length).toBe(4)
+    expect(matches.length).toBe(6)
     expect(html).toContain('role="switch"')
   })
 })

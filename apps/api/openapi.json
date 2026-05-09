@@ -608,6 +608,135 @@
         "title": "ResolveIn",
         "type": "object"
       },
+      "SeriesIn": {
+        "properties": {
+          "cover_image_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Image Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "slug": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Slug",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "title"
+        ],
+        "title": "SeriesIn",
+        "type": "object"
+      },
+      "SeriesItemIn": {
+        "properties": {
+          "document_id": {
+            "minLength": 1,
+            "title": "Document Id",
+            "type": "string"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          }
+        },
+        "required": [
+          "document_id"
+        ],
+        "title": "SeriesItemIn",
+        "type": "object"
+      },
+      "SeriesItemPatchIn": {
+        "properties": {
+          "position": {
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "position"
+        ],
+        "title": "SeriesItemPatchIn",
+        "type": "object"
+      },
+      "SeriesPatchIn": {
+        "properties": {
+          "cover_image_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Image Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "SeriesPatchIn",
+        "type": "object"
+      },
       "SnippetIn": {
         "properties": {
           "blocks": {
@@ -916,6 +1045,170 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/activity": {
+      "get": {
+        "operationId": "list_activity_api_v1_activity_get",
+        "parameters": [
+          {
+            "description": "ISO 시각 — 이 시각 이후만",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 시각 — 이 시각 이후만",
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "comma-separated list of kinds. allowed: doc_edited, doc_created, comment_added, share_link_created, bookmark_added, review_requested, review_decided, snippet_created",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "comma-separated list of kinds. allowed: doc_edited, doc_created, comment_added, share_link_created, bookmark_added, review_requested, review_decided, snippet_created",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Activity Api V1 Activity Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "활동 피드 — 다양한 출처를 합쳐 최신순 반환",
+        "tags": [
+          "activity"
+        ]
+      }
+    },
+    "/api/v1/activity/me": {
+      "get": {
+        "operationId": "list_my_activity_api_v1_activity_me_get",
+        "parameters": [
+          {
+            "description": "ISO 시각 — 이 시각 이후만",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 시각 — 이 시각 이후만",
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List My Activity Api V1 Activity Me Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "내가 관여한 활동 피드 — 작성자/리뷰어/오너 기준",
+        "tags": [
+          "activity"
+        ]
+      }
+    },
     "/api/v1/admin/audit": {
       "get": {
         "operationId": "list_audit_api_v1_admin_audit_get",
@@ -3824,6 +4117,50 @@
         ]
       }
     },
+    "/api/v1/documents/{slug}/series": {
+      "get": {
+        "operationId": "list_document_series_api_v1_documents__slug__series_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Document Series Api V1 Documents  Slug  Series Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "이 문서가 속한 시리즈 + 이웃 (reader+)",
+        "tags": [
+          "series"
+        ]
+      }
+    },
     "/api/v1/documents/{slug}/share": {
       "get": {
         "description": "revoked_at IS NULL 인 항목만 반환. view_count, expires_at 포함.",
@@ -6006,6 +6343,359 @@
         ]
       }
     },
+    "/api/v1/series": {
+      "get": {
+        "operationId": "list_series_api_v1_series_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Series Api V1 Series Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "시리즈 목록 (reader+)",
+        "tags": [
+          "series"
+        ]
+      },
+      "post": {
+        "operationId": "create_series_api_v1_series_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Series Api V1 Series Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "시리즈 생성 (editor+)",
+        "tags": [
+          "series"
+        ]
+      }
+    },
+    "/api/v1/series/{slug}": {
+      "delete": {
+        "operationId": "delete_series_api_v1_series__slug__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "시리즈 삭제 (owner | admin)",
+        "tags": [
+          "series"
+        ]
+      },
+      "get": {
+        "operationId": "get_series_api_v1_series__slug__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Series Api V1 Series  Slug  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "시리즈 상세 (reader+)",
+        "tags": [
+          "series"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_series_api_v1_series__slug__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Series Api V1 Series  Slug  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "시리즈 수정 (owner | admin)",
+        "tags": [
+          "series"
+        ]
+      }
+    },
+    "/api/v1/series/{slug}/items": {
+      "post": {
+        "operationId": "add_series_item_api_v1_series__slug__items_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesItemIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Series Item Api V1 Series  Slug  Items Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "시리즈에 문서 추가 (editor+)",
+        "tags": [
+          "series"
+        ]
+      }
+    },
+    "/api/v1/series/{slug}/items/{document_id}": {
+      "delete": {
+        "operationId": "remove_series_item_api_v1_series__slug__items__document_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "시리즈에서 문서 제거 (editor+)",
+        "tags": [
+          "series"
+        ]
+      },
+      "patch": {
+        "operationId": "reorder_series_item_api_v1_series__slug__items__document_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesItemPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reorder Series Item Api V1 Series  Slug  Items  Document Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "시리즈 항목 위치 변경 (editor+)",
+        "tags": [
+          "series"
+        ]
+      }
+    },
     "/api/v1/share/{token}": {
       "delete": {
         "operationId": "revoke_share_link_api_v1_share__token__delete",
@@ -7250,8 +7940,16 @@
       "name": "approvals"
     },
     {
+      "description": "활동 피드 — 편집/댓글/공유링크/책갈피/리뷰/스니펫 같은 다양한 이벤트를 출처에서 모아 최신순으로 반환한다. ?kind=, ?since=, ?limit= 으로 필터링.",
+      "name": "activity"
+    },
+    {
       "description": "재사용 가능한 블록 라이브러리 — 사용자가 N개 블록을 묶어 저장하고 다른 문서에 붙여넣는다. scope=private|team|org 로 공유 범위 조절. 팀 스코프는 users.team_id 기준 — team_id 가 없으면 팀 스니펫이 보이지 않는다.",
       "name": "snippets"
+    },
+    {
+      "description": "문서 시리즈(책 / 시리즈) — N개 문서를 묶어 순서를 부여하고 리더가 prev/next 로 탐색할 수 있게 한다. 문서 단건 호출 시 GET /documents/{slug}/series 로 이웃(prev/next) 까지 함께 회신.",
+      "name": "series"
     }
   ]
 }

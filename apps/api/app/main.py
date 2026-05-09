@@ -15,6 +15,7 @@ from .core.errors import (
     envelope,
     validation_error_handler,
 )
+from .routers.activity import router as activity_router
 from .routers.admin import router as admin_router
 from .routers.ai import router as ai_router
 from .routers.analytics import router as analytics_router
@@ -32,6 +33,7 @@ from .routers.links_graph import router as links_graph_router
 from .routers.notifications import router as notifications_router
 from .routers.orgs import router as orgs_router
 from .routers.search import router as search_router
+from .routers.series import router as series_router
 from .routers.sharing import router as sharing_router
 from .routers.snippets import router as snippets_router
 from .routers.tags import router as tags_router
@@ -164,11 +166,26 @@ TAGS_METADATA: list[dict[str, str]] = [
         ),
     },
     {
+        "name": "activity",
+        "description": (
+            "활동 피드 — 편집/댓글/공유링크/책갈피/리뷰/스니펫 같은 다양한 이벤트를 "
+            "출처에서 모아 최신순으로 반환한다. ?kind=, ?since=, ?limit= 으로 필터링."
+        ),
+    },
+    {
         "name": "snippets",
         "description": (
             "재사용 가능한 블록 라이브러리 — 사용자가 N개 블록을 묶어 저장하고 "
             "다른 문서에 붙여넣는다. scope=private|team|org 로 공유 범위 조절. "
             "팀 스코프는 users.team_id 기준 — team_id 가 없으면 팀 스니펫이 보이지 않는다."
+        ),
+    },
+    {
+        "name": "series",
+        "description": (
+            "문서 시리즈(책 / 시리즈) — N개 문서를 묶어 순서를 부여하고 "
+            "리더가 prev/next 로 탐색할 수 있게 한다. 문서 단건 호출 시 "
+            "GET /documents/{slug}/series 로 이웃(prev/next) 까지 함께 회신."
         ),
     },
 ]
@@ -256,6 +273,10 @@ def create_app() -> FastAPI:
     app.include_router(sharing_router)
     # 승인 워크플로우 — 리뷰어 + 상태 전이
     app.include_router(approvals_router)
+    # 문서 시리즈(책) — prev/next navigation
+    app.include_router(series_router)
+    # 활동 피드 — 다중 출처 집계
+    app.include_router(activity_router)
 
     return app
 
