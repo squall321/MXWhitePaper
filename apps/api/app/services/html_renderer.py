@@ -59,12 +59,15 @@ def render_namuwiki_html(
     doc: dict[str, Any],
     *,
     options: RenderOptions | None = None,
+    requester_role: str | None = None,
 ) -> str:
     """DocumentJSON dict 를 단일 HTML 문서로 렌더한다.
 
     Args:
         doc: DocumentJSON v1.0 dict (validated).
         options: 렌더 옵션. None 이면 기본값.
+        requester_role: 호출자 role. 지정 시 admin 미만은 meta.permission 이
+            높은 블록을 redact 한 결과를 렌더한다. None 이면 scrub 미적용.
 
     Returns:
         UTF-8 HTML 문자열 (DOCTYPE 포함).
@@ -72,6 +75,10 @@ def render_namuwiki_html(
     opts = options or RenderOptions()
     ctx = _Ctx(opts=opts, used_katex=False, used_mermaid=False)
 
+    if requester_role is not None:
+        from .document_service import scrub_for_response
+
+        doc = scrub_for_response(doc, role=requester_role)
     # Resolve `{{var}}` tokens up front. Code blocks are skipped inside the
     # helper (matches the FE rule: no substitution inside <pre><code>).
     doc = walk_doc_substitute(doc, doc.get("variables"))

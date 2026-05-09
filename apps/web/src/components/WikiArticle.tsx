@@ -34,6 +34,7 @@ import { useState } from 'react'
 import type { DocStatus } from '@/features/approvals/api'
 import { useAuthStore } from '@/features/auth/store'
 import { DocAnalyticsModal } from '@/features/analytics/DocAnalyticsModal'
+import { SaveAsTemplateModal } from '@/features/templates/SaveAsTemplateModal'
 
 interface WikiArticleProps {
   document: DocumentJSONV10
@@ -102,6 +103,11 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
   const canViewAnalytics =
     !!editableSlug && (userRole === 'editor' || userRole === 'admin')
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
+  // Cycle 0020 — save-as-template (editor+ only). Visible whenever the user
+  // could edit the doc; we don't gate on editableSlug because templates are
+  // independent of edit permission on a specific doc.
+  const canSaveTemplate = userRole === 'editor' || userRole === 'admin'
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
 
   return (
     <article className="relative space-y-6">
@@ -148,6 +154,19 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
             >
               <span aria-hidden="true">📊</span>
               <span className="ml-1 hidden sm:inline">통계</span>
+            </button>
+          )}
+          {canSaveTemplate && (
+            <button
+              type="button"
+              onClick={() => setSaveTemplateOpen(true)}
+              className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 hover:text-smsg-700"
+              data-testid="open-save-as-template"
+              aria-label="템플릿으로 저장"
+              title="템플릿으로 저장"
+            >
+              <span aria-hidden="true">📋</span>
+              <span className="ml-1 hidden sm:inline">템플릿으로 저장</span>
             </button>
           )}
           <FavoriteStar slug={document.slug} title={document.title} />
@@ -232,6 +251,13 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           slug={document.slug}
           open={analyticsOpen}
           onClose={() => setAnalyticsOpen(false)}
+        />
+      )}
+      {canSaveTemplate && (
+        <SaveAsTemplateModal
+          document={document}
+          open={saveTemplateOpen}
+          onClose={() => setSaveTemplateOpen(false)}
         />
       )}
     </article>

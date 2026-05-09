@@ -25,6 +25,7 @@ from app.core.auth import get_current_user, require_editor
 from app.core.db import get_db
 from app.core.errors import APIError, Forbidden, NotFound, envelope
 from app.repos import document_repo
+from app.services import notification_prefs as prefs_svc
 from app.services.document_service import fire_webhook
 
 router_doc = APIRouter(prefix="/api/v1/documents", tags=["comments"])
@@ -195,6 +196,11 @@ async def _insert_mention_notifications(
             {"u": u},
         )).first()
         if not exists:
+            continue
+        # Honour the recipient's per-user notification_prefs.
+        if not await prefs_svc.is_channel_enabled(
+            s, user_id=u, kind="comment_mention", channel="in_app"
+        ):
             continue
         await s.execute(
             text("""

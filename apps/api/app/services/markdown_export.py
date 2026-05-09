@@ -18,16 +18,28 @@ from app.services.variables import walk_doc_substitute
 # ── Public entry ─────────────────────────────────────────────────────
 
 
-def render_markdown(doc: dict[str, Any], *, include_metadata: bool = True) -> str:
+def render_markdown(
+    doc: dict[str, Any],
+    *,
+    include_metadata: bool = True,
+    requester_role: str | None = None,
+) -> str:
     """DocumentJSON dict 를 GFM 문자열로 렌더한다.
 
     Args:
         doc: DocumentJSON v1.0 dict.
         include_metadata: front-matter / 메타블록을 헤더로 포함할지.
+        requester_role: 호출자 role. 지정 시 admin 미만은 meta.permission 이
+            높은 블록을 redact 한 결과를 렌더한다. None 이면 scrub 미적용 —
+            backup_runner 처럼 admin-only access 가 보장된 경로용.
 
     Returns:
         UTF-8 markdown 문자열. 끝에 trailing newline 1개.
     """
+    if requester_role is not None:
+        from .document_service import scrub_for_response
+
+        doc = scrub_for_response(doc, role=requester_role)
     # Substitute `{{var}}` tokens BEFORE walking the tree so every block sees
     # the resolved text. `code` blocks are skipped inside the helper.
     doc = walk_doc_substitute(doc, doc.get("variables"))

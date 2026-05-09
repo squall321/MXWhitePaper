@@ -107,8 +107,8 @@ async def get_document(
     response.headers["Cache-Control"] = "private, must-revalidate"
     # Block-level visibility: redact blocks whose meta.permission is above the
     # caller's role (admin sees everything → no-op).
-    content = document_service.scrub_blocks_for_role(
-        doc["content_json"], _user.get("role")
+    content = document_service.scrub_for_response(
+        doc["content_json"], role=_user.get("role")
     )
     return envelope(
         data={
@@ -158,7 +158,9 @@ async def export_document_html(
         )
 
     doc = await document_service.get_document_or_404(s, slug)
-    content = doc["content_json"]
+    content = document_service.scrub_for_response(
+        doc["content_json"], role=_user.get("role")
+    )
 
     # 본문에서 imageId 를 모두 수집 → DB 한 번에 조회 → resolver 에 dict 주입.
     image_ids = _collect_image_ids(content)
@@ -187,6 +189,8 @@ async def export_document_html(
         mermaid_cdn=(mermaid == "cdn"),
         image_resolver=resolver,
     )
+    # `content` is already scrubbed above for the caller's role; pass through
+    # without re-scrubbing in the renderer.
     html_bytes = render_namuwiki_html(content, options=options).encode("utf-8")
     filename = f"{slug}.html"
     # 한글/특수 문자 slug 대응 — RFC 5987 filename* 사용
@@ -486,6 +490,9 @@ async def get_document_version(
     ver = await document_repo.find_version(s, doc_id=doc["id"], version=n)
     if not ver:
         raise NotFound(f"version not found: {slug}@{n}")
+    content = document_service.scrub_for_response(
+        ver["content_json"], role=_user.get("role")
+    )
     return envelope(
         data={
             "slug": doc["slug"],
@@ -494,7 +501,7 @@ async def get_document_version(
             "edited_by_name": ver["edited_by_name"],
             "edited_at": ver["edited_at"],
             "change_log": ver["change_log"],
-            "content": ver["content_json"],
+            "content": content,
         }
     )
 
@@ -602,6 +609,9 @@ async def patch_section(
     )
     etag = document_service.make_etag(doc["id"], doc["version"])
     response.headers["ETag"] = etag
+    section = document_service.scrub_section_for_response(
+        section, role=user.get("role")
+    )
     return envelope(
         data={
             "slug": doc["slug"],
@@ -639,6 +649,9 @@ async def patch_block(
     )
     etag = document_service.make_etag(doc["id"], doc["version"])
     response.headers["ETag"] = etag
+    block = document_service.scrub_block_for_response(
+        block, role=user.get("role")
+    )
     return envelope(
         data={
             "slug": doc["slug"],
@@ -792,11 +805,14 @@ async def reorder_sections(
     )
     etag = document_service.make_etag(doc["id"], doc["version"])
     response.headers["ETag"] = etag
+    scrubbed = document_service.scrub_for_response(
+        doc["content_json"], role=user.get("role")
+    )
     return envelope(
         data={
             "slug": doc["slug"],
             "version": doc["version"],
-            "sections": doc["content_json"]["sections"],
+            "sections": scrubbed["sections"],
         },
         meta={"etag": etag},
     )

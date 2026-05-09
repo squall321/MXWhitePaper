@@ -81,12 +81,15 @@ def render_pptx(
     doc: dict[str, Any],
     *,
     options: PptxOptions | None = None,
+    requester_role: str | None = None,
 ) -> bytes:
     """DocumentJSON dict 를 .pptx 바이너리로 렌더한다.
 
     Args:
         doc: DocumentJSON v1.0 dict.
         options: 렌더 옵션. None 이면 기본값.
+        requester_role: 호출자 role. 지정 시 admin 미만은 meta.permission 이
+            높은 블록을 redact 한 결과를 렌더한다. None 이면 scrub 미적용.
 
     Returns:
         .pptx zip 바이너리 (PK\\x03\\x04 매직).
@@ -98,6 +101,10 @@ def render_pptx(
 
     ctx = _Ctx(prs=prs, opts=opts)
 
+    if requester_role is not None:
+        from .document_service import scrub_for_response
+
+        doc = scrub_for_response(doc, role=requester_role)
     # Substitute `{{var}}` tokens up front so every slide emitter sees fully
     # resolved text. Code blocks are intentionally skipped inside the helper.
     doc = walk_doc_substitute(doc, doc.get("variables"))

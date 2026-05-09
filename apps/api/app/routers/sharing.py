@@ -320,6 +320,13 @@ async def read_shared_document(
         "has_password": share_meta["has_password"],
         "view_count": share_meta["view_count"] + 1,
     }
+    # Public share links never get to see admin/editor-permissioned blocks —
+    # always scrub at the lowest tier ('reader'), regardless of who created
+    # the share. This protects against an admin accidentally embedding
+    # restricted content in an externally-shareable link.
+    scrubbed_content = document_service.scrub_for_response(
+        doc["content_json"], role="reader"
+    )
     document_row = {
         "id": doc["id"],
         "slug": doc["slug"],
@@ -332,11 +339,11 @@ async def read_shared_document(
         "part_id": doc["part_id"],
         "created_at": doc["created_at"],
         "updated_at": doc["updated_at"],
-        "content": doc["content_json"],
+        "content": scrubbed_content,
     }
     return envelope(
         data={
-            "document": doc["content_json"],
+            "document": scrubbed_content,
             "row": document_row,
             "share_meta": public_share_meta,
         },

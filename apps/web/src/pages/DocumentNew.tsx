@@ -9,6 +9,10 @@ import { Button, Card, Field, Input, Select, cn } from '@/components/ui'
 import type { AppOutletContext } from '@/App'
 import { TemplateGallery } from '@/features/templates/TemplateGallery'
 import { findTemplate, templateToSections, type TemplateDef } from '@/features/templates/templates'
+import {
+  getServerTemplate,
+  type ServerTemplateSummary,
+} from '@/features/templates/serverApi'
 import { TagAutocomplete } from '@/features/tags/TagAutocomplete'
 
 /**
@@ -57,6 +61,11 @@ export function DocumentNewPage() {
   const initialMode: Mode = params.get('template') ? 'template' : 'blank'
   const [mode, setMode] = useState<Mode>(initialMode)
   const [templateId, setTemplateId] = useState<string>(params.get('template') ?? '')
+  // When the user picks a server (org-published) template we fetch its
+  // sections eagerly and stash them here. The bump of `use_count` happens on
+  // that GET. On submit we just spread these into the new doc payload.
+  const [serverSections, setServerSections] =
+    useState<SectionLevel1[] | null>(null)
 
   const [slug, setSlug] = useState(params.get('slug') ?? '')
   const [title, setTitle] = useState('')
@@ -77,7 +86,22 @@ export function DocumentNewPage() {
   // their own yet) so the form feels like a one-click action.
   const onPickTemplate = (tpl: TemplateDef) => {
     setTemplateId(tpl.id)
+    setServerSections(null)
     if (!title.trim()) setTitle(tpl.title)
+  }
+
+  const onPickServerTemplate = async (tpl: ServerTemplateSummary) => {
+    setError(null)
+    try {
+      // GET bumps use_count on the server. We tag the selection with a
+      // `server:<slug>` id so the existing highlight/CTA logic keeps working.
+      const full = await getServerTemplate(tpl.slug)
+      setTemplateId(`server:${full.slug}`)
+      setServerSections(full.sections as SectionLevel1[])
+      if (!title.trim()) setTitle(full.title)
+    } catch (e) {
+      setError((e as Error).message)
+    }
   }
 
   // Polish D — slug 에 한글 음절(가-힣)도 허용. 백엔드 JSON Schema 와 동일.
@@ -98,7 +122,17 @@ export function DocumentNewPage() {
     setError(null)
     try {
       let sections: SectionLevel1[]
-      if (mode === 'template' && templateId) {
+      if (mode === 'template' && serverSections) {
+        // Re-issue ULIDs on every section + block so two docs from the same
+        // server template never share IDs (mirrors `templateToSections`).
+        sections = serverSections.map((sec, i) => ({
+          ...sec,
+          id: ulid(),
+          number: String(i + 1),
+          blocks: (sec.blocks ?? []).map((b) => ({ ...b, id: ulid() })),
+          subsections: [],
+        }))
+      } else if (mode === 'template' && templateId) {
         const tpl = findTemplate(templateId)
         if (!tpl) {
           setError('선택한 템플릿을 찾을 수 없습니다.')
@@ -180,7 +214,11 @@ export function DocumentNewPage() {
           <p className="text-xs text-gray-500">
             마음에 드는 템플릿을 고르면 제목과 본문이 자동으로 채워집니다. 제목·슬러그는 아래에서 자유롭게 변경 가능합니다.
           </p>
-          <TemplateGallery onPick={onPickTemplate} selectedId={templateId} />
+          <TemplateGallery
+            onPick={onPickTemplate}
+            selectedId={templateId}
+            onPickServer={(t) => void onPickServerTemplate(t)}
+          />
         </Card>
       )}
 

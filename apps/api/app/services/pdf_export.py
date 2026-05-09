@@ -13,11 +13,16 @@ from typing import Any
 from app.services.html_renderer import RenderOptions, render_namuwiki_html
 
 
-def render_pdf(content: dict[str, Any]) -> bytes:
+def render_pdf(
+    content: dict[str, Any], *, requester_role: str | None = None
+) -> bytes:
     """DocumentJSON dict 를 받아 PDF 바이트를 돌려준다.
 
     WeasyPrint 가 설치되어 있지 않으면 ImportError 를 일으킨다 — 호출 측에서
     가용성을 보장한 후에만 호출할 것.
+
+    `requester_role` 이 주어지면 html 렌더 단계에서 block-permission scrub 이
+    적용된다.
     """
     import weasyprint  # type: ignore[import-untyped]
 
@@ -26,5 +31,7 @@ def render_pdf(content: dict[str, Any]) -> bytes:
         katex_cdn=False,
         mermaid_cdn=False,
     )
-    html = render_namuwiki_html(content, options=options)
+    html = render_namuwiki_html(
+        content, options=options, requester_role=requester_role
+    )
     return weasyprint.HTML(string=html).write_pdf()

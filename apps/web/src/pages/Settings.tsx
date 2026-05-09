@@ -3,13 +3,20 @@ import { useOutletContext } from 'react-router-dom'
 import { Card } from '@/components/ui'
 import {
   useSettingsStore,
+  NOTIFICATION_KINDS,
   type Density,
   type EmailCadence,
   type FontScale,
   type LineHeight,
+  type NotificationChannel,
+  type NotificationKind,
   type ThemeMode,
   type UiSettings,
 } from '@/features/settings/store'
+import {
+  fetchNotificationPrefs,
+  putNotificationPrefs,
+} from '@/features/settings/notificationPrefsApi'
 import { useAuthStore } from '@/features/auth/store'
 import { useLocale } from '@/lib/i18n'
 import { SpellcheckSettingsSection } from '@/features/spellcheck/SpellcheckSettingsSection'
@@ -39,8 +46,16 @@ export function SettingsPage() {
   const fontScale = useSettingsStore((s) => s.fontScale)
   const lineHeight = useSettingsStore((s) => s.lineHeight)
   const highContrast = useSettingsStore((s) => s.highContrast)
+  const notificationPrefs = useSettingsStore((s) => s.notification_prefs)
   const setOne = useSettingsStore((s) => s.set)
   const reset = useSettingsStore((s) => s.reset)
+  const setNotificationPref = useSettingsStore((s) => s.setNotificationPref)
+  const setAllNotificationPrefs = useSettingsStore(
+    (s) => s.setAllNotificationPrefs,
+  )
+  const replaceNotificationPrefs = useSettingsStore(
+    (s) => s.replaceNotificationPrefs,
+  )
   const userEmail = useAuthStore((s) => s.user?.email ?? null)
   const { setLeftRail, setRightRail } = useOutletContext<AppOutletContext>()
 
@@ -52,6 +67,19 @@ export function SettingsPage() {
       setRightRail(null)
     }
   }, [setLeftRail, setRightRail])
+
+  // Hydrate notification prefs from the server on mount. Best-effort —
+  // failure (logged-out / 401 / network) leaves the local defaults in place.
+  useEffect(() => {
+    let cancelled = false
+    void fetchNotificationPrefs().then((prefs) => {
+      if (cancelled || !prefs) return
+      replaceNotificationPrefs(prefs)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [replaceNotificationPrefs])
 
   return (
     <section className="space-y-6" data-testid="settings-page">
@@ -234,6 +262,121 @@ export function SettingsPage() {
             testId="settings-email-cadence"
           />
         </dl>
+      </Card>
+
+      <Card padded="md" data-testid="settings-notification-prefs-card">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-smsg-900 dark:text-gray-100">
+              알림
+            </h2>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              알림 종류별로 인앱 / 이메일 채널을 켜고 끌 수 있습니다. 변경은
+              즉시 서버에 저장됩니다.
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setAllNotificationPrefs(true)
+                void putNotificationPrefs(
+                  useSettingsStore.getState().notification_prefs,
+                )
+              }}
+              className="min-h-[36px] rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 transition-colors hover:border-smsg-500 hover:text-smsg-900 dark:border-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
+              data-testid="settings-notif-prefs-all-on"
+            >
+              전체 켜기
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAllNotificationPrefs(false)
+                void putNotificationPrefs(
+                  useSettingsStore.getState().notification_prefs,
+                )
+              }}
+              className="min-h-[36px] rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 transition-colors hover:border-smsg-500 hover:text-smsg-900 dark:border-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
+              data-testid="settings-notif-prefs-all-off"
+            >
+              전체 끄기
+            </button>
+          </div>
+        </div>
+        <div
+          className="mt-3 overflow-x-auto"
+          data-testid="settings-notif-prefs-table"
+        >
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-800">
+                <th
+                  scope="col"
+                  className="py-2 pr-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  알림 종류
+                </th>
+                <th
+                  scope="col"
+                  className="px-2 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  인앱
+                </th>
+                <th
+                  scope="col"
+                  className="px-2 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  이메일
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {NOTIFICATION_KINDS.map((kind) => (
+                <tr key={kind}>
+                  <th
+                    scope="row"
+                    className="py-2 pr-3 text-left text-sm font-medium text-smsg-900 dark:text-gray-100"
+                  >
+                    {NOTIFICATION_KIND_LABEL[kind]}
+                  </th>
+                  {(['in_app', 'email'] as NotificationChannel[]).map((ch) => {
+                    const checked = notificationPrefs[kind][ch]
+                    const testId = `settings-notif-pref-${kind}-${ch}`
+                    return (
+                      <td key={ch} className="px-2 py-2 text-center">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={checked}
+                          aria-label={`${NOTIFICATION_KIND_LABEL[kind]} - ${ch === 'in_app' ? '인앱' : '이메일'}`}
+                          data-testid={testId}
+                          onClick={() => {
+                            setNotificationPref(kind, ch, !checked)
+                            void putNotificationPrefs(
+                              useSettingsStore.getState().notification_prefs,
+                            )
+                          }}
+                          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-fast ${
+                            checked
+                              ? 'bg-smsg-700'
+                              : 'bg-gray-300 dark:bg-gray-700'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-fast ${
+                              checked ? 'translate-x-5' : 'translate-x-0.5'
+                            }`}
+                          />
+                        </button>
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <SpellcheckSettingsSection />
@@ -528,6 +671,14 @@ function LineHeightRadioRow({
       </div>
     </div>
   )
+}
+
+const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
+  comment_mention: '댓글 멘션',
+  review_request: '리뷰 요청',
+  review_decision: '리뷰 결정',
+  subscription_event: '구독 이벤트',
+  subscription_digest: '구독 다이제스트',
 }
 
 const FONT_SCALE_STOPS: FontScale[] = [0.875, 1, 1.125, 1.25]

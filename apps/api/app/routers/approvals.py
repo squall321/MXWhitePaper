@@ -48,6 +48,7 @@ from app.core.auth import get_current_user, require_editor
 from app.core.db import get_db
 from app.core.errors import Forbidden, NotFound, ValidationFailed, envelope
 from app.repos import document_repo
+from app.services import notification_prefs as prefs_svc
 from app.services.document_service import fire_webhook
 
 router = APIRouter(prefix="/api/v1", tags=["approvals"])
@@ -144,6 +145,12 @@ async def _insert_notification(
     kind: str,
     payload: dict[str, Any],
 ) -> None:
+    """INSERT a notifications row, honouring the recipient's in-app channel
+    preference. Silently no-ops when the user has disabled this kind for in-app."""
+    if not await prefs_svc.is_channel_enabled(
+        s, user_id=user_id, kind=kind, channel="in_app"
+    ):
+        return
     await s.execute(
         text("""
             INSERT INTO notifications (user_id, kind, payload)
@@ -246,6 +253,14 @@ async def add_reviewers(
                     continue
                 addr = it.get("reviewer_email")
                 if not addr:
+                    continue
+                # Honour the reviewer's email channel preference.
+                if not await prefs_svc.is_channel_enabled(
+                    s,
+                    user_id=it["reviewer_user_id"],
+                    kind="review_request",
+                    channel="email",
+                ):
                     continue
                 subject, body_text = review_request_email(
                     reviewer_name=it.get("reviewer_name") or "",

@@ -101,17 +101,24 @@ def render_docx(
     doc: dict[str, Any],
     *,
     options: DocxOptions | None = None,
+    requester_role: str | None = None,
 ) -> bytes:
     """DocumentJSON dict 를 .docx 바이너리로 렌더한다.
 
     Args:
         doc: DocumentJSON v1.0 dict.
         options: 렌더 옵션. None 이면 기본값.
+        requester_role: 호출자 role. 지정 시 admin 미만은 meta.permission 이
+            높은 블록을 redact 한 결과를 렌더한다. None 이면 scrub 미적용.
 
     Returns:
         .docx zip 바이너리 (PK\\x03\\x04 매직).
     """
     opts = options or DocxOptions()
+    if requester_role is not None:
+        from .document_service import scrub_for_response
+
+        doc = scrub_for_response(doc, role=requester_role)
     document = Document()
     ctx = _Ctx(document=document, opts=opts, footnotes=_collect_footnotes(doc))
 

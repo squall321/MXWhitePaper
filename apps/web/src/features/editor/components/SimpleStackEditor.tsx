@@ -32,6 +32,7 @@ import { cloneBlockWithNewIds, looksLikeBlockArray } from './BulkActionsBar'
 import { htmlToBlocks } from '../paste/htmlPaste'
 import { rehydratePastedImages } from '../paste/imageRehydrate'
 import { looksLikeCsv, parseCsv } from '../extensions/csv-paste'
+import { extractUrl } from '@/lib/urlDetect'
 import { ulid } from '../ulid'
 import { toast } from '@/components/ui/Toast'
 import { SnippetPicker } from '@/features/block-library/SnippetPicker'
@@ -450,6 +451,59 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
           await insertManyAtEnd([tableBlock], 'CSV 붙여넣기')
           return
         }
+      }
+
+      // 4. Single URL on the clipboard. Internal `/docs/<slug>` → offer to
+      //    convert to a `doc-link-card` block. External URL → offer iframe
+      //    (with sandbox warning) or fall back to a markdown-style paragraph
+      //    `[label](url)` so the user always has a non-iframe escape hatch.
+      const urlInfo = text ? extractUrl(text) : null
+      if (urlInfo) {
+        ev.preventDefault()
+        if (urlInfo.isInternal && urlInfo.slug) {
+          if (window.confirm('📄 카드로 변환?')) {
+            const card: Block = {
+              type: 'doc-link-card',
+              id: ulid(),
+              slug: urlInfo.slug,
+            }
+            await insertManyAtEnd([card], '문서 링크 카드 붙여넣기')
+            toast.success('문서 카드를 추가했습니다')
+            return
+          }
+          // Decline → fall through to plain-text paragraph below.
+        } else {
+          // External URL — confirm iframe embed (with sandbox warning).
+          // Decline → markdown-style paragraph.
+          if (
+            window.confirm(
+              '🔗 외부 링크입니다. 임베드(iframe)로 삽입할까요?\n취소하면 본문 링크로 추가됩니다. (iframe은 사내 화이트리스트만 렌더됩니다)',
+            )
+          ) {
+            const iframeBlock: Block = {
+              type: 'iframe',
+              id: ulid(),
+              src: urlInfo.url,
+            }
+            await insertManyAtEnd([iframeBlock], '임베드 붙여넣기')
+            toast.warn('iframe은 화이트리스트 도메인만 표시됩니다')
+            return
+          }
+        }
+        // Fallback for both internal-decline and external-decline: insert as
+        // a paragraph with markdown link syntax so the user keeps something
+        // useful in the doc.
+        await insertManyAtEnd(
+          [
+            {
+              type: 'paragraph',
+              id: ulid(),
+              text: `[${urlInfo.url}](${urlInfo.url})`,
+            } as Block,
+          ],
+          'URL 붙여넣기',
+        )
+        return
       }
     },
     [slug, insertManyAtEnd],

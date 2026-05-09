@@ -36,6 +36,27 @@ export type FontScale = 0.875 | 1 | 1.125 | 1.25
 /** 기본 줄간격 토큰. */
 export type LineHeight = 'tight' | 'normal' | 'relaxed'
 
+/**
+ * Cycle 0019 — per-event-per-channel notification toggles. Mirrors the BE
+ * `users.notification_prefs` JSONB column and the kinds whitelist in
+ * `apps/api/app/services/notification_prefs.py`.
+ */
+export type NotificationKind =
+  | 'comment_mention'
+  | 'review_request'
+  | 'review_decision'
+  | 'subscription_event'
+  | 'subscription_digest'
+
+export type NotificationChannel = 'in_app' | 'email'
+
+export interface ChannelPrefs {
+  in_app: boolean
+  email: boolean
+}
+
+export type NotificationPrefs = Record<NotificationKind, ChannelPrefs>
+
 export interface UiSettings {
   notifications: boolean
   autoSave: boolean
@@ -67,12 +88,66 @@ export interface UiSettings {
   lineHeight: LineHeight
   /** 고대비 모드 — `data-contrast="high"`를 `<html>`에 적용. */
   highContrast: boolean
+  /** Per-event-per-channel notification toggles (Cycle 0019). */
+  notification_prefs: NotificationPrefs
+}
+
+/** Default prefs matrix — kept in sync with BE `notification_prefs.DEFAULTS`. */
+export const NOTIFICATION_KINDS: NotificationKind[] = [
+  'comment_mention',
+  'review_request',
+  'review_decision',
+  'subscription_event',
+  'subscription_digest',
+]
+
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  comment_mention: { in_app: true, email: true },
+  review_request: { in_app: true, email: true },
+  review_decision: { in_app: true, email: false },
+  subscription_event: { in_app: true, email: false },
+  subscription_digest: { in_app: true, email: true },
+}
+
+function cloneDefaultNotificationPrefs(): NotificationPrefs {
+  return {
+    comment_mention: { ...DEFAULT_NOTIFICATION_PREFS.comment_mention },
+    review_request: { ...DEFAULT_NOTIFICATION_PREFS.review_request },
+    review_decision: { ...DEFAULT_NOTIFICATION_PREFS.review_decision },
+    subscription_event: { ...DEFAULT_NOTIFICATION_PREFS.subscription_event },
+    subscription_digest: { ...DEFAULT_NOTIFICATION_PREFS.subscription_digest },
+  }
+}
+
+/** Coerce an arbitrary partial blob into a full prefs map (defaults filled). */
+export function mergeNotificationPrefs(
+  partial: Partial<Record<NotificationKind, Partial<ChannelPrefs>>> | undefined,
+): NotificationPrefs {
+  const out = cloneDefaultNotificationPrefs()
+  if (!partial || typeof partial !== 'object') return out
+  for (const kind of NOTIFICATION_KINDS) {
+    const kv = partial[kind]
+    if (!kv || typeof kv !== 'object') continue
+    if (typeof kv.in_app === 'boolean') out[kind].in_app = kv.in_app
+    if (typeof kv.email === 'boolean') out[kind].email = kv.email
+  }
+  return out
 }
 
 export interface SettingsActions {
   set<K extends keyof UiSettings>(key: K, value: UiSettings[K]): void
   reset(): void
   hydrate(): void
+  /** Toggle a single (kind, channel) cell. */
+  setNotificationPref(
+    kind: NotificationKind,
+    channel: NotificationChannel,
+    value: boolean,
+  ): void
+  /** Bulk set every (kind, channel) cell to the same boolean. */
+  setAllNotificationPrefs(value: boolean): void
+  /** Replace the whole prefs blob (used after a server hydrate). */
+  replaceNotificationPrefs(next: NotificationPrefs): void
 }
 
 export const STORAGE_KEY = 'mxwp.uiSettings'
@@ -93,18 +168,34 @@ const DEFAULTS: UiSettings = {
   fontScale: 1,
   lineHeight: 'normal',
   highContrast: false,
+  notification_prefs: cloneDefaultNotificationPrefs(),
 }
 
 function readFromStorage(): UiSettings {
-  if (typeof window === 'undefined') return { ...DEFAULTS }
+  if (typeof window === 'undefined')
+    return { ...DEFAULTS, notification_prefs: cloneDefaultNotificationPrefs() }
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { ...DEFAULTS }
+    if (!raw)
+      return {
+        ...DEFAULTS,
+        notification_prefs: cloneDefaultNotificationPrefs(),
+      }
     const parsed = JSON.parse(raw) as Partial<UiSettings>
-    if (!parsed || typeof parsed !== 'object') return { ...DEFAULTS }
-    return { ...DEFAULTS, ...parsed }
+    if (!parsed || typeof parsed !== 'object')
+      return {
+        ...DEFAULTS,
+        notification_prefs: cloneDefaultNotificationPrefs(),
+      }
+    return {
+      ...DEFAULTS,
+      ...parsed,
+      // Merge nested prefs with defaults so a partial persisted blob doesn't
+      // wipe newly-added kinds.
+      notification_prefs: mergeNotificationPrefs(parsed.notification_prefs),
+    }
   } catch {
-    return { ...DEFAULTS }
+    return { ...DEFAULTS, notification_prefs: cloneDefaultNotificationPrefs() }
   }
 }
 
@@ -125,10 +216,41 @@ export const useSettingsStore = create<UiSettings & SettingsActions>((set, get) 
     set({ [key]: value } as Partial<UiSettings>)
   },
   reset: () => {
-    writeToStorage(DEFAULTS)
-    set({ ...DEFAULTS })
+    const fresh: UiSettings = {
+      ...DEFAULTS,
+      notification_prefs: cloneDefaultNotificationPrefs(),
+    }
+    writeToStorage(fresh)
+    set(fresh)
   },
   hydrate: () => set(readFromStorage()),
+  setNotificationPref: (kind, channel, value) => {
+    const cur = get().notification_prefs
+    const next: NotificationPrefs = {
+      ...cur,
+      [kind]: { ...cur[kind], [channel]: value },
+    }
+    const merged = { ...get(), notification_prefs: next } as UiSettings
+    writeToStorage(stripActions(merged))
+    set({ notification_prefs: next })
+  },
+  setAllNotificationPrefs: (value) => {
+    const next = cloneDefaultNotificationPrefs()
+    for (const kind of NOTIFICATION_KINDS) {
+      next[kind] = { in_app: value, email: value }
+    }
+    const merged = { ...get(), notification_prefs: next } as UiSettings
+    writeToStorage(stripActions(merged))
+    set({ notification_prefs: next })
+  },
+  replaceNotificationPrefs: (next) => {
+    // Defensively merge against defaults so a malformed server payload can't
+    // strand the UI without a kind.
+    const safe = mergeNotificationPrefs(next)
+    const merged = { ...get(), notification_prefs: safe } as UiSettings
+    writeToStorage(stripActions(merged))
+    set({ notification_prefs: safe })
+  },
 }))
 
 function stripActions(o: UiSettings & Partial<SettingsActions>): UiSettings {
@@ -149,6 +271,7 @@ function stripActions(o: UiSettings & Partial<SettingsActions>): UiSettings {
     fontScale,
     lineHeight,
     highContrast,
+    notification_prefs,
   } = o
   return {
     notifications,
@@ -166,5 +289,6 @@ function stripActions(o: UiSettings & Partial<SettingsActions>): UiSettings {
     fontScale,
     lineHeight,
     highContrast,
+    notification_prefs,
   }
 }

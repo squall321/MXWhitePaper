@@ -120,6 +120,56 @@ def _scrub_sections(sections: Any, role_level: int) -> Any:
     return sections
 
 
+def scrub_for_response(
+    content_json: dict[str, Any], *, role: str | None
+) -> dict[str, Any]:
+    """Public entry point for response-path scrubbing.
+
+    Thin wrapper around `scrub_blocks_for_role`. `role=None` is treated as the
+    lowest tier ('reader') — used by anonymous paths such as `/share/:token`
+    where the viewer has no authenticated role.
+    """
+    return scrub_blocks_for_role(content_json, role or "reader")
+
+
+def scrub_section_for_response(
+    section: dict[str, Any], *, role: str | None
+) -> dict[str, Any]:
+    """Scrub a single section subtree for the caller's role.
+
+    Used by endpoints that return only a section (PATCH section). Admin role
+    short-circuits to identity. Otherwise blocks (incl. nested
+    columns/tabs/accordion + subsections) are scrubbed.
+    """
+    if not isinstance(section, dict):
+        return section
+    role_level = _ROLE_LEVEL.get((role or "reader").lower(), 0)
+    if role_level >= _PERM_LEVEL["admin"]:
+        return section
+    cloned = copy.deepcopy(section)
+    cloned["blocks"] = _scrub_block_array(cloned.get("blocks"), role_level)
+    _scrub_sections(cloned.get("subsections"), role_level)
+    return cloned
+
+
+def scrub_block_for_response(
+    block: dict[str, Any], *, role: str | None
+) -> dict[str, Any]:
+    """Scrub a single block (and its nested children) for the caller's role.
+
+    Used by endpoints that return only a block (PATCH block). The block itself
+    may have a `meta.permission` above the caller — in which case it's
+    redacted to a placeholder.
+    """
+    if not isinstance(block, dict):
+        return block
+    role_level = _ROLE_LEVEL.get((role or "reader").lower(), 0)
+    if role_level >= _PERM_LEVEL["admin"]:
+        return block
+    scrubbed = _scrub_block_array([copy.deepcopy(block)], role_level)
+    return scrubbed[0] if scrubbed else block
+
+
 def scrub_blocks_for_role(
     content_json: dict[str, Any], role: str | None
 ) -> dict[str, Any]:

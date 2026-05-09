@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.db import session_factory, session_scope
+from app.services import notification_prefs as prefs_svc
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,16 @@ async def _dispatch_inner(
         if actor_user_id and user_id == actor_user_id:
             continue
         if cadence == "instant":
+            # Honour subscription_event in-app preference. Daily/weekly buffers
+            # always queue (so the eventual digest can still fire even if the
+            # user only wants the bundled view).
+            if not await prefs_svc.is_channel_enabled(
+                s,
+                user_id=user_id,
+                kind="subscription_event",
+                channel="in_app",
+            ):
+                continue
             await s.execute(
                 text(
                     """
@@ -234,16 +245,27 @@ async def emit_digests_for_user(
             "item_count": len(items),
             "items": items,
         }
-        await s.execute(
-            text(
-                """
-                INSERT INTO notifications (user_id, kind, payload)
-                VALUES (CAST(:u AS uuid), 'subscription_digest',
-                        CAST(:p AS jsonb))
-                """
-            ),
-            {"u": user_id, "p": json.dumps(digest_payload)},
+        # Honour the recipient's subscription_digest in-app preference. Even
+        # when in-app is off we still drain the buffer + advance last_digest_at
+        # so the cadence pacing stays consistent and the buffer doesn't grow
+        # unboundedly. Email is gated separately below.
+        digest_in_app = await prefs_svc.is_channel_enabled(
+            s,
+            user_id=user_id,
+            kind="subscription_digest",
+            channel="in_app",
         )
+        if digest_in_app:
+            await s.execute(
+                text(
+                    """
+                    INSERT INTO notifications (user_id, kind, payload)
+                    VALUES (CAST(:u AS uuid), 'subscription_digest',
+                            CAST(:p AS jsonb))
+                    """
+                ),
+                {"u": user_id, "p": json.dumps(digest_payload)},
+            )
         await s.execute(
             text(
                 "DELETE FROM pending_digest_items "
@@ -259,10 +281,17 @@ async def emit_digests_for_user(
             {"now": cur, "sid": sub_id},
         )
         # Best-effort email — never break the digest tx if SMTP / template fails.
-        try:
-            await _maybe_send_digest_email(s, user_id=user_id, items=items)
-        except Exception:  # noqa: BLE001
-            logger.exception("digest email skipped for user %s", user_id)
+        digest_email_enabled = await prefs_svc.is_channel_enabled(
+            s,
+            user_id=user_id,
+            kind="subscription_digest",
+            channel="email",
+        )
+        if digest_email_enabled:
+            try:
+                await _maybe_send_digest_email(s, user_id=user_id, items=items)
+            except Exception:  # noqa: BLE001
+                logger.exception("digest email skipped for user %s", user_id)
         bundled_total += len(items)
 
     if bundled_total:

@@ -26,6 +26,7 @@ from .routers.backups import router as backups_router
 from .routers.bookmarks import router as bookmarks_router
 from .routers.comments import router_doc as comments_doc_router
 from .routers.comments import router_one as comments_one_router
+from .routers.doc_templates import router as doc_templates_router
 from .routers.documents import router as documents_router
 from .routers.exports import router as exports_router
 from .routers.files import router as files_router
@@ -33,6 +34,7 @@ from .routers.forms import router as forms_router
 from .routers.glossary import router as glossary_router
 from .routers.imports import router as imports_router
 from .routers.links_graph import router as links_graph_router
+from .routers.notification_prefs import router as notification_prefs_router
 from .routers.notifications import router as notifications_router
 from .routers.orgs import router as orgs_router
 from .routers.presence import router as presence_router
@@ -125,6 +127,14 @@ TAGS_METADATA: list[dict[str, str]] = [
         "description": "BE 푸시 알림 — 멘션·답글 등. unread 카운트 + 읽음 처리.",
     },
     {
+        "name": "notification_prefs",
+        "description": (
+            "알림 채널 환경설정 — kind × channel(인앱/이메일) per-user 토글. "
+            "디스패처가 in_app=false 면 notifications row 를, email=false 면 "
+            "이메일 발송을 각각 건너뛴다."
+        ),
+    },
+    {
         "name": "bookmarks",
         "description": (
             "서버 영속 책갈피 + 열람 기록. 폴더 단위 그룹핑, 메모, 누적 read_seconds."
@@ -184,6 +194,14 @@ TAGS_METADATA: list[dict[str, str]] = [
             "재사용 가능한 블록 라이브러리 — 사용자가 N개 블록을 묶어 저장하고 "
             "다른 문서에 붙여넣는다. scope=private|team|org 로 공유 범위 조절. "
             "팀 스코프는 users.team_id 기준 — team_id 가 없으면 팀 스니펫이 보이지 않는다."
+        ),
+    },
+    {
+        "name": "doc-templates",
+        "description": (
+            "조직 공유 문서 템플릿 — 에디터/관리자가 DocumentJSON sections 묶음을 "
+            "발행해 다른 사용자가 새 문서 베이스로 사용한다. snippets 와 동일한 "
+            "scope=private|team|org 정책. POST /:slug/use 로 새 문서를 즉시 생성한다."
         ),
     },
     {
@@ -338,6 +356,8 @@ def create_app() -> FastAPI:
     app.include_router(links_graph_router)
     # 멘션 등 BE 푸시 알림
     app.include_router(notifications_router)
+    # Cycle 0019 — per-event-per-channel notification preferences.
+    app.include_router(notification_prefs_router)
     # Bookmarks + reads (server-persisted reading list)
     app.include_router(bookmarks_router)
     # Markdown / PDF export (HTML export 는 documents 라우터에 인라인)
@@ -348,6 +368,8 @@ def create_app() -> FastAPI:
     app.include_router(ai_router)
     # 재사용 블록 라이브러리 (스니펫)
     app.include_router(snippets_router)
+    # 조직 공유 문서 템플릿 (per-doc, 0020)
+    app.include_router(doc_templates_router)
     # 공개 공유 링크 — /share/{token} 은 인증 미적용
     app.include_router(sharing_router)
     # 승인 워크플로우 — 리뷰어 + 상태 전이

@@ -100,6 +100,11 @@ const AnalyticsPage = lazyLogged('Analytics', () =>
 const TagManagerPage = lazyLogged('TagManager', () =>
   import('./pages/TagManager').then((m) => ({ default: m.TagManagerPage })),
 )
+const TemplateManagerPage = lazyLogged('TemplateManager', () =>
+  import('./pages/TemplateManager').then((m) => ({
+    default: m.TemplateManagerPage,
+  })),
+)
 const RecentPage = lazyLogged('Recent', () =>
   import('./pages/Recent').then((m) => ({ default: m.RecentPage })),
 )
@@ -300,6 +305,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="admin/audit" element={<Boundaried name="admin/audit"><AuditLogPage /></Boundaried>} />
                 <Route path="admin/backups" element={<Boundaried name="admin/backups"><BackupAdminPage /></Boundaried>} />
                 <Route path="admin/tags" element={<Boundaried name="admin/tags"><TagManagerPage /></Boundaried>} />
+                <Route path="admin/templates" element={<Boundaried name="admin/templates"><TemplateManagerPage /></Boundaried>} />
                 <Route path="admin/webhooks" element={<Boundaried name="admin/webhooks"><WebhooksSettingsPage /></Boundaried>} />
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />

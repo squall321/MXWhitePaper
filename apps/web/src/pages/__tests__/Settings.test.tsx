@@ -143,10 +143,11 @@ describe('<SettingsPage />', () => {
   it('renders aria-checked for every toggle and exposes role="switch"', () => {
     const html = renderSettings()
     // 4 cosmetic toggles + 1 email-digest toggle + 2 spellcheck toggles +
-    // 1 high-contrast toggle (표시 설정 card). Excludes the language <select>
+    // 1 high-contrast toggle (표시 설정 card) + 10 notification-prefs cells
+    // (5 kinds × 2 channels, Cycle 0019). Excludes the language <select>
     // and the theme / cadence / density / font-scale / line-height radio groups.
     const matches = html.match(/role="switch"/g) ?? []
-    expect(matches.length).toBe(8)
+    expect(matches.length).toBe(18)
     expect(html).toContain('role="switch"')
   })
 

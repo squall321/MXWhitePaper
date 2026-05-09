@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import type { MouseEvent } from 'react'
+import { useRef, useState, type MouseEvent } from 'react'
 import { useDocumentExists } from '@/features/document/hooks/useDocumentExists'
 import { useEditorStore } from '@/features/editor/state'
 import type {
@@ -8,6 +8,10 @@ import type {
   SectionLevel3,
 } from '@/types/document'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
+import { LinkPreview } from './LinkPreview'
+
+// 500ms mouseenter debounce before the preview popup fetches/shows.
+const HOVER_DELAY_MS = 500
 
 interface WikiLinkProps {
   /** Empty string means "current document" (same-doc anchor). */
@@ -33,6 +37,26 @@ export function WikiLink({ slug, anchor, display }: WikiLinkProps) {
   const navigate = useNavigate()
   // Skip the existence query for same-doc anchors (slug === '').
   const { data: exists, isPending } = useDocumentExists(slug || undefined)
+
+  // Hover state for the preview popup. Only enabled for cross-doc links;
+  // same-doc anchors already show the section title via the inline label.
+  const [hovered, setHovered] = useState(false)
+  const anchorElRef = useRef<HTMLAnchorElement | null>(null)
+  const hoverTimerRef = useRef<number | null>(null)
+  const handleEnter = (e: MouseEvent<HTMLAnchorElement>) => {
+    anchorElRef.current = e.currentTarget
+    if (hoverTimerRef.current != null) window.clearTimeout(hoverTimerRef.current)
+    hoverTimerRef.current = window.setTimeout(() => {
+      setHovered(true)
+    }, HOVER_DELAY_MS)
+  }
+  const handleLeave = () => {
+    if (hoverTimerRef.current != null) {
+      window.clearTimeout(hoverTimerRef.current)
+      hoverTimerRef.current = null
+    }
+    setHovered(false)
+  }
 
   const sameDoc = slug === ''
   // Normalise anchor → numeric portion (`1.1`) and the DOM id (`section-1.1`).
@@ -67,14 +91,26 @@ export function WikiLink({ slug, anchor, display }: WikiLinkProps) {
       navigate(target)
     }
     return (
-      <a
-        href={target}
-        onClick={handleClick}
-        className="text-link-missing hover:underline"
-        title={`'${slug}' 문서가 아직 없습니다. 클릭해 생성하세요.`}
-      >
-        {label}
-      </a>
+      <>
+        <a
+          href={target}
+          onClick={handleClick}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          className="text-link-missing hover:underline"
+          title={`'${slug}' 문서가 아직 없습니다. 클릭해 생성하세요.`}
+        >
+          {label}
+        </a>
+        {hovered && (
+          <LinkPreview
+            slug={slug}
+            anchor={anchor}
+            anchorEl={anchorElRef.current}
+            onClose={handleLeave}
+          />
+        )}
+      </>
     )
   }
 
@@ -96,13 +132,25 @@ export function WikiLink({ slug, anchor, display }: WikiLinkProps) {
   }
 
   return (
-    <a
-      href={href}
-      className="text-link hover:underline"
-      title={anchorId ? `${slug} #${anchorId}` : slug}
-    >
-      {label}
-    </a>
+    <>
+      <a
+        href={href}
+        onMouseEnter={handleEnter}
+        onMouseLeave={handleLeave}
+        className="text-link hover:underline"
+        title={anchorId ? `${slug} #${anchorId}` : slug}
+      >
+        {label}
+      </a>
+      {hovered && !sameDoc && (
+        <LinkPreview
+          slug={slug}
+          anchor={anchor}
+          anchorEl={anchorElRef.current}
+          onClose={handleLeave}
+        />
+      )}
+    </>
   )
 }
 

@@ -81,7 +81,11 @@ async def export_markdown(
 
     doc = await document_service.get_document_or_404(s, slug)
     content = doc["content_json"]
-    md = render_markdown(content, include_metadata=include_metadata)
+    md = render_markdown(
+        content,
+        include_metadata=include_metadata,
+        requester_role=_user.get("role"),
+    )
     filename = f"{slug}.md"
     return FastAPIResponse(
         content=md.encode("utf-8"),
@@ -125,7 +129,9 @@ async def export_pdf(
     # Lazy import — only hit when WeasyPrint is actually present.
     from app.services.pdf_export import render_pdf
 
-    pdf_bytes = render_pdf(doc["content_json"])
+    pdf_bytes = render_pdf(
+        doc["content_json"], requester_role=_user.get("role")
+    )
     filename = f"{slug}.pdf"
     return FastAPIResponse(
         content=pdf_bytes,
@@ -193,7 +199,11 @@ async def export_pptx(
             return None
         return {"bytes": info.get("bytes"), "mime": info.get("mime")}
 
-    pptx_bytes = render_pptx(content, options=PptxOptions(image_resolver=resolver))
+    pptx_bytes = render_pptx(
+        content,
+        options=PptxOptions(image_resolver=resolver),
+        requester_role=_user.get("role"),
+    )
     filename = f"{slug}.pptx"
     return FastAPIResponse(
         content=pptx_bytes,
@@ -262,7 +272,11 @@ async def export_docx(
             return None
         return {"bytes": info.get("bytes"), "mime": info.get("mime")}
 
-    docx_bytes = render_docx(content, options=DocxOptions(image_resolver=resolver))
+    docx_bytes = render_docx(
+        content,
+        options=DocxOptions(image_resolver=resolver),
+        requester_role=_user.get("role"),
+    )
     filename = f"{slug}.docx"
     return FastAPIResponse(
         content=docx_bytes,

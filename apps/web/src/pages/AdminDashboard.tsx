@@ -13,6 +13,7 @@ import { AuditLogPage } from './AuditLog'
 import { BackupAdminPage } from './BackupAdmin'
 import { BulkDocImportPage } from './BulkDocImport'
 import { TagManagerPage } from './TagManager'
+import { TemplateManagerPage } from './TemplateManager'
 import { WebhooksSettingsPage } from './WebhooksSettings'
 import { useT } from '@/lib/i18n'
 import {
@@ -31,6 +32,7 @@ type TabKey =
   | 'maintenance'
   | 'orgs'
   | 'tags'
+  | 'templates'
   | 'webhooks'
   | 'backups'
   | 'import-csv'
@@ -43,6 +45,7 @@ const TABS: Array<{ key: TabKey; labelKey: string }> = [
   { key: 'maintenance', labelKey: 'page.adminDashboard.tab.maintenance' },
   { key: 'orgs', labelKey: 'page.adminDashboard.tab.orgs' },
   { key: 'tags', labelKey: 'page.adminDashboard.tab.tags' },
+  { key: 'templates', labelKey: 'page.adminDashboard.tab.templates' },
   { key: 'webhooks', labelKey: 'page.adminDashboard.tab.webhooks' },
   { key: 'backups', labelKey: 'page.adminDashboard.tab.backups' },
   { key: 'import-csv', labelKey: 'page.adminDashboard.tab.importCsv' },
@@ -126,6 +129,11 @@ export function AdminDashboardPage() {
       {tab === 'tags' && (
         <div data-testid="admin-tab-tags-content">
           <TagManagerPage />
+        </div>
+      )}
+      {tab === 'templates' && (
+        <div data-testid="admin-tab-templates-content">
+          <TemplateManagerPage />
         </div>
       )}
       {tab === 'webhooks' && (
