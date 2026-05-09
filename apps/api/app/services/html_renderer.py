@@ -27,6 +27,8 @@ import html
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.services.variables import walk_doc_substitute
+
 
 # ── Options ──────────────────────────────────────────────────────────
 
@@ -69,6 +71,10 @@ def render_namuwiki_html(
     """
     opts = options or RenderOptions()
     ctx = _Ctx(opts=opts, used_katex=False, used_mermaid=False)
+
+    # Resolve `{{var}}` tokens up front. Code blocks are skipped inside the
+    # helper (matches the FE rule: no substitution inside <pre><code>).
+    doc = walk_doc_substitute(doc, doc.get("variables"))
 
     title = _str(doc.get("title")) or "Untitled"
     summary = _str(doc.get("summary"))

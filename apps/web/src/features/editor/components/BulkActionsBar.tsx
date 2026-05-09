@@ -9,6 +9,7 @@ import {
 import { useEditorStore } from '../state'
 import { useBulkSelectionStore } from '../bulkSelectionStore'
 import { ulid } from '../ulid'
+import { SnippetSaveModal } from '@/features/block-library/SnippetSaveModal'
 
 /**
  * BulkActionsBar — fixed bottom-center bar that surfaces multi-block
@@ -269,6 +270,7 @@ export function BulkActionsBar({ slug }: Props) {
   const [err, setErr] = useState<string | null>(null)
   const [showSectionPicker, setShowSectionPicker] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [snippetBlocks, setSnippetBlocks] = useState<Block[] | null>(null)
 
   const ids = useMemo(() => Array.from(selected), [selected])
   const count = ids.length
@@ -438,6 +440,20 @@ export function BulkActionsBar({ slug }: Props) {
     [busy, count, ids, slug, apply, setConflict, currentEtag, clear],
   )
 
+  const handleSaveAsSnippet = useCallback(() => {
+    if (count === 0 || busy) return
+    const doc = currentDoc()
+    if (!doc) return
+    const blocks: Block[] = []
+    for (const s of doc.sections) {
+      for (const b of collectBlocksRecursive(s)) {
+        if (selected.has(b.id)) blocks.push(b)
+      }
+    }
+    if (blocks.length === 0) return
+    setSnippetBlocks(blocks)
+  }, [busy, count, currentDoc, selected])
+
   const handleCopyClipboard = useCallback(async () => {
     if (count === 0 || busy) return
     const doc = currentDoc()
@@ -470,6 +486,7 @@ export function BulkActionsBar({ slug }: Props) {
         onMoveDown={() => void handleMoveDirection('down')}
         onPickSection={() => setShowSectionPicker(true)}
         onCopy={() => void handleCopyClipboard()}
+        onSaveSnippet={handleSaveAsSnippet}
         onClose={() => clear()}
       />
 
@@ -499,6 +516,18 @@ export function BulkActionsBar({ slug }: Props) {
           onCancel={() => setShowSectionPicker(false)}
         />
       )}
+
+      {snippetBlocks && (
+        <SnippetSaveModal
+          blocks={snippetBlocks}
+          onClose={() => setSnippetBlocks(null)}
+          onSaved={() => {
+            setSnippetBlocks(null)
+            setToast('스니펫이 저장되었습니다.')
+            clear()
+          }}
+        />
+      )}
     </>
   )
 }
@@ -518,6 +547,7 @@ export interface BulkActionsBarViewProps {
   onMoveDown: () => void
   onPickSection: () => void
   onCopy: () => void
+  onSaveSnippet?: () => void
   onClose: () => void
 }
 
@@ -530,6 +560,7 @@ export function BulkActionsBarView({
   onMoveDown,
   onPickSection,
   onCopy,
+  onSaveSnippet,
   onClose,
 }: BulkActionsBarViewProps) {
   return (
@@ -600,6 +631,18 @@ export function BulkActionsBarView({
       >
         클립보드에 복사
       </button>
+      {onSaveSnippet && (
+        <button
+          type="button"
+          onClick={onSaveSnippet}
+          disabled={busy}
+          data-testid="bulk-action-save-snippet"
+          title="선택한 블록을 재사용 가능한 스니펫으로 저장"
+          className="rounded px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800"
+        >
+          📚 스니펫으로 저장
+        </button>
+      )}
 
       <span className="mx-1 h-4 w-px bg-gray-300 dark:bg-gray-700" aria-hidden />
 

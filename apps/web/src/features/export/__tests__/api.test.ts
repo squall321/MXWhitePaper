@@ -13,6 +13,7 @@ vi.mock('@/lib/api/client', () => ({
 
 import { apiClient } from '@/lib/api/client'
 import {
+  downloadDocx,
   downloadMarkdown,
   downloadPdf,
   downloadPptx,
@@ -172,6 +173,35 @@ describe('export/api · downloadPdf()', () => {
     await expect(downloadPdf('paper')).rejects.toMatchObject({
       response: { status: 500 },
     })
+  })
+})
+
+describe('export/api · downloadDocx()', () => {
+  it('POSTs to /exports/docx and triggers a .docx download on success', async () => {
+    const blob = new Blob([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], {
+      type:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+    post.mockResolvedValueOnce({ data: blob })
+
+    await downloadDocx('paper')
+
+    expect(post).toHaveBeenCalledWith(
+      '/exports/docx',
+      { slug: 'paper' },
+      { responseType: 'blob' },
+    )
+    expect(createdAnchors).toHaveLength(1)
+    expect(createdAnchors[0]!.download).toBe('paper.docx')
+    expect(createdAnchors[0]!.click).toHaveBeenCalledTimes(1)
+  })
+
+  it('propagates 422 errors', async () => {
+    post.mockRejectedValueOnce({ response: { status: 422 } })
+    await expect(downloadDocx('paper')).rejects.toMatchObject({
+      response: { status: 422 },
+    })
+    expect(createdAnchors).toHaveLength(0)
   })
 })
 

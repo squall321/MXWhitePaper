@@ -989,6 +989,58 @@ async def reorder_sections(
     )
 
 
+async def patch_variables(
+    s: AsyncSession,
+    *,
+    slug: str,
+    variables: dict[str, str],
+    if_match: str | None,
+    actor_id: str,
+    change_log: str | None = None,
+) -> dict[str, Any]:
+    """문서의 `variables` 맵을 통째로 교체.
+
+    값이 빈 문자열이거나 None인 항목은 자동으로 제거되어 빈 변수가 누적되지
+    않는다. payload 형 검증은 schema (`additionalProperties: { type: 'string' }`)
+    가 담당하므로 여기서는 합집합 갱신만 수행한다.
+    """
+    if not isinstance(variables, dict):
+        raise ValidationFailed("variables payload must be an object")
+    cleaned: dict[str, str] = {}
+    for k, v in variables.items():
+        if not isinstance(k, str) or not k:
+            continue
+        if v is None:
+            continue
+        if not isinstance(v, str):
+            raise ValidationFailed(
+                "variables values must be strings",
+                details={"key": k, "value_type": type(v).__name__},
+            )
+        if v:
+            cleaned[k] = v
+
+    existing = await get_document_or_404(s, slug)
+    _check_etag(existing, if_match)
+
+    content = copy.deepcopy(existing["content_json"])
+    if cleaned:
+        content["variables"] = cleaned
+    else:
+        content.pop("variables", None)
+
+    log = normalize_change_log(change_log, default="variables.patch")
+    return await _persist_content_change(
+        s,
+        existing=existing,
+        new_content=content,
+        actor_id=actor_id,
+        change_log=log,
+        action="document.variables.patch",
+        target_suffix="#variables",
+    )
+
+
 async def restore_version(
     s: AsyncSession,
     *,

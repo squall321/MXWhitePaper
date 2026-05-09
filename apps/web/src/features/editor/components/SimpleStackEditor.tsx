@@ -32,6 +32,7 @@ import { rehydratePastedImages } from '../paste/imageRehydrate'
 import { looksLikeCsv, parseCsv } from '../extensions/csv-paste'
 import { ulid } from '../ulid'
 import { toast } from '@/components/ui/Toast'
+import { SnippetPicker } from '@/features/block-library/SnippetPicker'
 
 /**
  * SimpleStackEditor — Notion-style block stack with drag-to-reorder and
@@ -80,6 +81,7 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
 
   // Trailing palette state — for the empty-section CTA + final "add at end".
   const [tailOpen, setTailOpen] = useState<{ x: number; y: number } | null>(null)
+  const [snippetTailOpen, setSnippetTailOpen] = useState(false)
 
   // Anchor block id for shift+click range select. Reset on clear() / Esc.
   const lastAnchorRef = useRef<Ulid | null>(null)
@@ -110,6 +112,11 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
     async (it: PaletteItem) => {
       if (it.kind === 'image') {
         window.dispatchEvent(new CustomEvent('mxwp:open-image-picker'))
+        setTailOpen(null)
+        return
+      }
+      if (it.kind === 'snippet') {
+        setSnippetTailOpen(true)
         setTailOpen(null)
         return
       }
@@ -596,6 +603,33 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
           anchor={tailOpen}
           onPick={(it) => void onPickTail(it)}
           onClose={() => setTailOpen(null)}
+        />
+      )}
+
+      {snippetTailOpen && (
+        <SnippetPicker
+          onClose={() => setSnippetTailOpen(false)}
+          onInsert={async (snippetBlocks) => {
+            // Append each snippet block at the section's current tail. Each
+            // POST returns a fresh etag chained into the next iteration.
+            for (const b of snippetBlocks) {
+              const tag = useEditorStore.getState().etag
+              if (!tag) break
+              try {
+                const result = await insertBlock(
+                  slug,
+                  { section_id: section.id, block: b },
+                  tag,
+                  '스니펫 삽입',
+                )
+                apply(result.document, result.etag)
+              } catch (err) {
+                if (isPreconditionFailed(err)) setConflict(null)
+                break
+              }
+            }
+            setSnippetTailOpen(false)
+          }}
         />
       )}
 

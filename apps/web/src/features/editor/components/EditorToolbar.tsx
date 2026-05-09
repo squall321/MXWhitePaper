@@ -351,6 +351,16 @@ export function EditorToolbar({
           >
             버전 이력
           </button>
+          {isEditing && (
+            <a
+              href={`/docs/${encodeURIComponent(slug)}/variables`}
+              data-testid="open-variables"
+              title="문서에 정의된 {{var}} 토큰 값 관리"
+              className="inline-flex h-8 items-center rounded-md border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus"
+            >
+              변수 관리
+            </a>
+          )}
           <button
             type="button"
             onClick={() => setShortcutsOpen(true)}

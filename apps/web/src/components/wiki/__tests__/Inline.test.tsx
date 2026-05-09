@@ -25,6 +25,14 @@ function render(text: string): string {
   )
 }
 
+function renderWithVars(text: string, variables: Record<string, string>): string {
+  return renderToStaticMarkup(
+    <MemoryRouter>
+      <Inline text={text} glossary={false} variables={variables} />
+    </MemoryRouter>,
+  )
+}
+
 describe('<Inline /> wiki anchor links', () => {
   it('renders a same-doc anchor `[[#section-1.1]]` with href="#section-1.1"', () => {
     const html = render('see [[#section-1.1]] above')
@@ -93,5 +101,41 @@ describe('<Inline /> pandoc-style footnote references', () => {
     // Empty tag and `?` (not in the alphanumeric/hyphen set) — no anchors.
     expect(html).not.toContain('href="#fn-')
     expect(html).toContain('[^]')
+  })
+})
+
+describe('<Inline /> variable tokens', () => {
+  it('substitutes a defined `{{name}}` from the supplied variables map', () => {
+    const html = renderWithVars('안녕 {{user}}!', { user: '홍길동' })
+    expect(html).toContain('안녕 홍길동!')
+    expect(html).not.toContain('{{user}}')
+  })
+
+  it('falls back to the literal default when the variable is undefined', () => {
+    const html = renderWithVars('금액: {{amount|미정}} 원', {})
+    expect(html).toContain('미정')
+    expect(html).not.toContain('var-unfilled')
+  })
+
+  it('marks unfilled variables with the var-unfilled span', () => {
+    const html = renderWithVars('이름: {{user}}', {})
+    expect(html).toContain('class="var-unfilled"')
+    expect(html).toContain('정의되지 않은 변수: user')
+    // The literal token survives so the user can spot it.
+    expect(html).toContain('{{user}}')
+  })
+
+  it('leaves an invalid variable name (with spaces) intact as plain text', () => {
+    const html = renderWithVars('{{bad name}} stays literal', { 'bad name': 'X' })
+    // Name doesn't match VAR_NAME_RE — Inline doesn't recognize the token.
+    expect(html).toContain('{{bad name}}')
+    expect(html).not.toContain('class="var-unfilled"')
+  })
+
+  it('substitutes alongside bold and footnote in the same string', () => {
+    const html = renderWithVars('**굵게** {{code}} 참고 [^1]', { code: 'A1' })
+    expect(html).toContain('<strong>굵게</strong>')
+    expect(html).toContain('A1')
+    expect(html).toContain('href="#fn-1"')
   })
 })

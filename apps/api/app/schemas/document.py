@@ -572,6 +572,10 @@ class DocumentjsonV10(BaseModel):
     glossary: list[GlossaryItem] | None = Field([], validate_default=True)
     references: list[Reference] | None = Field([], validate_default=True)
     see_also: list[Slug] | None = Field([], validate_default=True)
+    variables: dict[str, str] | None = None
+    """
+    Map of variable names → fill-in strings used to substitute {{var}} tokens at render time.
+    """
 
 
 class SectionLevel1(BaseModel):

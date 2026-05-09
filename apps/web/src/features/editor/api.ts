@@ -315,3 +315,21 @@ export function isPreconditionFailed(err: unknown): boolean {
     (err as { response?: { status?: number } })?.response?.status === 412
   )
 }
+
+/**
+ * PATCH /documents/:slug/variables — set the document's `variables` map. The
+ * payload fully replaces (not merges) the existing map; pass `{}` to clear.
+ */
+export async function patchVariables(
+  slug: Slug,
+  variables: Record<string, string>,
+  etag: string,
+  changeLog?: string,
+): Promise<EditorMutationResult> {
+  const res = await apiClient.patch<ApiEnvelope<DocumentJSONV10>>(
+    `/documents/${encodeURIComponent(slug)}/variables`,
+    { variables },
+    { headers: buildHeaders(etag, changeLog) },
+  )
+  return withFullDocFallback(slug, unwrap(res as never))
+}

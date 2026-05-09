@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from 'react'
 import { parseInline } from '@/lib/wiki-link'
 import { WikiLink } from './WikiLink'
 import { GlossaryTooltip } from '../GlossaryTooltip'
+import { useEditorStore } from '@/features/editor/state'
 
 interface InlineProps {
   text: string
@@ -11,7 +12,18 @@ interface InlineProps {
    * spans are undesirable.
    */
   glossary?: boolean
+  /**
+   * Optional override for variable resolution. Falls back to the active
+   * editor draft's `variables` map. Tests pass an explicit map so they don't
+   * have to bind the editor store.
+   */
+  variables?: Record<string, string>
 }
+
+/** Variable token grammar: `{{name}}` or `{{name|fallback}}`. Name is
+ * alphanumeric + underscore + hyphen. Fallback is a literal string up to the
+ * closing `}}`. Returns `null` when text doesn't start with a token here. */
+const VAR_NAME_RE = /^[A-Za-z0-9_-]+$/
 
 /**
  * Renders inline text — applies markdown-lite (bold, italic, code) AND
@@ -29,7 +41,18 @@ interface InlineProps {
  * Sprint 6: glossary terms in plain-text fragments are wrapped in a
  * `<GlossaryTooltip>` so hovering shows their definition.
  */
-export function Inline({ text, glossary = true }: InlineProps) {
+export function Inline({ text, glossary = true, variables }: InlineProps) {
+  // When the caller doesn't pass an explicit map, pull it from the active
+  // editor draft. Selecting via zustand keeps re-renders scoped to actual
+  // changes in `variables`. JSON-schema regen types `additionalProperties`
+  // as `string | undefined`, so we coerce to a defined-only record before
+  // passing it down — the substituter doesn't need to handle undefined.
+  const draftVars = useEditorStore((s) => s.draft?.variables)
+  const vars: Record<string, string> | undefined = variables ?? (
+    draftVars
+      ? Object.fromEntries(Object.entries(draftVars).filter(([, v]) => v !== undefined) as [string, string][])
+      : undefined
+  )
   const nodes = parseInline(text)
   return (
     <>
@@ -44,7 +67,7 @@ export function Inline({ text, glossary = true }: InlineProps) {
             />
           )
         }
-        const md = renderMarkdownLite(n.value, glossary)
+        const md = renderMarkdownLite(n.value, glossary, vars)
         return <Fragment key={i}>{md}</Fragment>
       })}
     </>
@@ -57,7 +80,11 @@ export function Inline({ text, glossary = true }: InlineProps) {
  * element, so the original text is never interpolated as HTML. Plain text
  * fragments may be wrapped in <GlossaryTooltip> for term annotation.
  */
-function renderMarkdownLite(text: string, glossary: boolean): ReactNode[] {
+function renderMarkdownLite(
+  text: string,
+  glossary: boolean,
+  variables?: Record<string, string>,
+): ReactNode[] {
   const out: ReactNode[] = []
   let buf = ''
   let i = 0
@@ -80,6 +107,38 @@ function renderMarkdownLite(text: string, glossary: boolean): ReactNode[] {
         out.push(<strong key={`b${key++}`}>{text.slice(i + 2, close)}</strong>)
         i = close + 2
         continue
+      }
+    }
+    // Variable token `{{name}}` or `{{name|fallback}}`. Resolution order:
+    // (1) variables[name] when defined; (2) literal fallback when present;
+    // (3) unfilled marker. Sits before `~~` so `{{}}` doesn't collide with
+    // anything inside a strikethrough span.
+    if (text.startsWith('{{', i)) {
+      const close = text.indexOf('}}', i + 2)
+      if (close > i + 2) {
+        const body = text.slice(i + 2, close)
+        const pipe = body.indexOf('|')
+        const name = pipe >= 0 ? body.slice(0, pipe) : body
+        const fallback = pipe >= 0 ? body.slice(pipe + 1) : null
+        if (VAR_NAME_RE.test(name)) {
+          flush()
+          const resolved = variables?.[name]
+          if (resolved !== undefined) {
+            out.push(<Fragment key={`v${key++}`}>{resolved}</Fragment>)
+          } else if (fallback !== null) {
+            out.push(<Fragment key={`v${key++}`}>{fallback}</Fragment>)
+          } else {
+            out.push(
+              <span
+                key={`v${key++}`}
+                className="var-unfilled"
+                title={`정의되지 않은 변수: ${name}`}
+              >{`{{${name}}}`}</span>,
+            )
+          }
+          i = close + 2
+          continue
+        }
       }
     }
     // Strikethrough — same precedence as bold (2-char delimiter); must come

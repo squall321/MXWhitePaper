@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  downloadDocx,
   downloadMarkdown,
   downloadPdf,
   downloadPptx,
@@ -22,7 +23,7 @@ interface ExportMenuProps {
  */
 export function ExportMenu({ slug }: ExportMenuProps) {
   const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState<null | 'md' | 'pdf' | 'pptx'>(null)
+  const [busy, setBusy] = useState<null | 'md' | 'pdf' | 'pptx' | 'docx'>(null)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -76,6 +77,21 @@ export function ExportMenu({ slug }: ExportMenuProps) {
       // eslint-disable-next-line no-console
       console.error('[export] pptx failed', err)
       setStatusMsg('PowerPoint 내보내기 실패')
+    } finally {
+      setBusy(null)
+      setOpen(false)
+    }
+  }
+
+  const handleDocx = async () => {
+    setBusy('docx')
+    try {
+      await downloadDocx(slug)
+      setStatusMsg('Word 다운로드 시작')
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[export] docx failed', err)
+      setStatusMsg('Word 내보내기 실패')
     } finally {
       setBusy(null)
       setOpen(false)
@@ -150,6 +166,19 @@ export function ExportMenu({ slug }: ExportMenuProps) {
             <span>Markdown</span>
             <span className="ml-auto text-[10px] text-gray-400">
               {busy === 'md' ? '…' : '.md'}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={handleDocx}
+            disabled={busy !== null}
+            className={itemClass}
+            data-testid="export-docx-item"
+          >
+            <span aria-hidden>📃</span>
+            <span>Word (.docx)</span>
+            <span className="ml-auto text-[10px] text-gray-400">
+              {busy === 'docx' ? '…' : '.docx'}
             </span>
           </button>
           <button

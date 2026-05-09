@@ -22,6 +22,7 @@ from app.core.auth import require_reader
 from app.core.db import get_db
 from app.core.errors import APIError
 from app.services import document_service
+from app.services.docx_export import DocxOptions, render_docx
 from app.services.markdown_export import render_markdown
 from app.services.pptx_export import PptxOptions, render_pptx
 
@@ -197,6 +198,75 @@ async def export_pptx(
     return FastAPIResponse(
         content=pptx_bytes,
         media_type=_PPTX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{quote(filename)}"; '
+                f"filename*=UTF-8''{quote(filename)}"
+            ),
+            "Cache-Control": "private, no-store",
+        },
+    )
+
+
+# ── DOCX export (python-docx) ───────────────────────────────────────
+
+
+_DOCX_MEDIA_TYPE = (
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
+
+
+@router.post(
+    "/docx",
+    summary="문서를 Word (.docx) 로 내보내기",
+    description=(
+        "DocumentJSON 본문을 Word 문서(.docx) 로 변환한다. cycle 1 의 .docx import "
+        "와 round-trip 가능 (스타일/구조를 importer 가 인식하는 형태로 출력).\n\n"
+        "- Heading 1/2/3 = section level, Heading 4/5/6 = `heading-4` block.\n"
+        "- markdown-lite (bold/italic/strike/underline/code/link/wiki/footnote) 보존.\n"
+        "- table / list / quote / callout / code 는 네이티브 도형/스타일로.\n"
+        "- chart / gantt / flow / org-chart 는 텍스트 요약 + 데이터 표 fallback.\n"
+        "- speaker note (`meta.note=\"speaker:…\"`) 는 DOCX 노트 페인이 없어 drop."
+    ),
+)
+async def export_docx(
+    payload: dict[str, Any],
+    s: AsyncSession = Depends(get_db),
+    _user: dict = Depends(require_reader),
+) -> FastAPIResponse:
+    slug = (payload or {}).get("slug")
+    if not slug or not isinstance(slug, str):
+        from app.core.errors import ValidationFailed
+
+        raise ValidationFailed("slug 가 필요합니다.", details={"required": ["slug"]})
+
+    doc = await document_service.get_document_or_404(s, slug)
+    content = doc["content_json"]
+
+    # 이미지 resolver — pptx_export 와 동일하게 documents.py 헬퍼 재사용.
+    from app.routers.documents import (
+        _collect_image_ids,
+        _fetch_image_bytes,
+        _fetch_image_urls,
+    )
+
+    image_ids = _collect_image_ids(content)
+    image_blob_lookup: dict[str, dict[str, Any]] = {}
+    if image_ids:
+        urls = await _fetch_image_urls(s, image_ids)
+        image_blob_lookup = await _fetch_image_bytes(s, urls)
+
+    def resolver(image_id: str) -> dict[str, Any] | None:
+        info = image_blob_lookup.get(image_id)
+        if not info:
+            return None
+        return {"bytes": info.get("bytes"), "mime": info.get("mime")}
+
+    docx_bytes = render_docx(content, options=DocxOptions(image_resolver=resolver))
+    filename = f"{slug}.docx"
+    return FastAPIResponse(
+        content=docx_bytes,
+        media_type=_DOCX_MEDIA_TYPE,
         headers={
             "Content-Disposition": (
                 f'attachment; filename="{quote(filename)}"; '

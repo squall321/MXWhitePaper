@@ -59,6 +59,12 @@ export interface DocumentJSONV10 {
   glossary?: GlossaryItem[]
   references?: Reference[]
   see_also?: Slug[]
+  /**
+   * Map of variable names → fill-in strings used to substitute {{var}} tokens at render time.
+   */
+  variables?: {
+    [k: string]: string | undefined
+  }
 }
 export interface DocumentMeta {
   division: string

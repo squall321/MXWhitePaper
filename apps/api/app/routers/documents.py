@@ -526,6 +526,48 @@ async def restore_document_version(
     )
 
 
+@router.patch(
+    "/{slug}/variables",
+    summary="문서 변수(mail-merge) 맵 갱신",
+    description=(
+        "DocumentJSON 의 `variables` 객체를 통째로 교체한다. `If-Match` 헤더로 "
+        "낙관적 동시성 보장. 빈 문자열은 자동 제거된다. payload: `{variables: {name: value}}`"
+    ),
+)
+async def patch_variables(
+    slug: str,
+    payload: dict[str, Any],
+    response: Response,
+    if_match: str | None = Header(default=None, alias="If-Match"),
+    x_mxwp_user: str | None = Header(default=None, alias="X-MXWP-User"),
+    x_change_log: str | None = Header(default=None, alias="X-MXWP-Change-Log"),
+    s: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_editor),
+) -> dict[str, Any]:
+    actor = await _resolve_actor(s, x_mxwp_user, user)
+    variables = payload.get("variables") if isinstance(payload, dict) else None
+    if variables is None:
+        variables = {}
+    doc = await document_service.patch_variables(
+        s,
+        slug=slug,
+        variables=variables,
+        if_match=if_match,
+        actor_id=actor,
+        change_log=x_change_log,
+    )
+    etag = document_service.make_etag(doc["id"], doc["version"])
+    response.headers["ETag"] = etag
+    return envelope(
+        data={
+            "slug": doc["slug"],
+            "version": doc["version"],
+            "variables": (doc.get("content_json") or {}).get("variables") or {},
+        },
+        meta={"etag": etag},
+    )
+
+
 # ── Sprint 4: Section/Block 편집 ────────────────────────────────────
 @router.patch(
     "/{slug}/sections/{section_id}",

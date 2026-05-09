@@ -261,6 +261,26 @@ export function mdLiteToHtml(src: string): string {
   let out = ''
   let i = 0
   while (i < src.length) {
+    // Variable token visual hint — render `{{name}}` (with optional `|fallback`)
+    // as a pill so editors immediately recognise it. Note this is a paint-only
+    // transform: `htmlToMdLite` walks the DOM and the inner text restores the
+    // literal `{{…}}` source on save (no special-case needed in the serializer
+    // because the textContent of the span IS the literal).
+    if (src.startsWith('{{', i)) {
+      const close = src.indexOf('}}', i + 2)
+      if (close > i + 2) {
+        const body = src.slice(i + 2, close)
+        const pipe = body.indexOf('|')
+        const name = pipe >= 0 ? body.slice(0, pipe) : body
+        if (/^[A-Za-z0-9_-]+$/.test(name)) {
+          // Inline style ensures the pill is visible even if Tailwind's JIT
+          // didn't pre-extract the class (innerHTML strings aren't scanned).
+          out += `<span class="mxwp-var-token" data-mxwp-var="${escapeHtml(name)}" style="background:#dbeafe;border-radius:4px;padding:0 4px;">${escapeHtml(`{{${body}}}`)}</span>`
+          i = close + 2
+          continue
+        }
+      }
+    }
     if (src.startsWith('**', i)) {
       const close = src.indexOf('**', i + 2)
       if (close > i + 2) {

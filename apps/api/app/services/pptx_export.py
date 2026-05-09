@@ -37,6 +37,8 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
+from app.services.variables import walk_doc_substitute
+
 
 # ── Tunables ─────────────────────────────────────────────────────────
 
@@ -95,6 +97,10 @@ def render_pptx(
     prs.slide_height = _SLIDE_H
 
     ctx = _Ctx(prs=prs, opts=opts)
+
+    # Substitute `{{var}}` tokens up front so every slide emitter sees fully
+    # resolved text. Code blocks are intentionally skipped inside the helper.
+    doc = walk_doc_substitute(doc, doc.get("variables"))
 
     _render_title_slide(ctx, doc)
 

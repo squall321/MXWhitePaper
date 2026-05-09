@@ -172,6 +172,47 @@ def test_renderer_callout_emits_blockquote_admonition() -> None:
     assert "> 두번째 줄" in out
 
 
+def test_renderer_substitutes_variables_in_paragraph() -> None:
+    blocks = [
+        {
+            "type": "paragraph",
+            "id": "01P00000000000000000VAR1",
+            "text": "안녕 {{user}}, 오늘은 {{date|미정}}입니다.",
+        }
+    ]
+    doc = _doc(blocks)
+    doc["variables"] = {"user": "홍길동"}
+    out = render_markdown(doc)
+    # Defined → resolves; missing with fallback → fallback.
+    assert "안녕 홍길동, 오늘은 미정입니다." in out
+    assert "{{user}}" not in out
+    assert "{{date" not in out
+
+
+def test_renderer_does_not_substitute_inside_code_blocks() -> None:
+    blocks = [
+        {
+            "type": "code",
+            "id": "01C00000000000000000VAR2",
+            "language": "python",
+            "code": 'print("{{secret}}")',
+        }
+    ]
+    doc = _doc(blocks)
+    doc["variables"] = {"secret": "leaked"}
+    out = render_markdown(doc)
+    assert "{{secret}}" in out
+    assert "leaked" not in out
+
+
+def test_renderer_unfilled_variable_keeps_token_literal() -> None:
+    blocks = [
+        {"type": "paragraph", "id": "01P00000000000000000VAR3", "text": "값: {{n}}"}
+    ]
+    out = render_markdown(_doc(blocks))
+    assert "값: {{n}}" in out
+
+
 def test_renderer_quote_with_citation() -> None:
     blocks = [
         {"type": "quote", "id": "01QU0000000000000000001A", "text": "인용문", "cite": "출처"}

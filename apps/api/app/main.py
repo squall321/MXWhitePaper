@@ -31,6 +31,7 @@ from .routers.links_graph import router as links_graph_router
 from .routers.notifications import router as notifications_router
 from .routers.orgs import router as orgs_router
 from .routers.search import router as search_router
+from .routers.snippets import router as snippets_router
 from .routers.tags import router as tags_router
 from .routers.uploads import images_router, uploads_router
 from .routers.users import router as users_router
@@ -144,6 +145,14 @@ TAGS_METADATA: list[dict[str, str]] = [
             "현재는 placeholder 응답이며, `AI_ENABLED=true` + LLM 키 설정 후 활성화된다."
         ),
     },
+    {
+        "name": "snippets",
+        "description": (
+            "재사용 가능한 블록 라이브러리 — 사용자가 N개 블록을 묶어 저장하고 "
+            "다른 문서에 붙여넣는다. scope=private|team|org 로 공유 범위 조절. "
+            "팀 스코프는 users.team_id 기준 — team_id 가 없으면 팀 스니펫이 보이지 않는다."
+        ),
+    },
 ]
 
 
@@ -223,6 +232,8 @@ def create_app() -> FastAPI:
     app.include_router(tags_router)
     # AI 보조 훅 — placeholder 응답 (실제 LLM 호출은 추후 작업)
     app.include_router(ai_router)
+    # 재사용 블록 라이브러리 (스니펫)
+    app.include_router(snippets_router)
 
     return app
 

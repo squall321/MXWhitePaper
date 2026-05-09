@@ -531,6 +531,18 @@ function ProfileMenu({
               testId="profile-menu-help"
             />
             <Link
+              to="/snippets"
+              role="menuitem"
+              onClick={close}
+              data-testid="profile-menu-snippets"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-smsg-50 hover:no-underline"
+            >
+              <span aria-hidden="true" className="w-4 text-center text-smsg-700">
+                📚
+              </span>
+              스니펫 관리
+            </Link>
+            <Link
               to="/orgs"
               role="menuitem"
               onClick={close}

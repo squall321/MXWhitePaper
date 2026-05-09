@@ -38,6 +38,11 @@
       "type": "array",
       "items": { "$ref": "#/$defs/Slug" },
       "default": []
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Map of variable names → fill-in strings used to substitute {{var}} tokens at render time."
     }
   },
 

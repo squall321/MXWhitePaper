@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import type { Slug } from '@/types/document'
 import {
   getVersion,
@@ -33,6 +34,10 @@ export function VersionHistoryPanel({ slug }: VersionHistoryPanelProps) {
     staleTime: 30_000,
   })
 
+  const navigate = useNavigate()
+  const [compareMode, setCompareMode] = useState(false)
+  const [compareFrom, setCompareFrom] = useState<number | null>(null)
+
   const [selected, setSelected] = useState<number | null>(null)
   const detail = useQuery<VersionDetail | null>({
     queryKey: ['document-version-detail', slug, selected],
@@ -62,7 +67,24 @@ export function VersionHistoryPanel({ slug }: VersionHistoryPanelProps) {
 
   return (
     <div className="space-y-3 px-2 py-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">버전 이력</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">버전 이력</h3>
+        <button
+          type="button"
+          onClick={() => {
+            setCompareMode((m) => !m)
+            setCompareFrom(null)
+          }}
+          data-testid="compare-mode-toggle"
+          className={`rounded border px-2 py-0.5 text-xs ${
+            compareMode
+              ? 'border-smsg-500 bg-smsg-100 text-smsg-900'
+              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          {compareMode ? '비교 종료' : '비교 모드'}
+        </button>
+      </div>
       {list.isPending && <p className="text-sm text-gray-500">불러오는 중…</p>}
       {list.isError && <p className="text-sm text-red-600">버전 목록 로드 실패</p>}
       {list.data && list.data.length === 0 && (
@@ -70,7 +92,7 @@ export function VersionHistoryPanel({ slug }: VersionHistoryPanelProps) {
       )}
       <ul className="space-y-1">
         {list.data?.map((v) => (
-          <li key={v.version}>
+          <li key={v.version} className="space-y-1">
             <button
               type="button"
               onClick={() => setSelected(v.version)}
@@ -88,6 +110,35 @@ export function VersionHistoryPanel({ slug }: VersionHistoryPanelProps) {
                 <span className="block truncate text-xs text-gray-500">{v.change_log}</span>
               )}
             </button>
+            {compareMode && (
+              <div className="flex justify-end">
+                {compareFrom == null ? (
+                  <button
+                    type="button"
+                    onClick={() => setCompareFrom(v.version)}
+                    data-testid={`compare-start-${v.version}`}
+                    className="rounded border border-gray-300 px-2 py-0.5 text-xs hover:bg-gray-50"
+                  >
+                    비교 시작
+                  </button>
+                ) : compareFrom === v.version ? (
+                  <span className="text-xs text-smsg-700">기준: v{v.version}</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `/docs/${encodeURIComponent(slug)}/versions/${compareFrom}/diff/${v.version}`,
+                      )
+                    }
+                    data-testid={`compare-with-${v.version}`}
+                    className="rounded border border-smsg-500 bg-smsg-50 px-2 py-0.5 text-xs text-smsg-900 hover:bg-smsg-100"
+                  >
+                    이 버전과 비교
+                  </button>
+                )}
+              </div>
+            )}
           </li>
         ))}
       </ul>

@@ -5,6 +5,7 @@ import { useEditorStore } from '../state'
 import { useUxHintStore } from '../uxHintStore'
 import { BlockInsertPalette, type PaletteItem } from './BlockInsertPalette'
 import { BlockResizeWrapper } from './BlockResizeWrapper'
+import { SnippetPicker } from '@/features/block-library/SnippetPicker'
 
 /**
  * BlockHoverInserter — wraps a single block with Notion-style affordances:
@@ -66,6 +67,9 @@ export function BlockHoverInserter({
   // block at a time.
   type Open = { side: 'before' | 'after'; anchor: { x: number; y: number } }
   const [open, setOpen] = useState<Open | null>(null)
+  // Snippet picker side-channel — opening keeps the rail context (side) so we
+  // know which index to insert at when the user picks a snippet.
+  const [snippetSide, setSnippetSide] = useState<'before' | 'after' | null>(null)
 
   // First-time-only affordance hint. The chip auto-fades after 4s.
   const [hintVisible, setHintVisible] = useState(false)
@@ -85,6 +89,13 @@ export function BlockHoverInserter({
       // via the same custom event.
       if (it.kind === 'image') {
         window.dispatchEvent(new CustomEvent('mxwp:open-image-picker'))
+        setOpen(null)
+        return
+      }
+      if (it.kind === 'snippet') {
+        // Defer to the snippet picker — preserve `open.side` so we know
+        // whether to insert before or after the wrapped block.
+        setSnippetSide(open.side)
         setOpen(null)
         return
       }
@@ -109,6 +120,36 @@ export function BlockHoverInserter({
       }
     },
     [open, etag, slug, sectionId, index, apply, setConflict],
+  )
+
+  const onInsertSnippetBlocks = useCallback(
+    async (blocks: Block[]) => {
+      const side = snippetSide
+      if (!side) return
+      // Insert sequentially so the etag chain stays consistent — each
+      // insertBlock returns a fresh doc + etag. Start index depends on the
+      // rail; subsequent blocks land after the previously-inserted one.
+      let cursor = side === 'before' ? index : index + 1
+      for (const b of blocks) {
+        const tag = useEditorStore.getState().etag
+        if (!tag) break
+        try {
+          const result = await insertBlock(
+            slug,
+            { section_id: sectionId, index: cursor, block: b },
+            tag,
+            '스니펫 삽입',
+          )
+          apply(result.document, result.etag)
+          cursor++
+        } catch (err) {
+          if (isPreconditionFailed(err)) setConflict(null)
+          break
+        }
+      }
+      setSnippetSide(null)
+    },
+    [snippetSide, index, slug, sectionId, apply, setConflict],
   )
 
   const onRailClick = useCallback(
@@ -285,6 +326,13 @@ export function BlockHoverInserter({
           anchor={open.anchor}
           onPick={(it) => void onPick(it)}
           onClose={() => setOpen(null)}
+        />
+      )}
+
+      {snippetSide && (
+        <SnippetPicker
+          onClose={() => setSnippetSide(null)}
+          onInsert={(blocks) => void onInsertSnippetBlocks(blocks)}
         />
       )}
     </div>

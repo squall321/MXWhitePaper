@@ -182,6 +182,17 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     slash: '/파일',
     preview: '📎 file.pdf',
   },
+  {
+    kind: 'snippet',
+    label: '스니펫',
+    icon: '📚',
+    // build() returns null — caller opens SnippetPicker and inserts the resolved
+    // blocks itself (similar to how the 'image' tile opens the image picker).
+    build: () => null,
+    hint: '저장된 블록 묶음을 현재 위치에 삽입.',
+    slash: '/스니펫',
+    preview: '📚 saved blocks',
+  },
 ]
 
 interface Props {

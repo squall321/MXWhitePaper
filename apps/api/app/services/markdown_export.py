@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.variables import walk_doc_substitute
+
 
 # ── Public entry ─────────────────────────────────────────────────────
 
@@ -26,6 +28,13 @@ def render_markdown(doc: dict[str, Any], *, include_metadata: bool = True) -> st
     Returns:
         UTF-8 markdown 문자열. 끝에 trailing newline 1개.
     """
+    # Substitute `{{var}}` tokens BEFORE walking the tree so every block sees
+    # the resolved text. `code` blocks are skipped inside the helper.
+    doc = walk_doc_substitute(doc, doc.get("variables"))
+    # TODO(K1, cycle 5): once `apps/api/app/services/docx_export.py` lands,
+    # add the same `walk_doc_substitute(doc, doc.get("variables"))` call at
+    # the top of its `render_docx` entry. The helper is in
+    # `apps/api/app/services/variables.py`.
     title = _str(doc.get("title")) or "Untitled"
     summary = _str(doc.get("summary"))
     metadata = doc.get("metadata") or {}

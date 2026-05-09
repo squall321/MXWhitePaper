@@ -534,6 +534,111 @@
         "title": "ResolveIn",
         "type": "object"
       },
+      "SnippetIn": {
+        "properties": {
+          "blocks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "minItems": 1,
+            "title": "Blocks",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "default": "private",
+            "title": "Scope",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "blocks"
+        ],
+        "title": "SnippetIn",
+        "type": "object"
+      },
+      "SnippetPatchIn": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          }
+        },
+        "title": "SnippetPatchIn",
+        "type": "object"
+      },
       "SummarizeBody": {
         "properties": {
           "target_length": {
@@ -3429,6 +3534,111 @@
         ]
       }
     },
+    "/api/v1/documents/{slug}/variables": {
+      "patch": {
+        "description": "DocumentJSON 의 `variables` 객체를 통째로 교체한다. `If-Match` 헤더로 낙관적 동시성 보장. 빈 문자열은 자동 제거된다. payload: `{variables: {name: value}}`",
+        "operationId": "patch_variables_api_v1_documents__slug__variables_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-MXWP-Change-Log",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-Change-Log"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Variables Api V1 Documents  Slug  Variables Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 변수(mail-merge) 맵 갱신",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/documents/{slug}/versions": {
       "get": {
         "operationId": "list_document_versions_api_v1_documents__slug__versions_get",
@@ -3628,6 +3838,48 @@
         "summary": "문서 조회 ping (analytics 용)",
         "tags": [
           "documents"
+        ]
+      }
+    },
+    "/api/v1/exports/docx": {
+      "post": {
+        "description": "DocumentJSON 본문을 Word 문서(.docx) 로 변환한다. cycle 1 의 .docx import 와 round-trip 가능 (스타일/구조를 importer 가 인식하는 형태로 출력).\n\n- Heading 1/2/3 = section level, Heading 4/5/6 = `heading-4` block.\n- markdown-lite (bold/italic/strike/underline/code/link/wiki/footnote) 보존.\n- table / list / quote / callout / code 는 네이티브 도형/스타일로.\n- chart / gantt / flow / org-chart 는 텍스트 요약 + 데이터 표 fallback.\n- speaker note (`meta.note=\"speaker:…\"`) 는 DOCX 노트 페인이 없어 drop.",
+        "operationId": "export_docx_api_v1_exports_docx_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서를 Word (.docx) 로 내보내기",
+        "tags": [
+          "exports"
         ]
       }
     },
@@ -5289,6 +5541,318 @@
         ]
       }
     },
+    "/api/v1/snippets": {
+      "get": {
+        "operationId": "list_snippets_api_v1_snippets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Snippets Api V1 Snippets Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "스니펫 목록 (reader+)",
+        "tags": [
+          "snippets"
+        ]
+      },
+      "post": {
+        "operationId": "create_snippet_api_v1_snippets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnippetIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Snippet Api V1 Snippets Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "스니펫 저장 (editor+)",
+        "tags": [
+          "snippets"
+        ]
+      }
+    },
+    "/api/v1/snippets/{sid}": {
+      "delete": {
+        "operationId": "delete_snippet_api_v1_snippets__sid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Sid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "스니펫 삭제 (owner|admin)",
+        "tags": [
+          "snippets"
+        ]
+      },
+      "get": {
+        "operationId": "get_snippet_api_v1_snippets__sid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Sid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Snippet Api V1 Snippets  Sid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "스니펫 단건 조회 (reader+, use_count++)",
+        "tags": [
+          "snippets"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_snippet_api_v1_snippets__sid__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "title": "Sid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnippetPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Snippet Api V1 Snippets  Sid  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "스니펫 수정 (owner)",
+        "tags": [
+          "snippets"
+        ]
+      }
+    },
+    "/api/v1/snippets/{sid}/use": {
+      "post": {
+        "operationId": "use_snippet_api_v1_snippets__sid__use_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "title": "Sid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Use Snippet Api V1 Snippets  Sid  Use Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "사용 마커 — use_count 만 ++ (reader+)",
+        "tags": [
+          "snippets"
+        ]
+      }
+    },
     "/api/v1/tags": {
       "get": {
         "description": "모든 비-archived 문서의 `metadata.tags` 를 집계해 (name, count) 로 반환한다. `q` 가 주어지면 prefix(case-insensitive)로 필터링한다.",
@@ -6100,6 +6664,10 @@
     {
       "description": "AI 보조 훅 — 요약/번역/다듬기/이어쓰기/제목 자동생성. 현재는 placeholder 응답이며, `AI_ENABLED=true` + LLM 키 설정 후 활성화된다.",
       "name": "ai"
+    },
+    {
+      "description": "재사용 가능한 블록 라이브러리 — 사용자가 N개 블록을 묶어 저장하고 다른 문서에 붙여넣는다. scope=private|team|org 로 공유 범위 조절. 팀 스코프는 users.team_id 기준 — team_id 가 없으면 팀 스니펫이 보이지 않는다.",
+      "name": "snippets"
     }
   ]
 }

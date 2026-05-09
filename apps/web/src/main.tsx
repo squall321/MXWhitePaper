@@ -50,11 +50,19 @@ const HomePage = lazyLogged('Home', () =>
 const DocumentReaderPage = lazyLogged('DocumentReader', () =>
   import('./pages/DocumentReader').then((m) => ({ default: m.DocumentReaderPage })),
 )
+const VersionDiffPage = lazyLogged('VersionDiff', () =>
+  import('./pages/VersionDiff').then((m) => ({ default: m.VersionDiffPage })),
+)
 const DocumentNewPage = lazyLogged('DocumentNew', () =>
   import('./pages/DocumentNew').then((m) => ({ default: m.DocumentNewPage })),
 )
 const DocumentImportPage = lazyLogged('DocumentImport', () =>
   import('./pages/DocumentImport').then((m) => ({ default: m.DocumentImportPage })),
+)
+const DocumentVariablesPage = lazyLogged('DocumentVariables', () =>
+  import('./pages/DocumentVariables').then((m) => ({
+    default: m.DocumentVariablesPage,
+  })),
 )
 const OrgsPage = lazyLogged('Orgs', () =>
   import('./pages/Orgs').then((m) => ({ default: m.OrgsPage })),
@@ -79,6 +87,9 @@ const ReadListPage = lazyLogged('ReadList', () =>
 )
 const SettingsPage = lazyLogged('Settings', () =>
   import('./pages/Settings').then((m) => ({ default: m.SettingsPage })),
+)
+const SnippetManagerPage = lazyLogged('SnippetManager', () =>
+  import('./pages/SnippetManager').then((m) => ({ default: m.SnippetManagerPage })),
 )
 // `TagPage` accepts a `mode` prop, which doesn't fit `lazyLogged`'s
 // component-with-no-props generic. Use `React.lazy` directly + manual log.
@@ -221,6 +232,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="docs/new" element={<Boundaried name="docs/new"><DocumentNewPage /></Boundaried>} />
                 <Route path="docs/import" element={<Boundaried name="docs/import"><DocumentImportPage /></Boundaried>} />
                 <Route path="docs/:slug" element={<Boundaried name="docs/:slug"><DocumentReaderPage /></Boundaried>} />
+                <Route path="docs/:slug/variables" element={<Boundaried name="docs/:slug/variables"><DocumentVariablesPage /></Boundaried>} />
+                <Route
+                  path="docs/:slug/versions/:from/diff/:to"
+                  element={<Boundaried name="docs/:slug/diff"><VersionDiffPage /></Boundaried>}
+                />
                 <Route path="orgs" element={<Boundaried name="orgs"><OrgsPage /></Boundaried>} />
                 <Route path="admin/orgs" element={<Boundaried name="admin/orgs"><AdminOrgsPage /></Boundaried>} />
                 <Route path="admin/dashboard" element={<Boundaried name="admin/dashboard"><AdminDashboardPage /></Boundaried>} />
@@ -229,6 +245,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
                 <Route path="reads" element={<Boundaried name="reads"><ReadListPage /></Boundaried>} />
                 <Route path="settings" element={<Boundaried name="settings"><SettingsPage /></Boundaried>} />
+                <Route path="snippets" element={<Boundaried name="snippets"><SnippetManagerPage /></Boundaried>} />
                 <Route path="graph" element={<Boundaried name="graph"><GraphPage /></Boundaried>} />
                 <Route path="graph/:slug" element={<Boundaried name="graph/:slug"><GraphPage /></Boundaried>} />
                 <Route path="tags/:tag" element={<Boundaried name="tags"><TagPage mode="tag" /></Boundaried>} />
