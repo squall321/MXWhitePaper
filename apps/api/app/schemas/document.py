@@ -508,6 +508,71 @@ class CalculatorBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
+class Viewbox(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    w: int = Field(..., ge=100, le=4000)
+    h: int = Field(..., ge=100, le=4000)
+
+
+class Point(RootModel[list[float]]):
+    root: list[float] = Field(..., max_length=2, min_length=2)
+
+
+class WhiteboardElement1(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['stroke']
+    id: str
+    points: list[Point]
+    stroke: str
+    stroke_width: float = Field(..., alias='strokeWidth', ge=1.0, le=32.0)
+
+
+class Shape(Enum):
+    rect = 'rect'
+    ellipse = 'ellipse'
+    line = 'line'
+    arrow = 'arrow'
+
+
+class WhiteboardElement2(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['shape']
+    id: str
+    shape: Shape
+    x: float
+    y: float
+    w: float
+    h: float
+    stroke: str
+    stroke_width: float = Field(..., alias='strokeWidth', ge=1.0, le=32.0)
+    fill: str | None = None
+
+
+class WhiteboardElement3(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['text']
+    id: str
+    x: float
+    y: float
+    text: str
+    font_size: float = Field(..., alias='fontSize', ge=8.0, le=96.0)
+    color: str
+
+
+class WhiteboardElement(
+    RootModel[WhiteboardElement1 | WhiteboardElement2 | WhiteboardElement3]
+):
+    root: WhiteboardElement1 | WhiteboardElement2 | WhiteboardElement3
+
+
 class RelatedDoc(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -546,6 +611,18 @@ class OrgChartBlock(BaseModel):
     id: Ulid
     root: OrgChartNode
     layout: Layout | None = 'tree'
+    meta: BlockMeta | None = None
+
+
+class WhiteboardBlock(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['whiteboard']
+    id: Ulid
+    title: str | None = None
+    viewbox: Viewbox
+    elements: list[WhiteboardElement]
     meta: BlockMeta | None = None
 
 
@@ -691,6 +768,7 @@ class Block(
         | DataSourceBlock
         | DashboardEmbedBlock
         | CalculatorBlock
+        | WhiteboardBlock
     ]
 ):
     root: (
@@ -720,6 +798,7 @@ class Block(
         | DataSourceBlock
         | DashboardEmbedBlock
         | CalculatorBlock
+        | WhiteboardBlock
     )
 
 

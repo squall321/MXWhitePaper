@@ -2,6 +2,7 @@ import { registerAuthHooks, registerConnectionHooks } from '@/lib/api/client'
 import { getAccessToken, useAuthStore } from '@/features/auth/store'
 import { refresh } from '@/features/auth/api'
 import { useConnectionStore } from '@/features/auth/connectionStore'
+import { startConnectionTracking } from '@/features/editor/connectionStore'
 
 const ACCESS_TOKEN_KEY = 'mxwp.access_token'
 
@@ -79,6 +80,10 @@ export function bootstrapAuth() {
     onSuccess: () => useConnectionStore.getState().markSuccess(),
     onFailure: () => useConnectionStore.getState().markFailure(),
   })
+
+  // Sprint 5 — editor offline UX. Attach window online/offline listeners +
+  // start the 30s healthz heartbeat. Idempotent.
+  startConnectionTracking()
 
   // Kick off rehydrate. Don't await — the AuthGuard renders a "hydrating"
   // shim so the redirect doesn't fire before the cookie has been tried.

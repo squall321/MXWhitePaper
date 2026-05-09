@@ -111,6 +111,9 @@ const NotFoundPage = lazyLogged('NotFound', () =>
 const PresentationPage = lazyLogged('Presentation', () =>
   import('./pages/Presentation').then((m) => ({ default: m.PresentationPage })),
 )
+const SharedDocViewPage = lazyLogged('SharedDocView', () =>
+  import('./pages/SharedDocView').then((m) => ({ default: m.SharedDocViewPage })),
+)
 const PresenterViewPage = lazyLogged('PresenterView', () =>
   import('./features/presentation/PresenterView').then((m) => ({
     default: m.PresenterViewPage,
@@ -204,6 +207,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route
                 path="/diag"
                 element={<Boundaried name="diag"><DiagPage /></Boundaried>}
+              />
+              {/* Public share route — bypasses AuthGuard so non-employees
+                  with a valid token can land here without logging in. */}
+              <Route
+                path="/share/:token"
+                element={<Boundaried name="share"><SharedDocViewPage /></Boundaried>}
               />
               <Route
                 path="/present/:slug"

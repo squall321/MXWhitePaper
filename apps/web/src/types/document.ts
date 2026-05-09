@@ -39,6 +39,36 @@ export type Block =
   | DataSourceBlock
   | DashboardEmbedBlock
   | CalculatorBlock
+  | WhiteboardBlock
+export type WhiteboardElement =
+  | {
+      kind: 'stroke'
+      id: string
+      points: [number, number][]
+      stroke: string
+      strokeWidth: number
+    }
+  | {
+      kind: 'shape'
+      id: string
+      shape: 'rect' | 'ellipse' | 'line' | 'arrow'
+      x: number
+      y: number
+      w: number
+      h: number
+      stroke: string
+      strokeWidth: number
+      fill?: string
+    }
+  | {
+      kind: 'text'
+      id: string
+      x: number
+      y: number
+      text: string
+      fontSize: number
+      color: string
+    }
 
 /**
  * MX White Paper 단일 진실 공급원(SSOT). Section 트리(level 1~3) + Block 배열 본문. PROJECT_PLAN.md / Plan / Design / Do 문서의 모든 데이터 모델 참조처.
@@ -391,6 +421,17 @@ export interface CalculatorBlock {
    */
   formula: string
   label?: string
+  meta?: BlockMeta
+}
+export interface WhiteboardBlock {
+  type: 'whiteboard'
+  id: Ulid
+  title?: string
+  viewbox: {
+    w: number
+    h: number
+  }
+  elements: WhiteboardElement[]
   meta?: BlockMeta
 }
 export interface SectionLevel2 {

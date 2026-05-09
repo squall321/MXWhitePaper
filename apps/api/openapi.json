@@ -215,6 +215,40 @@
         "title": "ContinueBody",
         "type": "object"
       },
+      "CreateShareIn": {
+        "description": "Body for POST /documents/{slug}/share.",
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO datetime in UTC. Past values are rejected (422).",
+            "title": "Expires At"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 4,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional password gate; hashed with argon2.",
+            "title": "Password"
+          }
+        },
+        "title": "CreateShareIn",
+        "type": "object"
+      },
       "DivisionCreate": {
         "additionalProperties": false,
         "properties": {
@@ -3534,6 +3568,104 @@
         ]
       }
     },
+    "/api/v1/documents/{slug}/share": {
+      "get": {
+        "description": "revoked_at IS NULL 인 항목만 반환. view_count, expires_at 포함.",
+        "operationId": "list_share_links_api_v1_documents__slug__share_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Share Links Api V1 Documents  Slug  Share Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "활성 공유 링크 목록 (editor+)",
+        "tags": [
+          "sharing"
+        ]
+      },
+      "post": {
+        "description": "문서 slug 에 대한 새 share token 을 발급한다. `expires_at` 미지정 시 무기한, `password` 지정 시 argon2 해시로 저장되며 공개 GET 에서 반드시 일치해야 한다.",
+        "operationId": "create_share_link_api_v1_documents__slug__share_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShareIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Share Link Api V1 Documents  Slug  Share Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "공개 공유 링크 생성 (editor+)",
+        "tags": [
+          "sharing"
+        ]
+      }
+    },
     "/api/v1/documents/{slug}/variables": {
       "patch": {
         "description": "DocumentJSON 의 `variables` 객체를 통째로 교체한다. `If-Match` 헤더로 낙관적 동시성 보장. 빈 문자열은 자동 제거된다. payload: `{variables: {name: value}}`",
@@ -5541,6 +5673,117 @@
         ]
       }
     },
+    "/api/v1/share/{token}": {
+      "delete": {
+        "operationId": "revoke_share_link_api_v1_share__token__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "공유 링크 revoke (creator 또는 admin)",
+        "tags": [
+          "sharing"
+        ]
+      },
+      "get": {
+        "description": "토큰이 유효하면 `GET /documents/{slug}` 와 동일한 envelope 을 반환한다. 비밀번호가 설정된 링크는 `password` 헤더 또는 쿼리로 평문을 함께 보내야 한다.\n\n- 404: 토큰이 존재하지 않음\n- 410: 만료(expires_at) 또는 revoke 됨\n- 401: 비밀번호가 설정된 링크인데 누락/불일치\n- 200: 성공 시 `view_count` 가 1 증가",
+        "operationId": "read_shared_document_api_v1_share__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "password",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Password"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Share-Password",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Share-Password"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Shared Document Api V1 Share  Token  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "공개 공유 링크로 문서 조회 (인증 불필요)",
+        "tags": [
+          "sharing"
+        ]
+      }
+    },
     "/api/v1/snippets": {
       "get": {
         "operationId": "list_snippets_api_v1_snippets_get",
@@ -6664,6 +6907,10 @@
     {
       "description": "AI 보조 훅 — 요약/번역/다듬기/이어쓰기/제목 자동생성. 현재는 placeholder 응답이며, `AI_ENABLED=true` + LLM 키 설정 후 활성화된다.",
       "name": "ai"
+    },
+    {
+      "description": "공개 공유 링크 — `POST /documents/{slug}/share` 로 토큰을 생성하면 `/share/{token}` 가 인증 없이 문서를 읽도록 열린다. 만료일/비밀번호/revoke 지원.",
+      "name": "sharing"
     },
     {
       "description": "재사용 가능한 블록 라이브러리 — 사용자가 N개 블록을 묶어 저장하고 다른 문서에 붙여넣는다. scope=private|team|org 로 공유 범위 조절. 팀 스코프는 users.team_id 기준 — team_id 가 없으면 팀 스니펫이 보이지 않는다.",

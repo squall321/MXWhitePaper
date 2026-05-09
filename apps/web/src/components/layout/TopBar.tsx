@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge'
 import { NetworkStatusPill } from '@/components/NetworkStatusPill'
 import { NotificationBell } from '@/features/notifications/components/NotificationBell'
 import { useLocale } from '@/lib/i18n'
+import { LanguageSwitcher } from './LanguageSwitcher'
 
 interface TopBarProps {
   onOpenPalette?: (q?: string) => void
@@ -108,7 +109,7 @@ export function TopBar({
           <SearchTrigger onOpenPalette={onOpenPalette} />
         </div>
 
-        <nav className="ml-auto flex items-center gap-1.5 text-sm sm:gap-3" aria-label="주요 메뉴">
+        <nav className="ml-auto flex items-center gap-1.5 text-sm sm:gap-3" aria-label={t('topbar.primaryNav')}>
           {/* Mobile search button */}
           <IconButton
             aria-label={t('topbar.search.label')}
@@ -127,11 +128,11 @@ export function TopBar({
           <div className="hidden items-center gap-1.5 lg:flex">
             <NavLinkPill to="/orgs" label={t('topbar.org')} active={isActive('/orgs')} />
             <NavLinkPill to="/recent" label={t('topbar.recent')} active={isActive('/recent')} />
-            <NavLinkPill to="/reads" label="읽은 문서" active={isActive('/reads')} />
+            <NavLinkPill to="/reads" label={t('topbar.reads')} active={isActive('/reads')} />
             {canSeeAnalytics && (
               <NavLinkPill
                 to="/analytics"
-                label="분석"
+                label={t('topbar.analytics')}
                 active={isActive('/analytics')}
               />
             )}
@@ -143,9 +144,9 @@ export function TopBar({
                 className={`rounded-md border border-white/30 bg-white/10 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/20 hover:no-underline ${
                   isActive('/admin/dashboard') ? 'bg-white/25' : ''
                 }`}
-                aria-label="관리자 대시보드"
+                aria-label={t('topbar.adminDashboard.aria')}
               >
-                ⚙ 관리
+                {t('topbar.adminBadge')}
               </Link>
             )}
           </div>
@@ -173,20 +174,20 @@ export function TopBar({
               >
                 <OverflowItem
                   to="/orgs"
-                  label="조직"
+                  label={t('topbar.orgFull')}
                   current={isActive('/orgs')}
                   onClick={() => setOverflowOpen(false)}
                 />
                 <OverflowItem
                   to="/recent"
-                  label="최근 본 문서"
+                  label={t('topbar.recentFull')}
                   current={isActive('/recent')}
                   onClick={() => setOverflowOpen(false)}
                 />
                 {canSeeAnalytics && (
                   <OverflowItem
                     to="/analytics"
-                    label="분석"
+                    label={t('topbar.analytics')}
                     current={isActive('/analytics')}
                     onClick={() => setOverflowOpen(false)}
                   />
@@ -194,7 +195,7 @@ export function TopBar({
                 {isAdmin && (
                   <OverflowItem
                     to="/admin/dashboard"
-                    label="⚙ 관리자 대시보드"
+                    label={t('topbar.adminDashboard')}
                     current={isActive('/admin/dashboard')}
                     onClick={() => setOverflowOpen(false)}
                   />
@@ -208,6 +209,8 @@ export function TopBar({
             <NewDocMenu
               tNewDocLabel={t('topbar.newDoc')}
               tNewDocAria={t('topbar.newDoc.aria')}
+              tNewDocBlank={t('topbar.newDoc')}
+              tNewDocImport={t('topbar.newDoc.import')}
               isActiveNew={isActive('/docs/new')}
               isActiveImport={isActive('/docs/import')}
             />
@@ -218,6 +221,8 @@ export function TopBar({
           <span className="mx-1 hidden h-5 w-px bg-white/25 sm:inline-block" aria-hidden="true" />
 
           {user && <NotificationBell />}
+
+          <LanguageSwitcher />
 
           {user ? (
             <ProfileMenu
@@ -248,11 +253,15 @@ export function TopBar({
 function NewDocMenu({
   tNewDocLabel,
   tNewDocAria,
+  tNewDocBlank,
+  tNewDocImport,
   isActiveNew,
   isActiveImport,
 }: {
   tNewDocLabel: string
   tNewDocAria: string
+  tNewDocBlank: string
+  tNewDocImport: string
   isActiveNew: boolean
   isActiveImport: boolean
 }) {
@@ -318,7 +327,7 @@ function NewDocMenu({
             onClick={() => setOpen(false)}
             className="block px-4 py-2 text-sm hover:bg-smsg-50 hover:no-underline"
           >
-            + 새 문서
+            {tNewDocBlank}
           </Link>
           <Link
             to="/docs/import"
@@ -327,7 +336,7 @@ function NewDocMenu({
             onClick={() => setOpen(false)}
             className="block px-4 py-2 text-sm hover:bg-smsg-50 hover:no-underline"
           >
-            📄 Word 가져오기
+            {tNewDocImport}
           </Link>
         </div>
       )}
@@ -490,9 +499,9 @@ function ProfileMenu({
             </div>
           </div>
 
-          <ProfileMenuSection title="프로필">
+          <ProfileMenuSection title={t('topbar.profile.section.profile')}>
             <ProfileMenuItem
-              label="환경설정"
+              label={t('topbar.profile.settings')}
               icon="⚙"
               onClick={() => {
                 close()
@@ -501,7 +510,7 @@ function ProfileMenu({
               testId="profile-menu-settings"
             />
             <ProfileMenuItem
-              label="즐겨찾기"
+              label={t('topbar.profile.favorites')}
               icon="★"
               onClick={() => {
                 close()
@@ -510,7 +519,7 @@ function ProfileMenu({
               testId="profile-menu-favorites"
             />
             <ProfileMenuItem
-              label="최근 활동"
+              label={t('topbar.profile.recent')}
               icon="↻"
               onClick={() => {
                 close()
@@ -520,9 +529,9 @@ function ProfileMenu({
             />
           </ProfileMenuSection>
 
-          <ProfileMenuSection title="기타">
+          <ProfileMenuSection title={t('topbar.profile.section.other')}>
             <ProfileMenuItem
-              label="도움말 / 단축키"
+              label={t('topbar.profile.help')}
               icon="?"
               onClick={() => {
                 close()
@@ -540,7 +549,7 @@ function ProfileMenu({
               <span aria-hidden="true" className="w-4 text-center text-smsg-700">
                 📚
               </span>
-              스니펫 관리
+              {t('topbar.profile.snippets')}
             </Link>
             <Link
               to="/orgs"
@@ -551,7 +560,7 @@ function ProfileMenu({
               <span aria-hidden="true" className="w-4 text-center text-smsg-700">
                 ▤
               </span>
-              조직 트리
+              {t('topbar.profile.orgTree')}
             </Link>
           </ProfileMenuSection>
 
@@ -568,7 +577,7 @@ function ProfileMenu({
               className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-smsg-50"
             >
               <span aria-hidden="true" className="text-gray-400">⎋</span>
-              로그아웃
+              {t('topbar.profile.logout')}
             </button>
           </div>
         </div>
@@ -625,6 +634,7 @@ function ProfileMenuItem({
  * Tiny pill that surfaces the axios-observed connection state.
  */
 function ConnectionPill() {
+  const { t } = useLocale()
   const lastSuccessAt = useConnectionStore((s) => s.lastSuccessAt)
   const lastFailureAt = useConnectionStore((s) => s.lastFailureAt)
   const consecutiveFailures = useConnectionStore((s) => s.consecutiveFailures)
@@ -637,7 +647,11 @@ function ConnectionPill() {
         ? 'bg-amber-100 text-amber-800'
         : 'bg-red-100 text-red-700'
   const label =
-    status === 'online' ? '온라인 ✓' : status === 'reconnecting' ? '재연결 시도 중' : '오프라인'
+    status === 'online'
+      ? t('topbar.connection.online')
+      : status === 'reconnecting'
+        ? t('topbar.connection.reconnecting')
+        : t('topbar.connection.offline')
 
   return (
     <span

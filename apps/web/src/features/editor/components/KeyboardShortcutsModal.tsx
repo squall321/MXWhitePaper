@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useLocale } from '@/lib/i18n'
 
 interface KeyboardShortcutsModalProps {
   open: boolean
@@ -7,74 +8,81 @@ interface KeyboardShortcutsModalProps {
 
 interface ShortcutRow {
   keys: string
-  desc: string
+  /** i18n key for the row description. */
+  descKey: string
 }
 
-const SECTIONS: { title: string; rows: ShortcutRow[] }[] = [
+interface ShortcutSection {
+  /** i18n key for the section heading. */
+  titleKey: string
+  rows: ShortcutRow[]
+}
+
+const SECTIONS: ShortcutSection[] = [
   {
-    title: '기본',
+    titleKey: 'shortcuts.section.basic',
     rows: [
-      { keys: 'E', desc: '편집/미리보기 전환' },
-      { keys: '⌘ S', desc: '수동 저장 (자동 저장 즉시 플러시)' },
-      { keys: '⌘ Z / ⌘ ⇧ Z', desc: '실행 취소 / 다시 실행' },
-      { keys: '?', desc: '단축키 안내 열기/닫기' },
-      { keys: 'Esc', desc: '메뉴/모달 닫기' },
+      { keys: 'E', descKey: 'shortcuts.basic.toggleEdit' },
+      { keys: '⌘ S', descKey: 'shortcuts.basic.save' },
+      { keys: '⌘ Z / ⌘ ⇧ Z', descKey: 'shortcuts.basic.undoRedo' },
+      { keys: '?', descKey: 'shortcuts.basic.help' },
+      { keys: 'Esc', descKey: 'shortcuts.basic.escape' },
     ],
   },
   {
-    title: '편집',
+    titleKey: 'shortcuts.section.edit',
     rows: [
-      { keys: '/', desc: '슬래시 메뉴 — 블록 추가' },
-      { keys: 'Tab / ⇧ Tab', desc: '들여쓰기 / 내어쓰기 (리스트 안)' },
-      { keys: '⌘ ↑ / ⌘ ↓', desc: '블록 위/아래로 이동' },
-      { keys: '[[', desc: '문서 위키링크 자동완성' },
-      { keys: '@', desc: '용어 참조 자동완성' },
-      { keys: ':emoji', desc: '이모지 자동완성' },
+      { keys: '/', descKey: 'shortcuts.edit.slash' },
+      { keys: 'Tab / ⇧ Tab', descKey: 'shortcuts.edit.indent' },
+      { keys: '⌘ ↑ / ⌘ ↓', descKey: 'shortcuts.edit.move' },
+      { keys: '[[', descKey: 'shortcuts.edit.wikilink' },
+      { keys: '@', descKey: 'shortcuts.edit.term' },
+      { keys: ':emoji', descKey: 'shortcuts.edit.emoji' },
     ],
   },
   {
-    title: '블록 일괄 선택',
+    titleKey: 'shortcuts.section.bulk',
     rows: [
-      { keys: '⌘ A', desc: '현재 섹션의 모든 블록 선택' },
-      { keys: '⌘ D', desc: '선택한 블록 복제' },
-      { keys: 'Delete / Backspace', desc: '선택한 블록 삭제' },
-      { keys: 'Esc', desc: '블록 선택 해제' },
+      { keys: '⌘ A', descKey: 'shortcuts.bulk.selectAll' },
+      { keys: '⌘ D', descKey: 'shortcuts.bulk.duplicate' },
+      { keys: 'Delete / Backspace', descKey: 'shortcuts.bulk.delete' },
+      { keys: 'Esc', descKey: 'shortcuts.bulk.deselect' },
     ],
   },
   {
-    title: '텍스트 서식',
+    titleKey: 'shortcuts.section.format',
     rows: [
-      { keys: '⌘ B', desc: '굵게' },
-      { keys: '⌘ I', desc: '기울임' },
-      { keys: '⌘ U', desc: '밑줄' },
-      { keys: '⌘ E', desc: '인라인 코드' },
-      { keys: '⌘ K', desc: '링크 삽입 ([[slug]] 또는 https://…)' },
-      { keys: '~~text~~', desc: '취소선 (또는 toolbar의 S 버튼)' },
+      { keys: '⌘ B', descKey: 'shortcuts.format.bold' },
+      { keys: '⌘ I', descKey: 'shortcuts.format.italic' },
+      { keys: '⌘ U', descKey: 'shortcuts.format.underline' },
+      { keys: '⌘ E', descKey: 'shortcuts.format.code' },
+      { keys: '⌘ K', descKey: 'shortcuts.format.link' },
+      { keys: '~~text~~', descKey: 'shortcuts.format.strike' },
     ],
   },
   {
-    title: '찾기 / 바꾸기',
+    titleKey: 'shortcuts.section.find',
     rows: [
-      { keys: '⌘ F', desc: '현재 문서에서 찾기 / 바꾸기' },
-      { keys: 'Esc', desc: '찾기 창 닫기' },
+      { keys: '⌘ F', descKey: 'shortcuts.find.open' },
+      { keys: 'Esc', descKey: 'shortcuts.find.close' },
     ],
   },
   {
-    title: '이동 (G 코드)',
+    titleKey: 'shortcuts.section.go',
     rows: [
-      { keys: '⌘ K', desc: '검색 / 명령 팔레트' },
-      { keys: 'G H', desc: '홈으로 이동' },
-      { keys: 'G O', desc: '조직 페이지' },
-      { keys: 'G R', desc: '최근 본 문서' },
-      { keys: 'G N', desc: '새 문서 작성' },
-      { keys: 'G S', desc: '환경설정' },
+      { keys: '⌘ K', descKey: 'shortcuts.go.palette' },
+      { keys: 'G H', descKey: 'shortcuts.go.home' },
+      { keys: 'G O', descKey: 'shortcuts.go.orgs' },
+      { keys: 'G R', descKey: 'shortcuts.go.recent' },
+      { keys: 'G N', descKey: 'shortcuts.go.newDoc' },
+      { keys: 'G S', descKey: 'shortcuts.go.settings' },
     ],
   },
   {
-    title: '아티클',
+    titleKey: 'shortcuts.section.article',
     rows: [
-      { keys: 'J / K', desc: '다음 / 이전 섹션' },
-      { keys: '★', desc: '즐겨찾기 토글' },
+      { keys: 'J / K', descKey: 'shortcuts.article.nav' },
+      { keys: '★', descKey: 'shortcuts.article.favorite' },
     ],
   },
 ]
@@ -87,6 +95,7 @@ export function KeyboardShortcutsModal({
   open,
   onClose,
 }: KeyboardShortcutsModalProps) {
+  const { t } = useLocale()
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -105,7 +114,7 @@ export function KeyboardShortcutsModal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="단축키 안내"
+      aria-label={t('shortcuts.title')}
       data-testid="shortcuts-modal"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onClick={onClose}
@@ -115,12 +124,12 @@ export function KeyboardShortcutsModal({
         onClick={(e) => e.stopPropagation()}
       >
         <header className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-smsg-900">단축키 안내</h2>
+          <h2 className="text-lg font-semibold text-smsg-900">{t('shortcuts.title')}</h2>
           <button
             type="button"
             onClick={onClose}
             className="rounded px-2 py-1 text-sm text-gray-500 hover:bg-gray-100"
-            aria-label="닫기"
+            aria-label={t('shortcuts.close.aria')}
           >
             Esc
           </button>
@@ -128,9 +137,9 @@ export function KeyboardShortcutsModal({
 
         <div className="grid gap-6 sm:grid-cols-2">
           {SECTIONS.map((sec) => (
-            <section key={sec.title}>
+            <section key={sec.titleKey}>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                {sec.title}
+                {t(sec.titleKey)}
               </h3>
               <dl className="space-y-1">
                 {sec.rows.map((row) => (
@@ -143,7 +152,7 @@ export function KeyboardShortcutsModal({
                         {row.keys}
                       </kbd>
                     </dt>
-                    <dd className="flex-1 text-right text-gray-700">{row.desc}</dd>
+                    <dd className="flex-1 text-right text-gray-700">{t(row.descKey)}</dd>
                   </div>
                 ))}
               </dl>
@@ -152,7 +161,7 @@ export function KeyboardShortcutsModal({
         </div>
 
         <p className="mt-6 text-center text-xs text-gray-500">
-          힌트: 본문 어디에서나 <kbd className="rounded border border-gray-300 bg-white px-1 font-mono">?</kbd>를 눌러 다시 열 수 있어요.
+          {t('shortcuts.hint')}
         </p>
       </div>
     </div>

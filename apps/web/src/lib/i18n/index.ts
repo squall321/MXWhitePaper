@@ -75,4 +75,15 @@ export function useLocale(): {
   }
 }
 
+/**
+ * Convenience hook returning just the bound `t()` function. Useful for
+ * components that don't need to read `locale` directly.
+ */
+export function useT(): (
+  key: LocaleKey | string,
+  params?: Record<string, string | number>,
+) => string {
+  return useLocale().t
+}
+
 export type { LocaleKey } from './ko'

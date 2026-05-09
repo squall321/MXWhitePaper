@@ -29,6 +29,9 @@ export interface EditorStateSnapshot {
   autoSaveEnabled: boolean
   /** Auto-save UX status indicator. */
   autoSaveStatus: AutoSaveStatus
+  /** Epoch ms of the most recent successful save — drives the "저장됨 N분 전"
+   *  relative-time pill. `null` until the first save completes. */
+  lastSavedAt: number | null
   /** Server document used for conflict diff display. Set on 412. */
   conflictRemote: DocumentJSONV10 | null
   /** ETag of `conflictRemote` — used as If-Match on the resolved PUT. */
@@ -64,6 +67,8 @@ export interface EditorActions {
 
   setAutoSaveEnabled(on: boolean): void
   setAutoSaveStatus(status: AutoSaveStatus): void
+  /** Mark a successful save — sets `lastSavedAt` to now. */
+  markSaved(at?: number): void
   /** Stash the freshly-fetched remote + its etag for the conflict modal. */
   setConflict(remote: DocumentJSONV10 | null, remoteEtag?: string | null): void
   /** Mark a freshly-inserted image block for caption auto-focus. */
@@ -80,6 +85,7 @@ const initialSnapshot: EditorStateSnapshot = {
   dirty: false,
   autoSaveEnabled: true,
   autoSaveStatus: 'idle',
+  lastSavedAt: null,
   conflictRemote: null,
   conflictRemoteEtag: null,
   baseContent: null,
@@ -141,6 +147,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           etag,
           dirty: false,
           autoSaveStatus: 'saved' as const,
+          lastSavedAt: Date.now(),
           conflictRemote: null,
           conflictRemoteEtag: null,
           baseContent: s.draft ?? s.baseContent,
@@ -152,6 +159,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         etag,
         dirty: false,
         autoSaveStatus: 'saved' as const,
+        lastSavedAt: Date.now(),
         conflictRemote: null,
         conflictRemoteEtag: null,
         // After a successful save the saved doc IS the new base for any
@@ -163,6 +171,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setAutoSaveEnabled: (on) => set({ autoSaveEnabled: on }),
   setAutoSaveStatus: (status) => set({ autoSaveStatus: status }),
+  markSaved: (at?: number) => set({ lastSavedAt: at ?? Date.now() }),
   setConflict: (remote, remoteEtag = null) =>
     set({
       conflictRemote: remote,

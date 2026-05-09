@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Block } from '@/types/document'
 import { ulid } from '../ulid'
+import { useLocale } from '@/lib/i18n'
 
 /**
  * BlockInsertPalette — small inline popover with the 16 most-used block
@@ -20,7 +21,11 @@ import { ulid } from '../ulid'
 
 export interface PaletteItem {
   kind: string
+  /** Default Korean label. Renderers should prefer `labelKey` when an i18n
+   *  translator is available so the UI flips with the locale. */
   label: string
+  /** i18n key for the visible tile label (e.g. `palette.paragraph`). */
+  labelKey?: string
   /** Single-glyph icon. Stick to one char so the grid stays tidy. */
   icon: string
   /** Build the block payload; return null when the action delegates (image picker). */
@@ -37,6 +42,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'paragraph',
     label: '글',
+    labelKey: 'palette.paragraph',
     icon: '¶',
     build: () => ({ type: 'paragraph', id: ulid(), text: '' }),
     hint: '일반 본문 단락. 마크다운으로 **굵게** *기울임* `코드` 가능.',
@@ -49,6 +55,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'heading-2',
     label: '큰 제목',
+    labelKey: 'palette.heading2',
     icon: 'H₂',
     build: () => ({ type: 'heading-4', id: ulid(), title: '', meta: { level: 2 } }),
     hint: 'level 2 큰 제목. 섹션 분기점에 사용하세요.',
@@ -58,6 +65,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'heading-3',
     label: '중간 제목',
+    labelKey: 'palette.heading3',
     icon: 'H₃',
     build: () => ({ type: 'heading-4', id: ulid(), title: '', meta: { level: 3 } }),
     hint: 'level 3 중간 제목. 큰 제목의 하위 분류.',
@@ -67,6 +75,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'heading-4',
     label: '작은 제목',
+    labelKey: 'palette.heading4',
     icon: 'H₄',
     build: () => ({ type: 'heading-4', id: ulid(), title: '', meta: { level: 4 } }),
     hint: 'level 4 작은 제목. 가장 가벼운 강조.',
@@ -77,6 +86,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'bullet-list',
     label: '글머리 목록',
+    labelKey: 'palette.bulletList',
     icon: '•',
     build: () => ({ type: 'list', id: ulid(), style: 'bullet', items: [''] }),
     hint: '점(•)으로 시작하는 비순서 목록.',
@@ -86,6 +96,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'numbered-list',
     label: '번호 목록',
+    labelKey: 'palette.numberedList',
     icon: '1.',
     build: () => ({ type: 'list', id: ulid(), style: 'number', items: [''] }),
     hint: '1, 2, 3 … 자동 번호가 붙는 목록.',
@@ -95,6 +106,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'check-list',
     label: '체크리스트',
+    labelKey: 'palette.checkList',
     icon: '☑',
     build: () => ({ type: 'list', id: ulid(), style: 'check', items: [''] }),
     hint: '체크박스로 진행 상태를 관리.',
@@ -104,6 +116,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'callout',
     label: '콜아웃',
+    labelKey: 'palette.callout',
     icon: '!',
     build: () => ({ type: 'callout', id: ulid(), variant: 'info', text: '' }),
     hint: 'info / warn / danger / tip 강조 박스.',
@@ -113,6 +126,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'quote',
     label: '인용',
+    labelKey: 'palette.quote',
     icon: '“',
     build: () => ({ type: 'quote', id: ulid(), text: '' }),
     hint: '인용문. 출처(`cite`)도 함께 보관.',
@@ -122,6 +136,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'code',
     label: '코드',
+    labelKey: 'palette.code',
     icon: '<>',
     build: () => ({ type: 'code', id: ulid(), code: '', language: 'text' }),
     hint: '언어별 하이라이팅 코드 블록.',
@@ -131,6 +146,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'table',
     label: '표',
+    labelKey: 'palette.table',
     icon: '▦',
     build: () => ({ type: 'table', id: ulid(), headers: ['열 1', '열 2'], rows: [['', '']] }),
     hint: '행/열 표. CSV 붙여넣기로 빠르게 채울 수 있어요.',
@@ -140,6 +156,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'chart',
     label: '차트',
+    labelKey: 'palette.chart',
     icon: '📊',
     build: () => ({ type: 'chart', id: ulid(), chartType: 'line', data: { labels: [], series: [] } }),
     hint: '막대/선/원/면적/레이더/산점. CSV 붙여넣기 지원.',
@@ -149,6 +166,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'image',
     label: '이미지',
+    labelKey: 'palette.image',
     icon: '🖼',
     build: () => null,
     hint: '업로드 또는 URL 첨부. 캡션 / alt 텍스트 지원.',
@@ -158,6 +176,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'math',
     label: '수식',
+    labelKey: 'palette.math',
     icon: '∑',
     build: () => ({ type: 'math', id: ulid(), expression: '' }),
     hint: 'LaTeX 수식 (KaTeX 렌더). 인라인/블록 모두 지원.',
@@ -167,6 +186,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'video',
     label: '영상',
+    labelKey: 'palette.video',
     icon: '▶',
     build: () => ({ type: 'video', id: ulid(), url: '' }),
     hint: '사내/유튜브/비메오 영상 임베드.',
@@ -176,6 +196,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'file',
     label: '파일',
+    labelKey: 'palette.file',
     icon: '📎',
     build: () => ({ type: 'file', id: ulid(), fileId: '', name: '' }),
     hint: '첨부 파일. 다운로드 카드로 표시됩니다.',
@@ -185,6 +206,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     kind: 'snippet',
     label: '스니펫',
+    labelKey: 'palette.snippet',
     icon: '📚',
     // build() returns null — caller opens SnippetPicker and inserts the resolved
     // blocks itself (similar to how the 'image' tile opens the image picker).
@@ -192,6 +214,21 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     hint: '저장된 블록 묶음을 현재 위치에 삽입.',
     slash: '/스니펫',
     preview: '📚 saved blocks',
+  },
+  {
+    kind: 'whiteboard',
+    label: '화이트보드',
+    labelKey: 'palette.whiteboard',
+    icon: '🎨',
+    build: () => ({
+      type: 'whiteboard',
+      id: ulid(),
+      viewbox: { w: 800, h: 480 },
+      elements: [],
+    }),
+    hint: '펜/도형/텍스트로 그리는 자유 캔버스 (free-draw board).',
+    slash: '/화이트보드',
+    preview: '🎨 free-draw board',
   },
 ]
 
@@ -203,8 +240,10 @@ interface Props {
 }
 
 export function BlockInsertPalette({ anchor, onPick, onClose }: Props) {
+  const { t } = useLocale()
   const ref = useRef<HTMLDivElement>(null)
   const [hovered, setHovered] = useState<string | null>(null)
+  const tileLabel = (it: PaletteItem) => (it.labelKey ? t(it.labelKey) : it.label)
 
   // Click outside / Esc to close.
   useEffect(() => {
@@ -261,7 +300,7 @@ export function BlockInsertPalette({ anchor, onPick, onClose }: Props) {
     <div
       ref={ref}
       role="menu"
-      aria-label="블록 추가"
+      aria-label={t('palette.label')}
       style={{
         position: 'fixed',
         left,
@@ -288,7 +327,7 @@ export function BlockInsertPalette({ anchor, onPick, onClose }: Props) {
             className="flex flex-col items-center gap-1 rounded-md border border-transparent px-1 py-2 text-[11px] text-gray-700 transition-colors hover:border-smsg-300 hover:bg-smsg-50 hover:text-smsg-900 focus-visible:border-smsg-500 focus-visible:bg-smsg-50 focus-visible:outline-none dark:text-gray-200 dark:hover:bg-gray-800"
           >
             <span aria-hidden className="text-base leading-none">{it.icon}</span>
-            <span>{it.label}</span>
+            <span>{tileLabel(it)}</span>
           </button>
         ))}
       </div>
@@ -299,7 +338,7 @@ export function BlockInsertPalette({ anchor, onPick, onClose }: Props) {
       <div className="sr-only">
         {PALETTE_ITEMS.map((it) => (
           <span key={it.kind} id={`palette-tip-${it.kind}`}>
-            {`${it.hint} 슬래시 메뉴 단축어: ${it.slash}.`}
+            {`${it.hint} ${t('palette.tooltip.shortcutHint', { slash: it.slash })}`}
           </span>
         ))}
       </div>
@@ -310,13 +349,13 @@ export function BlockInsertPalette({ anchor, onPick, onClose }: Props) {
           data-testid="palette-tooltip"
           className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-2 text-[11px] leading-snug text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
         >
-          <p className="font-semibold text-smsg-900 dark:text-smsg-100">{active.label}</p>
+          <p className="font-semibold text-smsg-900 dark:text-smsg-100">{tileLabel(active)}</p>
           <p className="mt-0.5">{active.hint}</p>
           <pre className="mt-1 whitespace-pre-wrap rounded bg-white px-2 py-1 font-mono text-[10px] text-gray-700 dark:bg-gray-900 dark:text-gray-300">
             {active.preview}
           </pre>
           <p className="mt-1 text-[10px] text-gray-500">
-            슬래시 메뉴: <kbd className="rounded border border-gray-300 bg-white px-1 font-mono dark:border-gray-600 dark:bg-gray-900">{active.slash}</kbd>
+            {t('palette.tooltip.slash')}: <kbd className="rounded border border-gray-300 bg-white px-1 font-mono dark:border-gray-600 dark:bg-gray-900">{active.slash}</kbd>
           </p>
         </div>
       )}

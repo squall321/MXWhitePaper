@@ -44,6 +44,7 @@ import { OrgChartBlockEditor } from '../OrgChartBlockEditor'
 import { TableBlockEditor } from '../TableBlockEditor'
 import { VideoBlockEditor } from '../VideoBlockEditor'
 import { CalculatorBlockEditor } from '../CalculatorBlockEditor'
+import { WhiteboardBlockEditor } from '../WhiteboardBlockEditor'
 
 import type {
   AccordionBlock,
@@ -67,6 +68,7 @@ import type {
   TableBlock,
   TabsBlock,
   VideoBlock,
+  WhiteboardBlock,
 } from '@/types/document'
 
 function harness(node: React.ReactNode) {
@@ -365,6 +367,18 @@ const CASES: Array<{
       formula: 'a + b',
     } satisfies CalculatorBlock,
     expect: 'formula',
+  },
+  {
+    type: 'whiteboard',
+    label: 'WhiteboardBlockEditor',
+    Editor: WhiteboardBlockEditor,
+    block: {
+      type: 'whiteboard',
+      id: ID(22),
+      viewbox: { w: 600, h: 400 },
+      elements: [],
+    } satisfies WhiteboardBlock,
+    expect: ['data-whiteboard-canvas', '펜', '지우개'],
   },
 ]
 

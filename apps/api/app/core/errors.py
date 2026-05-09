@@ -121,6 +121,12 @@ class Forbidden(APIError):
     message = "Forbidden"
 
 
+class Gone(APIError):
+    code = "GONE"
+    http_status = 410
+    message = "Resource is no longer available"
+
+
 def envelope(*, data: Any | None = None, error: dict[str, Any] | None = None,
              meta: dict[str, Any] | None = None) -> dict[str, Any]:
     return {"data": data, "meta": meta, "error": error}

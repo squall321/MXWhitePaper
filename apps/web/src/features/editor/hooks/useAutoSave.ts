@@ -3,6 +3,7 @@ import { useEditorStore } from '../state'
 import { putDocument, isPreconditionFailed, type EditorMutationResult } from '../api'
 import { getDocument } from '@/features/document/api'
 import { pushNotification } from '@/features/notifications/store'
+import { useConnectionStore } from '../connectionStore'
 
 /** Auto-save policy parameters. */
 const IDLE_MS = 5_000
@@ -27,6 +28,12 @@ interface AutoSaveOptions {
  * On 412 (stale ETag) it stores the remote version into the store so the
  * `<ConflictMergeModal />` can render — it does NOT auto-resolve.
  *
+ * **Offline mode**: when `useConnectionStore.online === false` the save is
+ * suppressed and `pendingMutations` is bumped instead. On the next online
+ * transition the hook drains the backlog by issuing a single full-doc PUT
+ * with the *current* draft snapshot (this side-steps stale-etag threading
+ * for individual queued edits — the local doc IS the merged result).
+ *
  * NOTE: this hook intentionally uses PUT (full doc replace). Sprint 5 may
  * switch to PATCH-by-section for finer granularity once the BE writes are
  * stable.
@@ -43,9 +50,16 @@ export function useAutoSave(slug: string | undefined, opts: AutoSaveOptions = {}
   const setConflict = useEditorStore((s) => s.setConflict)
   const applySnapshot = useEditorStore((s) => s.applyServerSnapshot)
 
+  const online = useConnectionStore((s) => s.online)
+  const bumpPending = useConnectionStore((s) => s.bumpPending)
+
   const charsSinceSave = useRef(0)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastDraftSize = useRef<number | null>(null)
+  /** Set to true while offline if any edit happens. Drained on reconnect. */
+  const needsFullSync = useRef(false)
+  /** Track previous online value so we detect the false→true edge. */
+  const prevOnline = useRef(online)
 
   const performSave = useCallback(async () => {
     const state = useEditorStore.getState()
@@ -101,6 +115,16 @@ export function useAutoSave(slug: string | undefined, opts: AutoSaveOptions = {}
     }
     lastDraftSize.current = size
 
+    // Offline: queue instead of sending. Each *new* dirty pulse increments
+    // the pending counter so the offline pill can show "N개 변경 대기 중".
+    if (!online) {
+      if (!needsFullSync.current) {
+        needsFullSync.current = true
+        bumpPending(1)
+      }
+      return
+    }
+
     // schedule idle save
     if (idleTimer.current) clearTimeout(idleTimer.current)
     idleTimer.current = setTimeout(() => {
@@ -114,7 +138,22 @@ export function useAutoSave(slug: string | undefined, opts: AutoSaveOptions = {}
     return () => {
       if (idleTimer.current) clearTimeout(idleTimer.current)
     }
-  }, [draft, dirty, enabled, autoSaveEnabled, conflictRemote, performSave])
+  }, [draft, dirty, enabled, autoSaveEnabled, conflictRemote, online, performSave, bumpPending])
+
+  // Drain the offline queue when connection is restored.
+  useEffect(() => {
+    const wentOnline = !prevOnline.current && online
+    prevOnline.current = online
+    if (!wentOnline) return
+    if (!needsFullSync.current) return
+    if (!enabled || !autoSaveEnabled) return
+    // Reset pending counter then fire the merged-snapshot PUT. We drain
+    // synchronously (one PUT) — the local draft IS the merged result of all
+    // queued edits, so etag-threading per-queued-mutation is unnecessary.
+    bumpPending(-useConnectionStore.getState().pendingMutations)
+    needsFullSync.current = false
+    void performSave()
+  }, [online, enabled, autoSaveEnabled, performSave, bumpPending])
 
   // expose manual save (Cmd/Ctrl+S) for the shortcut hook
   return { saveNow: performSave }

@@ -27,6 +27,7 @@ import { DataSourceBlockView } from './DataSourceBlock'
 import { DashboardEmbedBlockView } from './DashboardEmbedBlock'
 import { CalculatorBlockView } from './CalculatorBlock'
 import { OrgChartBlockView } from './OrgChartBlock'
+import { WhiteboardBlockView } from './WhiteboardBlock'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { InlineTextBlockEditor } from '@/features/editor/components/InlineTextBlockEditor'
 import { ListBlockEditor } from '@/features/editor/components/ListBlockEditor'
@@ -38,6 +39,7 @@ import { DataSourceBlockEditor } from '@/features/editor/blocks/DataSourceBlockE
 import { DashboardEmbedBlockEditor } from '@/features/editor/blocks/DashboardEmbedBlockEditor'
 import { CalculatorBlockEditor } from '@/features/editor/blocks/CalculatorBlockEditor'
 import { OrgChartBlockEditor } from '@/features/editor/blocks/OrgChartBlockEditor'
+import { WhiteboardBlockEditor } from '@/features/editor/blocks/WhiteboardBlockEditor'
 import { FlowBlockEditor } from '@/features/editor/blocks/FlowBlockEditor'
 import { GanttBlockEditor } from '@/features/editor/blocks/GanttBlockEditor'
 import { KpiCardsBlockEditor } from '@/features/editor/blocks/KpiCardsBlockEditor'
@@ -227,6 +229,9 @@ function BlockRendererInner({ block }: { block: Block }) {
     if (block.type === 'org-chart') {
       return <OrgChartBlockEditor slug={editorSlug} block={block} />
     }
+    if (block.type === 'whiteboard') {
+      return <WhiteboardBlockEditor slug={editorSlug} block={block} />
+    }
     if (block.type === 'flow') {
       return <FlowBlockEditor slug={editorSlug} block={block} />
     }
@@ -321,6 +326,8 @@ function BlockRendererInner({ block }: { block: Block }) {
       return <CalculatorBlockView block={block} />
     case 'org-chart':
       return <OrgChartBlockView block={block} />
+    case 'whiteboard':
+      return <WhiteboardBlockView block={block} />
     default:
       return (
         <PlaceholderBlockView

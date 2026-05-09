@@ -31,6 +31,7 @@ from .routers.links_graph import router as links_graph_router
 from .routers.notifications import router as notifications_router
 from .routers.orgs import router as orgs_router
 from .routers.search import router as search_router
+from .routers.sharing import router as sharing_router
 from .routers.snippets import router as snippets_router
 from .routers.tags import router as tags_router
 from .routers.uploads import images_router, uploads_router
@@ -146,6 +147,13 @@ TAGS_METADATA: list[dict[str, str]] = [
         ),
     },
     {
+        "name": "sharing",
+        "description": (
+            "공개 공유 링크 — `POST /documents/{slug}/share` 로 토큰을 생성하면 "
+            "`/share/{token}` 가 인증 없이 문서를 읽도록 열린다. 만료일/비밀번호/revoke 지원."
+        ),
+    },
+    {
         "name": "snippets",
         "description": (
             "재사용 가능한 블록 라이브러리 — 사용자가 N개 블록을 묶어 저장하고 "
@@ -234,6 +242,8 @@ def create_app() -> FastAPI:
     app.include_router(ai_router)
     # 재사용 블록 라이브러리 (스니펫)
     app.include_router(snippets_router)
+    # 공개 공유 링크 — /share/{token} 은 인증 미적용
+    app.include_router(sharing_router)
 
     return app
 

@@ -192,7 +192,8 @@
         { "$ref": "#/$defs/AccordionBlock" },
         { "$ref": "#/$defs/DataSourceBlock" },
         { "$ref": "#/$defs/DashboardEmbedBlock" },
-        { "$ref": "#/$defs/CalculatorBlock" }
+        { "$ref": "#/$defs/CalculatorBlock" },
+        { "$ref": "#/$defs/WhiteboardBlock" }
       ]
     },
 
@@ -635,6 +636,86 @@
         "label":   { "type": "string" },
         "meta":    { "$ref": "#/$defs/BlockMeta" }
       }
+    },
+
+    "WhiteboardBlock": {
+      "type": "object",
+      "required": ["type", "id", "viewbox", "elements"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "whiteboard" },
+        "id":   { "$ref": "#/$defs/Ulid" },
+        "title": { "type": "string" },
+        "viewbox": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["w", "h"],
+          "properties": {
+            "w": { "type": "integer", "minimum": 100, "maximum": 4000 },
+            "h": { "type": "integer", "minimum": 100, "maximum": 4000 }
+          }
+        },
+        "elements": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WhiteboardElement" }
+        },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "WhiteboardElement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "points", "stroke", "strokeWidth"],
+          "properties": {
+            "kind":  { "const": "stroke" },
+            "id":    { "type": "string" },
+            "points": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            "stroke":      { "type": "string" },
+            "strokeWidth": { "type": "number", "minimum": 1, "maximum": 32 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "shape", "x", "y", "w", "h", "stroke", "strokeWidth"],
+          "properties": {
+            "kind":  { "const": "shape" },
+            "id":    { "type": "string" },
+            "shape": { "enum": ["rect", "ellipse", "line", "arrow"] },
+            "x":     { "type": "number" },
+            "y":     { "type": "number" },
+            "w":     { "type": "number" },
+            "h":     { "type": "number" },
+            "stroke":      { "type": "string" },
+            "strokeWidth": { "type": "number", "minimum": 1, "maximum": 32 },
+            "fill":        { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "x", "y", "text", "fontSize", "color"],
+          "properties": {
+            "kind":     { "const": "text" },
+            "id":       { "type": "string" },
+            "x":        { "type": "number" },
+            "y":        { "type": "number" },
+            "text":     { "type": "string" },
+            "fontSize": { "type": "number", "minimum": 8, "maximum": 96 },
+            "color":    { "type": "string" }
+          }
+        }
+      ]
     },
 
     "RelatedDoc": {

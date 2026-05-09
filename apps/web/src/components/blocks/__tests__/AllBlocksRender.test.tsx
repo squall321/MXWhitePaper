@@ -4,7 +4,7 @@
  * schema change or a renderer refactor silently breaks one block type.
  *
  * Strategy:
- *   - Build a representative payload for each of the 26 block types.
+ *   - Build a representative payload for each of the 27 block types.
  *   - Mount via the central <BlockRenderer /> (the same dispatcher used in
  *     production) wrapped in MemoryRouter + QueryClientProvider so the
  *     network-touching renderers (data-source, doc-link-card, image, …)
@@ -202,6 +202,44 @@ const BLOCKS: Record<string, Block> = {
     ],
     formula: 'a + b',
   },
+  whiteboard: {
+    type: 'whiteboard',
+    id: ID(27),
+    title: '아이디어 보드',
+    viewbox: { w: 800, h: 480 },
+    elements: [
+      {
+        kind: 'stroke',
+        id: 'wbe-s-1',
+        points: [
+          [10, 10],
+          [40, 30],
+        ],
+        stroke: '#111827',
+        strokeWidth: 2,
+      },
+      {
+        kind: 'shape',
+        id: 'wbe-r-1',
+        shape: 'rect',
+        x: 100,
+        y: 100,
+        w: 80,
+        h: 60,
+        stroke: '#dc2626',
+        strokeWidth: 3,
+      },
+      {
+        kind: 'text',
+        id: 'wbe-t-1',
+        x: 200,
+        y: 200,
+        text: '안녕',
+        fontSize: 16,
+        color: '#111827',
+      },
+    ],
+  },
 }
 
 describe('<BlockRenderer /> read-mode coverage — every block type', () => {
@@ -210,7 +248,7 @@ describe('<BlockRenderer /> read-mode coverage — every block type', () => {
     useEditorStore.getState().reset()
   })
 
-  // 26 explicit cases — one per SSOT block type.
+  // 27 explicit cases — one per SSOT block type.
   for (const [type, block] of Object.entries(BLOCKS)) {
     it(`renders ${type} without throwing and produces non-empty HTML`, () => {
       const html = renderToStaticMarkup(harness(<BlockRenderer block={block} />))

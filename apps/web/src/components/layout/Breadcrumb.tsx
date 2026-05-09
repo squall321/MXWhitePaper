@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useDocument } from '@/features/document/hooks/useDocument'
+import { useLocale } from '@/lib/i18n'
 
 interface Crumb {
   label: string
@@ -21,6 +22,7 @@ interface Crumb {
  * TopBar stays usable on phones.
  */
 export function Breadcrumb() {
+  const { t } = useLocale()
   const location = useLocation()
   const navigate = useNavigate()
   const path = location.pathname
@@ -34,28 +36,34 @@ export function Breadcrumb() {
   const docQuery = useDocument(slug)
   const md = docQuery.data?.document?.metadata
 
+  const home = t('breadcrumb.home')
+
   let crumbs: Crumb[] | null = null
   if (path === '/') {
-    crumbs = [{ label: '홈' }]
+    crumbs = [{ label: home }]
   } else if (path === '/recent') {
-    crumbs = [{ label: '홈', to: '/' }, { label: '최근 본 문서' }]
+    crumbs = [{ label: home, to: '/' }, { label: t('breadcrumb.recent') }]
   } else if (path === '/orgs') {
-    crumbs = [{ label: '홈', to: '/' }, { label: '조직' }]
+    crumbs = [{ label: home, to: '/' }, { label: t('breadcrumb.orgs') }]
   } else if (path === '/admin/orgs') {
-    crumbs = [{ label: '홈', to: '/' }, { label: '관리', to: '/admin/orgs' }, { label: '조직 관리' }]
+    crumbs = [
+      { label: home, to: '/' },
+      { label: t('breadcrumb.admin'), to: '/admin/orgs' },
+      { label: t('breadcrumb.adminOrgs') },
+    ]
   } else if (path === '/settings') {
-    crumbs = [{ label: '홈', to: '/' }, { label: '환경설정' }]
+    crumbs = [{ label: home, to: '/' }, { label: t('breadcrumb.settings') }]
   } else if (path === '/docs/new') {
-    crumbs = [{ label: '홈', to: '/' }, { label: '새 문서' }]
+    crumbs = [{ label: home, to: '/' }, { label: t('breadcrumb.newDoc') }]
   } else if (isDocPage && slug) {
     if (!md) {
       // Still loading — render a stub so layout doesn't jump.
       crumbs = [
-        { label: '홈', to: '/' },
+        { label: home, to: '/' },
         { label: docQuery.data?.document?.title ?? slug },
       ]
     } else {
-      const segments: Crumb[] = [{ label: '홈', to: '/' }]
+      const segments: Crumb[] = [{ label: home, to: '/' }]
       if (md.division) segments.push({ label: md.division })
       if (md.team) segments.push({ label: md.team })
       if (md.group) segments.push({ label: md.group })
@@ -70,7 +78,7 @@ export function Breadcrumb() {
   return (
     <nav
       data-testid="breadcrumb"
-      aria-label="현재 위치"
+      aria-label={t('breadcrumb.label')}
       className="border-b border-gray-200 bg-white"
     >
       {/* Mobile: collapsed back button */}
@@ -78,11 +86,11 @@ export function Breadcrumb() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          aria-label="뒤로 가기"
+          aria-label={t('breadcrumb.back.aria')}
           className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-smsg-700 hover:bg-smsg-50"
         >
           <span aria-hidden="true">‹</span>
-          뒤로
+          {t('breadcrumb.back')}
         </button>
         <span className="ml-2 truncate text-xs text-gray-500">
           {crumbs[crumbs.length - 1]?.label}

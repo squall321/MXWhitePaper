@@ -255,6 +255,63 @@ FE 는 "AI 기능이 비활성화되어 있습니다. 관리자에게 문의하�
    조합으로 교체. **응답 shape (`{ summary }`, `{ translated, source_language }`,
    …) 는 그대로** 두면 FE 변경 없이 실시간 응답이 흐릅니다.
 
+## i18n in MX White Paper
+
+Lightweight in-house i18n layer, no external library. Default locale is Korean
+(`ko`); English (`en`) is the secondary locale. The active language lives in
+the global settings store (`useSettingsStore.language`), which round-trips
+through `localStorage` (`mxwp.uiSettings`).
+
+### Bundle file structure
+
+- `apps/web/src/lib/i18n/ko.ts` — source-of-truth Korean strings.
+  `LocaleKey` is `keyof typeof ko`, so every key in this file is statically
+  enforced across the codebase.
+- `apps/web/src/lib/i18n/en.ts` — English mirror. Typed as
+  `Record<LocaleKey, string>` so renaming a key in `ko.ts` surfaces a TS
+  error here.
+- `apps/web/src/lib/i18n/index.ts` — `t()`, `useT()`, `useLocale()`. The
+  imperative `t()` reads the live store on the server (handy in unit tests);
+  the hook version subscribes via `useSyncExternalStore` so React components
+  re-render on locale switch.
+
+### Adding a new key
+
+1. Add the Korean string in `ko.ts`. Pick a dotted namespace
+   (`topbar.search.placeholder`, `palette.callout`, `shortcuts.basic.save`).
+2. Add the matching English string in `en.ts` (typecheck enforces this).
+3. Replace the hard-coded literal at the call site:
+
+   ```tsx
+   import { useLocale } from '@/lib/i18n'
+   const { t } = useLocale()
+   return <button title={t('toolbar.save.title')}>{t('toolbar.save')}</button>
+   ```
+
+   For one-shot scripts / non-React code use the imperative `t('key')` —
+   it reads the same store, just without the subscription.
+
+4. Optional placeholders: `t('hello', { name: '구건모' })` → the bundle string
+   `안녕, {name}!` becomes `안녕, 구건모!`.
+
+### Switching locale
+
+- UI: the **🌐 KO/EN** dropdown in the top bar, next to the profile menu
+  (`apps/web/src/components/layout/LanguageSwitcher.tsx`). Selection persists
+  to `localStorage` immediately.
+- Settings page: `/settings → 언어` exposes the same toggle for keyboard users.
+- Programmatic: `useSettingsStore.getState().set('language', 'en')`.
+
+### Coverage today
+
+Sprint scope: TopBar, Breadcrumb, BlockInsertPalette tile labels,
+EditorToolbar buttons, KeyboardShortcutsModal sections + descriptions, and
+the existing home / login / settings pages. The block editors, AI feature
+strings, and per-page copy still use Korean literals — they're earmarked for
+a follow-up extraction pass. Missing keys at runtime emit a single
+`console.warn('[i18n] missing key: …')` and fall through to the key itself,
+so dev-mode usage surfaces gaps.
+
 ## 라이선스
 
 사내 전용 (UNLICENSED)
