@@ -108,6 +108,36 @@
         "title": "AttemptIn",
         "type": "object"
       },
+      "AuditRetentionPatch": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "retain_days": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 10000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retain Days"
+          }
+        },
+        "title": "AuditRetentionPatch",
+        "type": "object"
+      },
       "Body_import_csv_api_v1_imports_csv_post": {
         "properties": {
           "file": {
@@ -224,6 +254,28 @@
           }
         },
         "title": "BookmarkPatchIn",
+        "type": "object"
+      },
+      "BranchFromTagIn": {
+        "properties": {
+          "tag_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Tag Name",
+            "type": "string"
+          },
+          "target_slug": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Target Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag_name",
+          "target_slug"
+        ],
+        "title": "BranchFromTagIn",
         "type": "object"
       },
       "BulkDocPayload": {
@@ -516,6 +568,38 @@
           }
         },
         "title": "CreateShareIn",
+        "type": "object"
+      },
+      "CreateTagIn": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "is_locked": {
+            "default": false,
+            "title": "Is Locked",
+            "type": "boolean"
+          },
+          "tag_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Tag Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag_name"
+        ],
+        "title": "CreateTagIn",
         "type": "object"
       },
       "DecisionIn": {
@@ -2836,6 +2920,93 @@
           }
         },
         "summary": "감사 로그 조회",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/audit-retention": {
+      "get": {
+        "operationId": "get_audit_retention_api_v1_admin_audit_retention_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Audit Retention Api V1 Admin Audit Retention Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "감사 로그 보존 설정 + 통계 (admin)",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_audit_retention_api_v1_admin_audit_retention_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditRetentionPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Audit Retention Api V1 Admin Audit Retention Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "감사 로그 보존 설정 수정 (admin)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/audit-retention/prune-now": {
+      "post": {
+        "operationId": "prune_now_api_v1_admin_audit_retention_prune_now_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Prune Now Api V1 Admin Audit Retention Prune Now Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "즉시 prune — 매칭되는 audit_logs 행 삭제 (admin)",
         "tags": [
           "admin"
         ]
@@ -7085,6 +7256,61 @@
         ]
       }
     },
+    "/api/v1/documents/{slug}/branch-from-tag": {
+      "post": {
+        "operationId": "branch_from_tag_api_v1_documents__slug__branch_from_tag_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BranchFromTagIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Branch From Tag Api V1 Documents  Slug  Branch From Tag Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "태그된 버전에서 새 문서 분기 (editor+)",
+        "tags": [
+          "version-tags"
+        ]
+      }
+    },
     "/api/v1/documents/{slug}/comments": {
       "get": {
         "operationId": "list_comments_api_v1_documents__slug__comments_get",
@@ -8356,6 +8582,102 @@
         ]
       }
     },
+    "/api/v1/documents/{slug}/version-tags": {
+      "get": {
+        "operationId": "list_version_tags_api_v1_documents__slug__version_tags_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Version Tags Api V1 Documents  Slug  Version Tags Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 버전 태그 목록 (reader+)",
+        "tags": [
+          "version-tags"
+        ]
+      }
+    },
+    "/api/v1/documents/{slug}/version-tags/{tag_name}": {
+      "delete": {
+        "operationId": "delete_version_tag_api_v1_documents__slug__version_tags__tag_name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tag_name",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Tag Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "버전 태그 삭제 (잠금 해제: editor+, 잠금: admin)",
+        "tags": [
+          "version-tags"
+        ]
+      }
+    },
     "/api/v1/documents/{slug}/versions": {
       "get": {
         "operationId": "list_document_versions_api_v1_documents__slug__versions_get",
@@ -8519,6 +8841,71 @@
         "summary": "이전 버전 복원 (의도적 If-Match 면제)",
         "tags": [
           "documents"
+        ]
+      }
+    },
+    "/api/v1/documents/{slug}/versions/{n}/tags": {
+      "post": {
+        "operationId": "create_version_tag_api_v1_documents__slug__versions__n__tags_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "N",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTagIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Version Tag Api V1 Documents  Slug  Versions  N  Tags Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "버전에 태그 추가 (editor+)",
+        "tags": [
+          "version-tags"
         ]
       }
     },
@@ -10386,6 +10773,99 @@
         "summary": "알림 읽음 처리",
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/api/v1/oembed": {
+      "get": {
+        "description": "외부 사이트 (Slack/Notion/Discord/Teams/Linear) 가 위키 URL 을 붙여넣을 때 rich preview 를 위해 호출하는 [oEmbed](https://oembed.com/) 엔드포인트. 인증 불필요 — 공유 링크와 동일한 신뢰 모델을 따른다 (read-only metadata).\n\n- `url` 은 우리 도메인의 `/docs/<slug>` 형식이어야 한다.\n- `archived` 또는 `confidentiality='restricted'` 문서는 403 을 반환.\n- `format=xml` 은 미지원 — 501.",
+        "operationId": "oembed_endpoint_api_v1_oembed_get",
+        "parameters": [
+          {
+            "description": "encoded canonical doc URL",
+            "in": "query",
+            "name": "url",
+            "required": true,
+            "schema": {
+              "description": "encoded canonical doc URL",
+              "title": "Url",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "maxwidth",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Maxwidth"
+            }
+          },
+          {
+            "in": "query",
+            "name": "maxheight",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Maxheight"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "json",
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Oembed Endpoint Api V1 Oembed Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "oEmbed provider — rich preview metadata for external apps",
+        "tags": [
+          "oembed"
         ]
       }
     },
@@ -13744,6 +14224,14 @@
     {
       "description": "저장된 검색(스마트 폴더) (Cycle 0030) — 검색 필터(부서/태그/작성자/기간/상태/freeform 쿼리) 를 이름 + 아이콘과 함께 저장해 좌측 사이드바 '📂 내 보기' 에 노출한다. 각 뷰는 GET /me/saved-views/{id}/results 로 다시 documents 에 적용된다.",
       "name": "saved-views"
+    },
+    {
+      "description": "외부 사이트 (Slack/Notion/Discord/Teams/Linear) 가 위키 URL 을 rich preview 로 펼치기 위해 호출하는 oEmbed 프로바이더. 인증 불필요, archived/restricted 문서는 거절한다.",
+      "name": "oembed"
+    },
+    {
+      "description": "버전 태그 (Cycle 16) — document_versions(v1, v2, …) 에 사람이 읽는 라벨('v1.0 release', 'RC1') 을 붙이고, 태그된 시점의 content_json 스냅샷을 새 문서로 분기(branch) 한다. is_locked=true 태그는 admin 만 삭제 가능.",
+      "name": "version-tags"
     }
   ]
 }

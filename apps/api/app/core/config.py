@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     # 지면 시간 기반 자동화 규칙이 발화하지 않는다 — 이벤트 기반 규칙은 영향 없음.
     automation_cron_enabled: bool = Field(default=True)
 
+    # 0032 — Audit log retention pruner (asyncio in-process ticker, daily).
+    # CRUD 라우터는 항상 켜둔다 — 이 플래그는 ticker 만 게이트한다. 끄면
+    # tick_once() 가 즉시 0 을 반환해서 자동 prune 이 멈추지만 admin 의
+    # POST /admin/audit-retention/prune-now 는 여전히 동작한다.
+    audit_retention_enabled: bool = Field(default=True)
+
     # ── SMTP / Email (cycle: email integration) ──────────────────────
     # When `email_enabled=False` the email service logs to stdout under a
     # "[EMAIL CONSOLE FALLBACK]" prefix so dev never depends on a real MTA.

@@ -26,6 +26,14 @@ const SCOPE_LABEL: Record<TokenScope, string> = {
   admin: '관리자',
 }
 
+// 0024 — scope vocabulary now enforced server-side. The form copy below mirrors
+// the rule table in `apps/api/app/services/api_token_scopes.py`.
+const SCOPE_HELP: Record<TokenScope, string> = {
+  read: '읽기 (read) — GET/HEAD on most endpoints',
+  write: '쓰기 (write) — read + POST/PUT/PATCH/DELETE on non-admin endpoints',
+  admin: '관리자 (admin) — read + write + /admin/* endpoints',
+}
+
 type ExpiresChoice = '1m' | '3m' | '1y' | 'never'
 
 const EXPIRES_LABEL: Record<ExpiresChoice, string> = {
@@ -352,10 +360,14 @@ function CreateTokenModal({
               )
             })}
           </div>
-          <p className="mt-1 text-xs text-gray-500">
-            v1 에서는 scope 검사가 적용되지 않습니다 — 토큰의 사용자 role 이
-            그대로 적용됩니다 (TODO).
-          </p>
+          <ul
+            className="mt-2 space-y-1 text-xs text-gray-500"
+            data-testid="api-token-scope-help"
+          >
+            {ALL_SCOPES.map((s) => (
+              <li key={s}>{SCOPE_HELP[s]}</li>
+            ))}
+          </ul>
         </div>
 
         <label className="block">

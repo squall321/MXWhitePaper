@@ -188,6 +188,9 @@ async def export_document_html(
         katex_cdn=(katex == "cdn"),
         mermaid_cdn=(mermaid == "cdn"),
         image_resolver=resolver,
+        # External chat apps that fetch the exported HTML can auto-discover
+        # the oEmbed endpoint from this <link> tag.
+        oembed_base_url=get_settings().web_base_url,
     )
     # `content` is already scrubbed above for the caller's role; pass through
     # without re-scrubbing in the renderer.

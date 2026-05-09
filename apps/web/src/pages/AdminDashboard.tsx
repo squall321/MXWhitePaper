@@ -11,6 +11,7 @@ import { ActivityWidget } from '@/features/activity/ActivityWidget'
 import { AdminOrgsPage } from './AdminOrgs'
 import { ArchivedDocsPage } from './ArchivedDocs'
 import { AuditLogPage } from './AuditLog'
+import { AuditRetentionPage } from './AuditRetention'
 import { AutomationRulesPage } from './AutomationRules'
 import { BackupAdminPage } from './BackupAdmin'
 import { BulkDocImportPage } from './BulkDocImport'
@@ -31,6 +32,7 @@ import {
 type TabKey =
   | 'users'
   | 'audit'
+  | 'audit-retention'
   | 'health'
   | 'maintenance'
   | 'orgs'
@@ -47,6 +49,7 @@ type TabKey =
 const TABS: Array<{ key: TabKey; labelKey: string }> = [
   { key: 'users', labelKey: 'page.adminDashboard.tab.users' },
   { key: 'audit', labelKey: 'page.adminDashboard.tab.audit' },
+  { key: 'audit-retention', labelKey: 'page.adminDashboard.tab.auditRetention' },
   { key: 'health', labelKey: 'page.adminDashboard.tab.health' },
   { key: 'maintenance', labelKey: 'page.adminDashboard.tab.maintenance' },
   { key: 'orgs', labelKey: 'page.adminDashboard.tab.orgs' },
@@ -126,6 +129,11 @@ export function AdminDashboardPage() {
       {tab === 'audit' && (
         <div data-testid="admin-audit-tab">
           <AuditLogPage embedded />
+        </div>
+      )}
+      {tab === 'audit-retention' && (
+        <div data-testid="admin-tab-audit-retention-content">
+          <AuditRetentionPage embedded />
         </div>
       )}
       {tab === 'health' && <HealthTab />}

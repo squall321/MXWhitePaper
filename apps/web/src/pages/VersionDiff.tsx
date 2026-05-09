@@ -15,6 +15,7 @@ import { diffDocument } from '@/features/editor/diff/document-diff'
 import { InlineDiff } from '@/features/versions/InlineDiff'
 import { diffLines } from '@/features/versions/lineDiff'
 import { useEditorStore } from '@/features/editor/state'
+import { BranchFromTagButton } from '@/features/version-tags/BranchFromTagButton'
 
 type ViewMode = 'side-by-side' | 'inline' | 'json'
 
@@ -157,6 +158,7 @@ export function VersionDiffPage() {
           >
             좌우 바꾸기
           </button>
+          <BranchFromTagButton slug={slug} />
           <div className="flex-1" />
           <button
             type="button"

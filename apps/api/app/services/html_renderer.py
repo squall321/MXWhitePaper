@@ -43,6 +43,10 @@ class RenderOptions:
     - `image_resolver`: 함수(image_id) → {url, alt?, width?, height?, mime?}.
        endpoint 가 DB 를 거쳐 주입한다. None 이면 alt/caption 만 살린다.
     - `lang`: <html lang=…> 속성 값.
+    - `oembed_base_url`: 지정하면 head 에 ``<link rel="alternate" type=
+      "application/json+oembed" …>`` 태그를 삽입한다. Slack/Notion 등 외부
+      툴이 export 된 HTML 을 가져갔을 때 oEmbed 엔드포인트를 자동 발견할 수
+      있도록. None 이면 태그를 추가하지 않는다.
     """
 
     inline_images: bool = False
@@ -50,6 +54,7 @@ class RenderOptions:
     mermaid_cdn: bool = False
     image_resolver: Any = None  # Callable[[str], dict | None] | None
     lang: str = "ko"
+    oembed_base_url: str | None = None
 
 
 # ── Public entry ─────────────────────────────────────────────────────
@@ -107,6 +112,19 @@ def render_namuwiki_html(
         head_extras.append(_KATEX_CDN_LINK)
     if opts.mermaid_cdn and ctx.used_mermaid:
         head_extras.append(_MERMAID_CDN_SCRIPT)
+    # oEmbed auto-discovery — Slack/Notion/Discord/Teams/Linear scrape the
+    # head when a wiki URL is pasted; this <link> lets them locate the
+    # oEmbed endpoint without baking knowledge of our URL scheme.
+    if opts.oembed_base_url:
+        slug_for_oembed = _str(doc.get("slug"))
+        if slug_for_oembed:
+            base = opts.oembed_base_url.rstrip("/")
+            href = f"{base}/api/v1/oembed?url={base}/docs/{slug_for_oembed}"
+            head_extras.append(
+                f'<link rel="alternate" type="application/json+oembed" '
+                f'href="{html.escape(href)}" '
+                f'title="MX White Paper oEmbed">'
+            )
 
     return _HTML_TEMPLATE.format(
         lang=html.escape(opts.lang),

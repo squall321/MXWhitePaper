@@ -533,6 +533,7 @@ export const en: Record<LocaleKey, string> = {
   'page.adminDashboard.activityTitle': 'Recent activity — system-wide',
   'page.adminDashboard.tab.users': 'Users',
   'page.adminDashboard.tab.audit': 'Audit log',
+  'page.adminDashboard.tab.auditRetention': 'Audit retention',
   'page.adminDashboard.tab.health': 'Health',
   'page.adminDashboard.tab.maintenance': 'Maintenance',
   'page.adminDashboard.tab.orgs': 'Orgs',

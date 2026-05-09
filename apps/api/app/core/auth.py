@@ -17,10 +17,17 @@ from fastapi import Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..services.api_token_scopes import check_scope, required_scope_for
 from .config import get_settings
 from .db import get_db
 from .errors import Forbidden, Unauthorized
 from .security import decode_token, verify_password
+
+
+class ScopeInsufficient(Forbidden):
+    """Specialized Forbidden — token authenticates but its scopes are too narrow."""
+
+    code = "SCOPE_INSUFFICIENT"
 
 ROLE_ORDER: dict[str, int] = {
     "reader": 1,
@@ -78,8 +85,8 @@ async def _fetch_admin(s: AsyncSession) -> dict[str, Any] | None:
 
 async def _resolve_api_token(
     s: AsyncSession, full_token: str
-) -> dict[str, Any] | None:
-    """Return the token's user (or None on any failure).
+) -> tuple[dict[str, Any], list[str]] | None:
+    """Return (user, scopes) for the token (or None on any failure).
 
     1. Strip the `mxwp_` namespace, take the first 8 chars as the prefix.
     2. Look up candidate rows by `token_prefix` (indexed). There may be
@@ -87,6 +94,8 @@ async def _resolve_api_token(
        until one matches.
     3. Reject if revoked_at IS NOT NULL or expires_at < NOW().
     4. Bump `last_used_at` so the UI can show "마지막 사용".
+    5. (0024) Hand the token's `scopes` array back to the caller so the
+       middleware can enforce verb-vs-scope.
     """
     body = full_token[len(_API_TOKEN_NAMESPACE):]
     if len(body) < _API_TOKEN_PREFIX_LEN:
@@ -95,7 +104,7 @@ async def _resolve_api_token(
 
     rows = (await s.execute(
         text("""
-            SELECT id, user_id, token_hash, revoked_at, expires_at
+            SELECT id, user_id, token_hash, revoked_at, expires_at, scopes
             FROM api_tokens
             WHERE token_prefix = :p
         """),
@@ -106,6 +115,7 @@ async def _resolve_api_token(
 
     matched_id: str | None = None
     matched_user_id: str | None = None
+    matched_scopes: list[str] = []
     for row in rows:
         if row[3] is not None:
             continue
@@ -119,6 +129,22 @@ async def _resolve_api_token(
             if verify_password(full_token, row[2]):
                 matched_id = str(row[0])
                 matched_user_id = str(row[1])
+                raw_scopes = row[5]
+                if isinstance(raw_scopes, list):
+                    matched_scopes = [str(x) for x in raw_scopes]
+                elif isinstance(raw_scopes, str):
+                    # JSONB sometimes round-trips as the JSON-encoded string
+                    # depending on the asyncpg/SA stack. Be defensive.
+                    import json as _json
+                    try:
+                        v = _json.loads(raw_scopes)
+                        matched_scopes = (
+                            [str(x) for x in v] if isinstance(v, list) else []
+                        )
+                    except Exception:  # noqa: BLE001
+                        matched_scopes = []
+                else:
+                    matched_scopes = []
                 break
         except Exception:  # noqa: BLE001
             continue
@@ -143,7 +169,7 @@ async def _resolve_api_token(
     except Exception:  # noqa: BLE001
         await s.rollback()
 
-    return user
+    return user, matched_scopes
 
 
 async def get_current_user(
@@ -158,9 +184,22 @@ async def get_current_user(
 
         # 0023 — personal API token path. JWT path stays unchanged below.
         if token.startswith(_API_TOKEN_NAMESPACE):
-            user = await _resolve_api_token(s, token)
-            if not user:
+            resolved = await _resolve_api_token(s, token)
+            if not resolved:
                 raise Unauthorized("Invalid or revoked API token")
+            user, scopes = resolved
+            # 0024 — verb-vs-scope enforcement. /me/* is bypassed inside
+            # check_scope so the user can always inspect/revoke their own
+            # tokens regardless of the granted scope.
+            if not check_scope(scopes, request.method, request.url.path):
+                needed = required_scope_for(request.method, request.url.path)
+                raise ScopeInsufficient(
+                    f"Token lacks {needed} scope",
+                    details={
+                        "required_scope": needed,
+                        "granted_scopes": scopes,
+                    },
+                )
             return user
 
         try:

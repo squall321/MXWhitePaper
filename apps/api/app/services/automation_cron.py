@@ -172,11 +172,21 @@ async def tick_once() -> int:
                     rule["id"],
                 )
             # Always advance the schedule — even on crash — so a poison
-            # action doesn't loop. Compute against the planned firing
-            # time when possible (catches up missed ticks one at a time).
+            # action doesn't loop. Start from the planned firing time
+            # (catches up missed ticks) but keep advancing until the
+            # result is strictly in the future. Without this guard,
+            # stale schedules (e.g. test fixtures or ticker downtime)
+            # produce a `nxt` still in the past, so the next tick fires
+            # again immediately and the run-loop spins.
             base = rule["next_cron_run_at"] or now
             try:
                 nxt = next_run(parsed, base)
+                # Cap at a few iterations so a misconfigured rule can't
+                # spin forever; 1440 = "one day's worth of minutes".
+                for _ in range(1440):
+                    if nxt > now:
+                        break
+                    nxt = next_run(parsed, nxt)
             except ValueError:
                 nxt = next_run(parsed, now)
             await s.execute(

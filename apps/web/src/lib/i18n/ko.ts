@@ -566,6 +566,7 @@ export const ko = {
   'page.adminDashboard.activityTitle': '최근 활동 — 시스템 전체',
   'page.adminDashboard.tab.users': '사용자',
   'page.adminDashboard.tab.audit': '감사 로그',
+  'page.adminDashboard.tab.auditRetention': '감사 보존',
   'page.adminDashboard.tab.health': '시스템 상태',
   'page.adminDashboard.tab.maintenance': '유지보수',
   'page.adminDashboard.tab.orgs': '조직',

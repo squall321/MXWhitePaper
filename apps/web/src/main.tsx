@@ -94,6 +94,16 @@ const AuditLogPage = lazy(() =>
       throw err
     }),
 )
+// `AuditRetentionPage` accepts an `embedded` prop — same pattern as AuditLog.
+const AuditRetentionPage = lazy(() =>
+  import('./pages/AuditRetention')
+    .then((m) => ({ default: m.AuditRetentionPage }))
+    .catch((err: unknown) => {
+      // eslint-disable-next-line no-console
+      console.error('[mxwp] lazy chunk failed: AuditRetention', err)
+      throw err
+    }),
+)
 const BackupAdminPage = lazyLogged('BackupAdmin', () =>
   import('./pages/BackupAdmin').then((m) => ({ default: m.BackupAdminPage })),
 )
@@ -353,6 +363,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="admin/import-csv" element={<Boundaried name="admin/import-csv"><BulkDocImportPage /></Boundaried>} />
                 <Route path="admin/archive" element={<Boundaried name="admin/archive"><ArchivedDocsPage /></Boundaried>} />
                 <Route path="admin/audit" element={<Boundaried name="admin/audit"><AuditLogPage /></Boundaried>} />
+                <Route path="admin/audit-retention" element={<Boundaried name="admin/audit-retention"><AuditRetentionPage /></Boundaried>} />
                 <Route path="admin/backups" element={<Boundaried name="admin/backups"><BackupAdminPage /></Boundaried>} />
                 <Route path="admin/tags" element={<Boundaried name="admin/tags"><TagManagerPage /></Boundaried>} />
                 <Route path="admin/templates" element={<Boundaried name="admin/templates"><TemplateManagerPage /></Boundaried>} />

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import type { Slug } from '@/types/document'
@@ -11,6 +11,10 @@ import {
   type VersionRow,
 } from '../api'
 import { useEditorStore } from '../state'
+import { TagVersionButton } from '@/features/version-tags/TagVersionButton'
+import { VersionTagBadge } from '@/features/version-tags/VersionTagBadge'
+import { useVersionTags } from '@/features/version-tags/hooks'
+import type { VersionTag } from '@/features/version-tags/api'
 
 interface VersionHistoryPanelProps {
   slug: Slug
@@ -33,6 +37,16 @@ export function VersionHistoryPanel({ slug }: VersionHistoryPanelProps) {
     queryFn: () => listVersions(slug),
     staleTime: 30_000,
   })
+  const tagsQ = useVersionTags(slug)
+  const tagsByVersion = useMemo(() => {
+    const map = new Map<number, VersionTag[]>()
+    for (const t of tagsQ.data ?? []) {
+      const arr = map.get(t.version) ?? []
+      arr.push(t)
+      map.set(t.version, arr)
+    }
+    return map
+  }, [tagsQ.data])
 
   const navigate = useNavigate()
   const [compareMode, setCompareMode] = useState(false)
@@ -102,6 +116,9 @@ export function VersionHistoryPanel({ slug }: VersionHistoryPanelProps) {
               }`}
             >
               <span className="mr-2 font-mono text-xs text-smsg-500">v{v.version}</span>
+              {(tagsByVersion.get(v.version) ?? []).map((t) => (
+                <VersionTagBadge key={t.id} tag={t} className="mr-1" />
+              ))}
               <span className="text-xs text-gray-600">
                 {(v.edited_at ?? v.created_at)?.slice(0, 16) ?? ''}
                 {(v.edited_by_name ?? v.author) ? ` · ${v.edited_by_name ?? v.author}` : ''}
@@ -110,6 +127,9 @@ export function VersionHistoryPanel({ slug }: VersionHistoryPanelProps) {
                 <span className="block truncate text-xs text-gray-500">{v.change_log}</span>
               )}
             </button>
+            <div className="flex justify-end">
+              <TagVersionButton slug={slug} version={v.version} />
+            </div>
             {compareMode && (
               <div className="flex justify-end">
                 {compareFrom == null ? (

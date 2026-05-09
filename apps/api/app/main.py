@@ -22,6 +22,7 @@ from .routers.analytics import router as analytics_router
 from .routers.api_tokens import router as api_tokens_router
 from .routers.approvals import router as approvals_router
 from .routers.audit import router as audit_router
+from .routers.audit_retention import router as audit_retention_router
 from .routers.auth import router as auth_router
 from .routers.auth_flows import router as auth_flows_router
 from .routers.automation import router as automation_router
@@ -40,6 +41,7 @@ from .routers.imports import router as imports_router
 from .routers.links_graph import router as links_graph_router
 from .routers.notification_prefs import router as notification_prefs_router
 from .routers.notifications import router as notifications_router
+from .routers.oembed import router as oembed_router
 from .routers.orgs import router as orgs_router
 from .routers.presence import router as presence_router
 from .routers.quiz import router as quiz_router
@@ -56,6 +58,7 @@ from .routers.subscriptions import router as subscriptions_router
 from .routers.tags import router as tags_router
 from .routers.uploads import images_router, uploads_router
 from .routers.users import router as users_router
+from .routers.version_tags import router as version_tags_router
 from .routers.webhooks import router as webhooks_router
 from .routers.widgets import router as widgets_router
 
@@ -335,6 +338,23 @@ TAGS_METADATA: list[dict[str, str]] = [
             "다시 documents 에 적용된다."
         ),
     },
+    {
+        "name": "oembed",
+        "description": (
+            "외부 사이트 (Slack/Notion/Discord/Teams/Linear) 가 위키 URL 을 "
+            "rich preview 로 펼치기 위해 호출하는 oEmbed 프로바이더. 인증 불필요, "
+            "archived/restricted 문서는 거절한다."
+        ),
+    },
+    {
+        "name": "version-tags",
+        "description": (
+            "버전 태그 (Cycle 16) — document_versions(v1, v2, …) 에 사람이 "
+            "읽는 라벨('v1.0 release', 'RC1') 을 붙이고, 태그된 시점의 "
+            "content_json 스냅샷을 새 문서로 분기(branch) 한다. is_locked=true "
+            "태그는 admin 만 삭제 가능."
+        ),
+    },
 ]
 
 
@@ -352,6 +372,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     retention_task: _asyncio.Task[None] | None = None
     reminder_task: _asyncio.Task[None] | None = None
     cron_task: _asyncio.Task[None] | None = None
+    audit_pruner_task: _asyncio.Task[None] | None = None
     if settings.backup_enabled:
         from .services.backup_runner import backup_ticker
 
@@ -395,6 +416,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         cron_task = _asyncio.create_task(
             cron_ticker(), name="mxwp-automation-cron",
         )
+
+    # Cycle 0032 — audit log retention pruner. Single-replica. Daily.
+    if getattr(settings, "audit_retention_enabled", True):
+        from .services.audit_pruner import audit_pruner_ticker
+
+        audit_pruner_task = _asyncio.create_task(
+            audit_pruner_ticker(), name="mxwp-audit-pruner",
+        )
     try:
         yield
     finally:
@@ -405,6 +434,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             retention_task,
             reminder_task,
             cron_task,
+            audit_pruner_task,
         ):
             if t is None:
                 continue
@@ -475,6 +505,8 @@ def create_app() -> FastAPI:
     app.include_router(analytics_router)
     # Audit log viewer — admin paginated/filter/CSV
     app.include_router(audit_router)
+    # Cycle 0032 — audit log retention config + prune-now
+    app.include_router(audit_retention_router)
     # Tier 2C — comments workflow + wiki link graph
     app.include_router(comments_doc_router)
     app.include_router(comments_one_router)
@@ -531,6 +563,10 @@ def create_app() -> FastAPI:
     app.include_router(quiz_router)
     # Cycle 0030 — saved views / smart folders (per-user named filters).
     app.include_router(saved_views_router)
+    # oEmbed provider — public rich-preview metadata for external apps.
+    app.include_router(oembed_router)
+    # Cycle 16 — named version tags + branch-from-tag.
+    app.include_router(version_tags_router)
 
     return app
 
