@@ -19,6 +19,7 @@ import { RetentionPoliciesPage } from './RetentionPolicies'
 import { TagManagerPage } from './TagManager'
 import { TemplateManagerPage } from './TemplateManager'
 import { WebhooksSettingsPage } from './WebhooksSettings'
+import { WorkflowChainsPage } from './WorkflowChains'
 import { useT } from '@/lib/i18n'
 import {
   type AdminHealth,
@@ -40,6 +41,7 @@ type TabKey =
   | 'templates'
   | 'webhooks'
   | 'automation'
+  | 'workflow-chains'
   | 'retention'
   | 'backups'
   | 'import-csv'
@@ -57,6 +59,7 @@ const TABS: Array<{ key: TabKey; labelKey: string }> = [
   { key: 'templates', labelKey: 'page.adminDashboard.tab.templates' },
   { key: 'webhooks', labelKey: 'page.adminDashboard.tab.webhooks' },
   { key: 'automation', labelKey: 'page.adminDashboard.tab.automation' },
+  { key: 'workflow-chains', labelKey: 'page.adminDashboard.tab.workflowChains' },
   { key: 'retention', labelKey: 'page.adminDashboard.tab.retention' },
   { key: 'backups', labelKey: 'page.adminDashboard.tab.backups' },
   { key: 'import-csv', labelKey: 'page.adminDashboard.tab.importCsv' },
@@ -161,6 +164,11 @@ export function AdminDashboardPage() {
       {tab === 'automation' && (
         <div data-testid="admin-tab-automation-content">
           <AutomationRulesPage />
+        </div>
+      )}
+      {tab === 'workflow-chains' && (
+        <div data-testid="admin-tab-workflow-chains-content">
+          <WorkflowChainsPage />
         </div>
       )}
       {tab === 'retention' && (

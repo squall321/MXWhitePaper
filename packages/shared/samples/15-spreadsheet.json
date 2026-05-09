@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "id": "01J9X1Y2Z3A4B5C6D7E8F9G0SS",
+  "slug": "spreadsheet-sample",
+  "title": "스프레드시트 — 분기 예산 계산 샘플",
+  "summary": "셀 기반 그리드와 간단한 수식(=SUM, =AVG, ROUND 등)을 활용해 분기 예산을 합산/평균/잔액 계산하는 spreadsheet 블록 예제. 풀 엑셀이 아니라 가벼운 계산용.",
+  "metadata": {
+    "division": "MX",
+    "owners": ["u-finance"],
+    "tags": ["budget", "spreadsheet", "예제"],
+    "confidentiality": "internal"
+  },
+  "sections": [
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9GSS1",
+      "number": "1",
+      "level": 1,
+      "title": "Q1 예산 계획",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9GSS2",
+          "text": "각 카테고리의 1·2월 예산을 입력하면 D열에 Q1 합계(=B+C), 4행에 월별 합계(=SUM)가 자동 계산됩니다. D5는 한도 2600에서 합계를 뺀 잔액, 6행은 ROUND(AVG(..)) 평균입니다."
+        },
+        {
+          "type": "spreadsheet",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9GSS3",
+          "title": "Q1 예산 (단위: 만원)",
+          "cols": 4,
+          "rows": 6,
+          "headers": ["항목", "1월", "2월", "Q1 합계"],
+          "cells": {
+            "A1": "마케팅",
+            "B1": "300",
+            "C1": "320",
+            "D1": "=B1+C1",
+            "A2": "엔지니어링",
+            "B2": "800",
+            "C2": "820",
+            "D2": "=B2+C2",
+            "A3": "운영",
+            "B3": "150",
+            "C3": "170",
+            "D3": "=B3+C3",
+            "A4": "월 합계",
+            "B4": "=SUM(B1:B3)",
+            "C4": "=SUM(C1:C3)",
+            "D4": "=SUM(D1:D3)",
+            "A5": "잔액 (한도 2600)",
+            "D5": "=2600-D4",
+            "A6": "평균",
+            "B6": "=ROUND(AVG(B1:B3),0)",
+            "C6": "=ROUND(AVG(C1:C3),0)",
+            "D6": "=ROUND(AVG(D1:D3),0)"
+          }
+        }
+      ],
+      "subsections": []
+    }
+  ]
+}

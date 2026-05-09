@@ -49,6 +49,26 @@ os.environ.setdefault("MXWP_SKIP_VIEW_REFRESH", "1")
 
 
 @pytest.fixture(autouse=True)
+def _reset_rate_limiter_per_test():
+    """매 테스트마다 글로벌 per-IP token bucket 을 비운다.
+
+    한 테스트의 burst 가 다음 테스트로 새지 않도록 한다. 미들웨어 자체가
+    같은 source IP (`testclient`) 로 이뤄지는 모든 ASGI 트래픽을 한 버킷으로
+    묶기 때문에, 리셋을 하지 않으면 60/min 익명 cap 을 금방 초과해 테스트
+    파일 한 두 개를 넘기면 줄줄이 429 가 떨어진다.
+    """
+    try:
+        from app.middleware.rate_limit import reset_for_tests as _rl_reset
+    except Exception:  # noqa: BLE001 — module may not be importable yet
+        _rl_reset = None
+    if _rl_reset is not None:
+        _rl_reset()
+    yield
+    if _rl_reset is not None:
+        _rl_reset()
+
+
+@pytest.fixture(autouse=True)
 async def _reset_engine_per_test():
     """매 테스트마다 새 engine 을 사용해 loop-affinity 충돌을 피한다."""
     from app.core import db as db_mod

@@ -305,6 +305,22 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     slash: '/퀴즈',
     preview: '📝 퀴즈 / 평가',
   },
+  {
+    kind: 'spreadsheet',
+    label: '스프레드시트',
+    labelKey: 'palette.spreadsheet',
+    icon: '🧮',
+    build: () => ({
+      type: 'spreadsheet',
+      id: ulid(),
+      cols: 6,
+      rows: 10,
+      cells: {},
+    }),
+    hint: '셀 기반 표 + 간단한 수식 (=SUM/AVG/IF 등). 풀 엑셀이 아니라 가벼운 계산용.',
+    slash: '/스프레드시트',
+    preview: '🧮 A1+B1=…',
+  },
 ]
 
 interface Props {

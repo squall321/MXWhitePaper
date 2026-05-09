@@ -78,6 +78,7 @@ export const ko = {
   'palette.pdf': 'PDF',
   'palette.imageAnnotation': '이미지 주석',
   'palette.quiz': '퀴즈',
+  'palette.spreadsheet': '스프레드시트',
   'palette.tooltip.slash': '슬래시 메뉴',
   'palette.tooltip.shortcutHint': '슬래시 메뉴 단축어: {slash}.',
 
@@ -574,6 +575,7 @@ export const ko = {
   'page.adminDashboard.tab.templates': '템플릿',
   'page.adminDashboard.tab.webhooks': '웹훅',
   'page.adminDashboard.tab.automation': '자동화',
+  'page.adminDashboard.tab.workflowChains': '워크플로우 체인',
   'page.adminDashboard.tab.retention': '보존 정책',
   'page.adminDashboard.tab.backups': '백업',
   'page.adminDashboard.tab.importCsv': 'CSV 가져오기',

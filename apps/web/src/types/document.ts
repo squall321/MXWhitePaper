@@ -44,6 +44,7 @@ export type Block =
   | PdfBlock
   | QuizBlock
   | ImageAnnotationBlock
+  | SpreadsheetBlock
 export type WhiteboardElement =
   | {
       kind: 'stroke'
@@ -551,6 +552,21 @@ export interface ImageAnnotationBlock {
   image_id: string
   caption?: string
   annotations: AnnotationElement[]
+  meta?: BlockMeta
+}
+export interface SpreadsheetBlock {
+  type: 'spreadsheet'
+  id: Ulid
+  title?: string
+  cols: number
+  rows: number
+  headers?: string[]
+  /**
+   * Sparse map of cell-ref → raw cell input (e.g. {'A1':'42', 'B2':'=SUM(A1:A10)'})
+   */
+  cells: {
+    [k: string]: string | undefined
+  }
   meta?: BlockMeta
 }
 export interface SectionLevel2 {

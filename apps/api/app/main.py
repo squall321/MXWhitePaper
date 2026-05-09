@@ -15,6 +15,7 @@ from .core.errors import (
     envelope,
     validation_error_handler,
 )
+from .middleware.security import RateLimitMiddleware, SecurityHeadersMiddleware
 from .routers.activity import router as activity_router
 from .routers.admin import router as admin_router
 from .routers.ai import router as ai_router
@@ -56,11 +57,13 @@ from .routers.sharing import router as sharing_router
 from .routers.snippets import router as snippets_router
 from .routers.subscriptions import router as subscriptions_router
 from .routers.tags import router as tags_router
+from .routers.two_factor import router as two_factor_router
 from .routers.uploads import images_router, uploads_router
 from .routers.users import router as users_router
 from .routers.version_tags import router as version_tags_router
 from .routers.webhooks import router as webhooks_router
 from .routers.widgets import router as widgets_router
+from .routers.workflow_chains import router as workflow_chains_router
 
 
 # Polish D — Swagger /docs 에서 각 그룹의 의미를 한국어로 요약.
@@ -347,6 +350,15 @@ TAGS_METADATA: list[dict[str, str]] = [
         ),
     },
     {
+        "name": "two_factor",
+        "description": (
+            "TOTP 기반 2FA (Cycle 17) — 사용자가 설정에서 옵트인하면 이후 "
+            "로그인 시 Google Authenticator / Authy 6자리 코드를 추가로 "
+            "요구한다. 백업 코드(8개) 도 발급되며 1회씩 사용 후 'USED' 로 "
+            "마킹된다. /me/2fa/setup → /me/2fa/verify 로 활성화."
+        ),
+    },
+    {
         "name": "version-tags",
         "description": (
             "버전 태그 (Cycle 16) — document_versions(v1, v2, …) 에 사람이 "
@@ -465,13 +477,19 @@ def create_app() -> FastAPI:
         openapi_tags=TAGS_METADATA,
     )
 
+    # Security middleware stack. Starlette runs the *last-added* middleware
+    # outermost, so we add CORS last to ensure CORS headers are emitted on
+    # 429 / hardening-bypass paths too. Order at request time:
+    #   CORS → SecurityHeaders → RateLimit → app
+    app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["ETag", "Location"],
+        expose_headers=["ETag", "Location", "Retry-After"],
     )
 
     app.add_exception_handler(APIError, api_error_handler)  # type: ignore[arg-type]
@@ -567,6 +585,10 @@ def create_app() -> FastAPI:
     app.include_router(oembed_router)
     # Cycle 16 — named version tags + branch-from-tag.
     app.include_router(version_tags_router)
+    # Cycle 17 — TOTP-based 2FA (setup/verify/disable + login exchange).
+    app.include_router(two_factor_router)
+    # Cycle 18 — workflow chains (multi-step automation orchestrator).
+    app.include_router(workflow_chains_router)
 
     return app
 

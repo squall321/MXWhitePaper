@@ -308,6 +308,14 @@ const BLOCKS: Record<string, Block> = {
       },
     ],
   },
+  spreadsheet: {
+    type: 'spreadsheet',
+    id: ID(32),
+    title: 'Q1 예산',
+    cols: 3,
+    rows: 4,
+    cells: { A1: '10', B1: '20', C1: '=A1+B1', A2: '5', B2: '7', C2: '=A2+B2' },
+  },
 }
 
 describe('<BlockRenderer /> read-mode coverage — every block type', () => {

@@ -166,6 +166,11 @@ const AutomationRulesPage = lazyLogged('AutomationRules', () =>
     default: m.AutomationRulesPage,
   })),
 )
+const WorkflowChainsPage = lazyLogged('WorkflowChains', () =>
+  import('./pages/WorkflowChains').then((m) => ({
+    default: m.WorkflowChainsPage,
+  })),
+)
 const RetentionPoliciesPage = lazyLogged('RetentionPolicies', () =>
   import('./pages/RetentionPolicies').then((m) => ({
     default: m.RetentionPoliciesPage,
@@ -193,6 +198,9 @@ const ForgotPasswordPage = lazyLogged('ForgotPassword', () =>
 )
 const ResetPasswordPage = lazyLogged('ResetPassword', () =>
   import('./pages/ResetPassword').then((m) => ({ default: m.ResetPasswordPage })),
+)
+const TwoFactorSetupPage = lazyLogged('TwoFactorSetup', () =>
+  import('./pages/TwoFactorSetup').then((m) => ({ default: m.TwoFactorSetupPage })),
 )
 const NotFoundPage = lazyLogged('NotFound', () =>
   import('./pages/NotFound').then((m) => ({ default: m.NotFoundPage })),
@@ -369,6 +377,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="admin/templates" element={<Boundaried name="admin/templates"><TemplateManagerPage /></Boundaried>} />
                 <Route path="admin/webhooks" element={<Boundaried name="admin/webhooks"><WebhooksSettingsPage /></Boundaried>} />
                 <Route path="admin/automation" element={<Boundaried name="admin/automation"><AutomationRulesPage /></Boundaried>} />
+                <Route path="admin/workflow-chains" element={<Boundaried name="admin/workflow-chains"><WorkflowChainsPage /></Boundaried>} />
                 <Route path="admin/retention" element={<Boundaried name="admin/retention"><RetentionPoliciesPage /></Boundaried>} />
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
@@ -380,6 +389,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="views/:id" element={<Boundaried name="views/:id"><SavedViewPage /></Boundaried>} />
                 <Route path="settings" element={<Boundaried name="settings"><SettingsPage /></Boundaried>} />
                 <Route path="me/api-tokens" element={<Boundaried name="me/api-tokens"><ApiTokensPage /></Boundaried>} />
+                <Route path="me/2fa" element={<Boundaried name="me/2fa"><TwoFactorSetupPage /></Boundaried>} />
                 <Route path="snippets" element={<Boundaried name="snippets"><SnippetManagerPage /></Boundaried>} />
                 <Route path="series" element={<Boundaried name="series"><SeriesManagerPage /></Boundaried>} />
                 <Route path="series/:slug" element={<Boundaried name="series/:slug"><SeriesDetailPage /></Boundaried>} />

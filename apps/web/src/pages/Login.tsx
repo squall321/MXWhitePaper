@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { login } from '@/features/auth/api'
+import { login, loginTotp, TotpRequiredError } from '@/features/auth/api'
 import { useAuthStore } from '@/features/auth/store'
 import { Button, Card, Field, Input } from '@/components/ui'
 import { useLocale } from '@/lib/i18n'
@@ -47,6 +47,14 @@ export function LoginPage() {
   const returnTo = safeReturnPath(params.get('return'))
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [remember, setRemember] = useState(true)
+  // Cycle 17 — when the BE answers with TOTP_REQUIRED, switch the form to a
+  // second-factor input that posts to /auth/login/totp. partialToken is the
+  // short-lived JWT the FE echoes back. backupMode toggles between OTP code
+  // (6 digits) and a single-use backup code.
+  const [partialToken, setPartialToken] = useState<string | null>(null)
+  const [totpCode, setTotpCode] = useState('')
+  const [backupMode, setBackupMode] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const user = useAuthStore((s) => s.user)
   const hydrating = useAuthStore((s) => s.hydrating)
 
@@ -74,6 +82,14 @@ export function LoginPage() {
       await login(values.email, values.password)
       navigate(returnTo, { replace: true })
     } catch (err) {
+      if (err instanceof TotpRequiredError) {
+        // Switch to second-factor input. We keep the form mounted so the
+        // user can hit "처음부터 다시" if they need to.
+        setPartialToken(err.partialToken)
+        setTotpCode('')
+        setBackupMode(false)
+        return
+      }
       const e = err as { response?: { status?: number; data?: { error?: { message?: string } } } }
       const status = e.response?.status
       if (status === 401) {
@@ -91,6 +107,37 @@ export function LoginPage() {
       }
     }
   })
+
+  async function onTotpSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!partialToken) return
+    setSubmitError(null)
+    setVerifying(true)
+    try {
+      await loginTotp(partialToken, totpCode.trim())
+      navigate(returnTo, { replace: true })
+    } catch (err) {
+      const ax = err as { response?: { status?: number } }
+      if (ax.response?.status === 401) {
+        setSubmitError(
+          backupMode
+            ? '백업 코드가 일치하지 않거나 이미 사용되었습니다.'
+            : '인증 코드가 올바르지 않습니다. 시계가 동기화되어 있는지 확인하세요.',
+        )
+      } else {
+        setSubmitError('2FA 검증 중 오류가 발생했습니다.')
+      }
+    } finally {
+      setVerifying(false)
+    }
+  }
+
+  function resetToPasswordStep() {
+    setPartialToken(null)
+    setTotpCode('')
+    setBackupMode(false)
+    setSubmitError(null)
+  }
 
   return (
     <div
@@ -119,6 +166,68 @@ export function LoginPage() {
           <h2 className="mb-1 text-base font-semibold text-smsg-900 dark:text-gray-100">{t('login.heading')}</h2>
           <p className="mb-5 text-xs text-gray-500 dark:text-gray-400">{t('login.helper')}</p>
 
+          {partialToken ? (
+            <form
+              className="space-y-4"
+              onSubmit={onTotpSubmit}
+              data-testid="login-totp-form"
+            >
+              <p className="text-xs text-gray-600 dark:text-gray-300">
+                {backupMode
+                  ? '백업 코드 (1회용) 를 입력하세요.'
+                  : '등록된 OTP 앱의 6자리 코드를 입력하세요.'}
+              </p>
+              <Field
+                label={backupMode ? '백업 코드' : '6자리 코드'}
+                htmlFor="login-totp-code"
+                error={submitError ?? undefined}
+              >
+                <Input
+                  id="login-totp-code"
+                  data-testid="login-totp-code"
+                  inputMode={backupMode ? 'text' : 'numeric'}
+                  autoComplete="one-time-code"
+                  placeholder={backupMode ? 'XXXXX-XXXXX' : '123456'}
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value)}
+                  invalid={!!submitError}
+                />
+              </Field>
+
+              <Button
+                type="submit"
+                data-testid="login-totp-submit"
+                loading={verifying}
+                disabled={verifying}
+                fullWidth
+                size="md"
+              >
+                {verifying ? '확인 중…' : '로그인'}
+              </Button>
+
+              <div className="flex items-center justify-between text-xs">
+                <button
+                  type="button"
+                  className="text-link hover:underline"
+                  data-testid="login-totp-toggle-backup"
+                  onClick={() => {
+                    setBackupMode((b) => !b)
+                    setTotpCode('')
+                    setSubmitError(null)
+                  }}
+                >
+                  {backupMode ? 'OTP 코드 사용' : '백업 코드 사용'}
+                </button>
+                <button
+                  type="button"
+                  className="text-gray-500 hover:underline"
+                  onClick={resetToPasswordStep}
+                >
+                  처음부터 다시
+                </button>
+              </div>
+            </form>
+          ) : (
           <form className="space-y-4" onSubmit={onSubmit}>
             <Field label={t('login.email')} htmlFor="login-email" error={errors.email?.message}>
               <Input
@@ -191,6 +300,7 @@ export function LoginPage() {
               </p>
             )}
           </form>
+          )}
         </Card>
 
         <p className="mt-4 text-center text-[11px] text-white/70">

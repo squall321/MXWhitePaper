@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import ROLE_ORDER, get_current_user, require_admin
 from app.core.db import get_db
 from app.core.errors import NotFound, ValidationFailed, envelope
+from app.middleware.rate_limit import get_limiter
 from app.repos import document_repo
 from app.search import meili_indexer
 from app.services.document_service import refresh_search_view, reindex_meili
@@ -689,3 +690,18 @@ async def purge_archived_docs(
         )
     await s.commit()
     return envelope(data={"purged": purged, "skipped": skipped})
+
+
+# ── Rate-limit telemetry ─────────────────────────────────────────────────
+@router.get("/rate-limit-stats", summary="In-memory per-IP rate-limit 스냅샷")
+async def rate_limit_stats(
+    top: int = Query(default=10, ge=1, le=100),
+    _user: dict[str, Any] = Depends(require_admin),
+) -> dict[str, Any]:
+    """Return current in-process bucket stats — admin only.
+
+    Single-replica only (process-local). Multi-replica aggregation would
+    require Redis; flagged as future work.
+    """
+    snap = get_limiter().snapshot(top_n=top)
+    return envelope(data=snap)

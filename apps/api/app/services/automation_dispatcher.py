@@ -34,6 +34,7 @@ Filter matching is *simple equality* per key — if the rule's
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -67,6 +68,10 @@ VALID_ACTIONS: set[str] = {
     "remove_tag",
     "transition",
     "email_subscribers",
+    # Cycle 18 — fan out to a workflow_chain (multi-step automation).
+    # action_payload: { chain_id: str }. The chain is fired async so the
+    # firing rule's run_log row is written promptly.
+    "trigger_chain",
 }
 
 
@@ -391,6 +396,35 @@ async def _action_email_subscribers(
     return ("ok", None) if sent else ("failed", "all sends failed")
 
 
+async def _action_trigger_chain(
+    s: AsyncSession,
+    *,
+    action_payload: dict[str, Any],
+    trigger_kind: str,
+    payload: dict[str, Any],
+) -> tuple[str, str | None]:
+    """Fire a workflow_chain (Cycle 18).
+
+    ``action_payload``: ``{ chain_id: str }``. The chain runs in the
+    background; we return ``ok`` as soon as the task is scheduled so the
+    triggering rule's run-log row is written promptly.
+    """
+    chain_id = action_payload.get("chain_id")
+    if not isinstance(chain_id, str) or not chain_id.strip():
+        return "skipped", "action_payload.chain_id required"
+    # Imported lazily to avoid an import cycle at module load.
+    from app.services import workflow_chain as wc
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(
+            wc.run_chain(chain_id.strip(), {"trigger": trigger_kind, **payload})
+        )
+    except Exception as e:  # noqa: BLE001
+        return "failed", f"chain schedule error: {e}"
+    return "ok", None
+
+
 _ACTIONS: dict[str, Any] = {
     "webhook": _action_webhook,
     "notification_blast": _action_notification_blast,
@@ -398,6 +432,7 @@ _ACTIONS: dict[str, Any] = {
     "remove_tag": _action_remove_tag,
     "transition": _action_transition,
     "email_subscribers": _action_email_subscribers,
+    "trigger_chain": _action_trigger_chain,
 }
 
 

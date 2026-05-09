@@ -46,6 +46,24 @@ export function registerConnectionHooks(hooks: ConnectionHooks) {
   connectionHooks = hooks
 }
 
+// ── Rate-limit hook ───────────────────────────────────────────────────────
+// 429 responses surface a toast via this hook (registered by bootstrap.ts).
+// Decoupled from the toast module so the client stays test-friendly.
+export interface RateLimitHooks {
+  onRateLimited(retryAfterSec: number): void
+}
+
+let rateLimitHooks: RateLimitHooks | null = null
+
+export function registerRateLimitHooks(hooks: RateLimitHooks) {
+  rateLimitHooks = hooks
+}
+
+/** Internal — exposed for tests. */
+export function _getRateLimitHooks(): RateLimitHooks | null {
+  return rateLimitHooks
+}
+
 // ── Retry budget ──────────────────────────────────────────────────────────
 function readRetryLimit(): number {
   const raw = (import.meta.env.VITE_API_RETRY_LIMIT as string | undefined) ?? '1'
@@ -112,6 +130,26 @@ apiClient.interceptors.response.use(
       connectionHooks?.onSuccess()
     } else {
       connectionHooks?.onSuccess()
+    }
+
+    // ── 429 → surface toast, never auto-retry ────────────────────────
+    if (status === 429) {
+      const headers = err.response?.headers ?? {}
+      const headerVal =
+        (headers as Record<string, unknown>)['retry-after'] ??
+        (headers as Record<string, unknown>)['Retry-After']
+      let retryAfter = Number.parseInt(String(headerVal ?? ''), 10)
+      if (!Number.isFinite(retryAfter) || retryAfter <= 0) {
+        // Fall back to the body envelope's details.retry_after.
+        const bodyData = err.response?.data as
+          | { error?: { details?: { retry_after?: number } } }
+          | undefined
+        const fromBody = bodyData?.error?.details?.retry_after
+        retryAfter = typeof fromBody === 'number' && fromBody > 0 ? fromBody : 60
+      }
+      rateLimitHooks?.onRateLimited(retryAfter)
+      // No retry — propagate so call sites can react.
+      return Promise.reject(err)
     }
 
     // ── 401 → single-flight refresh + retry ──────────────────────────

@@ -197,7 +197,8 @@
         { "$ref": "#/$defs/FormBlock" },
         { "$ref": "#/$defs/PdfBlock" },
         { "$ref": "#/$defs/QuizBlock" },
-        { "$ref": "#/$defs/ImageAnnotationBlock" }
+        { "$ref": "#/$defs/ImageAnnotationBlock" },
+        { "$ref": "#/$defs/SpreadsheetBlock" }
       ]
     },
 
@@ -892,6 +893,26 @@
           }
         }
       ]
+    },
+
+    "SpreadsheetBlock": {
+      "type": "object",
+      "required": ["type", "id", "cols", "rows", "cells"],
+      "additionalProperties": false,
+      "properties": {
+        "type":    { "const": "spreadsheet" },
+        "id":      { "$ref": "#/$defs/Ulid" },
+        "title":   { "type": "string" },
+        "cols":    { "type": "integer", "minimum": 1, "maximum": 26, "default": 6 },
+        "rows":    { "type": "integer", "minimum": 1, "maximum": 200, "default": 10 },
+        "headers": { "type": "array", "items": { "type": "string" } },
+        "cells": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Sparse map of cell-ref → raw cell input (e.g. {'A1':'42', 'B2':'=SUM(A1:A10)'})"
+        },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
     },
 
     "RelatedDoc": {

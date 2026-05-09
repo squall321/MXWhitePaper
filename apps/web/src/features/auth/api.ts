@@ -43,14 +43,49 @@ function applyTokenResponse(
 }
 
 /**
+ * Cycle 17 — thrown by `login()` when the BE has 2FA enabled for the user.
+ * The Login page catches this and switches to the TOTP code input.
+ */
+export class TotpRequiredError extends Error {
+  partialToken: string
+  constructor(partialToken: string) {
+    super('TOTP_REQUIRED')
+    this.partialToken = partialToken
+  }
+}
+
+/**
  * POST /api/v1/auth/login → { access_token, expires_in, user }.
  * The refresh cookie is set httpOnly by the server.
+ *
+ * If the user has 2FA enabled, the BE replies 401 with
+ * ``error.code = "TOTP_REQUIRED"`` and a short-lived ``partial_token``
+ * in ``error.details``. We translate that to a typed exception so the
+ * FE can show the second-factor input without conflating it with a real
+ * password failure.
  */
 export async function login(email: string, password: string): Promise<AuthUser> {
-  const res = await apiClient.post<ApiEnvelope<LoginResponse>>('/auth/login', {
-    email,
-    password,
-  })
+  let res
+  try {
+    res = await apiClient.post<ApiEnvelope<LoginResponse>>('/auth/login', {
+      email,
+      password,
+    })
+  } catch (err) {
+    const e = err as {
+      response?: { status?: number; data?: ApiEnvelope<unknown> }
+    }
+    const code = e.response?.data?.error?.code
+    if (e.response?.status === 401 && code === 'TOTP_REQUIRED') {
+      const details = e.response.data?.error?.details as
+        | { partial_token?: string }
+        | undefined
+      if (details?.partial_token) {
+        throw new TotpRequiredError(details.partial_token)
+      }
+    }
+    throw err
+  }
   applyTokenResponse(res.data?.data)
   // Stash a debug timestamp so testers can confirm a successful round-trip
   // without opening DevTools.
@@ -61,6 +96,26 @@ export async function login(email: string, password: string): Promise<AuthUser> 
   } catch {
     /* private mode */
   }
+  const user = res.data?.data?.user
+  if (!user) {
+    throw new Error('로그인 응답에 사용자 정보가 없습니다.')
+  }
+  return user
+}
+
+/**
+ * POST /api/v1/auth/login/totp — exchange a partial token + 6-digit code
+ * (or a single-use backup code) for a real session.
+ */
+export async function loginTotp(
+  partialToken: string,
+  code: string,
+): Promise<AuthUser> {
+  const res = await apiClient.post<ApiEnvelope<LoginResponse>>(
+    '/auth/login/totp',
+    { partial_token: partialToken, code },
+  )
+  applyTokenResponse(res.data?.data)
   const user = res.data?.data?.user
   if (!user) {
     throw new Error('로그인 응답에 사용자 정보가 없습니다.')

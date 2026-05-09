@@ -1,4 +1,9 @@
-import { registerAuthHooks, registerConnectionHooks } from '@/lib/api/client'
+import {
+  registerAuthHooks,
+  registerConnectionHooks,
+  registerRateLimitHooks,
+} from '@/lib/api/client'
+import { toast } from '@/components/ui/Toast'
 import { getAccessToken, useAuthStore } from '@/features/auth/store'
 import { refresh } from '@/features/auth/api'
 import { useConnectionStore } from '@/features/auth/connectionStore'
@@ -82,6 +87,14 @@ export function bootstrapAuth() {
   registerConnectionHooks({
     onSuccess: () => useConnectionStore.getState().markSuccess(),
     onFailure: () => useConnectionStore.getState().markFailure(),
+  })
+
+  // 429 → user-facing toast. The client interceptor never auto-retries,
+  // so this toast is the user's only signal that they're being throttled.
+  registerRateLimitHooks({
+    onRateLimited: (sec) => {
+      toast.warn(`잠시 후 다시 시도하세요 — ${sec}초`)
+    },
   })
 
   // Sprint 5 — editor offline UX. Attach window online/offline listeners +

@@ -352,6 +352,99 @@
         "title": "BulkDocsIn",
         "type": "object"
       },
+      "ChainCreate": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepIn"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ChainCreate",
+        "type": "object"
+      },
+      "ChainPatch": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StepIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          }
+        },
+        "title": "ChainPatch",
+        "type": "object"
+      },
       "CommentIn": {
         "properties": {
           "anchor_id": {
@@ -628,6 +721,28 @@
         "title": "DecisionIn",
         "type": "object"
       },
+      "DisableIn": {
+        "properties": {
+          "code": {
+            "maxLength": 20,
+            "minLength": 6,
+            "title": "Code",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password",
+          "code"
+        ],
+        "title": "DisableIn",
+        "type": "object"
+      },
       "DivisionCreate": {
         "additionalProperties": false,
         "properties": {
@@ -812,6 +927,28 @@
           "password"
         ],
         "title": "LoginIn",
+        "type": "object"
+      },
+      "LoginTotpIn": {
+        "properties": {
+          "code": {
+            "maxLength": 20,
+            "minLength": 6,
+            "title": "Code",
+            "type": "string"
+          },
+          "partial_token": {
+            "maxLength": 4096,
+            "minLength": 8,
+            "title": "Partial Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "partial_token",
+          "code"
+        ],
+        "title": "LoginTotpIn",
         "type": "object"
       },
       "PartCreate": {
@@ -1248,6 +1385,21 @@
         "title": "ReadIn",
         "type": "object"
       },
+      "RegenIn": {
+        "properties": {
+          "code": {
+            "maxLength": 20,
+            "minLength": 6,
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "RegenIn",
+        "type": "object"
+      },
       "RemindIn": {
         "properties": {
           "user_id": {
@@ -1442,58 +1594,6 @@
           }
         },
         "title": "RulePatch",
-        "type": "object"
-      },
-      "RunNowIn": {
-        "properties": {
-          "format": {
-            "enum": [
-              "json",
-              "html",
-              "md",
-              "docx",
-              "pptx"
-            ],
-            "title": "Format",
-            "type": "string"
-          },
-          "scope": {
-            "enum": [
-              "full",
-              "user",
-              "doc"
-            ],
-            "title": "Scope",
-            "type": "string"
-          },
-          "target_doc_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target Doc Slug"
-          },
-          "target_user_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target User Id"
-          }
-        },
-        "required": [
-          "scope",
-          "format"
-        ],
-        "title": "RunNowIn",
         "type": "object"
       },
       "ScheduleIn": {
@@ -1758,6 +1858,21 @@
         "title": "SeriesPatchIn",
         "type": "object"
       },
+      "SetupIn": {
+        "properties": {
+          "password": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "SetupIn",
+        "type": "object"
+      },
       "SnippetIn": {
         "properties": {
           "blocks": {
@@ -1861,6 +1976,58 @@
           }
         },
         "title": "SnippetPatchIn",
+        "type": "object"
+      },
+      "StepIn": {
+        "properties": {
+          "action_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Kind"
+          },
+          "action_payload": {
+            "additionalProperties": true,
+            "title": "Action Payload",
+            "type": "object"
+          },
+          "delay_seconds": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Delay Seconds",
+            "type": "integer"
+          },
+          "fail_strategy": {
+            "default": "halt",
+            "title": "Fail Strategy",
+            "type": "string"
+          },
+          "ordering": {
+            "minimum": 0.0,
+            "title": "Ordering",
+            "type": "integer"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
+          }
+        },
+        "required": [
+          "ordering"
+        ],
+        "title": "StepIn",
         "type": "object"
       },
       "SubscribeIn": {
@@ -2350,6 +2517,28 @@
         "title": "VerifyEmailIn",
         "type": "object"
       },
+      "VerifyIn": {
+        "properties": {
+          "code": {
+            "maxLength": 12,
+            "minLength": 6,
+            "title": "Code",
+            "type": "string"
+          },
+          "stage_token": {
+            "maxLength": 4096,
+            "minLength": 8,
+            "title": "Stage Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage_token",
+          "code"
+        ],
+        "title": "VerifyIn",
+        "type": "object"
+      },
       "WebhookCreate": {
         "properties": {
           "events": {
@@ -2448,6 +2637,69 @@
           }
         },
         "title": "WebhookPatch",
+        "type": "object"
+      },
+      "app__routers__backups__RunNowIn": {
+        "properties": {
+          "format": {
+            "enum": [
+              "json",
+              "html",
+              "md",
+              "docx",
+              "pptx"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "full",
+              "user",
+              "doc"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "target_doc_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Doc Slug"
+          },
+          "target_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target User Id"
+          }
+        },
+        "required": [
+          "scope",
+          "format"
+        ],
+        "title": "RunNowIn",
+        "type": "object"
+      },
+      "app__routers__workflow_chains__RunNowIn": {
+        "properties": {
+          "trigger_payload": {
+            "additionalProperties": true,
+            "title": "Trigger Payload",
+            "type": "object"
+          }
+        },
+        "title": "RunNowIn",
         "type": "object"
       }
     }
@@ -3097,6 +3349,54 @@
           }
         },
         "summary": "유지보수 일괄 실행",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/rate-limit-stats": {
+      "get": {
+        "description": "Return current in-process bucket stats — admin only.\n\nSingle-replica only (process-local). Multi-replica aggregation would\nrequire Redis; flagged as future work.",
+        "operationId": "rate_limit_stats_api_v1_admin_rate_limit_stats_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "top",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Top",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rate Limit Stats Api V1 Admin Rate Limit Stats Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "In-memory per-IP rate-limit 스냅샷",
         "tags": [
           "admin"
         ]
@@ -4553,9 +4853,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Login Api V1 Auth Login Post",
-                  "type": "object"
+                  "title": "Response Login Api V1 Auth Login Post"
                 }
               }
             },
@@ -4573,6 +4871,49 @@
           }
         },
         "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/login/totp": {
+      "post": {
+        "operationId": "login_totp_api_v1_auth_login_totp_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginTotpIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Login Totp Api V1 Auth Login Totp Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login Totp",
         "tags": [
           "auth"
         ]
@@ -5024,7 +5365,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RunNowIn"
+                "$ref": "#/components/schemas/app__routers__backups__RunNowIn"
               }
             }
           },
@@ -10105,6 +10446,178 @@
         ]
       }
     },
+    "/api/v1/me/2fa/disable": {
+      "post": {
+        "operationId": "disable_api_v1_me_2fa_disable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisableIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Disable Api V1 Me 2Fa Disable Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Disable",
+        "tags": [
+          "two_factor"
+        ]
+      }
+    },
+    "/api/v1/me/2fa/regenerate-backup-codes": {
+      "post": {
+        "operationId": "regenerate_backup_codes_api_v1_me_2fa_regenerate_backup_codes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Regenerate Backup Codes Api V1 Me 2Fa Regenerate Backup Codes Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Regenerate Backup Codes",
+        "tags": [
+          "two_factor"
+        ]
+      }
+    },
+    "/api/v1/me/2fa/setup": {
+      "post": {
+        "operationId": "setup_api_v1_me_2fa_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Setup Api V1 Me 2Fa Setup Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Setup",
+        "tags": [
+          "two_factor"
+        ]
+      }
+    },
+    "/api/v1/me/2fa/verify": {
+      "post": {
+        "operationId": "verify_api_v1_me_2fa_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Verify Api V1 Me 2Fa Verify Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify",
+        "tags": [
+          "two_factor"
+        ]
+      }
+    },
     "/api/v1/me/api-tokens": {
       "get": {
         "operationId": "list_api_tokens_api_v1_me_api_tokens_get",
@@ -14062,6 +14575,321 @@
           "widgets"
         ]
       }
+    },
+    "/api/v1/workflow-chains": {
+      "get": {
+        "operationId": "list_chains_api_v1_workflow_chains_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Chains Api V1 Workflow Chains Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "워크플로우 체인 목록 (admin)",
+        "tags": [
+          "workflow_chains"
+        ]
+      },
+      "post": {
+        "operationId": "create_chain_api_v1_workflow_chains_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChainCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Chain Api V1 Workflow Chains Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "워크플로우 체인 생성 (admin)",
+        "tags": [
+          "workflow_chains"
+        ]
+      }
+    },
+    "/api/v1/workflow-chains/{chain_id}": {
+      "delete": {
+        "operationId": "delete_chain_api_v1_workflow_chains__chain_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chain_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Chain Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "워크플로우 체인 삭제 (admin)",
+        "tags": [
+          "workflow_chains"
+        ]
+      },
+      "get": {
+        "operationId": "get_chain_api_v1_workflow_chains__chain_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chain_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Chain Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Chain Api V1 Workflow Chains  Chain Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "워크플로우 체인 단건 (admin) — 단계 포함",
+        "tags": [
+          "workflow_chains"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_chain_api_v1_workflow_chains__chain_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chain_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Chain Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChainPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Chain Api V1 Workflow Chains  Chain Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "워크플로우 체인 수정 (admin) — steps 전달 시 통째 교체",
+        "tags": [
+          "workflow_chains"
+        ]
+      }
+    },
+    "/api/v1/workflow-chains/{chain_id}/run-now": {
+      "post": {
+        "operationId": "run_now_api_v1_workflow_chains__chain_id__run_now_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chain_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Chain Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/app__routers__workflow_chains__RunNowIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Now Api V1 Workflow Chains  Chain Id  Run Now Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "워크플로우 체인 즉시 실행 (admin)",
+        "tags": [
+          "workflow_chains"
+        ]
+      }
+    },
+    "/api/v1/workflow-chains/{chain_id}/runs": {
+      "get": {
+        "operationId": "list_runs_api_v1_workflow_chains__chain_id__runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chain_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Chain Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Runs Api V1 Workflow Chains  Chain Id  Runs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "워크플로우 체인 실행 로그 (admin, 최근순)",
+        "tags": [
+          "workflow_chains"
+        ]
+      }
     }
   },
   "tags": [
@@ -14228,6 +15056,10 @@
     {
       "description": "외부 사이트 (Slack/Notion/Discord/Teams/Linear) 가 위키 URL 을 rich preview 로 펼치기 위해 호출하는 oEmbed 프로바이더. 인증 불필요, archived/restricted 문서는 거절한다.",
       "name": "oembed"
+    },
+    {
+      "description": "TOTP 기반 2FA (Cycle 17) — 사용자가 설정에서 옵트인하면 이후 로그인 시 Google Authenticator / Authy 6자리 코드를 추가로 요구한다. 백업 코드(8개) 도 발급되며 1회씩 사용 후 'USED' 로 마킹된다. /me/2fa/setup → /me/2fa/verify 로 활성화.",
+      "name": "two_factor"
     },
     {
       "description": "버전 태그 (Cycle 16) — document_versions(v1, v2, …) 에 사람이 읽는 라벨('v1.0 release', 'RC1') 을 붙이고, 태그된 시점의 content_json 스냅샷을 새 문서로 분기(branch) 한다. is_locked=true 태그는 admin 만 삭제 가능.",

@@ -82,6 +82,7 @@ export const COLLAPSIBLE_BLOCK_TYPES: ReadonlySet<Block['type']> = new Set<Block
   'math',
   'org-chart',
   'whiteboard',
+  'spreadsheet',
 ])
 
 export function snap(px: number): number {

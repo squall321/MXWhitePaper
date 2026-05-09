@@ -48,6 +48,7 @@ import { WhiteboardBlockEditor } from '../WhiteboardBlockEditor'
 import { PdfBlockEditor } from '../PdfBlockEditor'
 import { ImageAnnotationBlockEditor } from '../ImageAnnotationBlockEditor'
 import { QuizBlockEditor } from '../QuizBlockEditor'
+import { SpreadsheetBlockEditor } from '../SpreadsheetBlockEditor'
 
 import type {
   AccordionBlock,
@@ -75,6 +76,7 @@ import type {
   PdfBlock,
   ImageAnnotationBlock,
   QuizBlock,
+  SpreadsheetBlock,
 } from '@/types/document'
 
 function harness(node: React.ReactNode) {
@@ -436,6 +438,20 @@ const CASES: Array<{
       ],
     } satisfies QuizBlock,
     expect: ['응시 기록 보기', '통과 점수', '문제 추가'],
+  },
+  {
+    type: 'spreadsheet',
+    label: 'SpreadsheetBlockEditor',
+    Editor: SpreadsheetBlockEditor,
+    block: {
+      type: 'spreadsheet',
+      id: ID(26),
+      title: 'Q1 예산',
+      cols: 3,
+      rows: 4,
+      cells: { A1: '10', B1: '20', C1: '=A1+B1' },
+    } satisfies SpreadsheetBlock,
+    expect: ['+ 행 추가', '+ 열 추가', 'data-cell-ref="A1"'],
   },
 ]
 

@@ -76,6 +76,7 @@ export const en: Record<LocaleKey, string> = {
   'palette.pdf': 'PDF',
   'palette.imageAnnotation': 'Image annotation',
   'palette.quiz': 'Quiz',
+  'palette.spreadsheet': 'Spreadsheet',
   'palette.tooltip.slash': 'Slash menu',
   'palette.tooltip.shortcutHint': 'Slash shortcut: {slash}.',
 
@@ -541,6 +542,7 @@ export const en: Record<LocaleKey, string> = {
   'page.adminDashboard.tab.templates': 'Templates',
   'page.adminDashboard.tab.webhooks': 'Webhooks',
   'page.adminDashboard.tab.automation': 'Automation',
+  'page.adminDashboard.tab.workflowChains': 'Workflow chains',
   'page.adminDashboard.tab.retention': 'Retention',
   'page.adminDashboard.tab.backups': 'Backups',
   'page.adminDashboard.tab.importCsv': 'Import CSV',

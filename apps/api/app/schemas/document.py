@@ -702,6 +702,23 @@ class AnnotationElement(
     root: AnnotationElement1 | AnnotationElement2 | AnnotationElement3
 
 
+class SpreadsheetBlock(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['spreadsheet']
+    id: Ulid
+    title: str | None = None
+    cols: int | None = Field(6, ge=1, le=26)
+    rows: int | None = Field(10, ge=1, le=200)
+    headers: list[str] | None = None
+    cells: dict[str, str]
+    """
+    Sparse map of cell-ref → raw cell input (e.g. {'A1':'42', 'B2':'=SUM(A1:A10)'})
+    """
+    meta: BlockMeta | None = None
+
+
 class RelatedDoc(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -948,6 +965,7 @@ class Block(
         | PdfBlock
         | QuizBlock
         | ImageAnnotationBlock
+        | SpreadsheetBlock
     ]
 ):
     root: (
@@ -982,6 +1000,7 @@ class Block(
         | PdfBlock
         | QuizBlock
         | ImageAnnotationBlock
+        | SpreadsheetBlock
     )
 
 
