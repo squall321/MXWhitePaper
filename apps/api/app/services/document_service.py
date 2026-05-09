@@ -36,6 +36,126 @@ logger = logging.getLogger(__name__)
 _CHANGE_LOG_RE = re.compile(r"^[A-Za-z0-9._:\-\s]{1,80}$")
 
 
+# ── Block-level permission scrubbing ────────────────────────────────────
+# Mirror of FE `canSeeBlock` in apps/web/src/components/blocks/BlockRenderer.tsx.
+# Higher number = more privileged. Unknown roles fall back to 0 (most-restrictive).
+_ROLE_LEVEL: dict[str, int] = {"reader": 1, "editor": 2, "owner": 3, "admin": 4}
+_PERM_LEVEL: dict[str, int] = {"all": 1, "editor": 2, "admin": 4}
+
+
+def _can_see_block(meta: Any, role_level: int) -> bool:
+    if not isinstance(meta, dict):
+        return True
+    perm = meta.get("permission")
+    if not isinstance(perm, str):
+        return True
+    needed = _PERM_LEVEL.get(perm, 1)
+    return role_level >= needed
+
+
+def _redact_block(block: dict[str, Any]) -> dict[str, Any]:
+    """Replace a hidden block with an opaque placeholder.
+
+    The placeholder retains the original `id` and the original
+    `meta.permission` value so the FE can still surface "this block is
+    restricted" in the same slot — but no other field of the original
+    block leaks through (no text, no captions, no nested blocks).
+    """
+    perm = (block.get("meta") or {}).get("permission")
+    return {
+        "type": "paragraph",
+        "id": block.get("id", ""),
+        "text": "[권한이 부족한 블록]",
+        "meta": {"permission": perm} if perm else {},
+    }
+
+
+def _scrub_block_array(blocks: Any, role_level: int) -> Any:
+    if not isinstance(blocks, list):
+        return blocks
+    out: list[Any] = []
+    for blk in blocks:
+        if not isinstance(blk, dict):
+            out.append(blk)
+            continue
+        if not _can_see_block(blk.get("meta"), role_level):
+            out.append(_redact_block(blk))
+            continue
+        # Recurse into container blocks so nested blocks are also gated.
+        btype = blk.get("type")
+        if btype == "columns":
+            cols = blk.get("columns")
+            if isinstance(cols, list):
+                blk["columns"] = [
+                    _scrub_block_array(col, role_level) for col in cols
+                ]
+        elif btype == "tabs":
+            tabs = blk.get("tabs")
+            if isinstance(tabs, list):
+                for tab in tabs:
+                    if isinstance(tab, dict):
+                        tab["blocks"] = _scrub_block_array(
+                            tab.get("blocks"), role_level
+                        )
+        elif btype == "accordion":
+            items = blk.get("items")
+            if isinstance(items, list):
+                for it in items:
+                    if isinstance(it, dict):
+                        it["blocks"] = _scrub_block_array(
+                            it.get("blocks"), role_level
+                        )
+        out.append(blk)
+    return out
+
+
+def _scrub_sections(sections: Any, role_level: int) -> Any:
+    if not isinstance(sections, list):
+        return sections
+    for sec in sections:
+        if not isinstance(sec, dict):
+            continue
+        sec["blocks"] = _scrub_block_array(sec.get("blocks"), role_level)
+        _scrub_sections(sec.get("subsections"), role_level)
+    return sections
+
+
+def scrub_blocks_for_role(
+    content_json: dict[str, Any], role: str | None
+) -> dict[str, Any]:
+    """Walk a DocumentJSON tree and redact blocks the caller can't see.
+
+    Permission matrix (role × meta.permission → visible?):
+
+        role        all   editor   admin
+        reader      ✓     ✗        ✗
+        editor      ✓     ✓        ✗
+        owner       ✓     ✓        ✗
+        admin       ✓     ✓        ✓
+        (unknown)   ✓     ✗        ✗      (treated as < reader)
+
+    A redacted block is replaced with a stable opaque placeholder:
+
+        { "type": "paragraph", "id": <original-id>,
+          "text": "[권한이 부족한 블록]",
+          "meta": { "permission": <original-permission> } }
+
+    so the original payload (text, captions, nested blocks) never leaves
+    the server. The caller is responsible for *not* echoing the resulting
+    document back into a write path — the redacted shape would clobber the
+    real content. This function deep-copies internally to be safe.
+    """
+    if not isinstance(content_json, dict):
+        return content_json
+    role_level = _ROLE_LEVEL.get((role or "").lower(), 0)
+    # Admins (and anything ≥ admin) see everything → fast path, no copy.
+    if role_level >= _PERM_LEVEL["admin"]:
+        return content_json
+    cloned = copy.deepcopy(content_json)
+    _scrub_sections(cloned.get("sections"), role_level)
+    return cloned
+
+
 def make_etag(doc_id: str, version: int) -> str:
     """Weak ETag 포맷 — 본문 단위 해시는 향후 도입."""
     return f'W/"{doc_id}-{version}"'

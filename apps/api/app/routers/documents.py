@@ -105,6 +105,11 @@ async def get_document(
     etag = document_service.make_etag(doc["id"], doc["version"])
     response.headers["ETag"] = etag
     response.headers["Cache-Control"] = "private, must-revalidate"
+    # Block-level visibility: redact blocks whose meta.permission is above the
+    # caller's role (admin sees everything → no-op).
+    content = document_service.scrub_blocks_for_role(
+        doc["content_json"], _user.get("role")
+    )
     return envelope(
         data={
             "id": doc["id"],
@@ -118,7 +123,7 @@ async def get_document(
             "part_id": doc["part_id"],
             "created_at": doc["created_at"],
             "updated_at": doc["updated_at"],
-            "content": doc["content_json"],
+            "content": content,
         },
         meta={"etag": etag},
     )

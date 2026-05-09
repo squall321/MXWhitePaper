@@ -4,6 +4,8 @@ import { refresh } from '@/features/auth/api'
 import { useConnectionStore } from '@/features/auth/connectionStore'
 import { startConnectionTracking } from '@/features/editor/connectionStore'
 import { registerServiceWorker } from '@/features/pwa/swRegistration'
+import { useSettingsStore } from '@/features/settings/store'
+import { applyDisplayPrefs } from '@/features/settings/applyDisplayPrefs'
 
 const ACCESS_TOKEN_KEY = 'mxwp.access_token'
 
@@ -89,6 +91,25 @@ export function bootstrapAuth() {
   // Cycle 7 — PWA service worker. No-op in dev (HMR) and on browsers
   // that don't expose `serviceWorker`.
   registerServiceWorker()
+
+  // 표시 설정 — apply density / font-scale / line-height / high-contrast
+  // before React mounts so the first paint already reflects the user's
+  // preference, then keep the singleton <style> tag in sync with the store.
+  const initial = useSettingsStore.getState()
+  applyDisplayPrefs({
+    density: initial.density,
+    fontScale: initial.fontScale,
+    lineHeight: initial.lineHeight,
+    highContrast: initial.highContrast,
+  })
+  useSettingsStore.subscribe((s) => {
+    applyDisplayPrefs({
+      density: s.density,
+      fontScale: s.fontScale,
+      lineHeight: s.lineHeight,
+      highContrast: s.highContrast,
+    })
+  })
 
   // Kick off rehydrate. Don't await — the AuthGuard renders a "hydrating"
   // shim so the redirect doesn't fire before the cookie has been tried.

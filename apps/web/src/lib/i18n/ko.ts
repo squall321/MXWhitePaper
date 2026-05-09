@@ -75,6 +75,7 @@ export const ko = {
   'palette.snippet': '스니펫',
   'palette.whiteboard': '화이트보드',
   'palette.form': '설문',
+  'palette.pdf': 'PDF',
   'palette.tooltip.slash': '슬래시 메뉴',
   'palette.tooltip.shortcutHint': '슬래시 메뉴 단축어: {slash}.',
 
@@ -271,6 +272,19 @@ export const ko = {
   'editor.file.pickerLabel': '파일 선택',
   'editor.file.retry': '다시 시도',
   'editor.file.changeLog': '파일 편집',
+
+  // Editor — PDF block
+  'editor.pdf.titleLabel': 'PDF 제목',
+  'editor.pdf.titlePlaceholder': '제목 (선택)',
+  'editor.pdf.upload': 'PDF 업로드',
+  'editor.pdf.replace': '교체',
+  'editor.pdf.pageLabel': '시작 페이지',
+  'editor.pdf.heightLabel': '높이 (px)',
+  'editor.pdf.uploadProgress': 'PDF 업로드 진행률',
+  'editor.pdf.pickerLabel': 'PDF 선택',
+  'editor.pdf.empty': 'PDF를 업로드하면 미리보기가 나타납니다.',
+  'editor.pdf.notPdf': 'PDF 파일만 업로드할 수 있습니다.',
+  'editor.pdf.changeLog': 'PDF 편집',
 
   // Editor — doc-link card
   'editor.docLink.currentTarget': '현재 대상',

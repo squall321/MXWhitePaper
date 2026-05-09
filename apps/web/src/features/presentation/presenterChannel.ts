@@ -21,6 +21,14 @@ export interface PresenterMessage {
   index: number
   total: number
   ts: number
+  /**
+   * Optional visual preferences. When present, the receiving window applies
+   * them so both Presentation and PresenterView stay visually consistent.
+   * Older messages that omit these are still accepted (back-compat).
+   */
+  theme?: 'light' | 'dark' | 'bright'
+  transition?: 'none' | 'fade' | 'slide-left'
+  stagger?: boolean
 }
 
 export interface PresenterChannel {

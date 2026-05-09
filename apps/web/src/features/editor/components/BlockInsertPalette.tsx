@@ -247,6 +247,22 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     slash: '/설문',
     preview: '📋 설문 폼',
   },
+  {
+    kind: 'pdf',
+    label: 'PDF',
+    labelKey: 'palette.pdf',
+    icon: '📕',
+    build: () => ({
+      type: 'pdf',
+      id: ulid(),
+      file_id: '',
+      page: 1,
+      height_px: 600,
+    }),
+    hint: 'SOP/규정/양식 PDF를 인라인으로 미리보기 + 다운로드.',
+    slash: '/PDF',
+    preview: '📕 PDF 미리보기',
+  },
 ]
 
 interface Props {

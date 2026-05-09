@@ -194,7 +194,8 @@
         { "$ref": "#/$defs/DashboardEmbedBlock" },
         { "$ref": "#/$defs/CalculatorBlock" },
         { "$ref": "#/$defs/WhiteboardBlock" },
-        { "$ref": "#/$defs/FormBlock" }
+        { "$ref": "#/$defs/FormBlock" },
+        { "$ref": "#/$defs/PdfBlock" }
       ]
     },
 
@@ -496,6 +497,21 @@
         "size":   { "type": "integer", "minimum": 0 },
         "mime":   { "type": "string" },
         "meta":   { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "PdfBlock": {
+      "type": "object",
+      "required": ["type", "id", "file_id"],
+      "additionalProperties": false,
+      "properties": {
+        "type":      { "const": "pdf" },
+        "id":        { "$ref": "#/$defs/Ulid" },
+        "file_id":   { "type": "string", "description": "FK to files table (mxwp-files); served via /api/v1/files/:file_id/download" },
+        "title":     { "type": "string" },
+        "page":      { "type": "integer", "minimum": 1, "default": 1 },
+        "height_px": { "type": "integer", "minimum": 200, "maximum": 4000, "default": 600 },
+        "meta":      { "$ref": "#/$defs/BlockMeta" }
       }
     },
 

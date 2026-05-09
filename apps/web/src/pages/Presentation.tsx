@@ -11,6 +11,17 @@ import {
 } from '@/features/presentation/slideMachine'
 import { SlideBlockRenderer } from '@/features/presentation/SlideBlockRenderer'
 import { openPresenterChannel } from '@/features/presentation/presenterChannel'
+import {
+  TRANSITIONS_CSS,
+  blockWrapperClass,
+  staggerStyle,
+  themeAttrs,
+} from '@/features/presentation/transitions.css'
+import {
+  useSettingsStore,
+  type SlideTheme,
+  type SlideTransition,
+} from '@/features/settings/store'
 
 /**
  * Presentation mode — one section per slide, keyboard-driven.
@@ -68,6 +79,13 @@ export function PresentationPage() {
   const [notesVisible, setNotesVisible] = useState(false)
   const [watermarkHidden, setWatermarkHidden] = useState(false)
 
+  // Visual preferences (transition, theme, stagger). Subscribing to the store
+  // re-renders on change so cycling through options updates immediately.
+  const slideTransition = useSettingsStore((s) => s.slide_transition)
+  const slideTheme = useSettingsStore((s) => s.slide_theme)
+  const slideStagger = useSettingsStore((s) => s.slide_stagger)
+  const setSetting = useSettingsStore((s) => s.set)
+
   const exit = useCallback(() => {
     if (slug) navigate(`/docs/${slug}`)
     else navigate('/')
@@ -83,13 +101,22 @@ export function PresentationPage() {
 
   // BroadcastChannel sync: post our index whenever it changes, and listen
   // for index updates from the presenter window so navigation in either side
-  // stays consistent.
+  // stays consistent. We piggy-back the visual prefs (theme/transition/stagger)
+  // on every tick so the popup window stays visually aligned without needing
+  // its own settings store hookup.
   useEffect(() => {
     if (total === 0) return
     const channel = openPresenterChannel()
-    channel.post({ index, total, ts: Date.now() })
+    channel.post({
+      index,
+      total,
+      ts: Date.now(),
+      theme: slideTheme,
+      transition: slideTransition,
+      stagger: slideStagger,
+    })
     channel.close()
-  }, [index, total])
+  }, [index, total, slideTheme, slideTransition, slideStagger])
 
   useEffect(() => {
     const channel = openPresenterChannel()
@@ -234,21 +261,41 @@ export function PresentationPage() {
   const sectionNumber = slide.kind === 'section' ? slide.number || '' : ''
 
   return (
-    <div className="presentation-root">
+    <div className="presentation-root" {...themeAttrs(slideTheme)}>
       <style>{PRESENTATION_CSS}</style>
-      <article
-        className={`slide${slide.kind === 'section' && shouldAutoShrink(slide) ? ' slide-dense' : ''}`}
-        data-kind={slide.kind}
-        aria-live="polite"
+      <style>{TRANSITIONS_CSS}</style>
+      {/* Keying on `index` remounts the wrapper on every navigation so the
+          CSS animation replays. The data attribute selects the kind. */}
+      <div
+        key={index}
+        className="slide-anim"
+        data-pres-transition={slideTransition}
       >
-        <SlideContent slide={slide} />
-        {!watermarkHidden && (
-          <div className="slide-watermark" aria-hidden>
-            <span>{slug}</span>
-            {sectionNumber && <span> · §{sectionNumber}</span>}
-          </div>
-        )}
-      </article>
+        <article
+          className={`slide${slide.kind === 'section' && shouldAutoShrink(slide) ? ' slide-dense' : ''}`}
+          data-kind={slide.kind}
+          aria-live="polite"
+        >
+          <SlideContent slide={slide} staggerEnabled={slideStagger} />
+          {!watermarkHidden && (
+            <div className="slide-watermark" aria-hidden>
+              <span>{slug}</span>
+              {sectionNumber && <span> · §{sectionNumber}</span>}
+            </div>
+          )}
+        </article>
+      </div>
+
+      <PresentationToolbar
+        theme={slideTheme}
+        transition={slideTransition}
+        stagger={slideStagger}
+        onCycleTheme={() => setSetting('slide_theme', cycleTheme(slideTheme))}
+        onCycleTransition={() =>
+          setSetting('slide_transition', cycleTransition(slideTransition))
+        }
+        onToggleStagger={() => setSetting('slide_stagger', !slideStagger)}
+      />
 
       {notesVisible && (
         <aside className="slide-notes" aria-label="발표자 메모">
@@ -356,7 +403,13 @@ export function PresentationPage() {
   )
 }
 
-function SlideContent({ slide }: { slide: Slide }) {
+function SlideContent({
+  slide,
+  staggerEnabled,
+}: {
+  slide: Slide
+  staggerEnabled: boolean
+}) {
   if (slide.kind === 'title') {
     const tags = Array.isArray(slide.meta?.tags) ? slide.meta.tags : []
     return (
@@ -384,10 +437,79 @@ function SlideContent({ slide }: { slide: Slide }) {
         <h2>{slide.title || '(제목 없음)'}</h2>
       </header>
       <div className="slide-blocks">
-        {body.map((block) => (
-          <SlideBlockRenderer key={block?.id ?? Math.random().toString(36)} block={block} />
+        {body.map((block, i) => (
+          <div
+            key={block?.id ?? Math.random().toString(36)}
+            className={blockWrapperClass(staggerEnabled)}
+            style={staggerStyle(i, staggerEnabled)}
+          >
+            <SlideBlockRenderer block={block} />
+          </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Cycle to the next theme in {light → dark → bright → light}. Pure helper so
+ * the unit test can lock the order down.
+ */
+export function cycleTheme(theme: SlideTheme): SlideTheme {
+  return theme === 'light' ? 'dark' : theme === 'dark' ? 'bright' : 'light'
+}
+
+/**
+ * Cycle to the next transition in {none → fade → slide-left → none}.
+ */
+export function cycleTransition(t: SlideTransition): SlideTransition {
+  return t === 'none' ? 'fade' : t === 'fade' ? 'slide-left' : 'none'
+}
+
+interface PresentationToolbarProps {
+  theme: SlideTheme
+  transition: SlideTransition
+  stagger: boolean
+  onCycleTheme: () => void
+  onCycleTransition: () => void
+  onToggleStagger: () => void
+}
+
+function PresentationToolbar({
+  theme,
+  transition,
+  stagger,
+  onCycleTheme,
+  onCycleTransition,
+  onToggleStagger,
+}: PresentationToolbarProps) {
+  return (
+    <div className="pres-toolbar" role="toolbar" aria-label="발표 모드 설정">
+      <button
+        type="button"
+        onClick={onCycleTheme}
+        title="테마 전환 (light/dark/bright)"
+        aria-label={`테마: ${theme}`}
+      >
+        {`🎨 테마: ${theme}`}
+      </button>
+      <button
+        type="button"
+        onClick={onCycleTransition}
+        title="슬라이드 전환 효과"
+        aria-label={`전환 효과: ${transition}`}
+      >
+        {`✨ 전환: ${transition}`}
+      </button>
+      <button
+        type="button"
+        onClick={onToggleStagger}
+        aria-pressed={stagger}
+        title="블록 단계별 등장"
+        aria-label={`단계별 등장: ${stagger ? 'on' : 'off'}`}
+      >
+        {`📋 등장: ${stagger ? 'on' : 'off'}`}
+      </button>
     </div>
   )
 }

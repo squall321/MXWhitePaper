@@ -41,6 +41,7 @@ export type Block =
   | CalculatorBlock
   | WhiteboardBlock
   | FormBlock
+  | PdfBlock
 export type WhiteboardElement =
   | {
       kind: 'stroke'
@@ -465,6 +466,18 @@ export interface FormQuestion {
   required?: boolean
   placeholder?: string
   options?: string[]
+}
+export interface PdfBlock {
+  type: 'pdf'
+  id: Ulid
+  /**
+   * FK to files table (mxwp-files); served via /api/v1/files/:file_id/download
+   */
+  file_id: string
+  title?: string
+  page?: number
+  height_px?: number
+  meta?: BlockMeta
 }
 export interface SectionLevel2 {
   id: Ulid

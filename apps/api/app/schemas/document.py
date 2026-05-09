@@ -422,6 +422,22 @@ class FileBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
+class PdfBlock(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['pdf']
+    id: Ulid
+    file_id: str
+    """
+    FK to files table (mxwp-files); served via /api/v1/files/:file_id/download
+    """
+    title: str | None = None
+    page: int | None = Field(1, ge=1)
+    height_px: int | None = Field(600, ge=200, le=4000)
+    meta: BlockMeta | None = None
+
+
 class DocLinkCardBlock(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -809,6 +825,7 @@ class Block(
         | CalculatorBlock
         | WhiteboardBlock
         | FormBlock
+        | PdfBlock
     ]
 ):
     root: (
@@ -840,6 +857,7 @@ class Block(
         | CalculatorBlock
         | WhiteboardBlock
         | FormBlock
+        | PdfBlock
     )
 
 

@@ -249,6 +249,14 @@ const BLOCKS: Record<string, Block> = {
       { id: 'q2', kind: 'rating-5', label: '만족도' },
     ],
   },
+  pdf: {
+    type: 'pdf',
+    id: ID(29),
+    file_id: '01TESTFILE0000000000000P29',
+    title: '사내 SOP v3.2',
+    page: 3,
+    height_px: 480,
+  },
 }
 
 describe('<BlockRenderer /> read-mode coverage — every block type', () => {
@@ -257,7 +265,7 @@ describe('<BlockRenderer /> read-mode coverage — every block type', () => {
     useEditorStore.getState().reset()
   })
 
-  // 28 explicit cases — one per SSOT block type.
+  // 29 explicit cases — one per SSOT block type.
   for (const [type, block] of Object.entries(BLOCKS)) {
     it(`renders ${type} without throwing and produces non-empty HTML`, () => {
       const html = renderToStaticMarkup(harness(<BlockRenderer block={block} />))

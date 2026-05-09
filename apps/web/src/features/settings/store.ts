@@ -12,6 +12,30 @@ export type ThemeMode = 'light' | 'dark' | 'system'
 /** "이메일 알림" 빈도 — 즉시 / 매일 / 매주. BE digest cadence와 키 정렬. */
 export type EmailCadence = 'instant' | 'daily' | 'weekly'
 
+/**
+ * Presentation mode slide transitions. `none` cuts hard, `fade` cross-fades
+ * (200ms), `slide-left` translates the next slide in from the right (300ms).
+ * Honoured by Presentation.tsx and synced to PresenterView via BroadcastChannel.
+ */
+export type SlideTransition = 'none' | 'fade' | 'slide-left'
+
+/**
+ * Visual theme for the Presentation stage. `light` is the historical default
+ * (white background, dark text). `dark` flips to white-on-near-black with the
+ * Samsung Blue accent. `bright` is a high-energy Samsung Blue background with
+ * white text — useful for launch decks.
+ */
+export type SlideTheme = 'light' | 'dark' | 'bright'
+
+/** 표시 밀도 — 기본 padding 또는 압축 padding을 선택. */
+export type Density = 'comfortable' | 'compact'
+
+/** 본문 글자 크기 배율. `--text-base`에 곱해서 적용. */
+export type FontScale = 0.875 | 1 | 1.125 | 1.25
+
+/** 기본 줄간격 토큰. */
+export type LineHeight = 'tight' | 'normal' | 'relaxed'
+
 export interface UiSettings {
   notifications: boolean
   autoSave: boolean
@@ -29,6 +53,20 @@ export interface UiSettings {
   emailDigest: boolean
   /** 디지스트 빈도. 즉시 / 매일 / 매주. */
   emailCadence: EmailCadence
+  /** Presentation slide transition style. */
+  slide_transition: SlideTransition
+  /** Presentation visual theme. */
+  slide_theme: SlideTheme
+  /** Per-block staggered fade-in inside a slide. */
+  slide_stagger: boolean
+  /** 표시 밀도 — 기본 / 압축. */
+  density: Density
+  /** 본문 글자 크기 배율. */
+  fontScale: FontScale
+  /** 줄간격. */
+  lineHeight: LineHeight
+  /** 고대비 모드 — `data-contrast="high"`를 `<html>`에 적용. */
+  highContrast: boolean
 }
 
 export interface SettingsActions {
@@ -48,6 +86,13 @@ const DEFAULTS: UiSettings = {
   language: 'ko',
   emailDigest: true,
   emailCadence: 'daily',
+  slide_transition: 'fade',
+  slide_theme: 'light',
+  slide_stagger: true,
+  density: 'comfortable',
+  fontScale: 1,
+  lineHeight: 'normal',
+  highContrast: false,
 }
 
 function readFromStorage(): UiSettings {
@@ -97,6 +142,13 @@ function stripActions(o: UiSettings & Partial<SettingsActions>): UiSettings {
     language,
     emailDigest,
     emailCadence,
+    slide_transition,
+    slide_theme,
+    slide_stagger,
+    density,
+    fontScale,
+    lineHeight,
+    highContrast,
   } = o
   return {
     notifications,
@@ -107,5 +159,12 @@ function stripActions(o: UiSettings & Partial<SettingsActions>): UiSettings {
     language,
     emailDigest,
     emailCadence,
+    slide_transition,
+    slide_theme,
+    slide_stagger,
+    density,
+    fontScale,
+    lineHeight,
+    highContrast,
   }
 }

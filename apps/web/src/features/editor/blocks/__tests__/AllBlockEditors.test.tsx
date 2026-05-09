@@ -45,6 +45,7 @@ import { TableBlockEditor } from '../TableBlockEditor'
 import { VideoBlockEditor } from '../VideoBlockEditor'
 import { CalculatorBlockEditor } from '../CalculatorBlockEditor'
 import { WhiteboardBlockEditor } from '../WhiteboardBlockEditor'
+import { PdfBlockEditor } from '../PdfBlockEditor'
 
 import type {
   AccordionBlock,
@@ -69,6 +70,7 @@ import type {
   TabsBlock,
   VideoBlock,
   WhiteboardBlock,
+  PdfBlock,
 } from '@/types/document'
 
 function harness(node: React.ReactNode) {
@@ -379,6 +381,20 @@ const CASES: Array<{
       elements: [],
     } satisfies WhiteboardBlock,
     expect: ['data-whiteboard-canvas', '펜', '지우개'],
+  },
+  {
+    type: 'pdf',
+    label: 'PdfBlockEditor',
+    Editor: PdfBlockEditor,
+    block: {
+      type: 'pdf',
+      id: ID(23),
+      file_id: '01TESTFILE0000000000000P23',
+      title: 'SOP v3.2',
+      page: 2,
+      height_px: 600,
+    } satisfies PdfBlock,
+    expect: ['시작 페이지', 'application/pdf', 'SOP v3.2'],
   },
 ]
 

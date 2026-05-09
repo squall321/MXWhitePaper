@@ -10,6 +10,8 @@ import {
 import { SlideBlockRenderer } from './SlideBlockRenderer'
 import { openPresenterChannel } from './presenterChannel'
 import { splitSpeakerNotes } from './slideMachine'
+import { TRANSITIONS_CSS, themeAttrs } from './transitions.css'
+import { useSettingsStore } from '@/features/settings/store'
 
 /**
  * PresenterView — the secondary popup window.
@@ -54,8 +56,16 @@ export function PresenterViewPage() {
   )
   const total = slides.length
 
+  // Visual prefs — start from the local store, but accept overrides arriving
+  // over BroadcastChannel so the popup stays aligned with the audience window.
+  const slideTheme = useSettingsStore((s) => s.slide_theme)
+  const slideTransition = useSettingsStore((s) => s.slide_transition)
+  const slideStagger = useSettingsStore((s) => s.slide_stagger)
+  const setSetting = useSettingsStore((s) => s.set)
+
   // Channel sync: receive index updates from the main window, send our own
-  // navigation events so both stay aligned.
+  // navigation events so both stay aligned. We also pull theme/transition
+  // overrides from each tick.
   useEffect(() => {
     const channel = openPresenterChannel()
     const unsub = channel.subscribe((msg) => {
@@ -63,20 +73,31 @@ export function PresenterViewPage() {
         // Total mismatch usually means doc not yet loaded on one side; clamp.
       }
       dispatch({ type: 'goto', index: msg.index })
+      if (msg.theme) setSetting('slide_theme', msg.theme)
+      if (msg.transition) setSetting('slide_transition', msg.transition)
+      if (typeof msg.stagger === 'boolean') setSetting('slide_stagger', msg.stagger)
     })
     return () => {
       unsub()
       channel.close()
     }
-  }, [total])
+  }, [total, setSetting])
 
-  // Broadcast our own index changes (so the main window follows).
+  // Broadcast our own index changes (so the main window follows). Visual prefs
+  // are echoed too so a late-attaching audience window also picks them up.
   useEffect(() => {
     if (total === 0) return
     const channel = openPresenterChannel()
-    channel.post({ index, total, ts: Date.now() })
+    channel.post({
+      index,
+      total,
+      ts: Date.now(),
+      theme: slideTheme,
+      transition: slideTransition,
+      stagger: slideStagger,
+    })
     channel.close()
-  }, [index, total])
+  }, [index, total, slideTheme, slideTransition, slideStagger])
 
   // Local key handling.
   useEffect(() => {
@@ -129,8 +150,9 @@ export function PresenterViewPage() {
   const notes = speakerNotesFor(current)
 
   return (
-    <div className="presenter-root" data-testid="presenter-root">
+    <div className="presenter-root" data-testid="presenter-root" {...themeAttrs(slideTheme)}>
       <style>{PRESENTER_CSS}</style>
+      <style>{TRANSITIONS_CSS}</style>
       <section className="pv-current" aria-label="현재 슬라이드">
         <div className="pv-current-inner">
           <SlideMini slide={current} />

@@ -29,6 +29,7 @@ import { CalculatorBlockView } from './CalculatorBlock'
 import { OrgChartBlockView } from './OrgChartBlock'
 import { WhiteboardBlockView } from './WhiteboardBlock'
 import { FormBlockView } from './FormBlock'
+import { PdfBlockView } from './PdfBlock'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { InlineTextBlockEditor } from '@/features/editor/components/InlineTextBlockEditor'
 import { ListBlockEditor } from '@/features/editor/components/ListBlockEditor'
@@ -52,6 +53,31 @@ import {
 import { BlockBoundary } from './BlockBoundary'
 import { BlockCollapseWrapper } from '@/features/editor/components/BlockCollapseWrapper'
 import { COLLAPSIBLE_BLOCK_TYPES } from '@/features/editor/components/BlockResizeWrapper'
+import { RestrictedBlockPlaceholder } from './RestrictedBlockPlaceholder'
+import { LockBadge } from '@/features/editor/components/LockBadge'
+import { useAuthStore } from '@/features/auth/store'
+
+/**
+ * Returns true when `userRole` may see a block whose `meta.permission` is
+ * the given level. Mirrors the BE matrix in document_service.scrub_blocks.
+ *
+ *   permission='admin'    → only role 'admin'
+ *   permission='editor'   → 'editor' | 'owner' | 'admin'
+ *   permission='all'/none → everyone (including 'reader')
+ *
+ * Unknown roles are treated as readers (most-restrictive default).
+ */
+export function canSeeBlock(
+  block: { meta?: { permission?: 'all' | 'editor' | 'admin' } } | null | undefined,
+  userRole: string | null | undefined,
+): boolean {
+  const required = block?.meta?.permission
+  if (!required || required === 'all') return true
+  const role = (userRole ?? '').toLowerCase()
+  if (required === 'admin') return role === 'admin'
+  // required === 'editor'
+  return role === 'editor' || role === 'owner' || role === 'admin'
+}
 
 // Lazy-loaded heavy block editors. Each chunk is named so the manualChunks
 // rules in vite.config.ts can land them in dedicated bundles.
@@ -91,6 +117,9 @@ const GanttBlockEditor = lazy(() =>
 const KpiCardsBlockEditor = lazy(() =>
   import('@/features/editor/blocks/KpiCardsBlockEditor').then((m) => ({ default: m.KpiCardsBlockEditor })),
 )
+const PdfBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/PdfBlockEditor').then((m) => ({ default: m.PdfBlockEditor })),
+)
 
 /** Tiny placeholder shown while a lazy block-editor chunk is fetched. */
 function BlockEditorSkeleton() {
@@ -122,6 +151,22 @@ function lazyEditor(node: ReactNode): ReactNode {
  * unmount the entire article (Hardening C).
  */
 export function BlockRenderer({ block }: { block: Block }) {
+  // Block-level visibility gate (Cycle: block permissions). The BE already
+  // scrubs forbidden blocks for non-admin readers — this is the FE belt to
+  // BE braces, and also covers the editor-mode case where the doc was
+  // fetched as admin but the block requires admin to view.
+  // Subscribe so the gate re-renders on logout/role change. Fall back to
+  // `getState()` because the React SSR path used by some renderers may
+  // return the initial server snapshot (user=null) even after the test or
+  // app has set a user — using the live snapshot keeps the matrix correct
+  // in both server and client renders.
+  const subscribed = useAuthStore((s) => s.user?.role ?? null)
+  const userRole = subscribed ?? useAuthStore.getState().user?.role ?? null
+  const isFullEditing = useEditorStore(editorSelectors.isFullEditing)
+  if (!canSeeBlock(block, userRole)) {
+    return <RestrictedBlockPlaceholder required={block?.meta?.permission === 'admin' ? 'admin' : 'editor'} />
+  }
+
   // For "tall" blocks (chart/table/code/gallery/gantt/flow/kpi-cards/
   // calculator/dashboard-embed/math/org-chart) we wrap with a small "접기"
   // toggle. Read mode → local state; edit mode → meta.collapsed via patchBlock.
@@ -129,6 +174,7 @@ export function BlockRenderer({ block }: { block: Block }) {
   const wrapWithCollapse = block && typeof block.type === 'string' && COLLAPSIBLE_BLOCK_TYPES.has(block.type)
   const inner = (
     <BlockBoundary blockType={block?.type}>
+      {isFullEditing && <LockBadgeWithSlug block={block} />}
       <BlockRendererInner block={block} />
     </BlockBoundary>
   )
@@ -138,6 +184,13 @@ export function BlockRenderer({ block }: { block: Block }) {
       {inner}
     </BlockCollapseWrapperWithSlug>
   )
+}
+
+/** Adapter so LockBadge can read `slug` from the editor store. */
+function LockBadgeWithSlug({ block }: { block: Block }) {
+  const editorSlug = useEditorStore((s) => s.slug)
+  if (!editorSlug || !block || typeof (block as { id?: unknown }).id !== 'string') return null
+  return <LockBadge slug={editorSlug} block={block} />
 }
 
 /**
@@ -306,6 +359,9 @@ function BlockRendererInner({ block }: { block: Block }) {
     if (block.type === 'file') {
       return <FileBlockEditor slug={editorSlug} block={block} />
     }
+    if (block.type === 'pdf') {
+      return lazyEditor(<PdfBlockEditor slug={editorSlug} block={block} />)
+    }
     if (block.type === 'doc-link-card') {
       return <DocLinkCardBlockEditor slug={editorSlug} block={block} />
     }
@@ -380,6 +436,8 @@ function BlockRendererInner({ block }: { block: Block }) {
       return <WhiteboardBlockView block={block} />
     case 'form':
       return <FormBlockView block={block} />
+    case 'pdf':
+      return <PdfBlockView block={block} />
     default:
       return (
         <PlaceholderBlockView

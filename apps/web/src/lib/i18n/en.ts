@@ -73,6 +73,7 @@ export const en: Record<LocaleKey, string> = {
   'palette.snippet': 'Snippet',
   'palette.whiteboard': 'Whiteboard',
   'palette.form': 'Form',
+  'palette.pdf': 'PDF',
   'palette.tooltip.slash': 'Slash menu',
   'palette.tooltip.shortcutHint': 'Slash shortcut: {slash}.',
 
@@ -256,6 +257,18 @@ export const en: Record<LocaleKey, string> = {
   'editor.file.pickerLabel': 'Pick file',
   'editor.file.retry': 'Retry',
   'editor.file.changeLog': 'Edit file',
+
+  'editor.pdf.titleLabel': 'PDF title',
+  'editor.pdf.titlePlaceholder': 'Title (optional)',
+  'editor.pdf.upload': 'Upload PDF',
+  'editor.pdf.replace': 'Replace',
+  'editor.pdf.pageLabel': 'Start page',
+  'editor.pdf.heightLabel': 'Height (px)',
+  'editor.pdf.uploadProgress': 'PDF upload progress',
+  'editor.pdf.pickerLabel': 'Pick PDF',
+  'editor.pdf.empty': 'Upload a PDF to see the preview.',
+  'editor.pdf.notPdf': 'Only PDF files are allowed.',
+  'editor.pdf.changeLog': 'Edit PDF',
 
   'editor.docLink.currentTarget': 'Current target',
   'editor.docLink.noTarget': 'No target set.',

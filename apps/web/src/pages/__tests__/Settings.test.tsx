@@ -142,10 +142,11 @@ describe('<SettingsPage />', () => {
 
   it('renders aria-checked for every toggle and exposes role="switch"', () => {
     const html = renderSettings()
-    // 4 cosmetic toggles + 1 email-digest toggle + 2 spellcheck toggles.
-    // Excludes the language <select> and the theme/cadence radio groups.
+    // 4 cosmetic toggles + 1 email-digest toggle + 2 spellcheck toggles +
+    // 1 high-contrast toggle (표시 설정 card). Excludes the language <select>
+    // and the theme / cadence / density / font-scale / line-height radio groups.
     const matches = html.match(/role="switch"/g) ?? []
-    expect(matches.length).toBe(7)
+    expect(matches.length).toBe(8)
     expect(html).toContain('role="switch"')
   })
 
@@ -161,6 +162,23 @@ describe('<SettingsPage />', () => {
     expect(html).toContain('settings-email-readonly')
     // Logged-out fallback message present (no auth user in this test env).
     expect(html).toContain('로그인 후 표시됩니다.')
+  })
+
+  it('renders the 표시 설정 card with density / font-scale / line-height controls', () => {
+    const html = renderSettings()
+    expect(html).toContain('표시 설정')
+    expect(html).toContain('settings-display-card')
+    expect(html).toContain('settings-density-radio')
+    expect(html).toContain('settings-density-comfortable')
+    expect(html).toContain('settings-density-compact')
+    expect(html).toContain('settings-font-scale')
+    expect(html).toContain('settings-font-scale-0.875')
+    expect(html).toContain('settings-font-scale-1.25')
+    expect(html).toContain('settings-line-height-radio')
+    expect(html).toContain('settings-line-height-tight')
+    expect(html).toContain('settings-line-height-relaxed')
+    expect(html).toContain('settings-toggle-high-contrast')
+    expect(html).toContain('settings-display-reset')
   })
 })
 

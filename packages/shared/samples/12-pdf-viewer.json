@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "id": "01J9X1Y2Z3A4B5C6D7E8F9G0PD",
+  "slug": "pdf-viewer-sample",
+  "title": "PDF 뷰어 샘플",
+  "summary": "사내에 공유된 SOP/규정 PDF를 인라인으로 미리보고 다운로드할 수 있는 PDF 블록 예제.",
+  "metadata": {
+    "division": "MX",
+    "owners": ["u-anyone"],
+    "tags": ["pdf", "viewer", "sop", "예제"],
+    "confidentiality": "internal"
+  },
+  "sections": [
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9GPD1",
+      "number": "1",
+      "level": 1,
+      "title": "사내 SOP 인라인 미리보기",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9GPD2",
+          "text": "아래는 mxwp-files에 업로드된 PDF를 인라인으로 보여주는 예시입니다. 페이지 이동/확대/다운로드는 브라우저 PDF 뷰어를 그대로 사용합니다."
+        },
+        {
+          "type": "pdf",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9GPD3",
+          "file_id": "01J9X1Y2Z3A4B5C6D7E8F9GPDF",
+          "title": "MX 부문 SOP v3.2",
+          "page": 1,
+          "height_px": 720
+        },
+        {
+          "type": "heading-4",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9GPD4",
+          "title": "페이지 지정 + 컴팩트 높이",
+          "meta": { "level": 3 }
+        },
+        {
+          "type": "pdf",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9GPD5",
+          "file_id": "01J9X1Y2Z3A4B5C6D7E8F9GPDF",
+          "title": "체크리스트 — 7페이지부터",
+          "page": 7,
+          "height_px": 400
+        }
+      ],
+      "subsections": []
+    }
+  ]
+}
