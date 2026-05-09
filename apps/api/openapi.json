@@ -420,6 +420,24 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HeartbeatIn": {
+        "properties": {
+          "anchor_block_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Block Id"
+          }
+        },
+        "title": "HeartbeatIn",
+        "type": "object"
+      },
       "LoginIn": {
         "properties": {
           "email": {
@@ -606,6 +624,191 @@
           }
         },
         "title": "ResolveIn",
+        "type": "object"
+      },
+      "RunNowIn": {
+        "properties": {
+          "format": {
+            "enum": [
+              "json",
+              "html",
+              "md",
+              "docx",
+              "pptx"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "full",
+              "user",
+              "doc"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "target_doc_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Doc Slug"
+          },
+          "target_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target User Id"
+          }
+        },
+        "required": [
+          "scope",
+          "format"
+        ],
+        "title": "RunNowIn",
+        "type": "object"
+      },
+      "ScheduleIn": {
+        "properties": {
+          "cadence": {
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly"
+            ],
+            "title": "Cadence",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "json",
+              "html",
+              "md",
+              "docx",
+              "pptx"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "hour_utc": {
+            "default": 3,
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Hour Utc",
+            "type": "integer"
+          },
+          "scope": {
+            "enum": [
+              "full",
+              "user",
+              "doc"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "target_doc_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Doc Slug"
+          },
+          "target_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target User Id"
+          }
+        },
+        "required": [
+          "scope",
+          "cadence",
+          "format"
+        ],
+        "title": "ScheduleIn",
+        "type": "object"
+      },
+      "SchedulePatchIn": {
+        "properties": {
+          "cadence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "daily",
+                  "weekly",
+                  "monthly"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cadence"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "enum": [
+                  "json",
+                  "html",
+                  "md",
+                  "docx",
+                  "pptx"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          },
+          "hour_utc": {
+            "anyOf": [
+              {
+                "maximum": 23.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hour Utc"
+          }
+        },
+        "title": "SchedulePatchIn",
         "type": "object"
       },
       "SeriesIn": {
@@ -917,6 +1120,23 @@
         "title": "TeamUpdate",
         "type": "object"
       },
+      "TestIn": {
+        "properties": {
+          "event_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Kind"
+          }
+        },
+        "title": "TestIn",
+        "type": "object"
+      },
       "TitleBody": {
         "properties": {
           "content": {
@@ -1034,6 +1254,106 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "WebhookCreate": {
+        "properties": {
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Events",
+            "type": "array"
+          },
+          "filter_part_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Filter Part Ids",
+            "type": "array"
+          },
+          "scope": {
+            "default": "user",
+            "title": "Scope",
+            "type": "string"
+          },
+          "url": {
+            "format": "uri",
+            "maxLength": 2083,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "events"
+        ],
+        "title": "WebhookCreate",
+        "type": "object"
+      },
+      "WebhookPatch": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "events": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
+          },
+          "filter_part_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter Part Ids"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "format": "uri",
+                "maxLength": 2083,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "WebhookPatch",
         "type": "object"
       }
     }
@@ -2004,6 +2324,287 @@
         "summary": "Refresh",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/backups/run-now": {
+      "post": {
+        "operationId": "run_now_api_v1_backups_run_now_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunNowIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Now Api V1 Backups Run Now Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "즉시 백업 실행 (admin)",
+        "tags": [
+          "backups"
+        ]
+      }
+    },
+    "/api/v1/backups/runs": {
+      "get": {
+        "operationId": "list_runs_api_v1_backups_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Runs Api V1 Backups Runs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "백업 실행 이력 (admin)",
+        "tags": [
+          "backups"
+        ]
+      }
+    },
+    "/api/v1/backups/runs/{run_id}/download": {
+      "get": {
+        "operationId": "download_run_api_v1_backups_runs__run_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "백업 아카이브 다운로드 (admin) — 302 presigned",
+        "tags": [
+          "backups"
+        ]
+      }
+    },
+    "/api/v1/backups/schedules": {
+      "get": {
+        "operationId": "list_schedules_api_v1_backups_schedules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Schedules Api V1 Backups Schedules Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "백업 일정 목록",
+        "tags": [
+          "backups"
+        ]
+      },
+      "post": {
+        "operationId": "create_schedule_api_v1_backups_schedules_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Schedule Api V1 Backups Schedules Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "백업 일정 생성",
+        "tags": [
+          "backups"
+        ]
+      }
+    },
+    "/api/v1/backups/schedules/{schedule_id}": {
+      "delete": {
+        "operationId": "delete_schedule_api_v1_backups_schedules__schedule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "백업 일정 삭제",
+        "tags": [
+          "backups"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_schedule_api_v1_backups_schedules__schedule_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchedulePatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Schedule Api V1 Backups Schedules  Schedule Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "백업 일정 수정",
+        "tags": [
+          "backups"
         ]
       }
     },
@@ -6007,6 +6608,185 @@
         ]
       }
     },
+    "/api/v1/presence/{slug}": {
+      "delete": {
+        "operationId": "leave_presence_api_v1_presence__slug__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "explicit leave (reader+)",
+        "tags": [
+          "presence"
+        ]
+      },
+      "get": {
+        "operationId": "list_presence_api_v1_presence__slug__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Presence Api V1 Presence  Slug  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "presence list (reader+)",
+        "tags": [
+          "presence"
+        ]
+      }
+    },
+    "/api/v1/presence/{slug}/heartbeat": {
+      "post": {
+        "operationId": "heartbeat_api_v1_presence__slug__heartbeat_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/HeartbeatIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Heartbeat Api V1 Presence  Slug  Heartbeat Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "presence heartbeat (reader+)",
+        "tags": [
+          "presence"
+        ]
+      }
+    },
+    "/api/v1/presence/{slug}/stream": {
+      "get": {
+        "description": "Server-Sent Events: emit a `presence` event every SSE_INTERVAL_SEC.",
+        "operationId": "stream_presence_api_v1_presence__slug__stream_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "presence SSE stream (reader+)",
+        "tags": [
+          "presence"
+        ]
+      }
+    },
     "/api/v1/reads": {
       "post": {
         "operationId": "post_read_api_v1_reads_post",
@@ -7781,6 +8561,321 @@
         ]
       }
     },
+    "/api/v1/webhooks": {
+      "get": {
+        "operationId": "list_webhooks_api_v1_webhooks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Webhooks Api V1 Webhooks Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "웹훅 목록",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "post": {
+        "operationId": "create_webhook_api_v1_webhooks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Webhook Api V1 Webhooks Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "웹훅 등록 (editor+ → user 스코프 / admin → org 스코프)",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/v1/webhooks/{hook_id}": {
+      "delete": {
+        "operationId": "delete_webhook_api_v1_webhooks__hook_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hook_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Hook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "웹훅 삭제 (owner | admin)",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "get": {
+        "operationId": "get_webhook_api_v1_webhooks__hook_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hook_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Hook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Webhook Api V1 Webhooks  Hook Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "웹훅 단건 (secret 마스킹)",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_webhook_api_v1_webhooks__hook_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hook_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Hook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Webhook Api V1 Webhooks  Hook Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "웹훅 수정 (owner | admin)",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/v1/webhooks/{hook_id}/deliveries": {
+      "get": {
+        "operationId": "list_deliveries_api_v1_webhooks__hook_id__deliveries_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hook_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Hook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Deliveries Api V1 Webhooks  Hook Id  Deliveries Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "최근 전송 로그 (owner | admin)",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/v1/webhooks/{hook_id}/test": {
+      "post": {
+        "operationId": "test_webhook_api_v1_webhooks__hook_id__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hook_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Hook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/TestIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Test Webhook Api V1 Webhooks  Hook Id  Test Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "테스트 페이로드 1회 전송 (owner | admin)",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
     "/api/v1/widgets/kpi/finance-daily": {
       "get": {
         "operationId": "get_kpi_finance_daily_api_v1_widgets_kpi_finance_daily_get",
@@ -7950,6 +9045,18 @@
     {
       "description": "문서 시리즈(책 / 시리즈) — N개 문서를 묶어 순서를 부여하고 리더가 prev/next 로 탐색할 수 있게 한다. 문서 단건 호출 시 GET /documents/{slug}/series 로 이웃(prev/next) 까지 함께 회신.",
       "name": "series"
+    },
+    {
+      "description": "실시간 프리젠스(누가 지금 이 문서를 보고 있는가). 메모리 기반 레지스트리로, heartbeat(10초 간격) 가 30초 이상 끊기면 자동으로 제거된다. SSE 스트림은 5초마다 현재 명단을 푸시.",
+      "name": "presence"
+    },
+    {
+      "description": "Outgoing webhook integrations — Slack/Discord/Teams/Linear 등 외부 도구로 문서 편집/공개/댓글/리뷰 이벤트를 푸시한다. POST 본문은 HMAC-SHA256 으로 서명되어 X-MXWP-Signature 헤더에 들어간다.",
+      "name": "webhooks"
+    },
+    {
+      "description": "예약 백업 + 즉시 백업. 일정(daily/weekly/monthly) 단위로 모든 문서를 선택한 포맷(json/html/md/docx/pptx) 으로 렌더해 zip 으로 묶어 MinIO 에 적재. asyncio in-process 스케줄러 — 단일 replica 한정.",
+      "name": "backups"
     }
   ]
 }

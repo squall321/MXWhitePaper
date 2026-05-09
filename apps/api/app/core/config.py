@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     minio_secret_key: str = Field(default="mxwp_minio_admin_change_me")
     minio_bucket_images: str = Field(default="mxwp-images")
     minio_bucket_files: str = Field(default="mxwp-files")
+    minio_bucket_backups: str = Field(default="mxwp-backups")
 
     # JWT
     jwt_secret: str = Field(default="replace_with_a_long_random_string_at_least_32_chars")
@@ -48,6 +49,11 @@ class Settings(BaseSettings):
     # 기본 false — 활성화하면 placeholder 응답이 흘러나간다. 실제 LLM 호출은
     # 추후 OPENAI_API_KEY / ANTHROPIC_API_KEY 가 잡혀야 의미가 있다.
     ai_enabled: bool = Field(default=False)
+
+    # 0015 — Scheduled backups (asyncio in-process ticker).
+    # 끄면 lifespan 에서 ticker 가 시작되지 않고 tick_once() 도 즉시 0 을 반환.
+    # 라우터는 켜둔 채로 남겨도 무방 — run-now 호출은 여전히 동작.
+    backup_enabled: bool = Field(default=True)
 
     @property
     def cors_origin_list(self) -> list[str]:

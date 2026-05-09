@@ -3,6 +3,7 @@ import { getAccessToken, useAuthStore } from '@/features/auth/store'
 import { refresh } from '@/features/auth/api'
 import { useConnectionStore } from '@/features/auth/connectionStore'
 import { startConnectionTracking } from '@/features/editor/connectionStore'
+import { registerServiceWorker } from '@/features/pwa/swRegistration'
 
 const ACCESS_TOKEN_KEY = 'mxwp.access_token'
 
@@ -84,6 +85,10 @@ export function bootstrapAuth() {
   // Sprint 5 — editor offline UX. Attach window online/offline listeners +
   // start the 30s healthz heartbeat. Idempotent.
   startConnectionTracking()
+
+  // Cycle 7 — PWA service worker. No-op in dev (HMR) and on browsers
+  // that don't expose `serviceWorker`.
+  registerServiceWorker()
 
   // Kick off rehydrate. Don't await — the AuthGuard renders a "hydrating"
   // shim so the redirect doesn't fire before the cookie has been tried.

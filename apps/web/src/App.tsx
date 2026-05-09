@@ -5,6 +5,7 @@ import { CommandPalette } from './features/search/components/CommandPalette'
 import { QuickSwitcher } from './features/quick-switcher/QuickSwitcher'
 import { ToastProvider } from './components/ui/Toast'
 import { useNotificationsStore } from './features/notifications/store'
+import { InstallPrompt } from './features/pwa/InstallPrompt'
 
 /**
  * Outlet context shape. Pages can call `setRightRail(node)` / `setLeftRail(node)`
@@ -99,6 +100,7 @@ export function App() {
         onOpenCommandPalette={() => setPaletteOpen(true)}
       />
       <ToastProvider />
+      <InstallPrompt />
     </AppShell>
   )
 }

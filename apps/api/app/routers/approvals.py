@@ -48,6 +48,7 @@ from app.core.auth import get_current_user, require_editor
 from app.core.db import get_db
 from app.core.errors import Forbidden, NotFound, ValidationFailed, envelope
 from app.repos import document_repo
+from app.services.document_service import fire_webhook
 
 router = APIRouter(prefix="/api/v1", tags=["approvals"])
 
@@ -331,6 +332,20 @@ async def submit_decision(
     )
     await s.commit()
 
+    await fire_webhook(
+        "review_decided",
+        {
+            "event": "review_decided",
+            "document_id": doc["id"],
+            "slug": doc["slug"],
+            "title": doc["title"],
+            "reviewer_user_id": user_id,
+            "status": body.status,
+            "comment": body.comment,
+        },
+        target_part_id=doc.get("part_id"),
+    )
+
     items = await _list_reviewer_rows(s, doc["id"])
     return envelope(data={"items": items}, meta={"count": len(items)})
 
@@ -395,6 +410,21 @@ async def transition_status(
         payload={"from": current, "to": target},
     )
     await s.commit()
+
+    if target == "published":
+        await fire_webhook(
+            "doc_published",
+            {
+                "event": "doc_published",
+                "document_id": doc["id"],
+                "slug": doc["slug"],
+                "title": doc["title"],
+                "actor_user_id": user["id"],
+                "from_status": current,
+            },
+            target_part_id=doc.get("part_id"),
+        )
+
     return envelope(data={"slug": slug, "status": target, "from": current})
 
 

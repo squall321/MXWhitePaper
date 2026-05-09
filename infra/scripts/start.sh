@@ -74,6 +74,7 @@ for i in $(seq 1 5); do
         mc alias set local http://127.0.0.1:${MINIO_API_PORT} '${MINIO_ACCESS_KEY}' '${MINIO_SECRET_KEY}' >/dev/null 2>&1 &&
         mc mb -p local/${MINIO_BUCKET_IMAGES} >/dev/null 2>&1 || true
         mc mb -p local/${MINIO_BUCKET_FILES}  >/dev/null 2>&1 || true
+        mc mb -p local/${MINIO_BUCKET_BACKUPS:-mxwp-backups} >/dev/null 2>&1 || true
         mc anonymous set download local/${MINIO_BUCKET_IMAGES} >/dev/null 2>&1 || true
       " 2>&1; then
     echo "  ✓ minio buckets ready"

@@ -10,7 +10,9 @@ import { toast } from '@/components/ui/Toast'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { ActivityWidget } from '@/features/activity/ActivityWidget'
 import { AdminOrgsPage } from './AdminOrgs'
+import { BackupAdminPage } from './BackupAdmin'
 import { TagManagerPage } from './TagManager'
+import { WebhooksSettingsPage } from './WebhooksSettings'
 import {
   type AdminAuditEntry,
   type AdminHealth,
@@ -22,7 +24,15 @@ import {
   runMaintenance,
 } from '@/features/admin/api'
 
-type TabKey = 'users' | 'audit' | 'health' | 'maintenance' | 'orgs' | 'tags'
+type TabKey =
+  | 'users'
+  | 'audit'
+  | 'health'
+  | 'maintenance'
+  | 'orgs'
+  | 'tags'
+  | 'webhooks'
+  | 'backups'
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'users', label: '사용자' },
@@ -31,6 +41,8 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'maintenance', label: '유지보수' },
   { key: 'orgs', label: '조직' },
   { key: 'tags', label: '태그' },
+  { key: 'webhooks', label: '웹훅' },
+  { key: 'backups', label: '백업' },
 ]
 
 const ROLE_OPTIONS = [
@@ -106,6 +118,16 @@ export function AdminDashboardPage() {
       {tab === 'tags' && (
         <div data-testid="admin-tab-tags-content">
           <TagManagerPage />
+        </div>
+      )}
+      {tab === 'webhooks' && (
+        <div data-testid="admin-tab-webhooks-content">
+          <WebhooksSettingsPage />
+        </div>
+      )}
+      {tab === 'backups' && (
+        <div data-testid="admin-tab-backups-content">
+          <BackupAdminPage />
         </div>
       )}
     </div>

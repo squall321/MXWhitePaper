@@ -21,6 +21,7 @@ from .routers.ai import router as ai_router
 from .routers.analytics import router as analytics_router
 from .routers.approvals import router as approvals_router
 from .routers.auth import router as auth_router
+from .routers.backups import router as backups_router
 from .routers.bookmarks import router as bookmarks_router
 from .routers.comments import router_doc as comments_doc_router
 from .routers.comments import router_one as comments_one_router
@@ -32,6 +33,7 @@ from .routers.imports import router as imports_router
 from .routers.links_graph import router as links_graph_router
 from .routers.notifications import router as notifications_router
 from .routers.orgs import router as orgs_router
+from .routers.presence import router as presence_router
 from .routers.search import router as search_router
 from .routers.series import router as series_router
 from .routers.sharing import router as sharing_router
@@ -39,6 +41,7 @@ from .routers.snippets import router as snippets_router
 from .routers.tags import router as tags_router
 from .routers.uploads import images_router, uploads_router
 from .routers.users import router as users_router
+from .routers.webhooks import router as webhooks_router
 from .routers.widgets import router as widgets_router
 
 
@@ -188,13 +191,55 @@ TAGS_METADATA: list[dict[str, str]] = [
             "GET /documents/{slug}/series 로 이웃(prev/next) 까지 함께 회신."
         ),
     },
+    {
+        "name": "presence",
+        "description": (
+            "실시간 프리젠스(누가 지금 이 문서를 보고 있는가). 메모리 기반 "
+            "레지스트리로, heartbeat(10초 간격) 가 30초 이상 끊기면 "
+            "자동으로 제거된다. SSE 스트림은 5초마다 현재 명단을 푸시."
+        ),
+    },
+    {
+        "name": "webhooks",
+        "description": (
+            "Outgoing webhook integrations — Slack/Discord/Teams/Linear 등 외부 도구로 "
+            "문서 편집/공개/댓글/리뷰 이벤트를 푸시한다. POST 본문은 HMAC-SHA256 으로 "
+            "서명되어 X-MXWP-Signature 헤더에 들어간다."
+        ),
+    },
+    {
+        "name": "backups",
+        "description": (
+            "예약 백업 + 즉시 백업. 일정(daily/weekly/monthly) 단위로 모든 문서를 "
+            "선택한 포맷(json/html/md/docx/pptx) 으로 렌더해 zip 으로 묶어 "
+            "MinIO 에 적재. asyncio in-process 스케줄러 — 단일 replica 한정."
+        ),
+    },
 ]
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    # Sprint 0 — no startup tasks yet. Sprint 6 will add Meilisearch index init etc.
-    yield
+    # Cycle 0015 — start the in-process backup ticker if enabled. The ticker
+    # ticks every 60s and fires due `backup_schedules`. Single-replica only —
+    # production multi-replica should swap for Celery beat / k8s CronJob.
+    import asyncio as _asyncio
+
+    settings = get_settings()
+    task: _asyncio.Task[None] | None = None
+    if settings.backup_enabled:
+        from .services.backup_runner import backup_ticker
+
+        task = _asyncio.create_task(backup_ticker(), name="mxwp-backup-ticker")
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except (BaseException,):  # noqa: BLE001 — cancel is expected
+                pass
 
 
 def create_app() -> FastAPI:
@@ -277,6 +322,12 @@ def create_app() -> FastAPI:
     app.include_router(series_router)
     # 활동 피드 — 다중 출처 집계
     app.include_router(activity_router)
+    # 실시간 프리젠스 — heartbeat + SSE
+    app.include_router(presence_router)
+    # Outgoing webhook integrations (Slack/Discord/...).
+    app.include_router(webhooks_router)
+    # Cycle 0015 — scheduled backups + ad-hoc run-now (admin).
+    app.include_router(backups_router)
 
     return app
 

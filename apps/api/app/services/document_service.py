@@ -26,6 +26,7 @@ from app.core.errors import NotFound, PreconditionFailed, ValidationFailed
 from app.repos import document_repo
 from app.schemas.document import DocumentjsonV10
 from app.search import meili_indexer
+from app.services import webhook_dispatcher
 from app.services.section_numbering import renumber_sections
 from app.services.wiki_link_extractor import extract_wiki_links
 
@@ -131,6 +132,26 @@ async def refresh_search_view(s: AsyncSession) -> None:
                 await s.rollback()
             except Exception:
                 pass
+
+
+async def fire_webhook(
+    event_kind: str,
+    payload: dict[str, Any],
+    *,
+    target_part_id: str | None = None,
+) -> None:
+    """Best-effort dispatch — never blocks the originating mutation.
+
+    Wraps `webhook_dispatcher.dispatch` in try/except so a misconfigured hook,
+    network error, or assertion in payload construction can never fail the
+    write that triggered the event.
+    """
+    try:
+        await webhook_dispatcher.dispatch(
+            event_kind, payload, target_part_id=target_part_id
+        )
+    except Exception as e:
+        logger.warning("webhook dispatch (%s) skipped: %s", event_kind, e)
 
 
 async def reindex_meili(s: AsyncSession, *, doc_id: str, archived: bool = False) -> None:
@@ -377,6 +398,18 @@ async def create_document(
     await refresh_search_view(s)
     await reindex_meili(s, doc_id=inserted["id"])
     doc = await get_document_or_404(s, slug)
+    await fire_webhook(
+        "doc_created",
+        {
+            "event": "doc_created",
+            "document_id": doc["id"],
+            "slug": doc["slug"],
+            "title": doc["title"],
+            "version": doc["version"],
+            "actor_user_id": owner_id,
+        },
+        target_part_id=part_id,
+    )
     return doc, warnings
 
 
@@ -459,6 +492,19 @@ async def replace_document(
     await refresh_search_view(s)
     await reindex_meili(s, doc_id=existing["id"])
     doc = await get_document_or_404(s, slug)
+    await fire_webhook(
+        "doc_edited",
+        {
+            "event": "doc_edited",
+            "document_id": doc["id"],
+            "slug": doc["slug"],
+            "title": doc["title"],
+            "version": doc["version"],
+            "actor_user_id": actor_id,
+            "change_log": log,
+        },
+        target_part_id=part_id,
+    )
     return doc, warnings
 
 
@@ -645,7 +691,21 @@ async def _persist_content_change(
     await s.commit()
     await refresh_search_view(s)
     await reindex_meili(s, doc_id=existing["id"])
-    return await get_document_or_404(s, existing["slug"])
+    fresh = await get_document_or_404(s, existing["slug"])
+    await fire_webhook(
+        "doc_edited",
+        {
+            "event": "doc_edited",
+            "document_id": fresh["id"],
+            "slug": fresh["slug"],
+            "title": fresh["title"],
+            "version": fresh["version"],
+            "actor_user_id": actor_id,
+            "change_log": change_log,
+        },
+        target_part_id=fresh.get("part_id"),
+    )
+    return fresh
 
 
 async def patch_section(

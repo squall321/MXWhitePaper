@@ -18,6 +18,10 @@ import { ReviewersPanel } from '@/features/approvals/ReviewersPanel'
 import { WorkflowRibbon } from '@/features/approvals/WorkflowRibbon'
 import { SeriesNav } from '@/features/series/SeriesNav'
 import { AddToSeriesButton } from '@/features/series/AddToSeriesButton'
+import { OfflineBanner } from '@/features/pwa/OfflineBanner'
+import { PresenceAvatars } from '@/features/presence/PresenceAvatars'
+import { BlockPresenceMarker } from '@/features/presence/BlockPresenceMarker'
+import { useAnchorBlockTracker } from '@/features/presence/useAnchorBlockTracker'
 import { useState } from 'react'
 import type { DocStatus } from '@/features/approvals/api'
 
@@ -79,8 +83,13 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
   const expandAll = useSectionCollapseStore((s) => s.expandAll)
   const collapseAll = useSectionCollapseStore((s) => s.collapseAll)
 
+  // Pipe the topmost-visible block id into the presence anchor cache so
+  // the heartbeat can broadcast where each viewer is reading.
+  useAnchorBlockTracker(document.slug)
+
   return (
-    <article className="space-y-6">
+    <article className="relative space-y-6">
+      <OfflineBanner />
       {showApprovals && editableSlug && (
         <WorkflowRibbon
           slug={editableSlug}
@@ -108,6 +117,7 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           <h1 className="flex-1 text-3xl font-semibold tracking-tight text-smsg-900 sm:text-4xl">
             {document.title}
           </h1>
+          <PresenceAvatars slug={document.slug} />
           {row?.id && (
             <AddToSeriesButton slug={document.slug} documentId={row.id} />
           )}
@@ -180,6 +190,9 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           store has at least one block. Lives at the article level so its
           fixed-position pill doesn't multiply across nested sections. */}
       {editableSlug && <BulkActionsBar slug={editableSlug} />}
+      {/* Right-margin presence dots — sibling overlay layer that polls
+          getBoundingClientRect every 200ms; never touches block internals. */}
+      <BlockPresenceMarker slug={document.slug} />
     </article>
   )
 }

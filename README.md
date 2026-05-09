@@ -312,6 +312,117 @@ a follow-up extraction pass. Missing keys at runtime emit a single
 `console.warn('[i18n] missing key: …')` and fall through to the key itself,
 so dev-mode usage surfaces gaps.
 
+## PWA / 오프라인
+
+`apps/web/public/` 에 vanilla service worker (`service-worker.js`) +
+`manifest.webmanifest` 가 들어 있다. 등록 헬퍼는
+`apps/web/src/features/pwa/swRegistration.ts` 에 있고, dev 모드(`import.meta.env.DEV`)에서는 HMR 충돌을 피하려고 자동 skip 된다.
+
+캐시 전략:
+
+| 패턴 | 전략 | 캐시 이름 |
+| --- | --- | --- |
+| `/assets/*` (Vite hashed) | stale-while-revalidate | `mxwp-runtime-v1` |
+| `GET /api/v1/documents/:slug` | network-first, 캐시 폴백 (LRU 50) | `mxwp-docs-v1` |
+| 그 외 `/api/v1/*` | network-first, no fallback | — |
+| HTML navigation | network-first → app-shell → `offline.html` | `mxwp-static-v1` |
+
+오프라인 상태에서 캐시된 문서를 보여줄 때는 SW 가 응답에
+`X-Mxwp-Cache: hit` 헤더를 추가하고, `WikiArticle` 헤더의
+`<OfflineBanner />` 가 `navigator.onLine === false` 시 안내 띠를 띄운다.
+
+설치 프롬프트는 `<InstallPrompt />` 가 `beforeinstallprompt` 를 가로채
+오른쪽 아래 "📱 앱으로 설치" 알약 버튼으로 노출한다 (이미 standalone 상태면 숨김).
+
+### 아이콘 TODO
+
+현재 매니페스트는 단색 SVG (`icon.svg`) 를 메인 아이콘으로 사용한다.
+크롬 데스크톱 설치 기준은 **192px / 512px PNG** 두 장을 요구하므로,
+실제 launch 전에 `apps/web/scripts/gen-pwa-icons.cjs` (Node 빌트인만으로
+플랫 컬러 placeholder 생성) 를 돌리거나, 디자인 PNG 를
+`apps/web/public/icon-192.png`, `apps/web/public/icon-512.png` 로
+교체해야 한다. 매니페스트의 PNG 항목은 이미 그 경로를 가리키고 있으니
+파일만 떨어뜨리면 자동으로 잡힌다.
+
+### 미배송
+
+- 푸시 알림 (Notification API + push subscription) — 별도 사이클.
+- background sync (`periodicSync`) 통한 자동 미러 — 별도 사이클.
+- service-worker 자체에 대한 진짜 jsdom + workbox-style 단위 테스트 —
+  현재는 smoke test (parse + listener wiring) 만 있다.
+
+## Webhook 페이로드
+
+외부 도구(Slack/Discord/Teams/Linear/...) 와 연결할 때 사용되는 outgoing
+webhook 의 본문 형식 + 서명 알고리즘. 관리자 화면 `/admin/webhooks` 에서
+URL/이벤트/part 필터/secret 을 등록한다.
+
+### 헤더
+
+```http
+POST <등록한 URL>
+Content-Type:    application/json
+User-Agent:      mx-white-paper-webhook
+X-MXWP-Signature: sha256=<hex digest>
+```
+
+`X-MXWP-Signature` 의 hex digest 는
+
+```text
+HMAC_SHA256(secret, raw_body_bytes)
+```
+
+로 계산된다. `secret` 은 등록 직후 1회만 평문으로 회신되며 이후 화면/응답에서는
+`••••<last4>` 로 마스킹된다. 수신측은 받은 `raw_body_bytes` 와 자기가 보관 중인
+secret 으로 같은 HMAC 을 계산해 `sha256=` 접두사까지 포함한 문자열을 비교하면
+된다 (timing-safe 비교 권장).
+
+#### Python 검증 예시
+
+```python
+import hmac, hashlib
+
+def verify(raw: bytes, header: str, secret: str) -> bool:
+    expected = "sha256=" + hmac.new(
+        secret.encode(), raw, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, header)
+```
+
+#### Node 검증 예시
+
+```js
+import { createHmac, timingSafeEqual } from 'node:crypto'
+
+export function verify(raw, header, secret) {
+  const exp = 'sha256=' + createHmac('sha256', secret).update(raw).digest('hex')
+  return (
+    exp.length === header.length &&
+    timingSafeEqual(Buffer.from(exp), Buffer.from(header))
+  )
+}
+```
+
+### 이벤트 종류
+
+| event_kind        | 트리거                                   | 페이로드 핵심 필드                              |
+|-------------------|------------------------------------------|-------------------------------------------------|
+| `doc_created`     | `POST /api/v1/documents`                 | `document_id, slug, title, version, actor_user_id` |
+| `doc_edited`      | 모든 본문/섹션/블록 수정                 | `document_id, slug, title, version, actor_user_id, change_log` |
+| `doc_published`   | `transition` → `published`               | `document_id, slug, title, actor_user_id, from_status` |
+| `comment_added`   | `POST /documents/:slug/comments`         | `document_id, slug, comment_id, anchor_kind, anchor_id, author_user_id, body_md` |
+| `review_decided`  | 리뷰어가 결정 제출 (approved/rejected/changes_requested) | `document_id, slug, title, reviewer_user_id, status, comment` |
+
+모든 페이로드는 공통적으로 `event` 필드(이벤트 종류 문자열) 를 포함한다.
+
+### 신뢰성
+
+`5xx` 또는 timeout 응답 시 약 60초 뒤에 1회 재시도된다. 4xx 는 영구 실패로
+간주되어 재시도하지 않으며, `webhooks.last_status` 가 `4xx` 로 갱신된다.
+`/admin/webhooks` 의 “전송 로그” 모달이 최근 20건의 응답 코드 + 본문 일부를
+보여 주므로 디버깅에 사용한다. `webhooks.filter_part_ids` 에 part UUID 를 넣어
+두면 그 part 에 속한 문서의 이벤트만 발사된다 (빈 리스트 = 모든 part 매칭).
+
 ## 라이선스
 
 사내 전용 (UNLICENSED)

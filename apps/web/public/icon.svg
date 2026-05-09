@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MX White Paper">
+  <rect width="512" height="512" rx="96" fill="#1428A0"/>
+  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central"
+        font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif"
+        font-weight="700" font-size="220" fill="#ffffff" letter-spacing="-8">MX</text>
+  <text x="50%" y="78%" text-anchor="middle" dominant-baseline="central"
+        font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif"
+        font-weight="500" font-size="56" fill="#ffffff" opacity="0.85" letter-spacing="2">WHITE PAPER</text>
+</svg>

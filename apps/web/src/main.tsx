@@ -76,6 +76,9 @@ const AdminOrgsPage = lazyLogged('AdminOrgs', () =>
 const AdminDashboardPage = lazyLogged('AdminDashboard', () =>
   import('./pages/AdminDashboard').then((m) => ({ default: m.AdminDashboardPage })),
 )
+const BackupAdminPage = lazyLogged('BackupAdmin', () =>
+  import('./pages/BackupAdmin').then((m) => ({ default: m.BackupAdminPage })),
+)
 const AnalyticsPage = lazyLogged('Analytics', () =>
   import('./pages/Analytics').then((m) => ({ default: m.AnalyticsPage })),
 )
@@ -105,6 +108,11 @@ const SeriesManagerPage = lazyLogged('SeriesManager', () =>
 )
 const SeriesDetailPage = lazyLogged('SeriesDetail', () =>
   import('./pages/SeriesDetail').then((m) => ({ default: m.SeriesDetailPage })),
+)
+const WebhooksSettingsPage = lazyLogged('WebhooksSettings', () =>
+  import('./pages/WebhooksSettings').then((m) => ({
+    default: m.WebhooksSettingsPage,
+  })),
 )
 // `TagPage` accepts a `mode` prop, which doesn't fit `lazyLogged`'s
 // component-with-no-props generic. Use `React.lazy` directly + manual log.
@@ -268,7 +276,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="orgs" element={<Boundaried name="orgs"><OrgsPage /></Boundaried>} />
                 <Route path="admin/orgs" element={<Boundaried name="admin/orgs"><AdminOrgsPage /></Boundaried>} />
                 <Route path="admin/dashboard" element={<Boundaried name="admin/dashboard"><AdminDashboardPage /></Boundaried>} />
+                <Route path="admin/backups" element={<Boundaried name="admin/backups"><BackupAdminPage /></Boundaried>} />
                 <Route path="admin/tags" element={<Boundaried name="admin/tags"><TagManagerPage /></Boundaried>} />
+                <Route path="admin/webhooks" element={<Boundaried name="admin/webhooks"><WebhooksSettingsPage /></Boundaried>} />
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
                 <Route path="activity" element={<Boundaried name="activity"><ActivityFeedPage /></Boundaried>} />

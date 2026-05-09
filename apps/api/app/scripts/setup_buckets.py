@@ -31,7 +31,11 @@ def main() -> int:
     settings = get_settings()
     cli = minio_adapter.internal_client()
 
-    for bucket in (settings.minio_bucket_images, settings.minio_bucket_files):
+    for bucket in (
+        settings.minio_bucket_images,
+        settings.minio_bucket_files,
+        settings.minio_bucket_backups,
+    ):
         try:
             cli.head_bucket(Bucket=bucket)
             print(f"✓ bucket exists: {bucket}")

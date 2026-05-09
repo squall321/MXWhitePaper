@@ -25,6 +25,7 @@ from app.core.auth import get_current_user, require_editor
 from app.core.db import get_db
 from app.core.errors import APIError, Forbidden, NotFound, envelope
 from app.repos import document_repo
+from app.services.document_service import fire_webhook
 
 router_doc = APIRouter(prefix="/api/v1/documents", tags=["comments"])
 router_one = APIRouter(prefix="/api/v1/comments", tags=["comments"])
@@ -296,6 +297,28 @@ async def create_comment(
         text(f"{_SELECT_COMMENT_COLUMNS} WHERE c.id = CAST(:id AS uuid)"),
         {"id": new_id},
     )).first()
+
+    # Webhook fan-out — `comment_added`. Resolve part_id once for filtering.
+    part_row = (await s.execute(
+        text("SELECT part_id FROM documents WHERE id = CAST(:d AS uuid)"),
+        {"d": doc_id},
+    )).first()
+    part_id = str(part_row[0]) if part_row and part_row[0] else None
+    await fire_webhook(
+        "comment_added",
+        {
+            "event": "comment_added",
+            "document_id": doc_id,
+            "slug": slug,
+            "comment_id": new_id,
+            "anchor_kind": body.anchor_kind,
+            "anchor_id": body.anchor_id,
+            "author_user_id": actor_id,
+            "body_md": body.body_md,
+        },
+        target_part_id=part_id,
+    )
+
     return envelope(data=_row_to_dict(full))
 
 
