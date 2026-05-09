@@ -6,6 +6,8 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { login, loginTotp, TotpRequiredError } from '@/features/auth/api'
 import { useAuthStore } from '@/features/auth/store'
 import { Button, Card, Field, Input } from '@/components/ui'
+import { toast } from '@/components/ui/Toast'
+import { discoverSsoProvider, type SsoDiscoverResult } from '@/features/sso/api'
 import { useLocale } from '@/lib/i18n'
 
 const loginSchema = z.object({
@@ -33,6 +35,25 @@ export function safeReturnPath(raw: string | null | undefined): string {
 }
 
 /**
+ * Decide whether an email value is "ready" to be probed via the SSO
+ * discover endpoint. Exposed for tests so we don't need a live React
+ * tree to exercise the logic.
+ */
+export function shouldProbeSso(email: string | null | undefined): boolean {
+  if (!email) return false
+  const trimmed = email.trim()
+  return trimmed.length > 0 && trimmed.includes('@')
+}
+
+/**
+ * Format the SSO sign-in button label. Centralised so a single source
+ * of truth is testable without rendering the page.
+ */
+export function ssoButtonLabel(providerName: string): string {
+  return `🔑 ${providerName}으로 로그인`
+}
+
+/**
  * Login page. react-hook-form + zod for validation. On success, redirects
  * to the `?return=...` URL or `/`. Dev mode pre-fills the form with the
  * documented seed credentials.
@@ -55,6 +76,13 @@ export function LoginPage() {
   const [totpCode, setTotpCode] = useState('')
   const [backupMode, setBackupMode] = useState(false)
   const [verifying, setVerifying] = useState(false)
+  // Cycle 19 — SSO discover. When the user types an email and tabs out we
+  // probe `/auth/sso/discover?email=…`. If a provider matches, we hide the
+  // password field and surface a single "🔑 {provider} 으로 로그인" button.
+  // Clicking the button fires a GET to `login_url`; while the BE's flow
+  // returns 501, we surface a toast and stay on the page.
+  const [ssoProvider, setSsoProvider] = useState<SsoDiscoverResult | null>(null)
+  const [ssoChecking, setSsoChecking] = useState(false)
   const user = useAuthStore((s) => s.user)
   const hydrating = useAuthStore((s) => s.hydrating)
 
@@ -137,6 +165,40 @@ export function LoginPage() {
     setTotpCode('')
     setBackupMode(false)
     setSubmitError(null)
+  }
+
+  /**
+   * Probe `/auth/sso/discover?email=…` when the email field loses focus.
+   * 404 (no matching provider) silently keeps the password field. Any
+   * other error is also non-fatal — we just don't surface SSO.
+   */
+  async function onEmailBlur(e: React.FocusEvent<HTMLInputElement>) {
+    const email = e.target.value.trim()
+    if (!shouldProbeSso(email)) {
+      setSsoProvider(null)
+      return
+    }
+    setSsoChecking(true)
+    try {
+      const result = await discoverSsoProvider(email)
+      setSsoProvider(result)
+    } catch {
+      setSsoProvider(null)
+    } finally {
+      setSsoChecking(false)
+    }
+  }
+
+  /**
+   * Click handler for the "🔑 {provider} 으로 로그인" button. The BE's
+   * `/auth/sso/{id}/initiate` currently returns 501; we surface that as a
+   * "곧 출시됩니다" toast rather than a hard navigation. When the real
+   * flow lands, replace this with `window.location.href = login_url`.
+   */
+  function onSsoSignIn() {
+    if (!ssoProvider) return
+    // TODO (cycle 19+1): redirect to ssoProvider.login_url once BE returns 302.
+    toast.info('SSO 연동은 곧 출시됩니다')
   }
 
   return (
@@ -230,28 +292,44 @@ export function LoginPage() {
           ) : (
           <form className="space-y-4" onSubmit={onSubmit}>
             <Field label={t('login.email')} htmlFor="login-email" error={errors.email?.message}>
-              <Input
-                id="login-email"
-                data-testid="login-email"
-                type="email"
-                autoComplete="username"
-                placeholder="name@samsung.com"
-                invalid={!!errors.email}
-                {...register('email')}
-              />
+              {(() => {
+                const reg = register('email')
+                return (
+                  <Input
+                    id="login-email"
+                    data-testid="login-email"
+                    type="email"
+                    autoComplete="username"
+                    placeholder="name@samsung.com"
+                    invalid={!!errors.email}
+                    {...reg}
+                    onBlur={(e) => {
+                      void reg.onBlur(e)
+                      void onEmailBlur(e)
+                    }}
+                    onChange={(e) => {
+                      void reg.onChange(e)
+                      // Typing again invalidates the previous SSO probe.
+                      if (ssoProvider) setSsoProvider(null)
+                    }}
+                  />
+                )
+              })()}
             </Field>
 
-            <Field label={t('login.password')} htmlFor="login-password" error={errors.password?.message}>
-              <Input
-                id="login-password"
-                data-testid="login-password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                invalid={!!errors.password}
-                {...register('password')}
-              />
-            </Field>
+            {!ssoProvider && (
+              <Field label={t('login.password')} htmlFor="login-password" error={errors.password?.message}>
+                <Input
+                  id="login-password"
+                  data-testid="login-password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  invalid={!!errors.password}
+                  {...register('password')}
+                />
+              </Field>
+            )}
 
             <div className="flex items-center justify-between">
               <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-gray-700">
@@ -278,16 +356,28 @@ export function LoginPage() {
               </p>
             )}
 
-            <Button
-              type="submit"
-              data-testid="login-submit"
-              loading={isSubmitting}
-              disabled={isSubmitting}
-              fullWidth
-              size="md"
-            >
-              {isSubmitting ? t('login.submitting') : t('login.submit')}
-            </Button>
+            {ssoProvider ? (
+              <Button
+                type="button"
+                data-testid="login-sso-button"
+                fullWidth
+                size="md"
+                onClick={onSsoSignIn}
+              >
+                {ssoButtonLabel(ssoProvider.name)}
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                data-testid="login-submit"
+                loading={isSubmitting || ssoChecking}
+                disabled={isSubmitting}
+                fullWidth
+                size="md"
+              >
+                {isSubmitting ? t('login.submitting') : t('login.submit')}
+              </Button>
+            )}
 
             {import.meta.env.DEV && (
               <p className="pt-2 text-[11px] text-gray-500">

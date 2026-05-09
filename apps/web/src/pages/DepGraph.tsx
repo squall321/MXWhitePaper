@@ -1,22 +1,31 @@
 /**
- * Doc Dependency Graph page (Cycle 7).
+ * Doc Dependency Graph page.
  *
  *   /dep-graph?root=<slug>
  *
- * Force-directed visualisation of inter-document wiki-link dependency. Differs
- * from the older `/graph` page in that:
- *   - Reuses the `dep-graph` BE which walks `content_json` directly (so newly
+ * Force-directed visualisation of inter-document wiki-link dependency.
+ *
+ *   - Reuses the `dep-graph` BE which walks `content_json` directly so newly
  *     added [[slug]] links show up even if the `links` table hasn't been
- *     resynced).
- *   - Adds a sidebar — depth slider 1-4, "고아 문서 보기" toggle.
+ *     resynced.
+ *   - Sidebar — depth slider 1-4, "고아 문서 보기" toggle.
  *   - Hover shows tooltip (title + slug + count_in/out); click navigates to
  *     `/docs/<slug>`.
  *
- * Layout note: the mandate asked for cytoscape + cose-bilkent (transitively
- * pulled in by `mermaid`). pnpm strict resolution doesn't expose those to
- * `apps/web` without declaring them as direct deps, so we fall back to
- * `d3-force` (already a direct dep, and the same module the older `/graph`
- * page uses). See the report for the cose-bilkent flag.
+ * Layout / renderer
+ * -----------------
+ * Cycle 16 used d3-force because pnpm strict resolution did not expose
+ * cytoscape (transitively in mermaid) to apps/web. Cycle 20 promotes
+ * cytoscape + cytoscape-cose-bilkent to direct deps so we can use the
+ * higher-quality cose-bilkent layout with built-in pan/zoom.
+ *
+ * The renderer dynamically imports cytoscape (it pulls a 600k chunk so
+ * we keep it off the critical path). If the dynamic import fails — e.g.
+ * a future strict CSP blocks the chunk, or the deps go missing in some
+ * exotic build — we silently fall back to the legacy d3-force SVG path.
+ * The `<svg data-testid="dep-graph-svg">` element is always rendered so
+ * SSR/vitest snapshots stay stable; cytoscape paints into a sibling
+ * `<div>` and we hide the SVG once it boots.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -69,7 +78,11 @@ export function DepGraphCanvas({
 }: DepGraphCanvasProps) {
   const svgRef = useRef<SVGSVGElement | null>(null)
   const gRef = useRef<SVGGElement | null>(null)
+  const cyHostRef = useRef<HTMLDivElement | null>(null)
   const simRef = useRef<Simulation<SimNode, SimLink> | null>(null)
+  // True once cytoscape has successfully mounted; we then hide the SVG
+  // fallback. Stays false in SSR / when the dynamic import fails.
+  const [usingCytoscape, setUsingCytoscape] = useState(false)
 
   const { nodes, links } = useMemo<{ nodes: SimNode[]; links: SimLink[] }>(
     () => ({
@@ -89,7 +102,116 @@ export function DepGraphCanvas({
     [rawNodes, rawEdges, rootSlug],
   )
 
+  // ── Cytoscape path ─────────────────────────────────────────────────────
+  // Tries the cose-bilkent layout first; if either dependency fails to
+  // import we leave `usingCytoscape` false and the d3-force effect below
+  // takes over. Both deps are dynamic-imported so the chunk loads only
+  // when /dep-graph is visited.
   useEffect(() => {
+    if (!cyHostRef.current) return
+    let cancelled = false
+    let cy: {
+      destroy: () => void
+      on: (ev: string, sel: string, cb: (evt: { target: { id: () => string } }) => void) => void
+    } | null = null
+    void (async () => {
+      try {
+        const cytoscapeMod = await import('cytoscape')
+        const cytoscape =
+          (cytoscapeMod as { default?: unknown }).default ?? cytoscapeMod
+        try {
+          // cose-bilkent ships no .d.ts; suppress the implicit-any warning.
+          // @ts-expect-error — package has no type declarations
+          const cb = await import('cytoscape-cose-bilkent')
+          const reg = (cb as { default?: unknown }).default ?? cb
+          // Idempotent — registering the same name twice is a no-op in
+          // cytoscape's plugin registry. Catch swallows any mismatch.
+          ;(cytoscape as (t: string, n: string, r: unknown) => unknown)(
+            'layout',
+            'cose-bilkent',
+            reg,
+          )
+        } catch {
+          /* layout fallback handled below */
+        }
+        if (cancelled || !cyHostRef.current) return
+        const elements = [
+          ...rawNodes.map((n) => ({
+            data: {
+              id: n.slug,
+              label: n.title,
+              countIn: n.count_in,
+              countOut: n.count_out,
+              isRoot: n.slug === rootSlug,
+            },
+          })),
+          ...rawEdges.map((e) => ({
+            data: { id: `${e.from}->${e.to}`, source: e.from, target: e.to, count: e.count },
+          })),
+        ]
+        const factory = cytoscape as (opts: unknown) => {
+          destroy: () => void
+          on: (ev: string, sel: string, cb: (evt: { target: { id: () => string } }) => void) => void
+        }
+        cy = factory({
+          container: cyHostRef.current,
+          elements,
+          layout: { name: 'cose-bilkent', animate: false, randomize: true },
+          style: [
+            {
+              selector: 'node',
+              style: {
+                'background-color': 'data(isRoot) ? "#0c4a6e" : "#0ea5e9"',
+                label: 'data(label)',
+                'font-size': 11,
+                color: '#1f2937',
+                'text-margin-y': -8,
+                width: 'mapData(countIn, 0, 8, 12, 28)',
+                height: 'mapData(countIn, 0, 8, 12, 28)',
+                'border-width': 1.5,
+                'border-color': '#fff',
+              },
+            },
+            {
+              selector: 'edge',
+              style: {
+                width: 'mapData(count, 1, 4, 1, 5)',
+                'line-color': '#94a3b8',
+                'curve-style': 'bezier',
+                'target-arrow-shape': 'triangle',
+                'target-arrow-color': '#94a3b8',
+                opacity: 0.7,
+              },
+            },
+          ],
+        })
+        cy.on('tap', 'node', (evt) => {
+          if (onPickNode) onPickNode(evt.target.id())
+        })
+        if (!cancelled) setUsingCytoscape(true)
+      } catch {
+        // Either cytoscape itself or cose-bilkent failed — leave fallback.
+        if (!cancelled) setUsingCytoscape(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+      if (cy) {
+        try {
+          cy.destroy()
+        } catch {
+          /* ignore — cy already torn down */
+        }
+      }
+      setUsingCytoscape(false)
+    }
+  }, [rawNodes, rawEdges, rootSlug, onPickNode])
+
+  // ── d3-force fallback path ─────────────────────────────────────────────
+  // Skipped while cytoscape is driving the canvas; if cytoscape fails to
+  // boot or unmounts we re-attach to the SVG.
+  useEffect(() => {
+    if (usingCytoscape) return
     if (!gRef.current) return
     const g = select(gRef.current)
     const sim = forceSimulation<SimNode>(nodes)
@@ -163,11 +285,11 @@ export function DepGraphCanvas({
       sim.stop()
       simRef.current = null
     }
-  }, [nodes, links, onPickNode])
+  }, [nodes, links, onPickNode, usingCytoscape])
 
-  // Pan + zoom (cytoscape would give this for free; with d3 we wire it
-  // explicitly).
+  // Pan + zoom for the d3-force fallback. Cytoscape ships its own.
   useEffect(() => {
+    if (usingCytoscape) return
     if (!svgRef.current || !gRef.current) return
     const svg = select<SVGSVGElement, unknown>(svgRef.current)
     const inner = select<SVGGElement, unknown>(gRef.current)
@@ -181,21 +303,32 @@ export function DepGraphCanvas({
     return () => {
       svg.on('.zoom', null)
     }
-  }, [])
+  }, [usingCytoscape])
 
   return (
-    <svg
-      ref={svgRef}
-      data-testid="dep-graph-svg"
-      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-      preserveAspectRatio="xMidYMid meet"
-      className="h-[600px] w-full rounded border border-gray-200 bg-white"
-    >
-      <g ref={gRef}>
-        <g className="links" />
-        <g className="nodes" />
-      </g>
-    </svg>
+    <div className="relative">
+      <div
+        ref={cyHostRef}
+        data-testid="dep-graph-cy-host"
+        className={`h-[600px] w-full rounded border border-gray-200 bg-white ${
+          usingCytoscape ? '' : 'hidden'
+        }`}
+      />
+      <svg
+        ref={svgRef}
+        data-testid="dep-graph-svg"
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        preserveAspectRatio="xMidYMid meet"
+        className={`h-[600px] w-full rounded border border-gray-200 bg-white ${
+          usingCytoscape ? 'hidden' : ''
+        }`}
+      >
+        <g ref={gRef}>
+          <g className="links" />
+          <g className="nodes" />
+        </g>
+      </svg>
+    </div>
   )
 }
 

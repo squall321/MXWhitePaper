@@ -157,5 +157,6 @@ async def audit_pruner_ticker() -> None:
                 last_run = now
         except Exception:  # noqa: BLE001 — ticker must never die
             logger.exception("audit_pruner tick failed")
+        from app.services.ticker_state import report_tick as _rt; _rt("audit_pruner", next_due_at=(last_run + timedelta(seconds=TICK_INTERVAL_SECONDS)) if last_run else None)
         # Sleep in 60s slices so cancel propagates quickly on shutdown.
         await asyncio.sleep(60)

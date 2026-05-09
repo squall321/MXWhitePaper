@@ -364,4 +364,5 @@ async def backup_ticker() -> None:
             await tick_once()
         except Exception:  # noqa: BLE001
             logger.exception("backup tick failed")
+        from app.services.ticker_state import report_tick as _rt; _rt("backup", next_due_at=datetime.now(timezone.utc) + timedelta(seconds=TICK_INTERVAL_SECONDS))
         await asyncio.sleep(TICK_INTERVAL_SECONDS)

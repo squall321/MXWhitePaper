@@ -200,27 +200,64 @@ async def create_share_link(
     meta = _row_to_share_meta(row)
 
     # Best-effort share-link emails. Never undo the share creation on failure.
+    # Each recipient is checked against the global ``email_optout_list``;
+    # those that match are silently skipped. Surviving recipients get a
+    # per-(email, document) opt-out token threaded into the body.
     notified: list[str] = []
+    skipped_optout: list[str] = []
     if body.notify_emails:
         try:
             from app.services.email import send_email, share_link_email
 
             sender_name = user.get("name") or user.get("email") or "MX 백서"
+
+            # One-shot lookup: which of the addresses are already opted out?
+            wanted_addrs: list[str] = []
             for raw in body.notify_emails:
                 if not isinstance(raw, str):
                     continue
-                addr = raw.strip()
+                addr = raw.strip().lower()
                 if not addr or "@" not in addr:
                     continue
+                wanted_addrs.append(addr)
+            opted_out: set[str] = set()
+            if wanted_addrs:
+                rows = (await s.execute(
+                    text(
+                        "SELECT email FROM email_optout_list WHERE email = ANY(:addrs)"
+                    ),
+                    {"addrs": wanted_addrs},
+                )).all()
+                opted_out = {r[0] for r in rows}
+
+            for addr in wanted_addrs:
+                if addr in opted_out:
+                    skipped_optout.append(addr)
+                    continue
+                # Mint a single-use opt-out token tied to (email, document).
+                optout_tok = secrets.token_urlsafe(_TOKEN_BYTES)
+                await s.execute(
+                    text(
+                        """
+                        INSERT INTO share_email_optout_tokens
+                          (token, email, document_id)
+                        VALUES (:t, :e, CAST(:d AS uuid))
+                        """
+                    ),
+                    {"t": optout_tok, "e": addr, "d": doc["id"]},
+                )
+                optout_url = f"/share/email-optout?token={optout_tok}"
                 subject, body_text = share_link_email(
                     recipient=addr,
                     sender_name=sender_name,
                     doc_title=doc["title"],
                     share_url=meta["url"],
+                    optout_url=optout_url,
                 )
                 ok = await send_email(addr, subject, body_text)
                 if ok:
                     notified.append(addr)
+            await s.commit()
         except Exception:  # noqa: BLE001
             import logging as _logging
 
@@ -237,6 +274,7 @@ async def create_share_link(
             "short_id": meta["short_id"],
             "short_url": meta["short_url"],
             "notified_emails": notified,
+            "skipped_optout_emails": skipped_optout,
         },
         meta={"share_id": meta["id"]},
     )
@@ -278,6 +316,55 @@ def _is_expired(row_expires_at: Any) -> bool:
         return False
     # asyncpg returns timezone-aware datetime for TIMESTAMPTZ.
     return row_expires_at <= datetime.now(UTC)
+
+
+@router.get(
+    "/share/email-optout",
+    summary="공유 메일 수신 거부 (인증 불필요)",
+    description=(
+        "공유 메일 본문에 포함된 ``token`` 으로 호출하면 해당 이메일을 "
+        "``email_optout_list`` 에 추가해 이후 공유 메일 발송에서 제외한다. "
+        "이미 처리된 토큰은 idempotent — 200 응답에 ``already=true`` 를 담는다.\n\n"
+        "**라우트 순서**: 이 핸들러는 `/share/{token}` 보다 먼저 등록돼야 "
+        "FastAPI 가 `email-optout` 을 슬러그가 아닌 리터럴로 매칭한다."
+    ),
+)
+async def share_email_optout_early(
+    token: str = Query(..., min_length=1, max_length=200),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Mounted BEFORE /share/{token} so the literal path wins. Body
+    delegates to the original handler implementation below."""
+    row = (await s.execute(
+        text(
+            """
+            SELECT email, used_at FROM share_email_optout_tokens
+            WHERE token = :t
+            """
+        ),
+        {"t": token},
+    )).first()
+    if not row:
+        raise NotFound("opt-out token not found")
+    email = row[0]
+    already = row[1] is not None
+    if not already:
+        await s.execute(
+            text("UPDATE share_email_optout_tokens SET used_at = NOW() WHERE token = :t"),
+            {"t": token},
+        )
+    await s.execute(
+        text(
+            """
+            INSERT INTO email_optout_list (email)
+            VALUES (:e)
+            ON CONFLICT (email) DO NOTHING
+            """
+        ),
+        {"e": email},
+    )
+    await s.commit()
+    return envelope(data={"email": email, "already": already})
 
 
 @router.get(

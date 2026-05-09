@@ -182,4 +182,5 @@ async def reminder_ticker() -> None:
             await tick_once()
         except Exception:  # noqa: BLE001
             logger.exception("reminder tick failed")
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td; from app.services.ticker_state import report_tick as _rt; _rt("reminder", next_due_at=_dt.now(_tz.utc) + _td(seconds=TICK_INTERVAL_SECONDS))
         await asyncio.sleep(TICK_INTERVAL_SECONDS)

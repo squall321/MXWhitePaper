@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { QuizBlockView, findMissingAnswers } from '../QuizBlock'
+import { QuizBlockView, findMissingAnswers, shuffleSeeded, hashSeed } from '../QuizBlock'
 import type { QuizBlock, QuizQuestion } from '@/types/document'
 
 const QUESTIONS: QuizQuestion[] = [
@@ -69,6 +69,43 @@ describe('findMissingAnswers (FE)', () => {
       q4: '   ',
     })
     expect(missing).toEqual(['q1', 'q2', 'q3', 'q4'])
+  })
+})
+
+describe('shuffleSeeded', () => {
+  const items = ['a', 'b', 'c', 'd', 'e']
+  it('returns the same length as input', () => {
+    expect(shuffleSeeded(items, 'seed-1')).toHaveLength(items.length)
+  })
+  it('does not mutate the input array', () => {
+    const before = [...items]
+    shuffleSeeded(items, 'seed-1')
+    expect(items).toEqual(before)
+  })
+  it('produces stable output for the same seed', () => {
+    expect(shuffleSeeded(items, 'attempt-42')).toEqual(
+      shuffleSeeded(items, 'attempt-42'),
+    )
+  })
+  it('produces different output for different seeds', () => {
+    const a = shuffleSeeded(items, 'attempt-1')
+    const b = shuffleSeeded(items, 'attempt-2')
+    // Possible but astronomically unlikely to collide for 5 items × 2 seeds.
+    expect(a).not.toEqual(b)
+  })
+  it('hashSeed returns a non-negative 32-bit integer', () => {
+    const h = hashSeed('hello')
+    expect(Number.isInteger(h)).toBe(true)
+    expect(h).toBeGreaterThanOrEqual(0)
+    expect(h).toBeLessThan(2 ** 32)
+  })
+})
+
+describe('<QuizBlockView /> with shuffle', () => {
+  it('renders the same set of questions when shuffle is on', () => {
+    const shuffled: QuizBlock = { ...block, shuffle: true }
+    const html = renderToStaticMarkup(<QuizBlockView block={shuffled} />)
+    for (const q of QUESTIONS) expect(html).toContain(q.label)
   })
 })
 

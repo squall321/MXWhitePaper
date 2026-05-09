@@ -1333,6 +1333,310 @@
         "title": "PolishBody",
         "type": "object"
       },
+      "ProviderCreate": {
+        "properties": {
+          "attribute_mapping": {
+            "additionalProperties": true,
+            "title": "Attribute Mapping",
+            "type": "object"
+          },
+          "default_role": {
+            "default": "reader",
+            "title": "Default Role",
+            "type": "string"
+          },
+          "email_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Domain"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "kind": {
+            "description": "saml | oidc",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "oidc_client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oidc Client Id"
+          },
+          "oidc_client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oidc Client Secret"
+          },
+          "oidc_issuer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oidc Issuer"
+          },
+          "oidc_scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oidc Scopes"
+          },
+          "saml_acs_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saml Acs Url"
+          },
+          "saml_entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saml Entity Id"
+          },
+          "saml_metadata_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saml Metadata Url"
+          },
+          "saml_x509_cert": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saml X509 Cert"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "ProviderCreate",
+        "type": "object"
+      },
+      "ProviderPatch": {
+        "properties": {
+          "attribute_mapping": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribute Mapping"
+          },
+          "default_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Role"
+          },
+          "email_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Domain"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "oidc_client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oidc Client Id"
+          },
+          "oidc_client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oidc Client Secret"
+          },
+          "oidc_issuer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oidc Issuer"
+          },
+          "oidc_scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oidc Scopes"
+          },
+          "saml_acs_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saml Acs Url"
+          },
+          "saml_entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saml Entity Id"
+          },
+          "saml_metadata_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saml Metadata Url"
+          },
+          "saml_x509_cert": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saml X509 Cert"
+          }
+        },
+        "title": "ProviderPatch",
+        "type": "object"
+      },
       "ReactionIn": {
         "properties": {
           "block_id": {
@@ -1480,6 +1784,17 @@
             ],
             "title": "Cron Expression"
           },
+          "cron_timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cron Timezone"
+          },
           "enabled": {
             "default": true,
             "title": "Enabled",
@@ -1544,6 +1859,17 @@
               }
             ],
             "title": "Cron Expression"
+          },
+          "cron_timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cron Timezone"
           },
           "enabled": {
             "anyOf": [
@@ -3331,6 +3657,30 @@
         ]
       }
     },
+    "/api/v1/admin/health-dashboard": {
+      "get": {
+        "description": "DB 풀 / MinIO 버킷 / Meilisearch 인덱스 / 인-프로세스 ticker / 24h 에러 카운트 / rate-limit / 큐 깊이 통합 스냅샷. 각 섹션은 try/except 로 격리되며 실패 시 ``ok: false`` 만 반환.",
+        "operationId": "health_dashboard_api_v1_admin_health_dashboard_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Dashboard Api V1 Admin Health Dashboard Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "시스템 헬스 종합 대시보드 (admin)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/maintenance/run": {
       "post": {
         "operationId": "run_maintenance_api_v1_admin_maintenance_run_post",
@@ -3742,6 +4092,202 @@
         "summary": "정책 실행 로그 (admin, 최근순)",
         "tags": [
           "retention"
+        ]
+      }
+    },
+    "/api/v1/admin/sso/providers": {
+      "get": {
+        "operationId": "list_providers_api_v1_admin_sso_providers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Providers Api V1 Admin Sso Providers Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "SSO 제공자 목록 (admin)",
+        "tags": [
+          "sso"
+        ]
+      },
+      "post": {
+        "operationId": "create_provider_api_v1_admin_sso_providers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Provider Api V1 Admin Sso Providers Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "SSO 제공자 생성 (admin)",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/api/v1/admin/sso/providers/{provider_id}": {
+      "delete": {
+        "operationId": "delete_provider_api_v1_admin_sso_providers__provider_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "SSO 제공자 삭제 (admin)",
+        "tags": [
+          "sso"
+        ]
+      },
+      "get": {
+        "operationId": "get_provider_api_v1_admin_sso_providers__provider_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Provider Api V1 Admin Sso Providers  Provider Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "SSO 제공자 단건 (admin) — 비밀값은 마스킹됨",
+        "tags": [
+          "sso"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_provider_api_v1_admin_sso_providers__provider_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Provider Api V1 Admin Sso Providers  Provider Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "SSO 제공자 수정 (admin)",
+        "tags": [
+          "sso"
         ]
       }
     },
@@ -5040,6 +5586,97 @@
         "summary": "Refresh",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/sso/discover": {
+      "get": {
+        "operationId": "discover_api_v1_auth_sso_discover_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "email",
+            "required": true,
+            "schema": {
+              "maxLength": 320,
+              "minLength": 3,
+              "title": "Email",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Discover Api V1 Auth Sso Discover Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "이메일 도메인으로 SSO 제공자 탐색 (public)",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/api/v1/auth/sso/{provider_id}/initiate": {
+      "get": {
+        "operationId": "initiate_api_v1_auth_sso__provider_id__initiate_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Initiate Api V1 Auth Sso  Provider Id  Initiate Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "SSO 로그인 흐름 시작 (public, 현재 501 placeholder)",
+        "tags": [
+          "sso"
         ]
       }
     },
@@ -7762,6 +8399,111 @@
         "summary": "댓글 작성 (editor+) — parent_id, mention_user_ids 지원",
         "tags": [
           "comments"
+        ]
+      }
+    },
+    "/api/v1/documents/{slug}/custom-css": {
+      "patch": {
+        "description": "DocumentJSON 의 ``custom_css`` 문자열을 sanitize 후 교체한다. 관리자(admin) 전용. ``<script>``, ``expression()``, ``url(javascript:)``, ``@import``, ``behavior:`` 등은 자동 제거되며 제거된 패턴은 ``meta.warnings`` 로 반환된다. 최대 10000 chars. 빈 문자열은 필드를 제거한다. ``If-Match`` 필요.",
+        "operationId": "patch_custom_css_api_v1_documents__slug__custom_css_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-MXWP-Change-Log",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-Change-Log"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Custom Css Api V1 Documents  Slug  Custom Css Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 custom CSS (admin-only branding) 갱신",
+        "tags": [
+          "documents"
         ]
       }
     },
@@ -13012,6 +13754,53 @@
         ]
       }
     },
+    "/api/v1/share/email-optout": {
+      "get": {
+        "description": "공유 메일 본문에 포함된 ``token`` 으로 호출하면 해당 이메일을 ``email_optout_list`` 에 추가해 이후 공유 메일 발송에서 제외한다. 이미 처리된 토큰은 idempotent — 200 응답에 ``already=true`` 를 담는다.\n\n**라우트 순서**: 이 핸들러는 `/share/{token}` 보다 먼저 등록돼야 FastAPI 가 `email-optout` 을 슬러그가 아닌 리터럴로 매칭한다.",
+        "operationId": "share_email_optout_early_api_v1_share_email_optout_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Share Email Optout Early Api V1 Share Email Optout Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "공유 메일 수신 거부 (인증 불필요)",
+        "tags": [
+          "sharing"
+        ]
+      }
+    },
     "/api/v1/share/short/{short_id}": {
       "get": {
         "description": "QR/모바일 친화 6자리 Crockford-base32 alias 를 token 으로 변환해 `/share/{token}` 으로 302 리다이렉트한다. revoked/expired 여부는 후속 GET /share/{token} 에서 410 으로 처리된다.",
@@ -15060,6 +15849,10 @@
     {
       "description": "TOTP 기반 2FA (Cycle 17) — 사용자가 설정에서 옵트인하면 이후 로그인 시 Google Authenticator / Authy 6자리 코드를 추가로 요구한다. 백업 코드(8개) 도 발급되며 1회씩 사용 후 'USED' 로 마킹된다. /me/2fa/setup → /me/2fa/verify 로 활성화.",
       "name": "two_factor"
+    },
+    {
+      "description": "SSO 제공자 (Cycle 19, scaffolding) — SAML/OIDC IdP 설정의 admin CRUD + 이메일 도메인 기반 자동 라우팅. 실제 SAML/OIDC 핸드셰이크는 다음 사이클에서 python3-saml / authlib 로 구현 예정 — 현재 /auth/sso/{id}/initiate 는 501 placeholder 를 회신한다.",
+      "name": "sso"
     },
     {
       "description": "버전 태그 (Cycle 16) — document_versions(v1, v2, …) 에 사람이 읽는 라벨('v1.0 release', 'RC1') 을 붙이고, 태그된 시점의 content_json 스냅샷을 새 문서로 분기(branch) 한다. is_locked=true 태그는 admin 만 삭제 가능.",

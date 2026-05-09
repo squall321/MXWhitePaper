@@ -256,3 +256,103 @@ async def test_create_share_for_unknown_slug_returns_404() -> None:
             "/api/v1/documents/no-such-slug-zzz/share", json={}
         )
         assert r.status_code == 404
+
+
+# ── Email opt-out (Cycle 13 S2 follow-up) ───────────────────────────────
+
+
+async def _wipe_optout_state() -> None:
+    s, gen = await _new_session()
+    try:
+        await s.execute(text("DELETE FROM share_email_optout_tokens"))
+        await s.execute(text("DELETE FROM email_optout_list"))
+        await s.commit()
+    finally:
+        await _close_session(gen)
+
+
+@pytest.mark.asyncio
+async def test_share_create_emits_optout_token_per_recipient() -> None:
+    """Each ``notify_emails`` recipient gets a row in
+    ``share_email_optout_tokens``."""
+    await _wipe_all_share_links()
+    await _wipe_optout_state()
+    async with await _client() as ac:
+        r = await ac.post(
+            f"/api/v1/documents/{SEED_SLUG}/share",
+            json={"notify_emails": ["alice@example.com", "bob@example.com"]},
+        )
+        assert r.status_code == 201, r.text
+        data = r.json()["data"]
+        assert sorted(data["notified_emails"]) == [
+            "alice@example.com",
+            "bob@example.com",
+        ]
+        assert data["skipped_optout_emails"] == []
+
+    s, gen = await _new_session()
+    try:
+        rows = (await s.execute(
+            text(
+                "SELECT email FROM share_email_optout_tokens ORDER BY email"
+            ),
+        )).all()
+        assert [r[0] for r in rows] == [
+            "alice@example.com",
+            "bob@example.com",
+        ]
+    finally:
+        await _close_session(gen)
+
+
+@pytest.mark.asyncio
+async def test_email_optout_endpoint_marks_recipient_unsubscribed() -> None:
+    await _wipe_all_share_links()
+    await _wipe_optout_state()
+    async with await _client() as ac:
+        r = await ac.post(
+            f"/api/v1/documents/{SEED_SLUG}/share",
+            json={"notify_emails": ["carol@example.com"]},
+        )
+        assert r.status_code == 201
+
+        # Look up the issued opt-out token.
+        s, gen = await _new_session()
+        try:
+            row = (await s.execute(
+                text("SELECT token FROM share_email_optout_tokens LIMIT 1"),
+            )).first()
+            assert row is not None
+            token = row[0]
+        finally:
+            await _close_session(gen)
+
+        # Hit the opt-out endpoint.
+        r2 = await ac.get(f"/api/v1/share/email-optout?token={token}")
+        assert r2.status_code == 200, r2.text
+        body = r2.json()["data"]
+        assert body["email"] == "carol@example.com"
+        assert body["already"] is False
+
+        # Idempotent — second hit reports `already=True` and email_optout_list
+        # remains a single row.
+        r3 = await ac.get(f"/api/v1/share/email-optout?token={token}")
+        assert r3.status_code == 200
+        assert r3.json()["data"]["already"] is True
+
+        # Subsequent share to the same address is filtered out.
+        r4 = await ac.post(
+            f"/api/v1/documents/{SEED_SLUG}/share",
+            json={"notify_emails": ["carol@example.com"]},
+        )
+        assert r4.status_code == 201
+        out = r4.json()["data"]
+        assert out["notified_emails"] == []
+        assert out["skipped_optout_emails"] == ["carol@example.com"]
+
+
+@pytest.mark.asyncio
+async def test_email_optout_endpoint_404_for_unknown_token() -> None:
+    async with await _client() as ac:
+        r = await ac.get("/api/v1/share/email-optout?token=nope-no-such-token")
+        assert r.status_code == 404

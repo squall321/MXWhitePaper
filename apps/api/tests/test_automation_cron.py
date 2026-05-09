@@ -306,3 +306,51 @@ async def test_tick_disables_rule_with_poison_expression() -> None:
         assert log is not None
         assert log[0] == "failed"
         assert "invalid cron_expression" in (log[1] or "")
+
+
+# ── Cycle 20: cron_timezone ────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_cron_rule_persists_timezone() -> None:
+    """Creating a cron rule with cron_timezone='Asia/Seoul' stores it and
+    schedules next_cron_run_at in UTC."""
+    async with await _client() as ac:
+        r = await ac.post(
+            "/api/v1/automation/rules",
+            json={
+                "name": "seoul morning",
+                "trigger_kind": "cron",
+                "cron_expression": "0 9 * * *",
+                "cron_timezone": "Asia/Seoul",
+                "action_kind": "notification_blast",
+                "action_payload": {
+                    "kind": "automation_blast",
+                    "message_template": "morning",
+                },
+            },
+        )
+        assert r.status_code == 201, r.text
+        data = r.json()["data"]
+        assert data["cron_timezone"] == "Asia/Seoul"
+        assert data["next_cron_run_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_cron_rule_rejects_unknown_timezone() -> None:
+    async with await _client() as ac:
+        r = await ac.post(
+            "/api/v1/automation/rules",
+            json={
+                "name": "bad tz",
+                "trigger_kind": "cron",
+                "cron_expression": "0 9 * * *",
+                "cron_timezone": "Mars/Olympus",
+                "action_kind": "notification_blast",
+                "action_payload": {
+                    "kind": "automation_blast",
+                    "message_template": "x",
+                },
+            },
+        )
+        assert r.status_code == 422

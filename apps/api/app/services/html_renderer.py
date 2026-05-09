@@ -27,6 +27,7 @@ import html
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.services.css_sanitizer import sanitize_css
 from app.services.variables import walk_doc_substitute
 
 
@@ -125,6 +126,17 @@ def render_namuwiki_html(
                 f'href="{html.escape(href)}" '
                 f'title="MX White Paper oEmbed">'
             )
+    # Per-doc admin-supplied CSS. Already sanitized by the PATCH endpoint
+    # before persistence, but we re-run the scrub here defensively (e.g.
+    # imports/restores might bypass the API). NOT scoped — leaks into the
+    # whole rendered page. Document warning + admin-only role limit blast
+    # radius. Escaping `</style>` defends against attribute-style breakouts.
+    raw_custom_css = _str(doc.get("custom_css"))
+    if raw_custom_css:
+        safe_css, _warnings = sanitize_css(raw_custom_css)
+        if safe_css:
+            safe_css = safe_css.replace("</style>", "<\\/style>")
+            head_extras.append(f"<style data-mxwp-custom-css=\"1\">{safe_css}</style>")
 
     return _HTML_TEMPLATE.format(
         lang=html.escape(opts.lang),

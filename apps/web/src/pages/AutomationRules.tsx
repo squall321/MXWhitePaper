@@ -10,6 +10,7 @@ import { ErrorState } from '@/components/ui/ErrorState'
 import {
   ALL_AUTOMATION_ACTIONS,
   ALL_AUTOMATION_TRIGGERS,
+  COMMON_CRON_TIMEZONES,
   type AutomationActionKind,
   type AutomationRule,
   type AutomationRunLog,
@@ -235,6 +236,9 @@ function RuleRow({
                 data-testid={`automation-row-cron-${rule.id}`}
               >
                 {rule.cron_expression}
+                {rule.cron_timezone && rule.cron_timezone !== 'UTC'
+                  ? ` (${rule.cron_timezone})`
+                  : ''}
               </span>
             )}
           </div>
@@ -311,6 +315,7 @@ function CreateRuleModal({
     { k: 'url', v: '' },
   ])
   const [cronExpr, setCronExpr] = useState('0 9 * * 1')
+  const [cronTz, setCronTz] = useState<string>('UTC')
   const [submitting, setSubmitting] = useState(false)
 
   const reset = () => {
@@ -320,6 +325,7 @@ function CreateRuleModal({
     setAction('webhook')
     setActionPairs([{ k: 'url', v: '' }])
     setCronExpr('0 9 * * 1')
+    setCronTz('UTC')
   }
 
   const onSubmit = async () => {
@@ -344,7 +350,9 @@ function CreateRuleModal({
         action_kind: action,
         action_payload: pairsToObject(actionPairs),
         enabled: true,
-        ...(trigger === 'cron' ? { cron_expression: cronExpr.trim() } : {}),
+        ...(trigger === 'cron'
+          ? { cron_expression: cronExpr.trim(), cron_timezone: cronTz }
+          : {}),
       })
       toast.success('등록됨')
       reset()
@@ -406,7 +414,12 @@ function CreateRuleModal({
           </Select>
         </div>
         {trigger === 'cron' ? (
-          <CronEditor expr={cronExpr} setExpr={setCronExpr} />
+          <CronEditor
+            expr={cronExpr}
+            setExpr={setCronExpr}
+            tz={cronTz}
+            setTz={setCronTz}
+          />
         ) : (
           <KvEditor
             label="트리거 필터 (선택, 키=값 동등 매칭)"
@@ -521,11 +534,17 @@ function KvEditor({
 function CronEditor({
   expr,
   setExpr,
+  tz,
+  setTz,
 }: {
   expr: string
   setExpr: (e: string) => void
+  tz: string
+  setTz: (t: string) => void
 }) {
-  // Live-validate + compute next firing for the helper line.
+  // Live-validate + compute next firing for the helper line. The FE
+  // ``parseCron`` mirror is timezone-agnostic; the preview text echoes
+  // the chosen tz so admins know what they're seeing.
   const preview = useMemo(() => {
     try {
       const parsed = parseCron(expr)
@@ -563,16 +582,28 @@ function CronEditor({
           </button>
         ))}
       </div>
+      <label className="mt-2 block text-xs text-gray-600">시간대</label>
+      <Select
+        value={tz}
+        onChange={(e) => setTz(e.target.value)}
+        data-testid="automation-cron-timezone"
+      >
+        {COMMON_CRON_TIMEZONES.map((t) => (
+          <option key={t.value} value={t.value}>
+            {t.label}
+          </option>
+        ))}
+      </Select>
       <p
         className={`mt-1 text-xs ${preview.ok ? 'text-gray-600' : 'text-red-600'}`}
         data-testid="automation-cron-preview"
       >
         {preview.ok
-          ? `다음 실행: ${preview.when.toLocaleString()} (${preview.rel})`
+          ? `다음 실행: ${preview.when.toLocaleString()} (${preview.rel}, ${tz})`
           : `오류: ${preview.error}`}
       </p>
       <p className="mt-1 text-[11px] text-gray-500">
-        형식: 분 시 일 월 요일 — 5칸. *, , (목록), - (범위), / (간격), ? 지원. UTC 기준.
+        형식: 분 시 일 월 요일 — 5칸. *, , (목록), - (범위), / (간격), ? 지원. 선택한 시간대 기준.
       </p>
     </div>
   )

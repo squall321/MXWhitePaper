@@ -346,15 +346,21 @@ so dev-mode usage surfaces gaps.
 설치 프롬프트는 `<InstallPrompt />` 가 `beforeinstallprompt` 를 가로채
 오른쪽 아래 "📱 앱으로 설치" 알약 버튼으로 노출한다 (이미 standalone 상태면 숨김).
 
-### 아이콘 TODO
+### 아이콘
 
-현재 매니페스트는 단색 SVG (`icon.svg`) 를 메인 아이콘으로 사용한다.
-크롬 데스크톱 설치 기준은 **192px / 512px PNG** 두 장을 요구하므로,
-실제 launch 전에 `apps/web/scripts/gen-pwa-icons.cjs` (Node 빌트인만으로
-플랫 컬러 placeholder 생성) 를 돌리거나, 디자인 PNG 를
-`apps/web/public/icon-192.png`, `apps/web/public/icon-512.png` 로
-교체해야 한다. 매니페스트의 PNG 항목은 이미 그 경로를 가리키고 있으니
-파일만 떨어뜨리면 자동으로 잡힌다.
+`apps/web/public/icon-192.png` + `icon-512.png` 가 빌드에 포함되어
+있어 크롬 데스크톱 설치 게이트가 통과한다 (Samsung 블루 배경 + 흰색 "MX"
+워드마크). 두 가지 방법으로 재생성할 수 있다:
+
+```bash
+# (a) Node 빌트인만 — 단색 placeholder
+node apps/web/scripts/gen-pwa-icons.cjs
+
+# (b) Pillow 사용 — "MX" 워드마크 포함 (현재 커밋된 형태)
+python3 apps/web/scripts/gen-pwa-icons.py
+```
+
+브랜드 디자인 PNG 가 따로 있다면 동일 경로에 덮어쓰면 매니페스트가 자동으로 잡는다.
 
 ### 미배송
 
@@ -434,6 +440,103 @@ export function verify(raw, header, secret) {
 `/admin/webhooks` 의 “전송 로그” 모달이 최근 20건의 응답 코드 + 본문 일부를
 보여 주므로 디버깅에 사용한다. `webhooks.filter_part_ids` 에 part UUID 를 넣어
 두면 그 part 에 속한 문서의 이벤트만 발사된다 (빈 리스트 = 모든 part 매칭).
+
+## 최종 기능 (cycle 20 기준)
+
+20 사이클의 자기개선 루프를 거친 시점의 모듈 단위 요약:
+
+- **Editor / Renderer**: BlockNote 기반 에디터 + 26 종 블록 (paragraph,
+  heading-2/3/4, list, table, image, file, callout, code, math, mermaid,
+  whiteboard, form, org-chart, flow, gantt, calculator, dashboard-embed,
+  data-source, kpi-cards, gallery, chart, quiz, embed, divider, …).
+- **검색 / 임베드**: Meilisearch 인덱스 + dependency graph 페이지
+  (`/dep-graph` — cytoscape cose-bilkent + d3-force fallback) + 위키링크
+  자동 갱신.
+- **워크플로우 자동화**: 이벤트(`doc_published`, `review_decided`, …) +
+  cron 트리거(IANA 시간대 지원), webhook · 알림 · 이메일 · 태그 · 상태
+  전이 액션, 다단계 chain, 실행 로그.
+- **공유 / 협업**: 공유 링크 (만료, 비밀번호, 짧은 alias, **수신 거부**
+  토큰), 코멘트/리뷰/승인 → 알림 / 이메일 다이제스트 / 구독.
+- **import / export**: DocumentJSON, .docx, .pptx, Markdown, PDF, CSV bulk
+  import.
+- **운영**: 백업 러너, 보존 정책, audit pruner, search audit, TOTP 2FA,
+  API token scopes, RBAC.
+- **PWA**: 192/512 PNG 아이콘 포함, network-first / cache-then-network 전략,
+  오프라인 페이지.
+
+### 주요 라우트 맵
+
+| 경로 | 역할 |
+| ------ | ------ |
+| `/` | 홈 / 최근 문서 |
+| `/docs/:slug` | 문서 읽기 |
+| `/docs/:slug/edit` | 문서 편집 (editor+) |
+| `/docs/:slug/present` | 프리젠테이션 모드 |
+| `/dep-graph?root=<slug>` | 의존성 그래프 (cytoscape) |
+| `/share/:token` | 공개 공유 링크 |
+| `/share/short/:short_id` | 짧은 alias 리다이렉트 |
+| `/share/email-optout?token=…` | 공유 메일 수신 거부 |
+| `/admin/automation` | 자동화 규칙 관리 (admin) |
+| `/admin/webhooks` | webhook 관리 (admin) |
+| `/admin/sso-providers` | SSO 공급자 (admin) |
+| `/admin/health` | 헬스 대시보드 (admin) |
+
+### 환경 변수 핵심
+
+`.env.example` 에 전체 목록이 있다. 운영에서 가장 자주 만지는 것들:
+
+| 키 | 의미 |
+| --- | --- |
+| `DATABASE_URL` | Postgres async URL |
+| `MEILI_URL` / `MEILI_KEY` | 검색 |
+| `MINIO_ENDPOINT` / `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | 파일 |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | 이메일 |
+| `EMAIL_ENABLED` | false 면 콘솔 폴백 |
+| `AI_ENABLED` | `/ai/*` 게이트 |
+| `MXWP_SKIP_AUTOMATION` | `1` 이면 cron/이벤트 ticker 정지 (테스트용) |
+| `JWT_SECRET` | 토큰 서명 |
+
+### 핵심 명령어 한 줄 모음
+
+```bash
+make codegen                           # 스키마 → TS/Python + OpenAPI 스냅샷
+make migrate                           # alembic upgrade head
+make seed                              # 초기 데이터
+make up | down | clean                 # 서비스 라이프사이클
+pnpm --filter @mx/web run typecheck    # FE 타입 검사
+pnpm --filter @mx/web run build        # 프로덕션 번들
+pnpm --filter @mx/web test             # vitest
+pytest -q                              # BE 테스트
+node apps/web/scripts/check-bundle-size.cjs   # 번들 게이트
+./apps/web/scripts/check-all.sh        # 4단계 통합 게이트
+```
+
+### Production checklist
+
+`launch` 전에 수동 확인이 필요한 항목들. 자동화된 회로(루프)에서 다루지
+않거나, 도메인 결정이 남아 있어 의도적으로 deferred 된 것들이다.
+
+- [ ] **AI 백엔드 연결** — `apps/api/app/routers/ai.py` 의 `_call_llm` 을
+  실 SDK 로 교체 (현재 5종 모두 placeholder).
+- [ ] **PWA 아이콘 디자인** — 현재는 단색 + "MX" 워드마크.
+  `apps/web/public/icon-{192,512}.png` 를 디자인 시안으로 교체.
+- [ ] **이미지 영속화 잡** — .docx import 가 placeholder ULID 만 발급.
+  실제 MinIO 업로드는 백그라운드 잡으로 분리 예정.
+- [ ] **푸시 알림 / periodic background sync** — PWA 미배송 영역.
+- [ ] **Service worker 단위 테스트** — 현재는 smoke 만.
+- [ ] **다중 replica cron ticker** — 현재는 single-replica 가정 (`automation_cron`,
+  `digest_runner`, `retention_runner`, `reminder_runner`, `backup_runner`).
+  HA 배포 시 advisory lock 또는 외부 큐로 마이그레이트.
+- [ ] **Webhook 4xx 영구 실패 알림** — admin email 통보 흐름 미작성.
+- [ ] **i18n 확장** — 블록 에디터 라벨, AI 패널 등 한국어 리터럴이 남은 영역.
+- [ ] **HTML email 템플릿** — 현재는 plain text 만.
+- [ ] **SSO 프로비저닝 자동화** — SsoProviders 모듈은 라우터/페이지만 있고,
+  실제 SAML / OIDC 핸드셰이크는 Z1 에이전트가 마무리 중.
+- [ ] **Health 대시보드 실시간 스트리밍** — Z2 에이전트가 별도 진행 중.
+- [ ] **Custom CSS 인젝션 보안 리뷰** — Z3 에이전트가 별도 진행 중.
+
+자동화된 회로가 추적 중인 follow-up 은 본 문서가 아니라
+`docs/04-analysis/` 의 마지막 분석서를 참조.
 
 ## 라이선스
 

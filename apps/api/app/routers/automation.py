@@ -28,6 +28,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.core.auth import require_admin
 from app.core.db import get_db
@@ -36,6 +37,19 @@ from app.repos import document_repo
 from app.services import automation_dispatcher
 from app.services.automation_dispatcher import VALID_ACTIONS, VALID_TRIGGERS
 from app.services.cron_parser import next_run, parse_cron
+
+
+def _resolve_tz_or_422(name: str | None) -> ZoneInfo:
+    """Validate an IANA tz name; raise 422 on bogus input."""
+    if not name:
+        return ZoneInfo("UTC")
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError as e:
+        raise ValidationFailed(
+            f"unknown cron_timezone: {name!r}",
+            details={"cron_timezone": name},
+        ) from e
 
 router = APIRouter(prefix="/api/v1", tags=["automation"])
 
@@ -54,6 +68,9 @@ class RuleCreate(BaseModel):
     # cron expression (minute hour dom month dow). Validated server-side via
     # ``cron_parser.parse_cron``.
     cron_expression: str | None = None
+    # Cycle 20 — IANA tz name; defaults to UTC. Used by the cron ticker to
+    # interpret ``cron_expression`` in the rule's local zone.
+    cron_timezone: str | None = None
 
 
 class RulePatch(BaseModel):
@@ -64,6 +81,7 @@ class RulePatch(BaseModel):
     action_payload: dict[str, Any] | None = None
     enabled: bool | None = None
     cron_expression: str | None = None
+    cron_timezone: str | None = None
 
 
 class TestRuleIn(BaseModel):
@@ -78,7 +96,7 @@ _SELECT_COLS = """
     SELECT id, name, trigger_kind, trigger_filter,
            action_kind, action_payload, enabled,
            created_by, created_at, last_fired_at, fire_count,
-           cron_expression, next_cron_run_at
+           cron_expression, next_cron_run_at, cron_timezone
     FROM automation_rules
 """
 
@@ -109,14 +127,17 @@ def _row_to_dict(r: Any) -> dict[str, Any]:
         "fire_count": int(r[10] or 0),
         "cron_expression": r[11],
         "next_cron_run_at": r[12].isoformat() if r[12] else None,
+        "cron_timezone": r[13] if len(r) > 13 else "UTC",
     }
 
 
-def _validate_and_compute_cron(expr: str | None) -> tuple[str, datetime]:
-    """Validate a cron expression and return ``(expr, next_run_at)``.
+def _validate_and_compute_cron(
+    expr: str | None, tz_name: str | None = None,
+) -> tuple[str, datetime, str]:
+    """Validate cron + tz and return ``(expr, next_run_at_utc, tz_name)``.
 
-    Raises ``ValidationFailed`` on a bad expression so the router emits a
-    standard 422.
+    Raises ``ValidationFailed`` on a bad expression / unknown tz so the
+    router emits a standard 422.
     """
     if not isinstance(expr, str) or not expr.strip():
         raise ValidationFailed(
@@ -129,8 +150,10 @@ def _validate_and_compute_cron(expr: str | None) -> tuple[str, datetime]:
             f"invalid cron_expression: {e}",
             details={"cron_expression": expr},
         ) from e
-    nxt = next_run(parsed, datetime.now(timezone.utc))
-    return expr.strip(), nxt
+    tz = _resolve_tz_or_422(tz_name)
+    nxt = next_run(parsed, datetime.now(timezone.utc), tz=tz)
+    canonical_tz = tz.key if hasattr(tz, "key") else (tz_name or "UTC")
+    return expr.strip(), nxt, canonical_tz
 
 
 async def _fetch_one(s: AsyncSession, rid: str) -> dict[str, Any] | None:
@@ -176,19 +199,22 @@ async def create_rule(
     _validate_action(body.action_kind)
     cron_expr: str | None = None
     next_at: datetime | None = None
+    cron_tz: str = "UTC"
     if body.trigger_kind == "cron":
-        cron_expr, next_at = _validate_and_compute_cron(body.cron_expression)
+        cron_expr, next_at, cron_tz = _validate_and_compute_cron(
+            body.cron_expression, body.cron_timezone,
+        )
     row = (await s.execute(
         text(
             """
             INSERT INTO automation_rules
               (name, trigger_kind, trigger_filter,
                action_kind, action_payload, enabled, created_by,
-               cron_expression, next_cron_run_at)
+               cron_expression, next_cron_run_at, cron_timezone)
             VALUES
               (:n, :tk, CAST(:tf AS jsonb),
                :ak, CAST(:ap AS jsonb), :en, CAST(:cb AS uuid),
-               :ce, :na)
+               :ce, :na, :ctz)
             RETURNING id
             """
         ),
@@ -202,6 +228,7 @@ async def create_rule(
             "cb": user["id"],
             "ce": cron_expr,
             "na": next_at,
+            "ctz": cron_tz,
         },
     )).first()
     rid = str(row[0])
@@ -295,15 +322,24 @@ async def patch_rule(
             if body.cron_expression is not None
             else rule.get("cron_expression")
         )
-        expr, nxt = _validate_and_compute_cron(new_expr)
+        new_tz = (
+            body.cron_timezone
+            if body.cron_timezone is not None
+            else rule.get("cron_timezone")
+        )
+        expr, nxt, ctz = _validate_and_compute_cron(new_expr, new_tz)
         sets.append("cron_expression = :ce")
         params["ce"] = expr
         sets.append("next_cron_run_at = :na")
         params["na"] = nxt
+        sets.append("cron_timezone = :ctz")
+        params["ctz"] = ctz
     elif body.trigger_kind is not None and body.trigger_kind != "cron":
-        # Switched off cron — wipe the schedule columns.
+        # Switched off cron — wipe the schedule columns. Leave cron_timezone
+        # at its default 'UTC' so a later switch back to cron starts clean.
         sets.append("cron_expression = NULL")
         sets.append("next_cron_run_at = NULL")
+        sets.append("cron_timezone = 'UTC'")
     if not sets:
         raise ValidationFailed("nothing to update")
 

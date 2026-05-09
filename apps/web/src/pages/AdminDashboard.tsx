@@ -15,7 +15,9 @@ import { AuditRetentionPage } from './AuditRetention'
 import { AutomationRulesPage } from './AutomationRules'
 import { BackupAdminPage } from './BackupAdmin'
 import { BulkDocImportPage } from './BulkDocImport'
+import { HealthDashboardPage } from './HealthDashboard'
 import { RetentionPoliciesPage } from './RetentionPolicies'
+import { SsoProvidersPage } from './SsoProviders'
 import { TagManagerPage } from './TagManager'
 import { TemplateManagerPage } from './TemplateManager'
 import { WebhooksSettingsPage } from './WebhooksSettings'
@@ -35,6 +37,7 @@ type TabKey =
   | 'audit'
   | 'audit-retention'
   | 'health'
+  | 'health-dashboard'
   | 'maintenance'
   | 'orgs'
   | 'tags'
@@ -42,6 +45,7 @@ type TabKey =
   | 'webhooks'
   | 'automation'
   | 'workflow-chains'
+  | 'sso'
   | 'retention'
   | 'backups'
   | 'import-csv'
@@ -53,6 +57,7 @@ const TABS: Array<{ key: TabKey; labelKey: string }> = [
   { key: 'audit', labelKey: 'page.adminDashboard.tab.audit' },
   { key: 'audit-retention', labelKey: 'page.adminDashboard.tab.auditRetention' },
   { key: 'health', labelKey: 'page.adminDashboard.tab.health' },
+  { key: 'health-dashboard', labelKey: 'page.adminDashboard.tab.healthDashboard' },
   { key: 'maintenance', labelKey: 'page.adminDashboard.tab.maintenance' },
   { key: 'orgs', labelKey: 'page.adminDashboard.tab.orgs' },
   { key: 'tags', labelKey: 'page.adminDashboard.tab.tags' },
@@ -60,6 +65,7 @@ const TABS: Array<{ key: TabKey; labelKey: string }> = [
   { key: 'webhooks', labelKey: 'page.adminDashboard.tab.webhooks' },
   { key: 'automation', labelKey: 'page.adminDashboard.tab.automation' },
   { key: 'workflow-chains', labelKey: 'page.adminDashboard.tab.workflowChains' },
+  { key: 'sso', labelKey: 'page.adminDashboard.tab.sso' },
   { key: 'retention', labelKey: 'page.adminDashboard.tab.retention' },
   { key: 'backups', labelKey: 'page.adminDashboard.tab.backups' },
   { key: 'import-csv', labelKey: 'page.adminDashboard.tab.importCsv' },
@@ -140,6 +146,11 @@ export function AdminDashboardPage() {
         </div>
       )}
       {tab === 'health' && <HealthTab />}
+      {tab === 'health-dashboard' && (
+        <div data-testid="admin-tab-health-dashboard-content">
+          <HealthDashboardPage />
+        </div>
+      )}
       {tab === 'maintenance' && <MaintenanceTab />}
       {tab === 'orgs' && (
         <div data-testid="admin-tab-orgs-content">
@@ -169,6 +180,11 @@ export function AdminDashboardPage() {
       {tab === 'workflow-chains' && (
         <div data-testid="admin-tab-workflow-chains-content">
           <WorkflowChainsPage />
+        </div>
+      )}
+      {tab === 'sso' && (
+        <div data-testid="admin-tab-sso-content">
+          <SsoProvidersPage />
         </div>
       )}
       {tab === 'retention' && (

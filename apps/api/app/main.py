@@ -38,6 +38,7 @@ from .routers.exports import router as exports_router
 from .routers.files import router as files_router
 from .routers.forms import router as forms_router
 from .routers.glossary import router as glossary_router
+from .routers.health_dashboard import router as health_dashboard_router
 from .routers.imports import router as imports_router
 from .routers.links_graph import router as links_graph_router
 from .routers.notification_prefs import router as notification_prefs_router
@@ -55,6 +56,7 @@ from .routers.search import router as search_router
 from .routers.series import router as series_router
 from .routers.sharing import router as sharing_router
 from .routers.snippets import router as snippets_router
+from .routers.sso import router as sso_router
 from .routers.subscriptions import router as subscriptions_router
 from .routers.tags import router as tags_router
 from .routers.two_factor import router as two_factor_router
@@ -359,6 +361,15 @@ TAGS_METADATA: list[dict[str, str]] = [
         ),
     },
     {
+        "name": "sso",
+        "description": (
+            "SSO 제공자 (Cycle 19, scaffolding) — SAML/OIDC IdP 설정의 "
+            "admin CRUD + 이메일 도메인 기반 자동 라우팅. 실제 SAML/OIDC "
+            "핸드셰이크는 다음 사이클에서 python3-saml / authlib 로 구현 예정 — "
+            "현재 /auth/sso/{id}/initiate 는 501 placeholder 를 회신한다."
+        ),
+    },
+    {
         "name": "version-tags",
         "description": (
             "버전 태그 (Cycle 16) — document_versions(v1, v2, …) 에 사람이 "
@@ -525,6 +536,8 @@ def create_app() -> FastAPI:
     app.include_router(audit_router)
     # Cycle 0032 — audit log retention config + prune-now
     app.include_router(audit_retention_router)
+    # Operations health dashboard — DB pool / MinIO / Meili / tickers
+    app.include_router(health_dashboard_router)
     # Tier 2C — comments workflow + wiki link graph
     app.include_router(comments_doc_router)
     app.include_router(comments_one_router)
@@ -589,6 +602,8 @@ def create_app() -> FastAPI:
     app.include_router(two_factor_router)
     # Cycle 18 — workflow chains (multi-step automation orchestrator).
     app.include_router(workflow_chains_router)
+    # Cycle 19 — SSO providers (admin CRUD + placeholder login flow).
+    app.include_router(sso_router)
 
     return app
 

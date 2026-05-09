@@ -15,7 +15,7 @@ from fastapi.responses import Response as FastAPIResponse
 from sqlalchemy import text as _sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import require_editor, require_reader
+from app.core.auth import require_admin, require_editor, require_reader
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import NotFound, envelope
@@ -580,6 +580,51 @@ async def patch_variables(
             "variables": (doc.get("content_json") or {}).get("variables") or {},
         },
         meta={"etag": etag},
+    )
+
+
+@router.patch(
+    "/{slug}/custom-css",
+    summary="문서 custom CSS (admin-only branding) 갱신",
+    description=(
+        "DocumentJSON 의 ``custom_css`` 문자열을 sanitize 후 교체한다. "
+        "관리자(admin) 전용. ``<script>``, ``expression()``, "
+        "``url(javascript:)``, ``@import``, ``behavior:`` 등은 자동 제거되며 "
+        "제거된 패턴은 ``meta.warnings`` 로 반환된다. "
+        "최대 10000 chars. 빈 문자열은 필드를 제거한다. ``If-Match`` 필요."
+    ),
+)
+async def patch_custom_css(
+    slug: str,
+    payload: dict[str, Any],
+    response: Response,
+    if_match: str | None = Header(default=None, alias="If-Match"),
+    x_mxwp_user: str | None = Header(default=None, alias="X-MXWP-User"),
+    x_change_log: str | None = Header(default=None, alias="X-MXWP-Change-Log"),
+    s: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_admin),
+) -> dict[str, Any]:
+    actor = await _resolve_actor(s, x_mxwp_user, user)
+    raw_css = payload.get("custom_css") if isinstance(payload, dict) else None
+    if raw_css is None:
+        raw_css = ""
+    doc, safe_css, warnings = await document_service.patch_custom_css(
+        s,
+        slug=slug,
+        raw_css=raw_css,
+        if_match=if_match,
+        actor_id=actor,
+        change_log=x_change_log,
+    )
+    etag = document_service.make_etag(doc["id"], doc["version"])
+    response.headers["ETag"] = etag
+    return envelope(
+        data={
+            "slug": doc["slug"],
+            "version": doc["version"],
+            "custom_css": safe_css,
+        },
+        meta={"etag": etag, "warnings": warnings},
     )
 
 

@@ -70,6 +70,11 @@ const DocumentVariablesPage = lazyLogged('DocumentVariables', () =>
     default: m.DocumentVariablesPage,
   })),
 )
+const DocumentCustomCssPage = lazyLogged('DocumentCustomCss', () =>
+  import('./pages/DocumentCustomCss').then((m) => ({
+    default: m.DocumentCustomCssPage,
+  })),
+)
 const OrgsPage = lazyLogged('Orgs', () =>
   import('./pages/Orgs').then((m) => ({ default: m.OrgsPage })),
 )
@@ -78,6 +83,9 @@ const AdminOrgsPage = lazyLogged('AdminOrgs', () =>
 )
 const AdminDashboardPage = lazyLogged('AdminDashboard', () =>
   import('./pages/AdminDashboard').then((m) => ({ default: m.AdminDashboardPage })),
+)
+const HealthDashboardPage = lazyLogged('HealthDashboard', () =>
+  import('./pages/HealthDashboard').then((m) => ({ default: m.HealthDashboardPage })),
 )
 const ArchivedDocsPage = lazyLogged('ArchivedDocs', () =>
   import('./pages/ArchivedDocs').then((m) => ({ default: m.ArchivedDocsPage })),
@@ -169,6 +177,11 @@ const AutomationRulesPage = lazyLogged('AutomationRules', () =>
 const WorkflowChainsPage = lazyLogged('WorkflowChains', () =>
   import('./pages/WorkflowChains').then((m) => ({
     default: m.WorkflowChainsPage,
+  })),
+)
+const SsoProvidersPage = lazyLogged('SsoProviders', () =>
+  import('./pages/SsoProviders').then((m) => ({
+    default: m.SsoProvidersPage,
   })),
 )
 const RetentionPoliciesPage = lazyLogged('RetentionPolicies', () =>
@@ -357,6 +370,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="docs/import" element={<Boundaried name="docs/import"><DocumentImportPage /></Boundaried>} />
                 <Route path="docs/:slug" element={<Boundaried name="docs/:slug"><DocumentReaderPage /></Boundaried>} />
                 <Route path="docs/:slug/variables" element={<Boundaried name="docs/:slug/variables"><DocumentVariablesPage /></Boundaried>} />
+                <Route path="docs/:slug/custom-css" element={<Boundaried name="docs/:slug/custom-css"><DocumentCustomCssPage /></Boundaried>} />
                 <Route
                   path="docs/:slug/versions/:from/diff/:to"
                   element={<Boundaried name="docs/:slug/diff"><VersionDiffPage /></Boundaried>}
@@ -368,6 +382,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="orgs" element={<Boundaried name="orgs"><OrgsPage /></Boundaried>} />
                 <Route path="admin/orgs" element={<Boundaried name="admin/orgs"><AdminOrgsPage /></Boundaried>} />
                 <Route path="admin/dashboard" element={<Boundaried name="admin/dashboard"><AdminDashboardPage /></Boundaried>} />
+                <Route path="admin/health" element={<Boundaried name="admin/health"><HealthDashboardPage /></Boundaried>} />
                 <Route path="admin/import-csv" element={<Boundaried name="admin/import-csv"><BulkDocImportPage /></Boundaried>} />
                 <Route path="admin/archive" element={<Boundaried name="admin/archive"><ArchivedDocsPage /></Boundaried>} />
                 <Route path="admin/audit" element={<Boundaried name="admin/audit"><AuditLogPage /></Boundaried>} />
@@ -378,6 +393,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="admin/webhooks" element={<Boundaried name="admin/webhooks"><WebhooksSettingsPage /></Boundaried>} />
                 <Route path="admin/automation" element={<Boundaried name="admin/automation"><AutomationRulesPage /></Boundaried>} />
                 <Route path="admin/workflow-chains" element={<Boundaried name="admin/workflow-chains"><WorkflowChainsPage /></Boundaried>} />
+                <Route path="admin/sso" element={<Boundaried name="admin/sso"><SsoProvidersPage /></Boundaried>} />
                 <Route path="admin/retention" element={<Boundaried name="admin/retention"><RetentionPoliciesPage /></Boundaried>} />
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />

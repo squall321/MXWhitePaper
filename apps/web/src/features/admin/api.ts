@@ -158,6 +158,65 @@ export async function getAdminHealth(): Promise<AdminHealth> {
   return unwrap<AdminHealth>(res)
 }
 
+// ── Health dashboard (operations view) ───────────────────────────────────
+export interface HealthBucket {
+  name: string
+  count: number
+  size_bytes: number
+  error?: string
+}
+export interface HealthIndex {
+  uid: string
+  count: number
+}
+export interface HealthTicker {
+  name: string
+  running: boolean
+  last_tick_at: string | null
+  next_due_at: string | null
+}
+export interface HealthDashboard {
+  uptime_seconds: number
+  version: string
+  database: {
+    pool_size: number
+    checked_out: number
+    overflow: number
+    ok: boolean
+    error?: string
+  }
+  minio: {
+    endpoint: string
+    buckets: HealthBucket[]
+    ok: boolean
+    error?: string
+  }
+  meilisearch: {
+    url: string
+    indexes: HealthIndex[]
+    ok: boolean
+    error?: string
+  }
+  tickers: HealthTicker[]
+  errors_24h: number
+  rate_limit: {
+    active_buckets: number
+    active_blocks: number
+  }
+  queue_depths: {
+    automation_pending: number
+    webhook_deliveries_pending: number
+    subscription_digest_buffer: number
+  }
+}
+
+export async function getHealthDashboard(): Promise<HealthDashboard> {
+  const res = await apiClient.get<ApiEnvelope<HealthDashboard>>(
+    '/admin/health-dashboard',
+  )
+  return unwrap<HealthDashboard>(res)
+}
+
 export async function runMaintenance(): Promise<MaintenanceResult> {
   const res = await apiClient.post<ApiEnvelope<MaintenanceResult>>(
     '/admin/maintenance/run',

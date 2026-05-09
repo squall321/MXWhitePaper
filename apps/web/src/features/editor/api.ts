@@ -333,3 +333,45 @@ export async function patchVariables(
   )
   return withFullDocFallback(slug, unwrap(res as never))
 }
+
+/**
+ * Result of PATCH /documents/:slug/custom-css. We surface ``warnings`` so the
+ * editor can show "we removed XYZ from your CSS" hints to the admin.
+ */
+export interface CustomCssMutationResult {
+  slug: string
+  version: number
+  customCss: string
+  warnings: string[]
+  etag: string
+}
+
+/**
+ * PATCH /documents/:slug/custom-css — admin-only. Pass empty string to clear.
+ * Server sanitizes the CSS (strips ``<script>``, ``expression()``,
+ * ``url(javascript:)``, ``@import``, ``behavior:`` …) and returns the
+ * cleaned CSS plus a ``warnings`` list naming each pattern stripped.
+ */
+export async function patchCustomCss(
+  slug: Slug,
+  customCss: string,
+  etag: string,
+  changeLog?: string,
+): Promise<CustomCssMutationResult> {
+  const res = await apiClient.patch<ApiEnvelope<{ slug: string; version: number; custom_css: string }>>(
+    `/documents/${encodeURIComponent(slug)}/custom-css`,
+    { custom_css: customCss },
+    { headers: buildHeaders(etag, changeLog) },
+  )
+  const meta = (res.data.meta ?? {}) as { etag?: string; warnings?: string[] }
+  const headerEtag = (res.headers as Record<string, string | undefined>)['etag']
+  const data = res.data.data
+  if (!data) throw new Error('서버 응답이 비어 있습니다.')
+  return {
+    slug: data.slug,
+    version: data.version,
+    customCss: data.custom_css ?? '',
+    warnings: meta.warnings ?? [],
+    etag: headerEtag ?? meta.etag ?? '',
+  }
+}

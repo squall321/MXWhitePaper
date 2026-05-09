@@ -6,6 +6,44 @@ import { useEditorStore } from '@/features/editor/state'
 
 export type QuizAnswerValue = string | string[] | boolean | null
 
+/** 32-bit deterministic hash of an arbitrary string (FNV-1a). Good enough as
+ *  a Fisher-Yates seed; the cryptographic strength is irrelevant — we only
+ *  need a stable scrambling per attempt. */
+export function hashSeed(input: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h >>> 0
+}
+
+/** Tiny xorshift32 PRNG. Deterministic for a given seed; cheap and pure. */
+function mulberry32(seed: number): () => number {
+  let s = seed | 0
+  return () => {
+    s = (s + 0x6d2b79f5) | 0
+    let t = s
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/**
+ * Stable Fisher-Yates shuffle. Returns a new array; does not mutate.
+ * Seed is hashed before use so callers can pass a string attempt id.
+ */
+export function shuffleSeeded<T>(items: readonly T[], seed: string | number): T[] {
+  const out = items.slice()
+  const rnd = mulberry32(typeof seed === 'string' ? hashSeed(seed) : seed >>> 0)
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1))
+    ;[out[i], out[j]] = [out[j]!, out[i]!]
+  }
+  return out
+}
+
 export interface QuizBlockViewProps {
   block: QuizBlock
 }
@@ -64,10 +102,21 @@ export function QuizBlockView({ block }: QuizBlockViewProps) {
   const [result, setResult] = useState<AttemptResult | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [meta, setMeta] = useState<MyAttemptsMeta | null>(null)
-  const [startedAt] = useState<number>(() => Date.now())
+  const [startedAt, setStartedAt] = useState<number>(() => Date.now())
+  // Frontend-side attempt id used as a Fisher-Yates seed when
+  // ``block.shuffle === true``. Re-minted on `reset()` so each retry gets
+  // a fresh ordering, but stable while the same form is being filled out.
+  const [attemptId, setAttemptId] = useState<string>(
+    () => `${block.id}:${startedAt}:${Math.random().toString(36).slice(2, 10)}`,
+  )
 
   const showAnswers = block.show_answers_after !== false
-  const questions = useMemo(() => block.questions, [block.questions])
+  const questions = useMemo(() => {
+    if (block.shuffle) {
+      return shuffleSeeded(block.questions, attemptId)
+    }
+    return block.questions
+  }, [block.questions, block.shuffle, attemptId])
   const remaining = meta?.remaining ?? null
   const maxAttempts = block.max_attempts ?? 0
   const canRetry = result != null && (maxAttempts === 0 || (remaining ?? 1) > 0)
@@ -99,10 +148,16 @@ export function QuizBlockView({ block }: QuizBlockViewProps) {
 
   const reset = () => {
     const o: Record<string, QuizAnswerValue> = {}
-    for (const q of questions) o[q.id] = initialAnswer(q)
+    for (const q of block.questions) o[q.id] = initialAnswer(q)
     setAnswers(o)
     setResult(null)
     setSubmitError(null)
+    // Mint a fresh attempt id so the (optional) shuffle re-seeds.
+    const ts = Date.now()
+    setStartedAt(ts)
+    setAttemptId(
+      `${block.id}:${ts}:${Math.random().toString(36).slice(2, 10)}`,
+    )
   }
 
   const onSubmit = async (e: FormEvent) => {

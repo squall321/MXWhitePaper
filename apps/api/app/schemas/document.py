@@ -845,6 +845,10 @@ class DocumentjsonV10(BaseModel):
     """
     Map of variable names → fill-in strings used to substitute {{var}} tokens at render time.
     """
+    custom_css: str | None = Field(None, max_length=10000)
+    """
+    Optional CSS injected into the doc's render. Sandboxed: no <script>, no expression(), no url(javascript:), no @import, no behavior:.
+    """
 
 
 class SectionLevel1(BaseModel):

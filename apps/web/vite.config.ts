@@ -81,6 +81,10 @@ export default defineConfig({
           if (!id.includes('node_modules')) return undefined
           if (id.includes('@blocknote') || id.includes('@mantine')) return 'editor'
           if (id.includes('mermaid')) return 'mermaid'
+          // Cytoscape + cose-bilkent are heavy; isolate them so /dep-graph's
+          // dynamic import can fetch them on demand without polluting the
+          // editor critical path.
+          if (id.includes('cytoscape') || id.includes('cose-base')) return 'graph-cytoscape'
           if (id.includes('recharts') || id.includes('d3-')) return 'charts'
           if (id.includes('katex')) return 'math'
           if (id.includes('@dnd-kit')) return 'dnd'

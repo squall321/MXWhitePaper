@@ -60,7 +60,23 @@ export interface AutomationRule {
   // Cycle 15 U4 — populated only when `trigger_kind === 'cron'`.
   cron_expression: string | null
   next_cron_run_at: string | null
+  // Cycle 20 — IANA tz name; defaults to 'UTC'. Returned for every rule
+  // even when trigger_kind != 'cron' (the column NOT NULL DEFAULT).
+  cron_timezone: string
 }
+
+/**
+ * Common IANA timezones offered in the admin form. Not exhaustive —
+ * the BE accepts any zoneinfo entry, this list is just for UX.
+ */
+export const COMMON_CRON_TIMEZONES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'UTC', label: 'UTC' },
+  { value: 'Asia/Seoul', label: 'Asia/Seoul (KST)' },
+  { value: 'Asia/Tokyo', label: 'Asia/Tokyo (JST)' },
+  { value: 'America/New_York', label: 'America/New_York (ET)' },
+  { value: 'Europe/Berlin', label: 'Europe/Berlin (CET)' },
+  { value: 'Australia/Sydney', label: 'Australia/Sydney (AET)' },
+]
 
 export interface AutomationRunLog {
   id: number
@@ -78,6 +94,7 @@ export interface CreateAutomationRuleIn {
   action_payload?: Record<string, unknown>
   enabled?: boolean
   cron_expression?: string
+  cron_timezone?: string
 }
 
 export interface PatchAutomationRuleIn {
@@ -88,6 +105,7 @@ export interface PatchAutomationRuleIn {
   action_payload?: Record<string, unknown>
   enabled?: boolean
   cron_expression?: string
+  cron_timezone?: string
 }
 
 export interface TestAutomationRuleResult {

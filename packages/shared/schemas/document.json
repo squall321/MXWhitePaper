@@ -43,6 +43,11 @@
       "type": "object",
       "additionalProperties": { "type": "string" },
       "description": "Map of variable names → fill-in strings used to substitute {{var}} tokens at render time."
+    },
+    "custom_css": {
+      "type": "string",
+      "maxLength": 10000,
+      "description": "Optional CSS injected into the doc's render. Sandboxed: no <script>, no expression(), no url(javascript:), no @import, no behavior:."
     }
   },
 

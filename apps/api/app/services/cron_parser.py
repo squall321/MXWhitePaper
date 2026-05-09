@@ -30,21 +30,28 @@ extensions): ``L``, ``W``, ``#``, named months/days (jan/mon/…),
 Time semantics
 ==============
 
-``next_run(parsed, after)`` returns the smallest ``datetime`` strictly
-greater than ``after`` whose minute/hour/dom/month/dow components all match
-the parsed sets. Day-of-month + day-of-week is the **POSIX OR** semantic —
-if both are restricted (neither is the wildcard ``*``), a date matches when
-*either* matches (this is what every ops-grade cron does).
+``next_run(parsed, after, tz=None)`` returns the smallest ``datetime``
+strictly greater than ``after`` whose minute/hour/dom/month/dow components
+match the parsed sets. Day-of-month + day-of-week follows the **POSIX OR**
+semantic — if both are restricted (neither is the wildcard ``*``), a date
+matches when *either* matches (this is what every ops-grade cron does).
 
-We always work in UTC. The ticker passes ``datetime.now(timezone.utc)`` —
-**NOT** flagged for this PR**: timezone handling, DST, leap-second
-weirdness. If a deployment needs Asia/Seoul fires, callers must adjust
-``after`` accordingly.
+When ``tz`` is supplied (``zoneinfo.ZoneInfo``), the schedule is evaluated
+in that local zone — the candidate time is converted to local before the
+field-match comparison and converted back to UTC for the return value.
+This is what users mean when they say "fire at 09:00 Asia/Seoul". Without
+``tz``, behaviour is unchanged: the comparison runs in whatever tzinfo
+``after`` carries, defaulting to UTC for naïve inputs.
+
+DST: candidate stepping is at one-minute granularity, so spring-forward
+gaps simply yield "no match" and the loop moves on; fall-back duplicates
+fire twice (once per civil minute) — same as cron(8). Acceptable for the
+30s ticker which de-duplicates by ``next_cron_run_at`` advancement.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo as _tzinfo
 
 # Inclusive (min, max) for each field, matching standard cron.
 _FIELD_RANGES: tuple[tuple[int, int], ...] = (
@@ -182,14 +189,25 @@ def _matches_date(parsed: ParsedCron, dt: datetime) -> bool:
     return dom_ok or dow_ok  # both restricted → OR
 
 
-def next_run(parsed: ParsedCron, after: datetime) -> datetime:
+def next_run(
+    parsed: ParsedCron,
+    after: datetime,
+    tz: _tzinfo | None = None,
+) -> datetime:
     """Smallest minute-aligned datetime strictly greater than ``after``
     whose components all satisfy ``parsed``.
 
     Naïve minute-by-minute search — cheap and correct, ≤ 60 * 24 * 366
     iterations in the absolute worst case (~530k) but typically <10.
-    Returns a ``datetime`` with ``tzinfo`` matching ``after.tzinfo``
-    (UTC if naïve is passed).
+
+    When ``tz`` is provided, field-matching runs in that local zone (so
+    "0 9 * * 1-5" with ``ZoneInfo('Asia/Seoul')`` fires at 09:00 KST,
+    which is 00:00 UTC).  The returned datetime is in UTC for callers that
+    persist it in a ``TIMESTAMPTZ`` column, regardless of ``tz``.
+
+    Returns a ``datetime`` with ``tzinfo``:
+      - UTC if ``tz`` is provided (canonical persisted form);
+      - matching ``after.tzinfo`` (UTC if naïve) when ``tz`` is None.
     """
     if after.tzinfo is None:
         after = after.replace(tzinfo=timezone.utc)
@@ -201,11 +219,21 @@ def next_run(parsed: ParsedCron, after: datetime) -> datetime:
     # match in 4y is unrepresentable in a valid 5-field cron expression.
     deadline = candidate + timedelta(days=4 * 366)
     while candidate < deadline:
+        # Evaluate the cron predicate in local time when a tz is supplied;
+        # the underlying instant is unchanged, only the field projection
+        # differs.
+        local = candidate.astimezone(tz) if tz is not None else candidate
         if (
-            candidate.minute in parsed.minute
-            and candidate.hour in parsed.hour
-            and _matches_date(parsed, candidate)
+            local.minute in parsed.minute
+            and local.hour in parsed.hour
+            and _matches_date(parsed, local)
         ):
-            return candidate
+            # Persist as UTC when a tz was supplied so callers don't have
+            # to remember the convention.
+            return (
+                candidate.astimezone(timezone.utc)
+                if tz is not None
+                else candidate
+            )
         candidate += timedelta(minutes=1)
     raise ValueError("cron expression has no firing time within 4 years")

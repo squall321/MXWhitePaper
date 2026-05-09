@@ -134,19 +134,35 @@ def share_link_email(
     sender_name: str,
     doc_title: str,
     share_url: str,
+    optout_url: str | None = None,
 ) -> tuple[str, str]:
-    """Share-link invite. Returns (subject, body_text)."""
+    """Share-link invite. Returns (subject, body_text).
+
+    When ``optout_url`` is provided we append a "수신 거부" footer pointing
+    at the GET handler. Per CAN-SPAM / KISA guidelines an opt-out link is
+    required when emailing addresses that haven't actively subscribed.
+    """
     subject = f"{sender_name}님이 '{doc_title}' 문서를 공유했습니다"
-    body = (
-        f"안녕하세요,\n\n"
-        f"{sender_name}님이 MX 백서의 '{doc_title}' 문서를 공유 링크로 보냈습니다.\n"
-        f"아래 주소에서 열람할 수 있습니다.\n\n"
-        f"  {share_url}\n\n"
-        f"링크에 비밀번호가 설정되어 있을 수 있으니, 발신자에게 별도로 확인해주세요.\n"
-        f"\n— MX 백서"
-    )
+    parts = [
+        "안녕하세요,",
+        "",
+        f"{sender_name}님이 MX 백서의 '{doc_title}' 문서를 공유 링크로 보냈습니다.",
+        "아래 주소에서 열람할 수 있습니다.",
+        "",
+        f"  {share_url}",
+        "",
+        "링크에 비밀번호가 설정되어 있을 수 있으니, 발신자에게 별도로 확인해주세요.",
+        "",
+        "— MX 백서",
+    ]
+    if optout_url:
+        parts.extend([
+            "",
+            "이 메일을 더 이상 받지 않으시려면 아래 링크를 클릭해주세요.",
+            f"  수신 거부: {optout_url}",
+        ])
     _ = recipient  # only used at the SMTP layer
-    return subject, body
+    return subject, "\n".join(parts)
 
 
 def review_request_email(

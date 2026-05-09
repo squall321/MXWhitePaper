@@ -224,6 +224,31 @@ def test_next_run_leap_day():
     assert next_run(p, after) == datetime(2028, 2, 29, 0, 0, tzinfo=UTC)
 
 
+def test_next_run_with_tz_kst_09am_evaluates_local():
+    """``0 9 * * 1-5`` with Asia/Seoul fires at 09:00 KST (= 00:00 UTC)."""
+    from zoneinfo import ZoneInfo
+
+    p = parse_cron("0 9 * * 1-5")
+    # Friday noon UTC. Next Monday 00:00 UTC = Mon 09:00 KST.
+    after = datetime(2026, 5, 8, 12, 0, tzinfo=UTC)
+    out = next_run(p, after, tz=ZoneInfo("Asia/Seoul"))
+    assert out == datetime(2026, 5, 11, 0, 0, tzinfo=UTC)
+    # Sanity check: same expression in UTC fires at 09:00 UTC, not 00:00.
+    assert next_run(p, after) == datetime(2026, 5, 11, 9, 0, tzinfo=UTC)
+
+
+def test_next_run_with_tz_persists_utc():
+    """When ``tz`` is supplied, the return value is canonicalised to UTC."""
+    from zoneinfo import ZoneInfo
+
+    p = parse_cron("0 18 * * *")
+    after = datetime(2026, 5, 9, 0, 0, tzinfo=UTC)
+    out = next_run(p, after, tz=ZoneInfo("America/New_York"))
+    # 18:00 ET on 2026-05-09 is 22:00 UTC (DST in effect).
+    assert out.tzinfo is UTC
+    assert out == datetime(2026, 5, 9, 22, 0, tzinfo=UTC)
+
+
 def test_next_run_consecutive_calls_are_strictly_monotonic():
     """Chaining ``next_run`` produces a strictly increasing schedule."""
     p = parse_cron("*/15 * * * *")

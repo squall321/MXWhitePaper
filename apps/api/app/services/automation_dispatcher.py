@@ -516,6 +516,7 @@ async def dispatch_event(
     payload: dict[str, Any],
 ) -> int:
     """Find + run all matching rules. Returns count fired (incl. failed)."""
+    from app.services.ticker_state import report_tick as _rt; _rt("automation_event")
     if os.environ.get("MXWP_SKIP_AUTOMATION") == "1":
         return 0
     if trigger_kind not in VALID_TRIGGERS:

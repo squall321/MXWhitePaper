@@ -137,6 +137,10 @@ export interface DocumentJSONV10 {
   variables?: {
     [k: string]: string | undefined
   }
+  /**
+   * Optional CSS injected into the doc's render. Sandboxed: no <script>, no expression(), no url(javascript:), no @import, no behavior:.
+   */
+  custom_css?: string
 }
 export interface DocumentMeta {
   division: string

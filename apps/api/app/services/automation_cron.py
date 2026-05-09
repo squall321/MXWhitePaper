@@ -35,6 +35,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +43,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import session_scope
 from app.services import automation_dispatcher
 from app.services.cron_parser import next_run, parse_cron
+
+
+def _resolve_tz(name: str | None) -> ZoneInfo:
+    """Resolve an IANA tz name. Falls back to UTC for empty / unknown names
+    so a poison value never crashes the ticker."""
+    if not name or name == "UTC":
+        return ZoneInfo("UTC")
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError:
+        logger.warning("automation_cron: unknown timezone %r — falling back to UTC", name)
+        return ZoneInfo("UTC")
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +71,7 @@ async def _due_rules(s: AsyncSession, *, now: datetime) -> list[dict[str, Any]]:
         text(
             """
             SELECT id, name, cron_expression, action_kind,
-                   action_payload, next_cron_run_at
+                   action_payload, next_cron_run_at, cron_timezone
             FROM automation_rules
             WHERE trigger_kind = 'cron'
               AND enabled = TRUE
@@ -87,6 +100,7 @@ async def _due_rules(s: AsyncSession, *, now: datetime) -> list[dict[str, Any]]:
             "action_kind": r[3],
             "action_payload": ap,
             "next_cron_run_at": r[5],
+            "cron_timezone": r[6] or "UTC",
         })
     return out
 
@@ -179,16 +193,17 @@ async def tick_once() -> int:
             # produce a `nxt` still in the past, so the next tick fires
             # again immediately and the run-loop spins.
             base = rule["next_cron_run_at"] or now
+            tz = _resolve_tz(rule.get("cron_timezone"))
             try:
-                nxt = next_run(parsed, base)
+                nxt = next_run(parsed, base, tz=tz)
                 # Cap at a few iterations so a misconfigured rule can't
                 # spin forever; 1440 = "one day's worth of minutes".
                 for _ in range(1440):
                     if nxt > now:
                         break
-                    nxt = next_run(parsed, nxt)
+                    nxt = next_run(parsed, nxt, tz=tz)
             except ValueError:
-                nxt = next_run(parsed, now)
+                nxt = next_run(parsed, now, tz=tz)
             await s.execute(
                 text(
                     "UPDATE automation_rules "
@@ -210,4 +225,5 @@ async def cron_ticker() -> None:
             await tick_once()
         except Exception:  # noqa: BLE001
             logger.exception("automation_cron tick failed")
+        from datetime import timedelta as _td; from app.services.ticker_state import report_tick as _rt; _rt("automation_cron", next_due_at=_utcnow() + _td(seconds=TICK_INTERVAL_SECONDS))
         await asyncio.sleep(TICK_INTERVAL_SECONDS)

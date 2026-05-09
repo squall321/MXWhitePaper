@@ -1355,6 +1355,59 @@ async def patch_variables(
     )
 
 
+async def patch_custom_css(
+    s: AsyncSession,
+    *,
+    slug: str,
+    raw_css: str | None,
+    if_match: str | None,
+    actor_id: str,
+    change_log: str | None = None,
+) -> tuple[dict[str, Any], str, list[str]]:
+    """문서의 ``custom_css`` 필드를 sanitize 후 교체.
+
+    Cycle 18 — admin-only branding CSS. 빈 문자열/None 이면 필드를 제거한다.
+    Sanitizer 가 ``<script>`` / ``expression()`` / ``url(javascript:)`` 등을
+    제거하며, 잘려나간 패턴 라벨을 warnings 로 반환해 호출자가 UI 에 노출할
+    수 있게 한다.
+
+    Returns:
+        (persisted_document_row, sanitized_css, warnings)
+    """
+    from app.services.css_sanitizer import MAX_CUSTOM_CSS_LEN, sanitize_css
+
+    if raw_css is not None and not isinstance(raw_css, str):
+        raise ValidationFailed("custom_css must be a string")
+    if isinstance(raw_css, str) and len(raw_css) > MAX_CUSTOM_CSS_LEN:
+        raise ValidationFailed(
+            f"custom_css exceeds {MAX_CUSTOM_CSS_LEN} chars",
+            details={"length": len(raw_css), "max": MAX_CUSTOM_CSS_LEN},
+        )
+
+    safe_css, warnings = sanitize_css(raw_css)
+
+    existing = await get_document_or_404(s, slug)
+    _check_etag(existing, if_match)
+
+    content = copy.deepcopy(existing["content_json"])
+    if safe_css:
+        content["custom_css"] = safe_css
+    else:
+        content.pop("custom_css", None)
+
+    log = normalize_change_log(change_log, default="custom_css.patch")
+    persisted = await _persist_content_change(
+        s,
+        existing=existing,
+        new_content=content,
+        actor_id=actor_id,
+        change_log=log,
+        action="document.custom_css.patch",
+        target_suffix="#custom_css",
+    )
+    return persisted, safe_css, warnings
+
+
 async def restore_version(
     s: AsyncSession,
     *,
