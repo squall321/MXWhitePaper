@@ -245,8 +245,19 @@ def search(
     *,
     q: str,
     limit: int = 20,
+    offset: int = 0,
     filters: dict[str, str] | None = None,
+    raw_filter_exprs: list[str] | None = None,
 ) -> dict[str, Any]:
+    """Run a Meilisearch query with `<mark>` highlighting + body cropping.
+
+    Args:
+        q: query string.
+        limit / offset: pagination.
+        filters: simple `{field: value}` map → emits `field = "value"` AND clauses.
+        raw_filter_exprs: extra filter expressions appended via AND
+            (used for range filters such as `updated_at >= "2025-01-01"`).
+    """
     cli = get_client()
     idx = cli.index(INDEX_UID)
     filter_exprs: list[str] = []
@@ -257,9 +268,14 @@ def search(
             # 값에 따옴표 escape
             safe = str(v).replace('"', '\\"')
             filter_exprs.append(f'{k} = "{safe}"')
+    if raw_filter_exprs:
+        filter_exprs.extend([e for e in raw_filter_exprs if e])
     payload: dict[str, Any] = {
         "limit": limit,
-        "attributesToHighlight": ["title", "summary"],
+        "offset": offset,
+        "attributesToHighlight": ["title", "summary", "body_text"],
+        "attributesToCrop": ["body_text"],
+        "cropLength": 200,
         "highlightPreTag": "<mark>",
         "highlightPostTag": "</mark>",
     }

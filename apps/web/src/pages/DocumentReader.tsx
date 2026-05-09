@@ -17,6 +17,7 @@ import { ArticleDropSurface } from '@/features/upload/components/ArticleDropSurf
 import { OrgTree } from '@/features/org/components/OrgTree'
 import { Drawer } from '@/components/ui/Drawer'
 import { pushRecent } from '@/features/recent/store'
+import { useReadingTimeTracker } from '@/features/bookmarks/hooks/useReadingTimeTracker'
 import type { AppOutletContext } from '@/App'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
 import type {
@@ -102,6 +103,11 @@ export function DocumentReaderPage() {
       pushRecent(slug, data.document.title)
     }
   }, [slug, data?.document?.title])
+
+  // Server-side read tracking — accumulates seconds while the page is visible
+  // and flushes every 30s + on unmount. Decoupled from analytics view ping so
+  // the reading-list query reflects per-doc time spent, not just visit count.
+  useReadingTimeTracker(data ? slug : undefined)
 
   // Tier 2D — analytics view ping. Fire-and-forget; failures are silent so
   // the read-only UX never depends on the analytics pipeline.

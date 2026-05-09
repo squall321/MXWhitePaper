@@ -127,6 +127,7 @@ export function TopBar({
           <div className="hidden items-center gap-1.5 lg:flex">
             <NavLinkPill to="/orgs" label={t('topbar.org')} active={isActive('/orgs')} />
             <NavLinkPill to="/recent" label={t('topbar.recent')} active={isActive('/recent')} />
+            <NavLinkPill to="/reads" label="읽은 문서" active={isActive('/reads')} />
             {canSeeAnalytics && (
               <NavLinkPill
                 to="/analytics"

@@ -19,6 +19,7 @@ from .routers.admin import router as admin_router
 from .routers.ai import router as ai_router
 from .routers.analytics import router as analytics_router
 from .routers.auth import router as auth_router
+from .routers.bookmarks import router as bookmarks_router
 from .routers.comments import router_doc as comments_doc_router
 from .routers.comments import router_one as comments_one_router
 from .routers.documents import router as documents_router
@@ -27,6 +28,7 @@ from .routers.files import router as files_router
 from .routers.glossary import router as glossary_router
 from .routers.imports import router as imports_router
 from .routers.links_graph import router as links_graph_router
+from .routers.notifications import router as notifications_router
 from .routers.orgs import router as orgs_router
 from .routers.search import router as search_router
 from .routers.tags import router as tags_router
@@ -102,7 +104,19 @@ TAGS_METADATA: list[dict[str, str]] = [
     {
         "name": "comments",
         "description": (
-            "문서/섹션/블록 단위 댓글. 작성자/admin 만 수정·삭제 (soft delete) 가능."
+            "문서/섹션/블록 단위 댓글. 작성자/admin 만 수정·삭제 (soft delete) 가능. "
+            "parent_id 로 답글 트리(최대 깊이 3)를 형성하고, mention_user_ids 로 "
+            "멘션 시 notifications 테이블에 row 가 INSERT 된다."
+        ),
+    },
+    {
+        "name": "notifications",
+        "description": "BE 푸시 알림 — 멘션·답글 등. unread 카운트 + 읽음 처리.",
+    },
+    {
+        "name": "bookmarks",
+        "description": (
+            "서버 영속 책갈피 + 열람 기록. 폴더 단위 그룹핑, 메모, 누적 read_seconds."
         ),
     },
     {
@@ -199,6 +213,10 @@ def create_app() -> FastAPI:
     app.include_router(comments_doc_router)
     app.include_router(comments_one_router)
     app.include_router(links_graph_router)
+    # 멘션 등 BE 푸시 알림
+    app.include_router(notifications_router)
+    # Bookmarks + reads (server-persisted reading list)
+    app.include_router(bookmarks_router)
     # Markdown / PDF export (HTML export 는 documents 라우터에 인라인)
     app.include_router(exports_router)
     # 태그 자동완성 + 태그 매니저

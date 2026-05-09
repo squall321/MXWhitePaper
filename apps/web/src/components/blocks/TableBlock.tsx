@@ -71,7 +71,7 @@ export function TableBlockView({ block }: { block: TableBlock }) {
           컨테이너 안에서만 부착되도록 한다. 그렇지 않으면 sticky 가 viewport
           기준으로 올라가 TopBar/Breadcrumb 자리에 박혀 본문이 헤더 위로 침투
           한다. */}
-      <div className="max-h-[60vh] overflow-x-auto overflow-y-auto rounded-md border border-gray-200 shadow-sm">
+      <div data-no-swipe className="max-h-[60vh] overflow-x-auto overflow-y-auto rounded-md border border-gray-200 shadow-sm">
         <table className="w-full min-w-[480px] border-collapse text-left text-sm">
           <thead className="sticky top-0 z-content bg-smsg-50 text-smsg-900">
             <tr>

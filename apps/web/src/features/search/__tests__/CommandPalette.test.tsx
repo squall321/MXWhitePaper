@@ -8,6 +8,12 @@ import { CommandPalette } from '../components/CommandPalette'
 vi.mock('../api', () => ({
   searchDocuments: vi.fn(async () => []),
   listWidgets: vi.fn(async () => []),
+  searchSuggest: vi.fn(async () => ({
+    tags: [],
+    authors: [],
+    parts: [],
+    documents: [],
+  })),
 }))
 
 function withProviders(node: React.ReactNode) {
@@ -76,5 +82,22 @@ describe('<CommandPalette />', () => {
     )
     // No recent items initially → placeholder copy.
     expect(html).toContain('검색어를 입력하세요')
+  })
+
+  it('renders the new 태그 / 사람 tabs (cycle 5 J3)', () => {
+    const html = renderToStaticMarkup(
+      withProviders(<CommandPalette open onClose={() => {}} />),
+    )
+    expect(html).toContain('태그')
+    expect(html).toContain('사람')
+  })
+
+  it('preserves existing 문서 / 위젯 / 명령 tabs', () => {
+    const html = renderToStaticMarkup(
+      withProviders(<CommandPalette open onClose={() => {}} />),
+    )
+    expect(html).toContain('문서')
+    expect(html).toContain('위젯')
+    expect(html).toContain('명령')
   })
 })

@@ -12,6 +12,7 @@ import {
   useDocumentSearch,
   useRecentSearches,
   useWidgetRegistry,
+  useSearchSuggest,
   type RecentSearchItem,
 } from '../hooks/useSearch'
 import type { DocSearchHit, WidgetRegistryEntry } from '../api'
@@ -26,7 +27,7 @@ interface CommandPaletteProps {
   initialQuery?: string
 }
 
-type Tab = 'docs' | 'widgets' | 'commands'
+type Tab = 'docs' | 'tags' | 'people' | 'widgets' | 'commands'
 
 /** Filter chip state for the 문서 tab. */
 interface DocFilters {
@@ -76,6 +77,11 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
     [grouped],
   )
 
+  // Suggest payload for tags / people tabs (cycle 5 J3).
+  const { data: suggest } = useSearchSuggest(q)
+  const tagMatches = suggest?.tags ?? []
+  const peopleMatches = suggest?.authors ?? []
+
   const { data: widgetList = [] } = useWidgetRegistry()
   const widgetMatches = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -104,7 +110,15 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
 
   // The list the keyboard cursor walks. Recomputed when the tab/data shifts.
   const optionCount =
-    tab === 'docs' ? flatDocs.length : tab === 'widgets' ? widgetMatches.length : commandMatches.length
+    tab === 'docs'
+      ? flatDocs.length
+      : tab === 'tags'
+        ? tagMatches.length
+        : tab === 'people'
+          ? peopleMatches.length
+          : tab === 'widgets'
+            ? widgetMatches.length
+            : commandMatches.length
 
   const goDoc = useCallback(
     (hit: DocSearchHit, newTab = false) => {
@@ -181,9 +195,19 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
     }
     if (e.key === 'Tab') {
       e.preventDefault()
-      const order: Tab[] = ['docs', 'widgets', 'commands']
+      const order: Tab[] = ['docs', 'tags', 'people', 'widgets', 'commands']
       const i = order.indexOf(tab)
       const dir = e.shiftKey ? -1 : 1
+      const next = order[(i + dir + order.length) % order.length]!
+      setTab(next)
+      return
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      // Left/right arrows switch tabs (cycle 5 J3 polish).
+      e.preventDefault()
+      const order: Tab[] = ['docs', 'tags', 'people', 'widgets', 'commands']
+      const i = order.indexOf(tab)
+      const dir = e.key === 'ArrowRight' ? 1 : -1
       const next = order[(i + dir + order.length) % order.length]!
       setTab(next)
       return
@@ -200,6 +224,24 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
       if (tab === 'commands') {
         const cmd = commandMatches[activeIdx]
         if (cmd) runCommand(cmd)
+        return
+      }
+      if (tab === 'tags') {
+        const t = tagMatches[activeIdx]
+        if (t) {
+          recent.push(q.trim())
+          onClose()
+          navigate(`/search?tag=${encodeURIComponent(t.tag)}`)
+        }
+        return
+      }
+      if (tab === 'people') {
+        const p = peopleMatches[activeIdx]
+        if (p) {
+          recent.push(q.trim())
+          onClose()
+          navigate(`/search?author=${encodeURIComponent(p.id)}`)
+        }
         return
       }
       // widgets tab — there's no nav action, but we still register the search.
@@ -252,6 +294,18 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
               count={flatDocs.length}
             />
             <TabBtn
+              active={tab === 'tags'}
+              onClick={() => setTab('tags')}
+              label="태그"
+              count={tagMatches.length}
+            />
+            <TabBtn
+              active={tab === 'people'}
+              onClick={() => setTab('people')}
+              label="사람"
+              count={peopleMatches.length}
+            />
+            <TabBtn
               active={tab === 'widgets'}
               onClick={() => setTab('widgets')}
               label="위젯"
@@ -286,6 +340,32 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
                 onPick={goDoc}
                 activeIdx={activeIdx}
                 onActivate={setActiveIdx}
+                listboxId={listboxId}
+                optionId={optionId}
+              />
+            ) : tab === 'tags' ? (
+              <TagResults
+                items={tagMatches}
+                activeIdx={activeIdx}
+                onActivate={setActiveIdx}
+                onPick={(t) => {
+                  recent.push(q.trim() || t.tag)
+                  onClose()
+                  navigate(`/search?tag=${encodeURIComponent(t.tag)}`)
+                }}
+                listboxId={listboxId}
+                optionId={optionId}
+              />
+            ) : tab === 'people' ? (
+              <PeopleResults
+                items={peopleMatches}
+                activeIdx={activeIdx}
+                onActivate={setActiveIdx}
+                onPick={(p) => {
+                  recent.push(q.trim() || p.label)
+                  onClose()
+                  navigate(`/search?author=${encodeURIComponent(p.id)}`)
+                }}
                 listboxId={listboxId}
                 optionId={optionId}
               />
@@ -607,7 +687,7 @@ function DocResults({
               </button>
             </div>
             <ul>
-              {recent.slice(0, 10).map((s) => (
+              {recent.slice(0, 8).map((s) => (
                 <li key={s.q} className="flex items-center gap-1">
                   <button
                     onClick={() => onUseRecent(s.q)}
@@ -709,6 +789,104 @@ function DocResults({
       {renderGroup('본문 매칭', grouped.body)}
       {renderGroup('태그 매칭', grouped.tag)}
     </div>
+  )
+}
+
+function TagResults({
+  items,
+  activeIdx,
+  onActivate,
+  onPick,
+  listboxId,
+  optionId,
+}: {
+  items: { tag: string; count: number }[]
+  activeIdx: number
+  onActivate: (i: number) => void
+  onPick: (t: { tag: string; count: number }) => void
+  listboxId: string
+  optionId: (i: number) => string
+}) {
+  if (items.length === 0) {
+    return <p className="px-2 py-6 text-center text-xs text-gray-400">태그 없음</p>
+  }
+  return (
+    <ul role="listbox" id={listboxId} aria-label="태그 결과" className="space-y-1">
+      {items.slice(0, 5).map((t, i) => {
+        const active = i === activeIdx
+        return (
+          <li key={t.tag}>
+            <button
+              type="button"
+              role="option"
+              id={optionId(i)}
+              aria-selected={active}
+              onMouseEnter={() => onActivate(i)}
+              onClick={() => onPick(t)}
+              className={cn(
+                'flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors',
+                active ? 'bg-smsg-100' : 'hover:bg-smsg-50',
+              )}
+            >
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-smsg-50 text-smsg-700">#</span>
+              <span className="flex-1 truncate text-sm font-semibold text-smsg-900">#{t.tag}</span>
+              {typeof t.count === 'number' && t.count > 0 && (
+                <span className="text-[11px] text-gray-400">{t.count}건</span>
+              )}
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function PeopleResults({
+  items,
+  activeIdx,
+  onActivate,
+  onPick,
+  listboxId,
+  optionId,
+}: {
+  items: { id: string; label: string; email?: string }[]
+  activeIdx: number
+  onActivate: (i: number) => void
+  onPick: (p: { id: string; label: string }) => void
+  listboxId: string
+  optionId: (i: number) => string
+}) {
+  if (items.length === 0) {
+    return <p className="px-2 py-6 text-center text-xs text-gray-400">사람 없음</p>
+  }
+  return (
+    <ul role="listbox" id={listboxId} aria-label="사람 결과" className="space-y-1">
+      {items.slice(0, 5).map((p, i) => {
+        const active = i === activeIdx
+        return (
+          <li key={p.id}>
+            <button
+              type="button"
+              role="option"
+              id={optionId(i)}
+              aria-selected={active}
+              onMouseEnter={() => onActivate(i)}
+              onClick={() => onPick(p)}
+              className={cn(
+                'flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors',
+                active ? 'bg-smsg-100' : 'hover:bg-smsg-50',
+              )}
+            >
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-smsg-50 text-smsg-700">@</span>
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-smsg-900">{p.label}</span>
+                {p.email && <span className="block truncate text-xs text-gray-500">{p.email}</span>}
+              </div>
+            </button>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 

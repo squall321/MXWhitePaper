@@ -74,6 +74,9 @@ const TagManagerPage = lazyLogged('TagManager', () =>
 const RecentPage = lazyLogged('Recent', () =>
   import('./pages/Recent').then((m) => ({ default: m.RecentPage })),
 )
+const ReadListPage = lazyLogged('ReadList', () =>
+  import('./pages/ReadList').then((m) => ({ default: m.ReadListPage })),
+)
 const SettingsPage = lazyLogged('Settings', () =>
   import('./pages/Settings').then((m) => ({ default: m.SettingsPage })),
 )
@@ -224,6 +227,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="admin/tags" element={<Boundaried name="admin/tags"><TagManagerPage /></Boundaried>} />
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
+                <Route path="reads" element={<Boundaried name="reads"><ReadListPage /></Boundaried>} />
                 <Route path="settings" element={<Boundaried name="settings"><SettingsPage /></Boundaried>} />
                 <Route path="graph" element={<Boundaried name="graph"><GraphPage /></Boundaried>} />
                 <Route path="graph/:slug" element={<Boundaried name="graph/:slug"><GraphPage /></Boundaried>} />

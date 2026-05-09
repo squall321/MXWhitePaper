@@ -53,7 +53,7 @@ export function CodeBlockView({ block }: { block: CodeBlock }) {
           )}
         </button>
       </figcaption>
-      <pre className="overflow-x-auto p-3 text-[13px] leading-6 text-gray-100">
+      <pre data-no-swipe className="overflow-x-auto p-3 text-[13px] leading-6 text-gray-100">
         <code className="font-mono">{block.code}</code>
       </pre>
     </figure>

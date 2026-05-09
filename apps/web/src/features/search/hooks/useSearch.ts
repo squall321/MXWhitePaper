@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { searchDocuments, listWidgets } from '../api'
+import { searchDocuments, listWidgets, searchSuggest } from '../api'
 
 /**
  * 200ms debounce for the document search field.
@@ -24,6 +24,22 @@ export function useDocumentSearch(q: string) {
     retry: 1,
     placeholderData: keepPreviousData,
     select: (rows) => (Array.isArray(rows) ? rows : []),
+  })
+}
+
+/**
+ * Omnibox autocomplete — debounced 200ms. Returns 4 grouped buckets
+ * (tags, authors, parts, documents). Empty query → all empty arrays.
+ */
+export function useSearchSuggest(q: string, limit = 8) {
+  const debounced = useDebounced(q, 200)
+  return useQuery({
+    queryKey: ['search', 'suggest', debounced, limit],
+    queryFn: () => searchSuggest(debounced, limit),
+    enabled: debounced.trim().length > 0,
+    staleTime: 30_000,
+    retry: 1,
+    placeholderData: keepPreviousData,
   })
 }
 

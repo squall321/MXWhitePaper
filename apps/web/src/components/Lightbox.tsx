@@ -1,10 +1,24 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useGestures } from '@/features/mobile/useGestures'
 
 export interface LightboxItem {
   /** Original-size URL (no thumb). */
   src: string
   alt?: string
   caption?: string
+}
+
+/** Zoom bounds for pinch-zoom. Below the lower one we treat as "tap to close". */
+export const LIGHTBOX_MIN_ZOOM = 1.0
+export const LIGHTBOX_MAX_ZOOM = 4.0
+export const LIGHTBOX_DISMISS_ZOOM = 1.05
+
+/** Clamp the live pinch scale into the allowed [1, 4] range. */
+export function clampZoom(scale: number): number {
+  if (!Number.isFinite(scale)) return LIGHTBOX_MIN_ZOOM
+  if (scale < LIGHTBOX_MIN_ZOOM) return LIGHTBOX_MIN_ZOOM
+  if (scale > LIGHTBOX_MAX_ZOOM) return LIGHTBOX_MAX_ZOOM
+  return scale
 }
 
 interface LightboxProps {
@@ -50,16 +64,53 @@ export function Lightbox({
   const list: LightboxItem[] = items ?? (src ? [{ src, alt, caption }] : [])
   const total = list.length
   const [idx, setIdx] = useState(startIndex)
+  // Pinch-zoom state. Reset whenever we navigate or open/close.
+  const [zoom, setZoom] = useState(LIGHTBOX_MIN_ZOOM)
+  const pinchStartRef = useRef(LIGHTBOX_MIN_ZOOM)
+  const stageRef = useRef<HTMLDivElement>(null)
 
   // Reset index whenever the lightbox reopens.
   useEffect(() => {
-    if (open) setIdx(Math.min(startIndex, Math.max(0, total - 1)))
+    if (open) {
+      setIdx(Math.min(startIndex, Math.max(0, total - 1)))
+      setZoom(LIGHTBOX_MIN_ZOOM)
+    }
   }, [open, startIndex, total])
 
   const go = useCallback(
-    (dir: 1 | -1) => setIdx((i) => nextIndex(i, total, dir)),
+    (dir: 1 | -1) => {
+      setIdx((i) => nextIndex(i, total, dir))
+      setZoom(LIGHTBOX_MIN_ZOOM)
+    },
     [total],
   )
+
+  // Pinch-zoom + double-tap. Pinch updates `zoom`; once the user releases at a
+  // value < LIGHTBOX_DISMISS_ZOOM we treat it as a "pinch to close" gesture.
+  useGestures(stageRef, {
+    onPinch: (scale) => {
+      const next = clampZoom(pinchStartRef.current * scale)
+      setZoom(next)
+    },
+    onDoubleTap: () => {
+      // Double-tap toggles between fit and 2× zoom.
+      setZoom((z) => (z > LIGHTBOX_MIN_ZOOM ? LIGHTBOX_MIN_ZOOM : 2))
+    },
+  })
+
+  // Snapshot the zoom level when a fresh pinch begins (we do this lazily by
+  // resetting after each pinch settle).
+  useEffect(() => {
+    pinchStartRef.current = zoom
+  }, [zoom])
+
+  // After the user releases below the dismiss threshold, close the lightbox.
+  useEffect(() => {
+    if (!open) return
+    if (zoom < LIGHTBOX_DISMISS_ZOOM && zoom !== LIGHTBOX_MIN_ZOOM) {
+      onClose()
+    }
+  }, [zoom, open, onClose])
 
   useEffect(() => {
     if (!open) return
@@ -94,13 +145,21 @@ export function Lightbox({
       onClick={onClose}
     >
       <div
+        ref={stageRef}
+        data-zoom={zoom.toFixed(2)}
         className="relative max-h-[90vh] max-w-[95vw]"
         onClick={(e) => e.stopPropagation()}
+        style={{ touchAction: 'none' }}
       >
         <img
           src={cur.src}
           alt={cur.alt ?? cur.caption ?? ''}
           className="max-h-[90vh] max-w-[95vw] rounded shadow-2xl"
+          style={{
+            transform: `scale(${zoom})`,
+            transformOrigin: 'center center',
+            transition: 'transform 80ms ease-out',
+          }}
         />
         {cur.alt && (
           <span

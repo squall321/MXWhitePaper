@@ -8,6 +8,7 @@ import {
   deleteComment,
   listComments,
   patchComment,
+  resolveThread,
   type Comment,
   type CommentListResponse,
   type CreateCommentInput,
@@ -45,6 +46,14 @@ export function useDeleteComment(slug: string) {
   const qc = useQueryClient()
   return useMutation<void, Error, string>({
     mutationFn: (id) => deleteComment(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: commentsKey(slug) }),
+  })
+}
+
+export function useResolveThread(slug: string) {
+  const qc = useQueryClient()
+  return useMutation<Comment, Error, { id: string; resolved?: boolean }>({
+    mutationFn: ({ id, resolved }) => resolveThread(id, resolved),
     onSuccess: () => qc.invalidateQueries({ queryKey: commentsKey(slug) }),
   })
 }

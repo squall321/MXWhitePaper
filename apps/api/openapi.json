@@ -37,6 +37,74 @@
         "title": "Body_import_docx_api_v1_imports_docx_post",
         "type": "object"
       },
+      "BookmarkIn": {
+        "properties": {
+          "document_id": {
+            "minLength": 1,
+            "title": "Document Id",
+            "type": "string"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "document_id"
+        ],
+        "title": "BookmarkIn",
+        "type": "object"
+      },
+      "BookmarkPatchIn": {
+        "properties": {
+          "folder": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "title": "BookmarkPatchIn",
+        "type": "object"
+      },
       "CommentIn": {
         "properties": {
           "anchor_id": {
@@ -61,6 +129,14 @@
             "minLength": 1,
             "title": "Body Md",
             "type": "string"
+          },
+          "mention_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Mention User Ids",
+            "type": "array"
           },
           "parent_id": {
             "anyOf": [
@@ -98,7 +174,7 @@
           "status": {
             "anyOf": [
               {
-                "pattern": "^(visible|hidden|deleted)$",
+                "pattern": "^(visible|hidden|deleted|resolved)$",
                 "type": "string"
               },
               {
@@ -424,6 +500,38 @@
           "text"
         ],
         "title": "PolishBody",
+        "type": "object"
+      },
+      "ReadIn": {
+        "properties": {
+          "document_id": {
+            "minLength": 1,
+            "title": "Document Id",
+            "type": "string"
+          },
+          "read_seconds": {
+            "maximum": 86400.0,
+            "minimum": 0.0,
+            "title": "Read Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "document_id",
+          "read_seconds"
+        ],
+        "title": "ReadIn",
+        "type": "object"
+      },
+      "ResolveIn": {
+        "properties": {
+          "resolved": {
+            "default": true,
+            "title": "Resolved",
+            "type": "boolean"
+          }
+        },
+        "title": "ResolveIn",
         "type": "object"
       },
       "SummarizeBody": {
@@ -1414,6 +1522,215 @@
         ]
       }
     },
+    "/api/v1/bookmarks": {
+      "get": {
+        "operationId": "list_bookmarks_api_v1_bookmarks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "folder",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Folder"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Bookmarks Api V1 Bookmarks Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "책갈피 목록 (reader+)",
+        "tags": [
+          "bookmarks"
+        ]
+      },
+      "post": {
+        "operationId": "create_bookmark_api_v1_bookmarks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookmarkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Bookmark Api V1 Bookmarks Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "책갈피 추가 (reader+)",
+        "tags": [
+          "bookmarks"
+        ]
+      }
+    },
+    "/api/v1/bookmarks/folders": {
+      "get": {
+        "operationId": "list_folders_api_v1_bookmarks_folders_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Folders Api V1 Bookmarks Folders Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "폴더별 카운트 (reader+)",
+        "tags": [
+          "bookmarks"
+        ]
+      }
+    },
+    "/api/v1/bookmarks/{bid}": {
+      "delete": {
+        "operationId": "delete_bookmark_api_v1_bookmarks__bid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bid",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Bid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "책갈피 삭제 (owner)",
+        "tags": [
+          "bookmarks"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_bookmark_api_v1_bookmarks__bid__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bid",
+            "required": true,
+            "schema": {
+              "title": "Bid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookmarkPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Bookmark Api V1 Bookmarks  Bid  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "책갈피 수정 (owner)",
+        "tags": [
+          "bookmarks"
+        ]
+      }
+    },
     "/api/v1/comments/{cid}": {
       "delete": {
         "operationId": "delete_comment_api_v1_comments__cid__delete",
@@ -1501,6 +1818,67 @@
           }
         },
         "summary": "댓글 수정 (작성자 OR admin)",
+        "tags": [
+          "comments"
+        ]
+      }
+    },
+    "/api/v1/comments/{cid}/resolve": {
+      "post": {
+        "operationId": "resolve_thread_api_v1_comments__cid__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ResolveIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Resolve Thread Api V1 Comments  Cid  Resolve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "스레드 resolve 토글 (어느 댓글 id 든 root 로 올라가 status 갱신)",
         "tags": [
           "comments"
         ]
@@ -2662,7 +3040,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "댓글 목록 (anchor 별 그룹)",
+        "summary": "댓글 트리 조회 (anchor 별 그룹 + replies, depth ≤ 3)",
         "tags": [
           "comments"
         ]
@@ -2731,7 +3109,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "댓글 작성 (editor+)",
+        "summary": "댓글 작성 (editor+) — parent_id, mention_user_ids 지원",
         "tags": [
           "comments"
         ]
@@ -4117,6 +4495,105 @@
         ]
       }
     },
+    "/api/v1/notifications": {
+      "get": {
+        "operationId": "list_notifications_api_v1_notifications_get",
+        "parameters": [
+          {
+            "description": "True 면 read_at IS NULL 만",
+            "in": "query",
+            "name": "unread",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "True 면 read_at IS NULL 만",
+              "title": "Unread",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Notifications Api V1 Notifications Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "내 알림 목록 — 최신순",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/{nid}/read": {
+      "post": {
+        "operationId": "mark_read_api_v1_notifications__nid__read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "알림 읽음 처리",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
     "/api/v1/orgs/tree": {
       "get": {
         "description": "좌측 네비게이션용 nested 응답. 한 번에 4개 SELECT 만 수행.",
@@ -4476,6 +4953,96 @@
         ]
       }
     },
+    "/api/v1/reads": {
+      "post": {
+        "operationId": "post_read_api_v1_reads_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Read Api V1 Reads Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "열람 기록 (reader+, accumulate read_seconds)",
+        "tags": [
+          "bookmarks"
+        ]
+      }
+    },
+    "/api/v1/reads/recent": {
+      "get": {
+        "operationId": "get_recent_reads_api_v1_reads_recent_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Recent Reads Api V1 Reads Recent Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "최근 열람 문서 (reader+)",
+        "tags": [
+          "bookmarks"
+        ]
+      }
+    },
     "/api/v1/search": {
       "get": {
         "operationId": "search_api_v1_search_get",
@@ -4501,6 +5068,17 @@
               "maximum": 100,
               "minimum": 1,
               "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
               "type": "integer"
             }
           },
@@ -4554,6 +5132,22 @@
           },
           {
             "in": "query",
+            "name": "author",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Author"
+            }
+          },
+          {
+            "in": "query",
             "name": "confidentiality",
             "required": false,
             "schema": {
@@ -4566,6 +5160,42 @@
                 }
               ],
               "title": "Confidentiality"
+            }
+          },
+          {
+            "description": "updated_at >= YYYY-MM-DD",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "updated_at >= YYYY-MM-DD",
+              "title": "From"
+            }
+          },
+          {
+            "description": "updated_at <= YYYY-MM-DD",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "updated_at <= YYYY-MM-DD",
+              "title": "To"
             }
           }
         ],
@@ -4594,6 +5224,66 @@
           }
         },
         "summary": "Search",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/api/v1/search/suggest": {
+      "get": {
+        "description": "Omnibox 자동완성 — 태그 / 작성자 / 부서 / 최근 문서 제목.\n\n각 카테고리별 최대 `limit` 건. 빈 q 면 모든 리스트가 빈 배열.",
+        "operationId": "search_suggest_api_v1_search_suggest_get",
+        "parameters": [
+          {
+            "description": "suggest prefix",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "suggest prefix",
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 8,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Search Suggest Api V1 Search Suggest Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Suggest",
         "tags": [
           "search"
         ]
@@ -5384,8 +6074,16 @@
       "name": "analytics"
     },
     {
-      "description": "문서/섹션/블록 단위 댓글. 작성자/admin 만 수정·삭제 (soft delete) 가능.",
+      "description": "문서/섹션/블록 단위 댓글. 작성자/admin 만 수정·삭제 (soft delete) 가능. parent_id 로 답글 트리(최대 깊이 3)를 형성하고, mention_user_ids 로 멘션 시 notifications 테이블에 row 가 INSERT 된다.",
       "name": "comments"
+    },
+    {
+      "description": "BE 푸시 알림 — 멘션·답글 등. unread 카운트 + 읽음 처리.",
+      "name": "notifications"
+    },
+    {
+      "description": "서버 영속 책갈피 + 열람 기록. 폴더 단위 그룹핑, 메모, 누적 read_seconds.",
+      "name": "bookmarks"
     },
     {
       "description": "위키 링크 그래프 — BFS 그래프 / 전역 그래프.",

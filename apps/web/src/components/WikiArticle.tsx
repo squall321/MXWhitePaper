@@ -9,8 +9,11 @@ import { Infobox } from './Infobox'
 import { SectionRenderer } from './SectionRenderer'
 import { Badge } from '@/components/ui'
 import { FavoriteStar } from '@/features/favorites/components/FavoriteStar'
+import { BookmarkButton } from '@/features/bookmarks/components/BookmarkButton'
+import { estimateReadingTimeMinutes } from '@/lib/readingTime'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
 import { BulkActionsBar } from '@/features/editor/components/BulkActionsBar'
+import { SectionSwipe } from '@/features/mobile/SectionSwipe'
 
 interface WikiArticleProps {
   document: DocumentJSONV10
@@ -80,7 +83,9 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
             {document.title}
           </h1>
           <FavoriteStar slug={document.slug} title={document.title} />
+          <BookmarkButton slug={document.slug} title={document.title} />
         </div>
+        <ReadingTimePill document={document} />
         {document.summary && (
           <p className="text-base leading-relaxed text-gray-700">{document.summary}</p>
         )}
@@ -117,17 +122,23 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
 
       <div className="clearfix">
         {document.infobox && <Infobox data={document.infobox} />}
-        <div className="space-y-6">
-          {(document.sections ?? []).map((section, idx) => (
-            <SectionRenderer
-              key={section.id}
-              section={section}
-              editableSlug={editableSlug}
-              autoFocusInline={idx === 0}
-              collapseSlug={slug}
-            />
-          ))}
-        </div>
+        <SectionSwipe
+          sectionIds={(document.sections ?? []).map((s) =>
+            s.number ? `section-${s.number}` : s.id,
+          )}
+        >
+          <div className="space-y-6">
+            {(document.sections ?? []).map((section, idx) => (
+              <SectionRenderer
+                key={section.id}
+                section={section}
+                editableSlug={editableSlug}
+                autoFocusInline={idx === 0}
+                collapseSlug={slug}
+              />
+            ))}
+          </div>
+        </SectionSwipe>
       </div>
       {/* Floating bulk-actions bar — renders only when the bulk-selection
           store has at least one block. Lives at the article level so its
@@ -139,4 +150,17 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
 
 function formatDate(iso: string): string {
   return iso.length >= 10 ? iso.slice(0, 10) : iso
+}
+
+function ReadingTimePill({ document }: { document: DocumentJSONV10 }) {
+  const minutes = estimateReadingTimeMinutes(document)
+  if (!minutes) return null
+  return (
+    <div className="text-xs text-gray-500" data-testid="reading-time-pill">
+      <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-gray-600">
+        <span aria-hidden="true">📖</span>
+        <span>~{minutes}분 분량</span>
+      </span>
+    </div>
+  )
 }
