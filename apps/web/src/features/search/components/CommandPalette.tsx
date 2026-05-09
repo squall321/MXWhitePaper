@@ -1,4 +1,6 @@
 import {
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
   useId,
@@ -17,8 +19,15 @@ import {
 } from '../hooks/useSearch'
 import type { DocSearchHit, WidgetRegistryEntry } from '../api'
 import { useAuthStore } from '@/features/auth/store'
-import { KeyboardShortcutsModal } from '@/features/editor/components/KeyboardShortcutsModal'
 import { cn } from '@/components/ui/cn'
+
+// KeyboardShortcutsModal is opened via the "?" shortcut from inside the
+// palette — defer the chunk download until that first open.
+const KeyboardShortcutsModal = lazy(() =>
+  import('@/features/editor/components/KeyboardShortcutsModal').then((m) => ({
+    default: m.KeyboardShortcutsModal,
+  })),
+)
 
 interface CommandPaletteProps {
   open: boolean
@@ -401,10 +410,14 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
           </div>
         </div>
       </div>
-      <KeyboardShortcutsModal
-        open={shortcutsOpen}
-        onClose={() => setShortcutsOpen(false)}
-      />
+      {shortcutsOpen && (
+        <Suspense fallback={null}>
+          <KeyboardShortcutsModal
+            open={shortcutsOpen}
+            onClose={() => setShortcutsOpen(false)}
+          />
+        </Suspense>
+      )}
     </>
   )
 }

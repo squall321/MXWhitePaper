@@ -62,6 +62,9 @@ const DocumentNewPage = lazyLogged('DocumentNew', () =>
 const DocumentImportPage = lazyLogged('DocumentImport', () =>
   import('./pages/DocumentImport').then((m) => ({ default: m.DocumentImportPage })),
 )
+const BulkDocImportPage = lazyLogged('BulkDocImport', () =>
+  import('./pages/BulkDocImport').then((m) => ({ default: m.BulkDocImportPage })),
+)
 const DocumentVariablesPage = lazyLogged('DocumentVariables', () =>
   import('./pages/DocumentVariables').then((m) => ({
     default: m.DocumentVariablesPage,
@@ -75,6 +78,18 @@ const AdminOrgsPage = lazyLogged('AdminOrgs', () =>
 )
 const AdminDashboardPage = lazyLogged('AdminDashboard', () =>
   import('./pages/AdminDashboard').then((m) => ({ default: m.AdminDashboardPage })),
+)
+// `AuditLogPage` has an optional `embedded` prop so it can be reused inside
+// AdminDashboard. Use `React.lazy` directly (lazyLogged's generic requires
+// `ComponentType<never>`).
+const AuditLogPage = lazy(() =>
+  import('./pages/AuditLog')
+    .then((m) => ({ default: m.AuditLogPage }))
+    .catch((err: unknown) => {
+      // eslint-disable-next-line no-console
+      console.error('[mxwp] lazy chunk failed: AuditLog', err)
+      throw err
+    }),
 )
 const BackupAdminPage = lazyLogged('BackupAdmin', () =>
   import('./pages/BackupAdmin').then((m) => ({ default: m.BackupAdminPage })),
@@ -281,6 +296,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="orgs" element={<Boundaried name="orgs"><OrgsPage /></Boundaried>} />
                 <Route path="admin/orgs" element={<Boundaried name="admin/orgs"><AdminOrgsPage /></Boundaried>} />
                 <Route path="admin/dashboard" element={<Boundaried name="admin/dashboard"><AdminDashboardPage /></Boundaried>} />
+                <Route path="admin/import-csv" element={<Boundaried name="admin/import-csv"><BulkDocImportPage /></Boundaried>} />
+                <Route path="admin/audit" element={<Boundaried name="admin/audit"><AuditLogPage /></Boundaried>} />
                 <Route path="admin/backups" element={<Boundaried name="admin/backups"><BackupAdminPage /></Boundaried>} />
                 <Route path="admin/tags" element={<Boundaried name="admin/tags"><TagManagerPage /></Boundaried>} />
                 <Route path="admin/webhooks" element={<Boundaried name="admin/webhooks"><WebhooksSettingsPage /></Boundaried>} />

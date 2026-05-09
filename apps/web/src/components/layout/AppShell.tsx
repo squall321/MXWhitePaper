@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { Suspense, lazy, useState, type ReactNode } from 'react'
 import { TopBar } from './TopBar'
 import { Breadcrumb } from './Breadcrumb'
 import { useGChord } from './useGChord'
@@ -10,9 +10,16 @@ import { RailBoundary } from '@/components/blocks/BlockBoundary'
 import { useFavoritesStore } from '@/features/favorites/store'
 import { useRecentStore } from '@/features/recent/store'
 import { useSettingsStore } from '@/features/settings/store'
-import { KeyboardShortcutsModal } from '@/features/editor/components/KeyboardShortcutsModal'
 import { Link } from 'react-router-dom'
 import { useT } from '@/lib/i18n'
+
+// Keyboard shortcuts modal is rarely opened (?-key) — defer the chunk until
+// the first time the user actually opens it.
+const KeyboardShortcutsModal = lazy(() =>
+  import('@/features/editor/components/KeyboardShortcutsModal').then((m) => ({
+    default: m.KeyboardShortcutsModal,
+  })),
+)
 
 interface AppShellProps {
   children: ReactNode
@@ -180,7 +187,11 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
       )}
 
       {/* Profile menu surfaces — Modal / Drawer hosted at the shell level. */}
-      <KeyboardShortcutsModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+      {helpOpen && (
+        <Suspense fallback={null}>
+          <KeyboardShortcutsModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+        </Suspense>
+      )}
       <SettingsQuickModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <FavoritesDrawer open={favoritesOpen} onClose={() => setFavoritesOpen(false)} />
       <RecentDrawer open={recentOpen} onClose={() => setRecentOpen(false)} />

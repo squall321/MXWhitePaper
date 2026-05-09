@@ -142,10 +142,54 @@ describe('<SettingsPage />', () => {
 
   it('renders aria-checked for every toggle and exposes role="switch"', () => {
     const html = renderSettings()
-    // 4 cosmetic toggles + 2 spellcheck toggles (enabled, autoDetectLang).
-    // Excludes the language <select> and the theme radio group.
+    // 4 cosmetic toggles + 1 email-digest toggle + 2 spellcheck toggles.
+    // Excludes the language <select> and the theme/cadence radio groups.
     const matches = html.match(/role="switch"/g) ?? []
-    expect(matches.length).toBe(6)
+    expect(matches.length).toBe(7)
     expect(html).toContain('role="switch"')
+  })
+
+  it('renders the 이메일 알림 card with cadence radio and read-only email row', () => {
+    const html = renderSettings()
+    expect(html).toContain('이메일 알림')
+    expect(html).toContain('settings-email-card')
+    expect(html).toContain('settings-toggle-email-digest')
+    expect(html).toContain('settings-email-cadence')
+    expect(html).toContain('settings-email-cadence-instant')
+    expect(html).toContain('settings-email-cadence-daily')
+    expect(html).toContain('settings-email-cadence-weekly')
+    expect(html).toContain('settings-email-readonly')
+    // Logged-out fallback message present (no auth user in this test env).
+    expect(html).toContain('로그인 후 표시됩니다.')
+  })
+})
+
+describe('settings/store email prefs', () => {
+  beforeEach(() => {
+    ;(globalThis as unknown as {
+      window: { localStorage: MemoryStorage }
+    }).window.localStorage.clear()
+    useSettingsStore.getState().reset()
+  })
+
+  it('exposes email defaults', () => {
+    const s = useSettingsStore.getState()
+    expect(s.emailDigest).toBe(true)
+    expect(s.emailCadence).toBe('daily')
+  })
+
+  it('persists email cadence changes', () => {
+    useSettingsStore.getState().set('emailCadence', 'weekly')
+    useSettingsStore.getState().set('emailDigest', false)
+    const raw = (
+      globalThis as unknown as { window: { localStorage: MemoryStorage } }
+    ).window.localStorage.getItem(STORAGE_KEY)
+    expect(raw).toBeTruthy()
+    const parsed = JSON.parse(raw!) as {
+      emailCadence: string
+      emailDigest: boolean
+    }
+    expect(parsed.emailCadence).toBe('weekly')
+    expect(parsed.emailDigest).toBe(false)
   })
 })

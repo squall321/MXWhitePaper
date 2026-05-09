@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { useParams, useOutletContext, useSearchParams } from 'react-router-dom'
 import { useDocument } from '@/features/document/hooks/useDocument'
 import { WikiArticle } from '@/components/WikiArticle'
@@ -10,7 +10,13 @@ import { EditorToolbar } from '@/features/editor/components/EditorToolbar'
 import { QuickInsertBar } from '@/features/editor/components/QuickInsertBar'
 import { OutlinePanel } from '@/features/editor/components/OutlinePanel'
 import { VersionHistoryPanel } from '@/features/editor/components/VersionHistoryPanel'
-import { ConflictMergeModal } from '@/features/editor/components/ConflictMergeModal'
+// ConflictMergeModal only mounts when an ETag conflict actually fires —
+// defer the chunk so it doesn't bloat the reader's first paint.
+const ConflictMergeModal = lazy(() =>
+  import('@/features/editor/components/ConflictMergeModal').then((m) => ({
+    default: m.ConflictMergeModal,
+  })),
+)
 import { OnboardingTour } from '@/features/editor/components/OnboardingTour'
 import { EditorHelpButton } from '@/features/editor/components/EditorHelpButton'
 import { ArticleDropSurface } from '@/features/upload/components/ArticleDropSurface'
@@ -294,7 +300,11 @@ export function DocumentReaderPage() {
 
       {isFullEditing && <QuickInsertBar slug={slug} />}
 
-      {conflict && <ConflictMergeModal slug={slug} />}
+      {conflict && (
+        <Suspense fallback={null}>
+          <ConflictMergeModal slug={slug} />
+        </Suspense>
+      )}
       {isFullEditing && <OnboardingTour />}
       <EditorHelpButton />
 

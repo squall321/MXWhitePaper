@@ -1,9 +1,14 @@
-"""Word (.docx) → DocumentJSON import 라우터.
+"""Import 라우터.
 
 POST /imports/docx (editor+, rate-limit 5/min/user, max 30 MB)
   - multipart/form-data: file (.docx), slug?, title?
   - 결과: DocumentJSON v1.0 + import_summary 통계 (FE 가 받은 후 별도로
     POST /documents 호출해 영구화).
+
+POST /imports/csv (admin-only, max 5 MB, ≤500 rows)
+  - multipart/form-data: file (.csv)
+  - 행 단위로 DocumentJSON v1.0 을 만들어 즉시 영속화. slug 충돌은 skip.
+  - 결과: {created, skipped, errors[]}.
 
 검증:
   - 확장자 .docx
@@ -15,17 +20,21 @@ Rate-limit 은 files.py 의 in-process 패턴을 그대로 따른다 (5/min/user
 """
 from __future__ import annotations
 
+import csv
+import io
+import re
 import time
 from typing import Any
 
+import ulid
 from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import require_editor
+from app.core.auth import require_admin, require_editor
 from app.core.db import get_db
-from app.core.errors import APIError, ValidationFailed, envelope
+from app.core.errors import APIError, Conflict, ValidationFailed, envelope
 from app.repos import document_repo
-from app.services import docx_import, upload_service
+from app.services import docx_import, document_service, upload_service
 
 router = APIRouter(prefix="/api/v1/imports", tags=["imports"])
 
@@ -197,4 +206,236 @@ async def import_docx(
     return envelope(
         data={"document": document, "summary": summary_dict},
         meta={"slug": final_slug},
+    )
+
+
+# ── Bulk CSV import ──────────────────────────────────────────────────
+MAX_CSV_BYTES = 5 * 1024 * 1024
+MAX_CSV_ROWS = 500
+_CSV_COLUMNS = (
+    "slug", "title", "summary", "division", "team", "group", "part",
+    "tags", "owners", "confidentiality", "body",
+)
+_REQUIRED_CSV_COLUMNS = ("title",)
+_CONFIDENTIALITY_VALUES = {"public", "internal", "restricted"}
+_SLUG_RE = re.compile(r"[^a-z0-9가-힣\-]+")
+
+
+def _slugify_title(title: str) -> str:
+    base = (title or "").lower().strip()
+    base = _SLUG_RE.sub("-", base)
+    base = re.sub(r"-+", "-", base).strip("-")
+    if not base:
+        base = "imported"
+    return base[:100]
+
+
+def _split_tags(raw: str) -> list[str]:
+    if not raw:
+        return []
+    parts = re.split(r"[|,]", raw)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _split_owners(raw: str) -> list[str]:
+    if not raw:
+        return []
+    return [p.strip() for p in raw.split("|") if p.strip()]
+
+
+def _body_to_blocks(body: str) -> list[dict[str, Any]]:
+    """`\\n\\n` 로 분리된 문단들을 paragraph block 배열로 변환."""
+    if not body:
+        return []
+    paragraphs = [p.strip() for p in body.split("\n\n")]
+    return [
+        {"type": "paragraph", "id": str(ulid.new()), "text": p}
+        for p in paragraphs
+        if p
+    ]
+
+
+def _row_to_documentjson(
+    row: dict[str, str], *, owner_email: str
+) -> dict[str, Any]:
+    """CSV 한 행 → DocumentJSON v1.0 dict.
+
+    title 누락 또는 confidentiality 값이 잘못되면 ValueError 를 던진다 (호출자 행
+    번호와 함께 errors 에 기록).
+    """
+    title = (row.get("title") or "").strip()
+    if not title:
+        raise ValueError("title is required")
+    slug = (row.get("slug") or "").strip().lower() or _slugify_title(title)
+    division = (row.get("division") or "").strip() or "기타"
+    confidentiality = (row.get("confidentiality") or "internal").strip().lower()
+    if confidentiality not in _CONFIDENTIALITY_VALUES:
+        raise ValueError(
+            f"confidentiality must be one of {sorted(_CONFIDENTIALITY_VALUES)}"
+        )
+
+    metadata: dict[str, Any] = {
+        "division": division,
+        "owners": _split_owners(row.get("owners") or "") or [owner_email],
+        "tags": _split_tags(row.get("tags") or ""),
+        "confidentiality": confidentiality,
+    }
+    for key in ("team", "group", "part"):
+        v = (row.get(key) or "").strip()
+        if v:
+            metadata[key] = v
+
+    blocks = _body_to_blocks(row.get("body") or "")
+    section: dict[str, Any] = {
+        "id": str(ulid.new()),
+        "level": 1,
+        "title": title[:200],
+        "blocks": blocks,
+        "subsections": [],
+    }
+
+    doc: dict[str, Any] = {
+        "schema_version": "1.0",
+        "id": str(ulid.new()),
+        "slug": slug,
+        "title": title[:200],
+        "metadata": metadata,
+        "sections": [section],
+    }
+    summary = (row.get("summary") or "").strip()
+    if summary:
+        doc["summary"] = summary[:500]
+    return doc
+
+
+def _normalize_csv_headers(raw: list[str]) -> list[str]:
+    return [(h or "").strip().lower() for h in raw]
+
+
+@router.post(
+    "/csv",
+    summary="CSV 일괄 문서 가져오기 (admin only)",
+    description=(
+        "CSV 한 행이 한 문서. 헤더 컬럼 (case-insensitive): "
+        "`slug,title,summary,division,team,group,part,tags,owners,"
+        "confidentiality,body`. tags 는 ',' 또는 '|' 로 구분, owners 는 '|'. "
+        "body 의 `\\n\\n` 단위가 단락. 최대 5 MB / 500 행. "
+        "이미 존재하는 slug 는 skipped 로 집계."
+    ),
+)
+async def import_csv(
+    file: UploadFile = File(...),
+    x_mxwp_user: str | None = Header(default=None, alias="X-MXWP-User"),
+    s: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_admin),
+) -> dict[str, Any]:
+    fname = (file.filename or "").lower()
+    if not fname.endswith(".csv"):
+        raise ValidationFailed(
+            "filename must end with .csv",
+            details={"got": file.filename},
+        )
+
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(64 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_CSV_BYTES:
+            raise ValidationFailed(
+                f"file exceeds max size ({MAX_CSV_BYTES} bytes)",
+                details={"limit": MAX_CSV_BYTES},
+            )
+        chunks.append(chunk)
+    raw = b"".join(chunks)
+
+    try:
+        text_data = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as e:
+        raise ValidationFailed(
+            "csv must be UTF-8 encoded",
+            details={"reason": str(e)},
+        ) from e
+
+    reader = csv.reader(io.StringIO(text_data))
+    try:
+        header = next(reader)
+    except StopIteration as e:
+        raise ValidationFailed("csv is empty (no header row)") from e
+
+    headers = _normalize_csv_headers(header)
+    missing = [c for c in _REQUIRED_CSV_COLUMNS if c not in headers]
+    if missing:
+        raise ValidationFailed(
+            "csv is missing required column(s)",
+            details={"missing": missing, "expected": list(_CSV_COLUMNS)},
+        )
+
+    # Pre-validate ALL rows before creating any.
+    parsed_rows: list[tuple[int, dict[str, Any]]] = []
+    parse_errors: list[dict[str, Any]] = []
+    for row_idx, raw_row in enumerate(reader, start=2):  # row 1 = header
+        if len(parsed_rows) + len(parse_errors) >= MAX_CSV_ROWS:
+            raise ValidationFailed(
+                f"csv exceeds max rows ({MAX_CSV_ROWS})",
+                details={"limit": MAX_CSV_ROWS},
+            )
+        # pad/truncate to header width
+        cells = list(raw_row) + [""] * (len(headers) - len(raw_row))
+        cells = cells[: len(headers)]
+        if not any(c.strip() for c in cells):
+            continue  # blank line
+        row_dict = dict(zip(headers, cells, strict=False))
+        try:
+            doc = _row_to_documentjson(
+                row_dict,
+                owner_email=(x_mxwp_user or user.get("email") or "admin"),
+            )
+        except ValueError as e:
+            parse_errors.append({
+                "row": row_idx,
+                "slug": (row_dict.get("slug") or "").strip() or None,
+                "message": str(e),
+            })
+            continue
+        parsed_rows.append((row_idx, doc))
+
+    # Fail-fast: any parse error → no inserts.
+    if parse_errors:
+        raise ValidationFailed(
+            "csv has parse errors — no rows imported",
+            details={"errors": parse_errors},
+        )
+
+    actor = await _resolve_actor(s, x_mxwp_user, user)
+
+    created = 0
+    skipped = 0
+    errors: list[dict[str, Any]] = []
+    for row_idx, doc in parsed_rows:
+        slug = doc["slug"]
+        existing = await document_repo.find_by_slug(s, slug)
+        if existing:
+            skipped += 1
+            continue
+        try:
+            await document_service.create_document(
+                s, payload=doc, owner_id=actor
+            )
+            created += 1
+        except Conflict:
+            # Race between find_by_slug and INSERT — count as skipped.
+            skipped += 1
+        except (ValidationFailed, APIError) as e:
+            errors.append({
+                "row": row_idx,
+                "slug": slug,
+                "message": getattr(e, "message", str(e)),
+            })
+
+    return envelope(
+        data={"created": created, "skipped": skipped, "errors": errors},
+        meta={"total_rows": len(parsed_rows)},
     )

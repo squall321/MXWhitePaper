@@ -20,6 +20,13 @@ vi.mock('@/features/admin/api', () => ({
     ]),
   patchAdminUser: () => Promise.resolve({}),
   listAuditLogs: () => Promise.resolve([]),
+  listAuditViewer: () =>
+    Promise.resolve({
+      items: [],
+      meta: { count: 0, total: 0, limit: 50, offset: 0 },
+    }),
+  listAuditActions: () => Promise.resolve([]),
+  auditCsvUrl: () => '/api/v1/audit/csv',
   getAdminHealth: () =>
     Promise.resolve({
       docs_active: 1,

@@ -117,9 +117,21 @@ export function InlineFormattingToolbar({
       const top = Math.max(8, target.top - 38)
       setPos({ left, top })
     }
-    const onSelChange = () => reposition()
-    const onScroll = () => reposition()
-    const onMouseUp = () => reposition()
+    // `selectionchange` fires per keystroke — even per arrow-key tick — and
+    // each callback reads `getBoundingClientRect()` (forced layout). 50 ms is
+    // imperceptible to a human dragging a selection but eliminates the
+    // sub-frame storms during fast typing/scrolling.
+    let scheduled: number | null = null
+    const debouncedReposition = () => {
+      if (scheduled !== null) return
+      scheduled = window.setTimeout(() => {
+        scheduled = null
+        reposition()
+      }, 50)
+    }
+    const onSelChange = () => debouncedReposition()
+    const onScroll = () => debouncedReposition()
+    const onMouseUp = () => debouncedReposition()
     document.addEventListener('selectionchange', onSelChange)
     window.addEventListener('scroll', onScroll, true)
     window.addEventListener('mouseup', onMouseUp)
@@ -127,6 +139,7 @@ export function InlineFormattingToolbar({
       document.removeEventListener('selectionchange', onSelChange)
       window.removeEventListener('scroll', onScroll, true)
       window.removeEventListener('mouseup', onMouseUp)
+      if (scheduled !== null) window.clearTimeout(scheduled)
     }
   }, [rootSelector])
 

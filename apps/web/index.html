@@ -8,9 +8,46 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#1428A0" />
     <title>MX White Paper</title>
+    <!--
+      LCP-critical inline CSS. Mirrors the AppShell skeleton so the user sees
+      a styled top bar + content rail before Tailwind's hashed bundle lands.
+      Numbers come from tokens.css (Samsung Blue #1428A0). Tailwind / tokens.css
+      override these once the JS chunk that imports them executes.
+    -->
+    <style>
+      html, body { margin: 0; padding: 0; background: #ffffff; color: #111827; }
+      body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+      #root { min-height: 100vh; }
+      .skip-to-content {
+        position: absolute; top: -40px; left: 8px;
+        background: #1428A0; color: #fff;
+        padding: 6px 10px; border-radius: 4px;
+        font-size: 14px; z-index: 9999;
+      }
+      .skip-to-content:focus { top: 8px; }
+      .pre-hydrate-shell {
+        display: flex; flex-direction: column; min-height: 100vh;
+      }
+      .pre-hydrate-shell > .pre-hydrate-topbar {
+        height: 56px; background: #ffffff; border-bottom: 1px solid #e5e7eb;
+      }
+      .pre-hydrate-shell > .pre-hydrate-main {
+        flex: 1; padding: 24px;
+      }
+    </style>
   </head>
   <body class="bg-white text-gray-900 antialiased">
-    <div id="root"></div>
+    <!-- Skip-to-content sits as the very first focusable node so keyboard
+         users can bypass nav before any framework code runs. -->
+    <a href="#main" class="skip-to-content">본문으로 건너뛰기</a>
+    <div id="root">
+      <!-- Skeleton paint shown until React hydrates. Removed when AppShell
+           replaces #root's children. -->
+      <div class="pre-hydrate-shell" aria-hidden="true">
+        <div class="pre-hydrate-topbar"></div>
+        <div class="pre-hydrate-main"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

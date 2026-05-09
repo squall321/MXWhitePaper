@@ -4,23 +4,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/features/auth/store'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import { Input, Select } from '@/components/ui/Input'
 import { toast } from '@/components/ui/Toast'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { ActivityWidget } from '@/features/activity/ActivityWidget'
 import { AdminOrgsPage } from './AdminOrgs'
+import { AuditLogPage } from './AuditLog'
 import { BackupAdminPage } from './BackupAdmin'
+import { BulkDocImportPage } from './BulkDocImport'
 import { TagManagerPage } from './TagManager'
 import { WebhooksSettingsPage } from './WebhooksSettings'
 import { useT } from '@/lib/i18n'
 import {
-  type AdminAuditEntry,
   type AdminHealth,
   type AdminUser,
   getAdminHealth,
   listAdminUsers,
-  listAuditLogs,
   patchAdminUser,
   runMaintenance,
 } from '@/features/admin/api'
@@ -34,6 +33,7 @@ type TabKey =
   | 'tags'
   | 'webhooks'
   | 'backups'
+  | 'import-csv'
 
 /** Tabs reference an i18n key; the visible label is resolved at render. */
 const TABS: Array<{ key: TabKey; labelKey: string }> = [
@@ -45,6 +45,7 @@ const TABS: Array<{ key: TabKey; labelKey: string }> = [
   { key: 'tags', labelKey: 'page.adminDashboard.tab.tags' },
   { key: 'webhooks', labelKey: 'page.adminDashboard.tab.webhooks' },
   { key: 'backups', labelKey: 'page.adminDashboard.tab.backups' },
+  { key: 'import-csv', labelKey: 'page.adminDashboard.tab.importCsv' },
 ]
 
 const ROLE_OPTIONS = [
@@ -110,7 +111,11 @@ export function AdminDashboardPage() {
       </nav>
 
       {tab === 'users' && <UsersTab />}
-      {tab === 'audit' && <AuditTab />}
+      {tab === 'audit' && (
+        <div data-testid="admin-audit-tab">
+          <AuditLogPage embedded />
+        </div>
+      )}
       {tab === 'health' && <HealthTab />}
       {tab === 'maintenance' && <MaintenanceTab />}
       {tab === 'orgs' && (
@@ -131,6 +136,11 @@ export function AdminDashboardPage() {
       {tab === 'backups' && (
         <div data-testid="admin-tab-backups-content">
           <BackupAdminPage />
+        </div>
+      )}
+      {tab === 'import-csv' && (
+        <div data-testid="admin-tab-import-csv-content">
+          <BulkDocImportPage />
         </div>
       )}
     </div>
@@ -313,130 +323,6 @@ function UserRow({
         </div>
       </td>
     </tr>
-  )
-}
-
-// ── Audit logs ──────────────────────────────────────────────────────────
-function AuditTab() {
-  const t = useT()
-  const [action, setAction] = useState('')
-  const [user, setUser] = useState('')
-  const [since, setSince] = useState('')
-
-  const params = useMemo(
-    () => ({
-      action: action || undefined,
-      user: user || undefined,
-      since: since || undefined,
-      limit: 100,
-    }),
-    [action, user, since],
-  )
-
-  const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: ['admin', 'audit', params],
-    queryFn: () => listAuditLogs(params),
-  })
-
-  return (
-    <section data-testid="admin-audit-tab" className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-xs text-gray-600" htmlFor="admin-audit-action">
-            {t('page.adminDashboard.audit.action')}
-          </label>
-          <Input
-            id="admin-audit-action"
-            value={action}
-            onChange={(e) => setAction(e.target.value)}
-            placeholder="document.create"
-            data-testid="admin-audit-action"
-            aria-label={t('page.adminDashboard.audit.action')}
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-600" htmlFor="admin-audit-user">
-            {t('page.adminDashboard.audit.user')}
-          </label>
-          <Input
-            id="admin-audit-user"
-            value={user}
-            onChange={(e) => setUser(e.target.value)}
-            placeholder={t('page.adminDashboard.audit.userPlaceholder')}
-            data-testid="admin-audit-user"
-            aria-label={t('page.adminDashboard.audit.user')}
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-600" htmlFor="admin-audit-since">
-            {t('page.adminDashboard.audit.since')}
-          </label>
-          <Input
-            id="admin-audit-since"
-            value={since}
-            onChange={(e) => setSince(e.target.value)}
-            placeholder="2026-05-01T00:00:00Z"
-            data-testid="admin-audit-since"
-            aria-label={t('page.adminDashboard.audit.since')}
-          />
-        </div>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => void refetch()}
-          data-testid="admin-audit-refresh"
-        >
-          {t('common.refresh')}
-        </Button>
-      </div>
-
-      {isPending && (
-        <p role="status" aria-live="polite" className="text-sm text-gray-500">
-          {t('common.loading')}
-        </p>
-      )}
-      {isError && (
-        <ErrorState
-          title={t('page.adminDashboard.audit.fetchFail')}
-          description={error instanceof Error ? error.message : t('common.error')}
-          onRetry={() => void refetch()}
-        />
-      )}
-      {data && (
-        <Card padded={false}>
-          <ul
-            className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto text-sm"
-            data-testid="admin-audit-list"
-          >
-            {data.map((row) => (
-              <AuditRow key={row.id} row={row} />
-            ))}
-            {data.length === 0 && (
-              <li className="px-3 py-6 text-center text-gray-500">
-                {t('page.adminDashboard.audit.empty')}
-              </li>
-            )}
-          </ul>
-        </Card>
-      )}
-    </section>
-  )
-}
-
-function AuditRow({ row }: { row: AdminAuditEntry }) {
-  return (
-    <li className="px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="brand">{row.action}</Badge>
-        <span className="text-xs text-gray-700">{row.target}</span>
-        <span className="ml-auto text-xs text-gray-500">
-          {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}
-        </span>
-      </div>
-      <div className="mt-1 text-xs text-gray-600">
-        {row.user_email || row.user_id || 'system'}
-      </div>
-    </li>
   )
 }
 

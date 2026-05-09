@@ -85,6 +85,74 @@ export async function listAuditLogs(params: {
   return unwrap<AdminAuditEntry[]>(res)
 }
 
+// ── Audit viewer (BE: apps/api/app/routers/audit.py) ─────────────────────
+export interface AuditEntry {
+  id: string
+  actor_user_id: string | null
+  actor_name: string | null
+  action: string
+  target_kind: string | null
+  target_id: string | null
+  payload: Record<string, unknown> | null
+  created_at: string | null
+}
+
+export interface AuditListParams {
+  since?: string
+  until?: string
+  actor_user_id?: string
+  action?: string
+  target_kind?: string
+  limit?: number
+  offset?: number
+}
+
+export interface AuditListMeta {
+  count: number
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface AuditListResult {
+  items: AuditEntry[]
+  meta: AuditListMeta
+}
+
+export async function listAuditViewer(
+  params: AuditListParams,
+): Promise<AuditListResult> {
+  const res = await apiClient.get<ApiEnvelope<AuditEntry[]>>('/audit', {
+    params,
+  })
+  const items = unwrap<AuditEntry[]>(res)
+  const meta = (res.data?.meta ?? {
+    count: items.length,
+    total: items.length,
+    limit: params.limit ?? items.length,
+    offset: params.offset ?? 0,
+  }) as unknown as AuditListMeta
+  return { items, meta }
+}
+
+export async function listAuditActions(): Promise<string[]> {
+  const res = await apiClient.get<ApiEnvelope<string[]>>('/audit/actions')
+  return unwrap<string[]>(res)
+}
+
+/** Build a relative URL for the CSV export (axios baseURL prefixed). */
+export function auditCsvUrl(params: AuditListParams): string {
+  const base =
+    (import.meta.env.VITE_API_URL as string | undefined) || '/api/v1'
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '') continue
+    qs.set(k, String(v))
+  }
+  const tail = qs.toString()
+  return `${base}/audit/csv${tail ? `?${tail}` : ''}`
+}
+
 export async function getAdminHealth(): Promise<AdminHealth> {
   const res = await apiClient.get<ApiEnvelope<AdminHealth>>('/admin/health')
   return unwrap<AdminHealth>(res)

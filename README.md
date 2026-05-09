@@ -130,7 +130,19 @@ apptainer exec instance://mxwp_api /bin/sh -c \
 curl -X POST http://localhost:8000/api/v1/documents \
   -H 'Content-Type: application/json' \
   --data @packages/shared/samples/05-minimal-doc.json
+
+# 3) CSV 로 한 번에 여러 문서 (admin only, ≤500 행 / ≤5 MB)
+#    샘플: apps/api/scripts/sample-bulk-import.csv
+curl -X POST http://localhost:8000/api/v1/imports/csv \
+  -F "file=@apps/api/scripts/sample-bulk-import.csv"
+# → {"data":{"created":N,"skipped":M,"errors":[…]}, "meta":{"total_rows":…}}
 ```
+
+CSV 컬럼 (헤더 case-insensitive):
+`slug,title,summary,division,team,group,part,tags,owners,confidentiality,body`.
+`tags` 는 `,` 또는 `|`, `owners` 는 `|` 로 분리. `body` 의 빈 줄(`\n\n`)이
+단락 경계이며 한 행은 level-1 섹션 하나로 만들어집니다. slug 가 이미 있으면
+`skipped` 로 집계 — 충돌 없이 점진적 마이그레이션이 가능합니다.
 
 POST 한 번이면 다음이 모두 자동으로 수행됩니다:
 

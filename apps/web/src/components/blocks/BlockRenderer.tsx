@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Suspense, lazy, type ReactNode } from 'react'
 import type { Block } from '@/types/document'
 import { ParagraphBlockView } from './ParagraphBlock'
 import { Heading4BlockView } from './Heading4Block'
@@ -32,36 +32,81 @@ import { FormBlockView } from './FormBlock'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { InlineTextBlockEditor } from '@/features/editor/components/InlineTextBlockEditor'
 import { ListBlockEditor } from '@/features/editor/components/ListBlockEditor'
+// ImageBlockEditor stays eager — it's the most-frequently-used editor branch
+// (every figure block hits it) and lazy-loading on every paint flashes the
+// fallback. The heavier editors below are split off behind React.lazy so they
+// only ship when a user actually opens that block in edit mode.
 import { ImageBlockEditor } from '@/features/editor/blocks/ImageBlockEditor'
-import { GalleryBlockEditor } from '@/features/editor/blocks/GalleryBlockEditor'
-import { ChartBlockEditorWrapper } from '@/features/editor/blocks/ChartBlockEditorWrapper'
-import { MathBlockEditorWrapper } from '@/features/editor/blocks/MathBlockEditorWrapper'
-import { DataSourceBlockEditor } from '@/features/editor/blocks/DataSourceBlockEditor'
-import { DashboardEmbedBlockEditor } from '@/features/editor/blocks/DashboardEmbedBlockEditor'
-import { CalculatorBlockEditor } from '@/features/editor/blocks/CalculatorBlockEditor'
-import { OrgChartBlockEditor } from '@/features/editor/blocks/OrgChartBlockEditor'
-import { WhiteboardBlockEditor } from '@/features/editor/blocks/WhiteboardBlockEditor'
-import { FormBlockEditor } from '@/features/editor/blocks/FormBlockEditor'
-import { FlowBlockEditor } from '@/features/editor/blocks/FlowBlockEditor'
-import { GanttBlockEditor } from '@/features/editor/blocks/GanttBlockEditor'
-import { KpiCardsBlockEditor } from '@/features/editor/blocks/KpiCardsBlockEditor'
-import { TableBlockEditor } from '@/features/editor/blocks/TableBlockEditor'
-import { CodeBlockEditor } from '@/features/editor/blocks/CodeBlockEditor'
 import { CalloutVariantPicker } from '@/features/editor/blocks/CalloutVariantPicker'
 import { VideoBlockEditor } from '@/features/editor/blocks/VideoBlockEditor'
 import { IframeBlockEditor } from '@/features/editor/blocks/IframeBlockEditor'
 import { FileBlockEditor } from '@/features/editor/blocks/FileBlockEditor'
 import { DocLinkCardBlockEditor } from '@/features/editor/blocks/DocLinkCardBlockEditor'
+import { TableBlockEditor } from '@/features/editor/blocks/TableBlockEditor'
+import { CodeBlockEditor } from '@/features/editor/blocks/CodeBlockEditor'
 import {
   AccordionBlockEditor,
   ColumnsBlockEditor,
   TabsBlockEditor,
 } from '@/features/editor/blocks/ContainerBlockEditors'
 import { BlockBoundary } from './BlockBoundary'
-import {
-  BlockCollapseWrapper,
-} from '@/features/editor/components/BlockCollapseWrapper'
+import { BlockCollapseWrapper } from '@/features/editor/components/BlockCollapseWrapper'
 import { COLLAPSIBLE_BLOCK_TYPES } from '@/features/editor/components/BlockResizeWrapper'
+
+// Lazy-loaded heavy block editors. Each chunk is named so the manualChunks
+// rules in vite.config.ts can land them in dedicated bundles.
+const GalleryBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/GalleryBlockEditor').then((m) => ({ default: m.GalleryBlockEditor })),
+)
+const ChartBlockEditorWrapper = lazy(() =>
+  import('@/features/editor/blocks/ChartBlockEditorWrapper').then((m) => ({ default: m.ChartBlockEditorWrapper })),
+)
+const MathBlockEditorWrapper = lazy(() =>
+  import('@/features/editor/blocks/MathBlockEditorWrapper').then((m) => ({ default: m.MathBlockEditorWrapper })),
+)
+const DataSourceBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/DataSourceBlockEditor').then((m) => ({ default: m.DataSourceBlockEditor })),
+)
+const DashboardEmbedBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/DashboardEmbedBlockEditor').then((m) => ({ default: m.DashboardEmbedBlockEditor })),
+)
+const CalculatorBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/CalculatorBlockEditor').then((m) => ({ default: m.CalculatorBlockEditor })),
+)
+const OrgChartBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/OrgChartBlockEditor').then((m) => ({ default: m.OrgChartBlockEditor })),
+)
+const WhiteboardBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/WhiteboardBlockEditor').then((m) => ({ default: m.WhiteboardBlockEditor })),
+)
+const FormBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/FormBlockEditor').then((m) => ({ default: m.FormBlockEditor })),
+)
+const FlowBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/FlowBlockEditor').then((m) => ({ default: m.FlowBlockEditor })),
+)
+const GanttBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/GanttBlockEditor').then((m) => ({ default: m.GanttBlockEditor })),
+)
+const KpiCardsBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/KpiCardsBlockEditor').then((m) => ({ default: m.KpiCardsBlockEditor })),
+)
+
+/** Tiny placeholder shown while a lazy block-editor chunk is fetched. */
+function BlockEditorSkeleton() {
+  return (
+    <div
+      className="my-2 h-24 w-full animate-pulse rounded border border-gray-200 bg-gray-50"
+      aria-hidden="true"
+    />
+  )
+}
+
+/** Wrap a lazy block-editor in <Suspense> so the parent never sees a thrown
+ *  promise. Keeps BlockRenderer's dispatch logic readable. */
+function lazyEditor(node: ReactNode): ReactNode {
+  return <Suspense fallback={<BlockEditorSkeleton />}>{node}</Suspense>
+}
 
 /**
  * BlockRenderer — discriminates on `block.type` and never throws on unknown
@@ -211,40 +256,40 @@ function BlockRendererInner({ block }: { block: Block }) {
       return <ImageBlockEditor slug={editorSlug} block={block} />
     }
     if (block.type === 'gallery') {
-      return <GalleryBlockEditor slug={editorSlug} block={block} />
+      return lazyEditor(<GalleryBlockEditor slug={editorSlug} block={block} />)
     }
     if (block.type === 'chart') {
-      return <ChartBlockEditorWrapper slug={editorSlug} block={block} />
+      return lazyEditor(<ChartBlockEditorWrapper slug={editorSlug} block={block} />)
     }
     if (block.type === 'math') {
-      return <MathBlockEditorWrapper slug={editorSlug} block={block} />
+      return lazyEditor(<MathBlockEditorWrapper slug={editorSlug} block={block} />)
     }
     if (block.type === 'data-source') {
-      return <DataSourceBlockEditor slug={editorSlug} block={block} />
+      return lazyEditor(<DataSourceBlockEditor slug={editorSlug} block={block} />)
     }
     if (block.type === 'dashboard-embed') {
-      return <DashboardEmbedBlockEditor slug={editorSlug} block={block} />
+      return lazyEditor(<DashboardEmbedBlockEditor slug={editorSlug} block={block} />)
     }
     if (block.type === 'calculator') {
-      return <CalculatorBlockEditor slug={editorSlug} block={block} />
+      return lazyEditor(<CalculatorBlockEditor slug={editorSlug} block={block} />)
     }
     if (block.type === 'org-chart') {
-      return <OrgChartBlockEditor slug={editorSlug} block={block} />
+      return lazyEditor(<OrgChartBlockEditor slug={editorSlug} block={block} />)
     }
     if (block.type === 'whiteboard') {
-      return <WhiteboardBlockEditor slug={editorSlug} block={block} />
+      return lazyEditor(<WhiteboardBlockEditor slug={editorSlug} block={block} />)
     }
     if (block.type === 'form') {
-      return <FormBlockEditor slug={editorSlug} block={block} />
+      return lazyEditor(<FormBlockEditor slug={editorSlug} block={block} />)
     }
     if (block.type === 'flow') {
-      return <FlowBlockEditor slug={editorSlug} block={block} />
+      return lazyEditor(<FlowBlockEditor slug={editorSlug} block={block} />)
     }
     if (block.type === 'gantt') {
-      return <GanttBlockEditor slug={editorSlug} block={block} />
+      return lazyEditor(<GanttBlockEditor slug={editorSlug} block={block} />)
     }
     if (block.type === 'kpi-cards') {
-      return <KpiCardsBlockEditor slug={editorSlug} block={block} />
+      return lazyEditor(<KpiCardsBlockEditor slug={editorSlug} block={block} />)
     }
     if (block.type === 'table') {
       return <TableBlockEditor slug={editorSlug} block={block} />

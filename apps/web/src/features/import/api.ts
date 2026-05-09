@@ -65,3 +65,32 @@ export async function importDocx(
   }
   return data
 }
+
+// ── Bulk CSV import (admin only) ────────────────────────────────────
+export interface BulkImportError {
+  row: number
+  slug: string | null
+  message: string
+}
+
+export interface BulkImportResult {
+  created: number
+  skipped: number
+  errors: BulkImportError[]
+}
+
+/** POST /imports/csv — CSV 일괄 업로드. admin 전용. */
+export async function importBulkCsv(file: File): Promise<BulkImportResult> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await apiClient.post<ApiEnvelope<BulkImportResult>>(
+    '/imports/csv',
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+  const data = res.data?.data
+  if (!data) {
+    throw new Error('서버 응답이 비어 있습니다.')
+  }
+  return data
+}

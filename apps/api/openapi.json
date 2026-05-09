@@ -3,6 +3,12 @@
     "schemas": {
       "AddReviewersIn": {
         "properties": {
+          "notify": {
+            "default": false,
+            "description": "True 면 새로 추가된 reviewer 의 등록 이메일로 검토 요청 메일을 best-effort 발송한다. SMTP 실패는 reviewer 생성을 되돌리지 않는다.",
+            "title": "Notify",
+            "type": "boolean"
+          },
           "user_ids": {
             "items": {
               "type": "string"
@@ -51,6 +57,20 @@
           "document_id"
         ],
         "title": "AnchorIn",
+        "type": "object"
+      },
+      "Body_import_csv_api_v1_imports_csv_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_csv_api_v1_imports_csv_post",
         "type": "object"
       },
       "Body_import_docx_api_v1_imports_docx_post": {
@@ -282,6 +302,15 @@
             ],
             "description": "ISO datetime in UTC. Past values are rejected (422).",
             "title": "Expires At"
+          },
+          "notify_emails": {
+            "description": "선택적으로 share-link 안내 메일을 보낼 수신자 목록. 각 항목에 대해 best-effort SMTP 발송 — 실패해도 token 생성은 성공한다.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Notify Emails",
+            "type": "array"
           },
           "password": {
             "anyOf": [
@@ -2518,6 +2547,295 @@
         "summary": "최근 N일 가장 많이 조회된 문서 top 10",
         "tags": [
           "analytics"
+        ]
+      }
+    },
+    "/api/v1/audit": {
+      "get": {
+        "operationId": "list_audit_api_v1_audit_get",
+        "parameters": [
+          {
+            "description": "ISO 시점 — 이상 포함",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 시점 — 이상 포함",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "ISO 시점 — 미만",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 시점 — 미만",
+              "title": "Until"
+            }
+          },
+          {
+            "description": "actor uuid 정확매칭",
+            "in": "query",
+            "name": "actor_user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "actor uuid 정확매칭",
+              "title": "Actor User Id"
+            }
+          },
+          {
+            "description": "action 정확매칭",
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "action 정확매칭",
+              "title": "Action"
+            }
+          },
+          {
+            "description": "target prefix (':' 앞)",
+            "in": "query",
+            "name": "target_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "target prefix (':' 앞)",
+              "title": "Target Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Audit Api V1 Audit Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "감사 로그 조회 (페이지+필터)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/audit/actions": {
+      "get": {
+        "operationId": "list_actions_api_v1_audit_actions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Actions Api V1 Audit Actions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "distinct action 목록 (5분 캐시)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/audit/csv": {
+      "get": {
+        "operationId": "export_csv_api_v1_audit_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor_user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor User Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10000,
+              "maximum": 100000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "감사 로그 CSV 내보내기 (스트리밍)",
+        "tags": [
+          "admin"
         ]
       }
     },
@@ -6581,6 +6899,68 @@
         "summary": "Get Image",
         "tags": [
           "images"
+        ]
+      }
+    },
+    "/api/v1/imports/csv": {
+      "post": {
+        "description": "CSV 한 행이 한 문서. 헤더 컬럼 (case-insensitive): `slug,title,summary,division,team,group,part,tags,owners,confidentiality,body`. tags 는 ',' 또는 '|' 로 구분, owners 는 '|'. body 의 `\\n\\n` 단위가 단락. 최대 5 MB / 500 행. 이미 존재하는 slug 는 skipped 로 집계.",
+        "operationId": "import_csv_api_v1_imports_csv_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_csv_api_v1_imports_csv_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Import Csv Api V1 Imports Csv Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "CSV 일괄 문서 가져오기 (admin only)",
+        "tags": [
+          "imports"
         ]
       }
     },

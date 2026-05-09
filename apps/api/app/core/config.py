@@ -59,6 +59,17 @@ class Settings(BaseSettings):
     # dispatcher 는 항상 동작 — 이 플래그는 runner ticker 만 게이트한다.
     subscription_digest_enabled: bool = Field(default=True)
 
+    # ── SMTP / Email (cycle: email integration) ──────────────────────
+    # When `email_enabled=False` the email service logs to stdout under a
+    # "[EMAIL CONSOLE FALLBACK]" prefix so dev never depends on a real MTA.
+    # When True the stdlib smtplib is used with the credentials below.
+    smtp_host: str | None = Field(default=None)
+    smtp_port: int = Field(default=587)
+    smtp_user: str | None = Field(default=None)
+    smtp_password: str | None = Field(default=None)
+    smtp_from: str = Field(default="noreply@mxwhitepaper.local")
+    email_enabled: bool = Field(default=False)
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

@@ -77,6 +77,13 @@ DECISION_STATUSES: set[str] = {"approved", "rejected", "changes_requested"}
 
 class AddReviewersIn(BaseModel):
     user_ids: list[str] = Field(default_factory=list, max_length=50)
+    notify: bool = Field(
+        default=False,
+        description=(
+            "True 면 새로 추가된 reviewer 의 등록 이메일로 검토 요청 메일을 "
+            "best-effort 발송한다. SMTP 실패는 reviewer 생성을 되돌리지 않는다."
+        ),
+    )
 
 
 class DecisionIn(BaseModel):
@@ -222,8 +229,47 @@ async def add_reviewers(
     await s.commit()
 
     items = await _list_reviewer_rows(s, doc["id"])
+
+    # Best-effort review-request emails. Toggle gated on body.notify so callers
+    # opt in explicitly; failures never undo the reviewer rows above.
+    notified: list[str] = []
+    if body.notify and added:
+        try:
+            from app.services.email import review_request_email, send_email
+
+            requester_name = (
+                user.get("name") or user.get("email") or "검토 요청자"
+            )
+            doc_url = f"/docs/{doc['slug']}"
+            for it in items:
+                if it["reviewer_user_id"] not in added:
+                    continue
+                addr = it.get("reviewer_email")
+                if not addr:
+                    continue
+                subject, body_text = review_request_email(
+                    reviewer_name=it.get("reviewer_name") or "",
+                    requester_name=requester_name,
+                    doc_title=doc["title"],
+                    doc_url=doc_url,
+                )
+                ok = await send_email(addr, subject, body_text)
+                if ok:
+                    notified.append(addr)
+        except Exception:  # noqa: BLE001
+            import logging as _logging
+
+            _logging.getLogger(__name__).exception(
+                "review-request email dispatch failed for slug=%s", slug
+            )
+
     return envelope(
-        data={"items": items, "added": added, "skipped": skipped},
+        data={
+            "items": items,
+            "added": added,
+            "skipped": skipped,
+            "notified_emails": notified,
+        },
         meta={"count": len(items)},
     )
 

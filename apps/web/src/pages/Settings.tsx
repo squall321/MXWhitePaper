@@ -1,7 +1,13 @@
 import { useEffect } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { Card } from '@/components/ui'
-import { useSettingsStore, type ThemeMode, type UiSettings } from '@/features/settings/store'
+import {
+  useSettingsStore,
+  type EmailCadence,
+  type ThemeMode,
+  type UiSettings,
+} from '@/features/settings/store'
+import { useAuthStore } from '@/features/auth/store'
 import { useLocale } from '@/lib/i18n'
 import { SpellcheckSettingsSection } from '@/features/spellcheck/SpellcheckSettingsSection'
 import type { AppOutletContext } from '@/App'
@@ -24,8 +30,11 @@ export function SettingsPage() {
   const darkMode = useSettingsStore((s) => s.darkMode)
   const themeMode = useSettingsStore((s) => s.themeMode)
   const language = useSettingsStore((s) => s.language)
+  const emailDigest = useSettingsStore((s) => s.emailDigest)
+  const emailCadence = useSettingsStore((s) => s.emailCadence)
   const setOne = useSettingsStore((s) => s.set)
   const reset = useSettingsStore((s) => s.reset)
+  const userEmail = useAuthStore((s) => s.user?.email ?? null)
   const { setLeftRail, setRightRail } = useOutletContext<AppOutletContext>()
 
   useEffect(() => {
@@ -113,6 +122,50 @@ export function SettingsPage() {
         </dl>
       </Card>
 
+      <Card padded="md" data-testid="settings-email-card">
+        <h2 className="text-base font-semibold text-smsg-900 dark:text-gray-100">
+          이메일 알림
+        </h2>
+        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+          구독 다이제스트와 검토 요청 메일 발송 설정입니다. 발신은 관리자가 SMTP 를
+          연결한 환경에서만 실제로 이루어집니다.
+        </p>
+        <dl className="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
+          <div className="flex items-center justify-between gap-4 py-3 first:pt-0">
+            <div className="min-w-0">
+              <dt className="text-sm font-medium text-smsg-900 dark:text-gray-100">
+                내 이메일
+              </dt>
+              <dd
+                className="mt-0.5 text-xs text-gray-500 dark:text-gray-400"
+                data-testid="settings-email-readonly"
+              >
+                {userEmail ?? '로그인 후 표시됩니다.'}
+              </dd>
+            </div>
+          </div>
+          <ToggleRow
+            label="다이제스트 이메일 받기"
+            description="구독한 문서의 변경 사항을 모아 이메일로 받습니다."
+            checked={emailDigest && Boolean(userEmail)}
+            onChange={(v) => setOne('emailDigest', v)}
+            testId="settings-toggle-email-digest"
+          />
+          <CadenceRadioRow
+            label="알림 빈도"
+            description="다이제스트 묶음의 발송 주기를 정합니다."
+            value={emailCadence}
+            options={[
+              { value: 'instant', label: '즉시' },
+              { value: 'daily', label: '매일' },
+              { value: 'weekly', label: '매주' },
+            ]}
+            onChange={(v) => setOne('emailCadence', v)}
+            testId="settings-email-cadence"
+          />
+        </dl>
+      </Card>
+
       <SpellcheckSettingsSection />
 
       <div className="flex justify-end">
@@ -194,6 +247,60 @@ function SelectRow({ label, description, value, options, onChange, testId }: Sel
           </option>
         ))}
       </select>
+    </div>
+  )
+}
+
+interface CadenceRadioRowProps {
+  label: string
+  description: string
+  value: EmailCadence
+  options: { value: EmailCadence; label: string }[]
+  onChange: (v: EmailCadence) => void
+  testId?: string
+}
+
+function CadenceRadioRow({
+  label,
+  description,
+  value,
+  options,
+  onChange,
+  testId,
+}: CadenceRadioRowProps) {
+  return (
+    <div className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <dt className="text-sm font-medium text-smsg-900 dark:text-gray-100">{label}</dt>
+        <dd className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{description}</dd>
+      </div>
+      <div
+        role="radiogroup"
+        aria-label={label}
+        data-testid={testId}
+        className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 p-0.5 text-xs dark:border-gray-700 dark:bg-gray-800"
+      >
+        {options.map((o) => {
+          const active = o.value === value
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              data-testid={`settings-email-cadence-${o.value}`}
+              onClick={() => onChange(o.value)}
+              className={`min-h-[36px] rounded-full px-3 py-1 transition-colors ${
+                active
+                  ? 'bg-smsg-700 text-white shadow-sm'
+                  : 'text-gray-700 hover:text-smsg-900 dark:text-gray-300 dark:hover:text-gray-100'
+              }`}
+            >
+              {o.label}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

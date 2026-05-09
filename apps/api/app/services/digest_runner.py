@@ -258,11 +258,37 @@ async def emit_digests_for_user(
             ),
             {"now": cur, "sid": sub_id},
         )
+        # Best-effort email — never break the digest tx if SMTP / template fails.
+        try:
+            await _maybe_send_digest_email(s, user_id=user_id, items=items)
+        except Exception:  # noqa: BLE001
+            logger.exception("digest email skipped for user %s", user_id)
         bundled_total += len(items)
 
     if bundled_total:
         await s.commit()
     return bundled_total
+
+
+async def _maybe_send_digest_email(
+    s: AsyncSession, *, user_id: str, items: list[dict[str, Any]]
+) -> None:
+    """Look up the user's email/name and dispatch a digest email.
+
+    Silent no-op if the user row is missing or has no email. Imported lazily so
+    `digest_runner` keeps no top-level dependency on the email service (lets
+    test_subscriptions monkeypatch via app.services.email cleanly)."""
+    row = (await s.execute(
+        text("SELECT email, name FROM users WHERE id = CAST(:u AS uuid)"),
+        {"u": user_id},
+    )).first()
+    if not row or not row[0]:
+        return
+    from app.services.email import send_digest_email
+
+    await send_digest_email(
+        user_email=row[0], user_name=row[1] or "", items=items
+    )
 
 
 async def tick_once() -> int:

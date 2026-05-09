@@ -9,6 +9,9 @@ import { create } from 'zustand'
 /** Tri-state theme preference. `system` follows `prefers-color-scheme`. */
 export type ThemeMode = 'light' | 'dark' | 'system'
 
+/** "이메일 알림" 빈도 — 즉시 / 매일 / 매주. BE digest cadence와 키 정렬. */
+export type EmailCadence = 'instant' | 'daily' | 'weekly'
+
 export interface UiSettings {
   notifications: boolean
   autoSave: boolean
@@ -22,6 +25,10 @@ export interface UiSettings {
   themeMode: ThemeMode
   /** UI language. ko default, en secondary. */
   language: 'ko' | 'en'
+  /** "다이제스트 이메일 받기" 토글. 기본은 이메일이 있을 때 true. */
+  emailDigest: boolean
+  /** 디지스트 빈도. 즉시 / 매일 / 매주. */
+  emailCadence: EmailCadence
 }
 
 export interface SettingsActions {
@@ -39,6 +46,8 @@ const DEFAULTS: UiSettings = {
   darkMode: false,
   themeMode: 'system',
   language: 'ko',
+  emailDigest: true,
+  emailCadence: 'daily',
 }
 
 function readFromStorage(): UiSettings {
@@ -79,6 +88,24 @@ export const useSettingsStore = create<UiSettings & SettingsActions>((set, get) 
 
 function stripActions(o: UiSettings & Partial<SettingsActions>): UiSettings {
   // Avoid persisting function references.
-  const { notifications, autoSave, codeFade, darkMode, themeMode, language } = o
-  return { notifications, autoSave, codeFade, darkMode, themeMode, language }
+  const {
+    notifications,
+    autoSave,
+    codeFade,
+    darkMode,
+    themeMode,
+    language,
+    emailDigest,
+    emailCadence,
+  } = o
+  return {
+    notifications,
+    autoSave,
+    codeFade,
+    darkMode,
+    themeMode,
+    language,
+    emailDigest,
+    emailCadence,
+  }
 }

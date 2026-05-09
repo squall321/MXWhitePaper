@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import type { GalleryBlock, ImageBlock, Slug } from '@/types/document'
 import { useEditorStore, editorSelectors } from '../state'
 import { insertBlock, isPreconditionFailed } from '../api'
@@ -9,14 +9,23 @@ import {
 } from '@/features/upload/components/ImageDropzone'
 import type { ImageRecord } from '@/features/upload/api'
 import { AutoSaveStatusPill } from './AutoSaveStatusPill'
-import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
-import { FindReplaceModal } from './FindReplaceModal'
 import { PartPicker } from './PartPicker'
-import { SectionLinkPicker } from './SectionLinkPicker'
 import { ExportMenu } from '@/features/export/ExportMenu'
 import { AiButton } from '@/features/ai/AiButton'
 import { ShareModal } from '@/features/sharing/ShareModal'
 import { useLocale } from '@/lib/i18n'
+
+// Rarely-shown modals — keep them off the editor's critical path. Each one
+// only mounts when its toggle is true so the lazy chunk is fetched on demand.
+const KeyboardShortcutsModal = lazy(() =>
+  import('./KeyboardShortcutsModal').then((m) => ({ default: m.KeyboardShortcutsModal })),
+)
+const FindReplaceModal = lazy(() =>
+  import('./FindReplaceModal').then((m) => ({ default: m.FindReplaceModal })),
+)
+const SectionLinkPicker = lazy(() =>
+  import('./SectionLinkPicker').then((m) => ({ default: m.SectionLinkPicker })),
+)
 
 interface EditorToolbarProps {
   slug: Slug
@@ -390,27 +399,39 @@ export function EditorToolbar({
         </div>
       </div>
 
-      <KeyboardShortcutsModal
-        open={shortcutsOpen}
-        onClose={() => setShortcutsOpen(false)}
-      />
+      {/* Lazy-loaded modals — only mount when their toggle flips on so the
+          chunk download is deferred until first open. */}
+      {shortcutsOpen && (
+        <Suspense fallback={null}>
+          <KeyboardShortcutsModal
+            open={shortcutsOpen}
+            onClose={() => setShortcutsOpen(false)}
+          />
+        </Suspense>
+      )}
 
-      <FindReplaceModal
-        open={findOpen}
-        onClose={() => setFindOpen(false)}
-        slug={slug}
-      />
+      {findOpen && (
+        <Suspense fallback={null}>
+          <FindReplaceModal
+            open={findOpen}
+            onClose={() => setFindOpen(false)}
+            slug={slug}
+          />
+        </Suspense>
+      )}
 
       {sectionLinkOpen && draft && (
-        <SectionLinkPicker
-          document={draft}
-          onSelect={(pick) => {
-            // Build the wiki-link source: `[[#section-X.Y|타이틀]]`.
-            const text = `[[#${pick.anchor}|${pick.display}]]`
-            insertSectionLink(text)
-          }}
-          onCancel={() => setSectionLinkOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <SectionLinkPicker
+            document={draft}
+            onSelect={(pick) => {
+              // Build the wiki-link source: `[[#section-X.Y|타이틀]]`.
+              const text = `[[#${pick.anchor}|${pick.display}]]`
+              insertSectionLink(text)
+            }}
+            onCancel={() => setSectionLinkOpen(false)}
+          />
+        </Suspense>
       )}
 
       <ShareModal

@@ -54,6 +54,14 @@ class CreateShareIn(BaseModel):
         max_length=200,
         description="Optional password gate; hashed with argon2.",
     )
+    notify_emails: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description=(
+            "선택적으로 share-link 안내 메일을 보낼 수신자 목록. "
+            "각 항목에 대해 best-effort SMTP 발송 — 실패해도 token 생성은 성공한다."
+        ),
+    )
 
 
 def _public_share_url(token: str) -> str:
@@ -151,12 +159,43 @@ async def create_share_link(
     await s.commit()
 
     meta = _row_to_share_meta(row)
+
+    # Best-effort share-link emails. Never undo the share creation on failure.
+    notified: list[str] = []
+    if body.notify_emails:
+        try:
+            from app.services.email import send_email, share_link_email
+
+            sender_name = user.get("name") or user.get("email") or "MX 백서"
+            for raw in body.notify_emails:
+                if not isinstance(raw, str):
+                    continue
+                addr = raw.strip()
+                if not addr or "@" not in addr:
+                    continue
+                subject, body_text = share_link_email(
+                    recipient=addr,
+                    sender_name=sender_name,
+                    doc_title=doc["title"],
+                    share_url=meta["url"],
+                )
+                ok = await send_email(addr, subject, body_text)
+                if ok:
+                    notified.append(addr)
+        except Exception:  # noqa: BLE001
+            import logging as _logging
+
+            _logging.getLogger(__name__).exception(
+                "share-link email dispatch failed for slug=%s", slug
+            )
+
     return envelope(
         data={
             "token": meta["token"],
             "url": meta["url"],
             "expires_at": meta["expires_at"],
             "has_password": meta["has_password"],
+            "notified_emails": notified,
         },
         meta={"share_id": meta["id"]},
     )

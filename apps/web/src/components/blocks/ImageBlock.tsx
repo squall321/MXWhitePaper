@@ -39,6 +39,7 @@ export function ImageBlockView({ block }: { block: ImageBlock }) {
           src={viewSrc}
           alt={block.alt ?? block.caption ?? ''}
           loading="lazy"
+          decoding="async"
           className="block w-full"
         />
       </button>

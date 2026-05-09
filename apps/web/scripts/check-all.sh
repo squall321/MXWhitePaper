@@ -30,10 +30,13 @@ pnpm --filter @mx/shared run validate
 step "2/4  TypeScript typecheck (@mx/web)"
 pnpm --filter @mx/web typecheck
 
-step "3/4  Vite build (@mx/web)"
+step "3/5  Vite build (@mx/web)"
 pnpm --filter @mx/web build
 
-step "4/4  Vitest"
+step "4/5  Bundle-size budget"
+node apps/web/scripts/check-bundle-size.cjs
+
+step "5/5  Vitest"
 cd apps/web
 pnpm vitest run
 

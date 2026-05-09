@@ -20,6 +20,7 @@ from .routers.admin import router as admin_router
 from .routers.ai import router as ai_router
 from .routers.analytics import router as analytics_router
 from .routers.approvals import router as approvals_router
+from .routers.audit import router as audit_router
 from .routers.auth import router as auth_router
 from .routers.backups import router as backups_router
 from .routers.bookmarks import router as bookmarks_router
@@ -329,6 +330,8 @@ def create_app() -> FastAPI:
     # Tier 2D — admin dashboard + usage analytics
     app.include_router(admin_router)
     app.include_router(analytics_router)
+    # Audit log viewer — admin paginated/filter/CSV
+    app.include_router(audit_router)
     # Tier 2C — comments workflow + wiki link graph
     app.include_router(comments_doc_router)
     app.include_router(comments_one_router)

@@ -12,8 +12,15 @@ import { FavoriteStar } from '@/features/favorites/components/FavoriteStar'
 import { BookmarkButton } from '@/features/bookmarks/components/BookmarkButton'
 import { FollowButton } from '@/features/subscriptions/FollowButton'
 import { estimateReadingTimeMinutes } from '@/lib/readingTime'
+import { Suspense, lazy } from 'react'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
-import { BulkActionsBar } from '@/features/editor/components/BulkActionsBar'
+// BulkActionsBar only renders inside the editable surface and is rarely shown
+// (multi-select state). Lazy so the read-mode reader doesn't ship its code.
+const BulkActionsBar = lazy(() =>
+  import('@/features/editor/components/BulkActionsBar').then((m) => ({
+    default: m.BulkActionsBar,
+  })),
+)
 import { SectionSwipe } from '@/features/mobile/SectionSwipe'
 import { ReviewersPanel } from '@/features/approvals/ReviewersPanel'
 import { WorkflowRibbon } from '@/features/approvals/WorkflowRibbon'
@@ -212,7 +219,11 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
       {/* Floating bulk-actions bar — renders only when the bulk-selection
           store has at least one block. Lives at the article level so its
           fixed-position pill doesn't multiply across nested sections. */}
-      {editableSlug && <BulkActionsBar slug={editableSlug} />}
+      {editableSlug && (
+        <Suspense fallback={null}>
+          <BulkActionsBar slug={editableSlug} />
+        </Suspense>
+      )}
       {/* Right-margin presence dots — sibling overlay layer that polls
           getBoundingClientRect every 200ms; never touches block internals. */}
       <BlockPresenceMarker slug={document.slug} />
