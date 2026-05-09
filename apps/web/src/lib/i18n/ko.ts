@@ -555,6 +555,7 @@ export const ko = {
   'page.adminDashboard.tab.webhooks': '웹훅',
   'page.adminDashboard.tab.backups': '백업',
   'page.adminDashboard.tab.importCsv': 'CSV 가져오기',
+  'page.adminDashboard.tab.archive': '보관 문서',
   'page.adminDashboard.users.search': '검색',
   'page.adminDashboard.users.searchPlaceholder': '이름/이메일',
   'page.adminDashboard.users.role': 'role',

@@ -30,6 +30,7 @@ KINDS: tuple[str, ...] = (
     "review_decision",
     "subscription_event",
     "subscription_digest",
+    "reaction_added",
 )
 
 CHANNELS: tuple[str, ...] = ("in_app", "email")
@@ -41,6 +42,7 @@ DEFAULTS: dict[str, dict[str, bool]] = {
     "review_decision": {"in_app": True, "email": False},
     "subscription_event": {"in_app": True, "email": False},
     "subscription_digest": {"in_app": True, "email": True},
+    "reaction_added": {"in_app": True, "email": False},
 }
 
 

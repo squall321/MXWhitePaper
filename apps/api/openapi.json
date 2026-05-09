@@ -59,6 +59,20 @@
         "title": "AnchorIn",
         "type": "object"
       },
+      "ArchiveBulkIn": {
+        "properties": {
+          "slugs": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Slugs",
+            "type": "array"
+          }
+        },
+        "title": "ArchiveBulkIn",
+        "type": "object"
+      },
       "Body_import_csv_api_v1_imports_csv_post": {
         "properties": {
           "file": {
@@ -175,6 +189,80 @@
           }
         },
         "title": "BookmarkPatchIn",
+        "type": "object"
+      },
+      "BulkDocPayload": {
+        "description": "Op-specific payload. Only relevant fields are read per op.",
+        "properties": {
+          "part_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "move-part 대상 part uuid",
+            "title": "Part Id"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "transition 대상 status",
+            "title": "Status"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "add-tag/remove-tag 대상 태그",
+            "title": "Tag"
+          }
+        },
+        "title": "BulkDocPayload",
+        "type": "object"
+      },
+      "BulkDocsIn": {
+        "properties": {
+          "op": {
+            "enum": [
+              "move-part",
+              "add-tag",
+              "remove-tag",
+              "transition",
+              "delete"
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/BulkDocPayload"
+          },
+          "slugs": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Slugs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "op"
+        ],
+        "title": "BulkDocsIn",
         "type": "object"
       },
       "CommentIn": {
@@ -690,6 +778,37 @@
           "text"
         ],
         "title": "PolishBody",
+        "type": "object"
+      },
+      "ReactionIn": {
+        "properties": {
+          "block_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Id"
+          },
+          "document_id": {
+            "minLength": 1,
+            "title": "Document Id",
+            "type": "string"
+          },
+          "emoji": {
+            "title": "Emoji",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "emoji"
+        ],
+        "title": "ReactionIn",
         "type": "object"
       },
       "ReadIn": {
@@ -1849,6 +1968,207 @@
         ]
       }
     },
+    "/api/v1/admin/archived-docs": {
+      "get": {
+        "operationId": "list_archived_docs_api_v1_admin_archived_docs_get",
+        "parameters": [
+          {
+            "description": "이 일수 이내에 보관된 문서만 (updated_at 기준)",
+            "in": "query",
+            "name": "since_days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 3650,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "이 일수 이내에 보관된 문서만 (updated_at 기준)",
+              "title": "Since Days"
+            }
+          },
+          {
+            "description": "작성자 이름/이메일 부분 일치",
+            "in": "query",
+            "name": "author",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "작성자 이름/이메일 부분 일치",
+              "title": "Author"
+            }
+          },
+          {
+            "description": "부서(team) UUID — 작성자 team_id 기준",
+            "in": "query",
+            "name": "team_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "부서(team) UUID — 작성자 team_id 기준",
+              "title": "Team Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Archived Docs Api V1 Admin Archived Docs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "보관 문서 목록",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/archived-docs/purge": {
+      "delete": {
+        "description": "Hard-delete archived docs. Refuses if any doc was archived <7 days ago.",
+        "operationId": "purge_archived_docs_api_v1_admin_archived_docs_purge_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveBulkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Purge Archived Docs Api V1 Admin Archived Docs Purge Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "보관 문서 영구 삭제 (irreversible)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/archived-docs/restore": {
+      "post": {
+        "operationId": "restore_archived_docs_api_v1_admin_archived_docs_restore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveBulkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Restore Archived Docs Api V1 Admin Archived Docs Restore Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "보관 문서 일괄 복원 (→ draft)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/audit": {
       "get": {
         "operationId": "list_audit_api_v1_admin_audit_get",
@@ -1945,6 +2265,50 @@
           }
         },
         "summary": "감사 로그 조회",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/bulk-docs": {
+      "post": {
+        "description": "여러 문서에 한 번의 op 를 적용한다. partial-failure 모델: 한 슬러그가 실패해도 나머지는 진행한다. delete 는 status='archived' 로의 soft-delete 와 동일.",
+        "operationId": "bulk_docs_api_v1_admin_bulk_docs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkDocsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Bulk Docs Api V1 Admin Bulk Docs Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "다중 문서 일괄 작업 (move/tag/transition/delete)",
         "tags": [
           "admin"
         ]
@@ -5408,6 +5772,51 @@
         ]
       }
     },
+    "/api/v1/documents/{slug}/reactions": {
+      "get": {
+        "operationId": "aggregate_reactions_api_v1_documents__slug__reactions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Aggregate Reactions Api V1 Documents  Slug  Reactions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 + 블록별 반응 집계 — { doc: {...}, blocks: { id: {...} } }",
+        "tags": [
+          "reactions"
+        ]
+      }
+    },
     "/api/v1/documents/{slug}/reviewers": {
       "get": {
         "operationId": "list_reviewers_api_v1_documents__slug__reviewers_get",
@@ -7697,6 +8106,51 @@
         ]
       }
     },
+    "/api/v1/me/reactions/{slug}": {
+      "get": {
+        "operationId": "my_reactions_api_v1_me_reactions__slug__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response My Reactions Api V1 Me Reactions  Slug  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "현재 유저가 이 문서/블록에 남긴 반응 — toggle 표시용",
+        "tags": [
+          "reactions"
+        ]
+      }
+    },
     "/api/v1/me/reviews": {
       "get": {
         "operationId": "my_reviews_api_v1_me_reviews_get",
@@ -8377,6 +8831,49 @@
         "summary": "presence SSE stream (reader+)",
         "tags": [
           "presence"
+        ]
+      }
+    },
+    "/api/v1/reactions": {
+      "post": {
+        "operationId": "toggle_reaction_api_v1_reactions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Toggle Reaction Api V1 Reactions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "이모지 반응 토글 — 같은 emoji 가 이미 있으면 삭제, 없으면 INSERT",
+        "tags": [
+          "reactions"
         ]
       }
     },
@@ -9110,6 +9607,47 @@
         "summary": "시리즈 항목 위치 변경 (editor+)",
         "tags": [
           "series"
+        ]
+      }
+    },
+    "/api/v1/share/short/{short_id}": {
+      "get": {
+        "description": "QR/모바일 친화 6자리 Crockford-base32 alias 를 token 으로 변환해 `/share/{token}` 으로 302 리다이렉트한다. revoked/expired 여부는 후속 GET /share/{token} 에서 410 으로 처리된다.",
+        "operationId": "resolve_short_share_id_api_v1_share_short__short_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "short_id",
+            "required": true,
+            "schema": {
+              "title": "Short Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "307": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "짧은 alias 로 share token 해석 (302)",
+        "tags": [
+          "sharing"
         ]
       }
     },
@@ -10757,6 +11295,10 @@
     {
       "description": "예약 백업 + 즉시 백업. 일정(daily/weekly/monthly) 단위로 모든 문서를 선택한 포맷(json/html/md/docx/pptx) 으로 렌더해 zip 으로 묶어 MinIO 에 적재. asyncio in-process 스케줄러 — 단일 replica 한정.",
       "name": "backups"
+    },
+    {
+      "description": "이모지 반응 — 문서 또는 블록에 5종 이모지(👍 ❤️ 🤔 🙏 🎉)를 토글한다. 댓글과 별개의 가벼운 시그널이며, 작성자에게 `reaction_added` 알림이 INSERT 된다.",
+      "name": "reactions"
     },
     {
       "description": "문서 팔로우 + 다이제스트. 구독 시 doc_edited / comment_added / review_decided / doc_published 알림을 받는다. cadence=instant 면 즉시 알림, daily/weekly 이면 pending_digest_items 에 적재해 in-process digest_runner 가 묶어 한 번에 발송.",

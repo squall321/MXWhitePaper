@@ -523,6 +523,7 @@ export const en: Record<LocaleKey, string> = {
   'page.adminDashboard.tab.webhooks': 'Webhooks',
   'page.adminDashboard.tab.backups': 'Backups',
   'page.adminDashboard.tab.importCsv': 'Import CSV',
+  'page.adminDashboard.tab.archive': 'Archived Docs',
   'page.adminDashboard.users.search': 'Search',
   'page.adminDashboard.users.searchPlaceholder': 'Name / email',
   'page.adminDashboard.users.role': 'role',

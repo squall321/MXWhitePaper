@@ -5,6 +5,8 @@ import { useRecentStore } from '@/features/recent/store'
 import { formatRelative } from '@/features/recent/components/RecentRail'
 import type { AppOutletContext } from '@/App'
 import { useT } from '@/lib/i18n'
+import { BulkDocCheckbox } from '@/features/admin/bulk-docs/BulkDocCheckbox'
+import { BulkDocActionsBar } from '@/features/admin/bulk-docs/BulkDocActionsBar'
 
 /**
  * Full "최근 본 문서" page. Lists every persisted entry (cap 20). Each row
@@ -64,6 +66,7 @@ export function RecentPage() {
                 key={doc.slug}
                 className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-smsg-50"
               >
+                <BulkDocCheckbox slug={doc.slug} />
                 <div className="min-w-0 flex-1">
                   <Link
                     to={`/docs/${encodeURIComponent(doc.slug)}`}
@@ -95,6 +98,7 @@ export function RecentPage() {
           </ul>
         </Card>
       )}
+      <BulkDocActionsBar />
     </section>
   )
 }

@@ -8,6 +8,8 @@ import {
 import type { RecentRead } from '@/features/bookmarks/api'
 import { formatRelative } from '@/features/recent/components/RecentRail'
 import type { AppOutletContext } from '@/App'
+import { BulkDocCheckbox } from '@/features/admin/bulk-docs/BulkDocCheckbox'
+import { BulkDocActionsBar } from '@/features/admin/bulk-docs/BulkDocActionsBar'
 
 type SortMode = 'last-read' | 'most-time' | 'unread-first'
 
@@ -104,6 +106,7 @@ export function ReadListPage() {
                 key={doc.document_id}
                 className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-smsg-50"
               >
+                <BulkDocCheckbox slug={doc.slug} />
                 <div className="min-w-0 flex-1">
                   <Link
                     to={`/docs/${encodeURIComponent(doc.slug)}`}
@@ -138,6 +141,7 @@ export function ReadListPage() {
           </ul>
         </Card>
       )}
+      <BulkDocActionsBar />
     </section>
   )
 }

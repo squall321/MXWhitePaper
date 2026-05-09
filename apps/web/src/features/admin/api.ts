@@ -164,3 +164,81 @@ export async function runMaintenance(): Promise<MaintenanceResult> {
   )
   return unwrap<MaintenanceResult>(res)
 }
+
+// ── Archived documents (cycle 8) ─────────────────────────────────────────
+export interface ArchivedDoc {
+  slug: string
+  title: string
+  archived_at: string | null
+  owner_id: string | null
+  owner_name: string | null
+  owner_email: string | null
+  last_edited_at: string | null
+}
+
+export interface ArchivedDocsListMeta {
+  count: number
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface ArchivedDocsListResult {
+  items: ArchivedDoc[]
+  meta: ArchivedDocsListMeta
+}
+
+export interface ArchivedDocsListParams {
+  since_days?: number
+  author?: string
+  team_id?: string
+  limit?: number
+  offset?: number
+}
+
+export async function listArchivedDocs(
+  params: ArchivedDocsListParams,
+): Promise<ArchivedDocsListResult> {
+  const res = await apiClient.get<ApiEnvelope<ArchivedDoc[]>>(
+    '/admin/archived-docs',
+    { params },
+  )
+  const items = unwrap<ArchivedDoc[]>(res)
+  const meta = (res.data?.meta ?? {
+    count: items.length,
+    total: items.length,
+    limit: params.limit ?? items.length,
+    offset: params.offset ?? 0,
+  }) as unknown as ArchivedDocsListMeta
+  return { items, meta }
+}
+
+export interface ArchivedDocsRestoreResult {
+  restored: string[]
+  skipped: Array<{ slug: string; reason: string }>
+}
+
+export async function restoreArchivedDocs(
+  slugs: string[],
+): Promise<ArchivedDocsRestoreResult> {
+  const res = await apiClient.post<ApiEnvelope<ArchivedDocsRestoreResult>>(
+    '/admin/archived-docs/restore',
+    { slugs },
+  )
+  return unwrap<ArchivedDocsRestoreResult>(res)
+}
+
+export interface ArchivedDocsPurgeResult {
+  purged: string[]
+  skipped: Array<{ slug: string; reason: string }>
+}
+
+export async function purgeArchivedDocs(
+  slugs: string[],
+): Promise<ArchivedDocsPurgeResult> {
+  const res = await apiClient.delete<ApiEnvelope<ArchivedDocsPurgeResult>>(
+    '/admin/archived-docs/purge',
+    { data: { slugs } },
+  )
+  return unwrap<ArchivedDocsPurgeResult>(res)
+}

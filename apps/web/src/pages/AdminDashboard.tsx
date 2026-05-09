@@ -9,6 +9,7 @@ import { toast } from '@/components/ui/Toast'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { ActivityWidget } from '@/features/activity/ActivityWidget'
 import { AdminOrgsPage } from './AdminOrgs'
+import { ArchivedDocsPage } from './ArchivedDocs'
 import { AuditLogPage } from './AuditLog'
 import { BackupAdminPage } from './BackupAdmin'
 import { BulkDocImportPage } from './BulkDocImport'
@@ -36,6 +37,7 @@ type TabKey =
   | 'webhooks'
   | 'backups'
   | 'import-csv'
+  | 'archive'
 
 /** Tabs reference an i18n key; the visible label is resolved at render. */
 const TABS: Array<{ key: TabKey; labelKey: string }> = [
@@ -49,6 +51,7 @@ const TABS: Array<{ key: TabKey; labelKey: string }> = [
   { key: 'webhooks', labelKey: 'page.adminDashboard.tab.webhooks' },
   { key: 'backups', labelKey: 'page.adminDashboard.tab.backups' },
   { key: 'import-csv', labelKey: 'page.adminDashboard.tab.importCsv' },
+  { key: 'archive', labelKey: 'page.adminDashboard.tab.archive' },
 ]
 
 const ROLE_OPTIONS = [
@@ -149,6 +152,11 @@ export function AdminDashboardPage() {
       {tab === 'import-csv' && (
         <div data-testid="admin-tab-import-csv-content">
           <BulkDocImportPage />
+        </div>
+      )}
+      {tab === 'archive' && (
+        <div data-testid="admin-tab-archive-content">
+          <ArchivedDocsPage />
         </div>
       )}
     </div>

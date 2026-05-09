@@ -679,6 +679,7 @@ const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
   review_decision: '리뷰 결정',
   subscription_event: '구독 이벤트',
   subscription_digest: '구독 다이제스트',
+  reaction_added: '이모지 반응',
 }
 
 const FONT_SCALE_STOPS: FontScale[] = [0.875, 1, 1.125, 1.25]

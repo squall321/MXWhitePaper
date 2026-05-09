@@ -13,6 +13,8 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { DocSearchHit } from '../api'
 import { Highlight } from '@/components/Highlight'
+import { BulkDocCheckbox } from '@/features/admin/bulk-docs/BulkDocCheckbox'
+import { BulkDocActionsBar } from '@/features/admin/bulk-docs/BulkDocActionsBar'
 
 export interface SearchResultsProps {
   query: string
@@ -67,6 +69,7 @@ export function SearchResults({ query, items, loading, total, queryTimeMs }: Sea
           ))}
         </ul>
       )}
+      <BulkDocActionsBar />
     </div>
   )
 }
@@ -121,10 +124,11 @@ function ResultCard({ hit, query }: ResultCardProps) {
 
   return (
     <article
-      className="rounded-md p-2 transition-colors hover:bg-smsg-50"
+      className="flex gap-2 rounded-md p-2 transition-colors hover:bg-smsg-50"
       data-testid="result-card"
     >
-      <Link to={`/docs/${encodeURIComponent(hit.slug)}`} className="block">
+      <BulkDocCheckbox slug={hit.slug} />
+      <Link to={`/docs/${encodeURIComponent(hit.slug)}`} className="block flex-1">
         <h3 className="text-base font-semibold text-smsg-900">
           {titleHtml ? (
             <Highlight html={titleHtml} />

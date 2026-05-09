@@ -31,10 +31,15 @@ import { PresenceAvatars } from '@/features/presence/PresenceAvatars'
 import { BlockPresenceMarker } from '@/features/presence/BlockPresenceMarker'
 import { useAnchorBlockTracker } from '@/features/presence/useAnchorBlockTracker'
 import { useState } from 'react'
-import type { DocStatus } from '@/features/approvals/api'
+import { useNavigate } from 'react-router-dom'
+import { type DocStatus, transitionStatus } from '@/features/approvals/api'
 import { useAuthStore } from '@/features/auth/store'
 import { DocAnalyticsModal } from '@/features/analytics/DocAnalyticsModal'
 import { SaveAsTemplateModal } from '@/features/templates/SaveAsTemplateModal'
+import { ReactionBar } from '@/features/reactions/ReactionBar'
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
+import { toast } from '@/components/ui/Toast'
 
 interface WikiArticleProps {
   document: DocumentJSONV10
@@ -109,9 +114,68 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
   const canSaveTemplate = userRole === 'editor' || userRole === 'admin'
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
 
+  // Cycle 8 — quick archive button (editor+ on non-archived docs).
+  const navigate = useNavigate()
+  const isArchived = workflowStatus === 'archived'
+  const canArchive =
+    !!editableSlug &&
+    !isArchived &&
+    (userRole === 'editor' || userRole === 'admin')
+  const isAdmin = userRole === 'admin'
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
+  const [archiveBusy, setArchiveBusy] = useState(false)
+  const onArchive = async () => {
+    if (!editableSlug || archiveBusy) return
+    setArchiveBusy(true)
+    try {
+      await transitionStatus(editableSlug, 'archived')
+      toast.success('문서를 보관 처리했습니다.')
+      setArchiveConfirmOpen(false)
+      navigate('/')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '보관 실패')
+    } finally {
+      setArchiveBusy(false)
+    }
+  }
+  const onUnarchive = async () => {
+    if (!editableSlug || archiveBusy) return
+    setArchiveBusy(true)
+    try {
+      const res = await transitionStatus(editableSlug, 'draft')
+      setWorkflowStatus(res.status)
+      toast.success('보관을 해제했습니다 (초안).')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '복원 실패')
+    } finally {
+      setArchiveBusy(false)
+    }
+  }
+
   return (
     <article className="relative space-y-6">
       <OfflineBanner />
+      {isArchived && (
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          data-testid="archived-doc-banner"
+          role="status"
+        >
+          <span aria-hidden="true">📦</span>
+          <span>이 문서는 보관 처리되었습니다 — 일반 사용자에게 보이지 않습니다.</span>
+          {isAdmin && editableSlug && (
+            <button
+              type="button"
+              onClick={() => void onUnarchive()}
+              disabled={archiveBusy}
+              className="ml-auto rounded border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+              data-testid="archived-banner-unarchive"
+            >
+              복원
+            </button>
+          )}
+        </div>
+      )}
       {showApprovals && editableSlug && (
         <WorkflowRibbon
           slug={editableSlug}
@@ -167,6 +231,19 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
             >
               <span aria-hidden="true">📋</span>
               <span className="ml-1 hidden sm:inline">템플릿으로 저장</span>
+            </button>
+          )}
+          {canArchive && (
+            <button
+              type="button"
+              onClick={() => setArchiveConfirmOpen(true)}
+              className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 hover:text-smsg-700"
+              data-testid="open-archive-doc"
+              aria-label="보관"
+              title="보관"
+            >
+              <span aria-hidden="true">📦</span>
+              <span className="ml-1 hidden sm:inline">보관</span>
             </button>
           )}
           <FavoriteStar slug={document.slug} title={document.title} />
@@ -228,6 +305,14 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           </div>
         </SectionSwipe>
       </div>
+      {/* Cycle 0021 — doc-level emoji reactions. Lives at article bottom so
+          readers see it after digesting the body. */}
+      <div className="flex flex-col items-start gap-2 border-t border-gray-200 pt-4">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          이 문서에 반응
+        </span>
+        <ReactionBar slug={document.slug} documentId={row?.id} />
+      </div>
       <SeriesNav slug={document.slug} placement="bottom" />
       {showApprovals && editableSlug && (
         <ReviewersPanel
@@ -260,6 +345,37 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           onClose={() => setSaveTemplateOpen(false)}
         />
       )}
+      <Modal
+        open={archiveConfirmOpen}
+        onClose={() => setArchiveConfirmOpen(false)}
+        title="문서 보관 확인"
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setArchiveConfirmOpen(false)}
+              data-testid="archive-doc-cancel"
+            >
+              취소
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={archiveBusy}
+              onClick={() => void onArchive()}
+              data-testid="archive-doc-confirm"
+            >
+              보관
+            </Button>
+          </div>
+        }
+      >
+        <div className="px-5 py-4 text-sm text-gray-700">
+          <p>이 문서를 보관 처리합니다. 일반 사용자에게는 더 이상 노출되지 않으며, 관리자가 보관 문서 페이지에서 복원할 수 있습니다.</p>
+        </div>
+      </Modal>
     </article>
   )
 }

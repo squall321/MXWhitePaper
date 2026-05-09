@@ -76,13 +76,14 @@ async def test_get_returns_default_matrix_when_unset() -> None:
         r = await ac.get("/api/v1/me/notification-prefs")
         assert r.status_code == 200, r.text
         prefs = r.json()["data"]["prefs"]
-        # Five known kinds.
+        # Six known kinds (`reaction_added` added in cycle 0021).
         assert set(prefs.keys()) == {
             "comment_mention",
             "review_request",
             "review_decision",
             "subscription_event",
             "subscription_digest",
+            "reaction_added",
         }
         # Documented defaults.
         assert prefs["comment_mention"] == {"in_app": True, "email": True}

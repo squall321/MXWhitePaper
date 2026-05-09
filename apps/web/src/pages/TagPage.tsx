@@ -5,6 +5,8 @@ import type { DocumentCard } from '@/features/document/api'
 import { Badge, Card, EmptyState, ErrorState, Skeleton } from '@/components/ui'
 import { toApiError } from '@/lib/api/envelope'
 import type { AppOutletContext } from '@/App'
+import { BulkDocCheckbox } from '@/features/admin/bulk-docs/BulkDocCheckbox'
+import { BulkDocActionsBar } from '@/features/admin/bulk-docs/BulkDocActionsBar'
 
 /**
  * `/tags/:tag` and `/category/:cat` landing page. Filters the document list
@@ -85,7 +87,10 @@ export function TagPage({ mode }: { mode: 'tag' | 'category' }) {
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
         >
           {items.map((doc) => (
-            <li key={doc.id}>
+            <li key={doc.id} className="relative">
+              <div className="absolute left-2 top-2 z-10">
+                <BulkDocCheckbox slug={doc.slug} />
+              </div>
               <Link
                 to={`/docs/${encodeURIComponent(doc.slug)}`}
                 className="block hover:no-underline"
@@ -105,6 +110,7 @@ export function TagPage({ mode }: { mode: 'tag' | 'category' }) {
           ))}
         </ul>
       )}
+      <BulkDocActionsBar />
     </section>
   )
 }

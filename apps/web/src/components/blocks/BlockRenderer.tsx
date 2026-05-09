@@ -55,6 +55,7 @@ import { BlockCollapseWrapper } from '@/features/editor/components/BlockCollapse
 import { COLLAPSIBLE_BLOCK_TYPES } from '@/features/editor/components/BlockResizeWrapper'
 import { RestrictedBlockPlaceholder } from './RestrictedBlockPlaceholder'
 import { LockBadge } from '@/features/editor/components/LockBadge'
+import { ReactionBar } from '@/features/reactions/ReactionBar'
 import { useAuthStore } from '@/features/auth/store'
 
 /**
@@ -176,6 +177,10 @@ export function BlockRenderer({ block }: { block: Block }) {
     <BlockBoundary blockType={block?.type}>
       {isFullEditing && <LockBadgeWithSlug block={block} />}
       <BlockRendererInner block={block} />
+      {/* Cycle 0021 — block-level reactions. Sibling overlay (does not touch
+          BlockHoverInserter). Hidden in editing mode to avoid clashing with
+          the slash menu / hover rails. */}
+      {!isFullEditing && <BlockReactionsOverlay block={block} />}
     </BlockBoundary>
   )
   if (!wrapWithCollapse) return inner
@@ -183,6 +188,26 @@ export function BlockRenderer({ block }: { block: Block }) {
     <BlockCollapseWrapperWithSlug block={block}>
       {inner}
     </BlockCollapseWrapperWithSlug>
+  )
+}
+
+/** Cycle 0021 — sibling overlay that mounts a compact ReactionBar on each
+ *  block. Hidden when no slug is available (e.g. inside templates / preview
+ *  surfaces) and when the block has no stable id. `collapseEmpty` keeps the
+ *  visual surface area near zero until somebody actually reacts. */
+function BlockReactionsOverlay({ block }: { block: Block }) {
+  const editorSlug = useEditorStore((s) => s.slug)
+  if (!editorSlug) return null
+  if (!block || typeof (block as { id?: unknown }).id !== 'string') return null
+  return (
+    <div className="mt-1.5">
+      <ReactionBar
+        slug={editorSlug}
+        blockId={(block as { id: string }).id}
+        variant="compact"
+        collapseEmpty
+      />
+    </div>
   )
 }
 

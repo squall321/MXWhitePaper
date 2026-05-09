@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,6 +40,35 @@ router = APIRouter(prefix="/api/v1", tags=["sharing"])
 
 # `secrets.token_urlsafe(24)` — 24 random bytes → 32 url-safe chars.
 _TOKEN_BYTES = 24
+
+# Crockford base32 alphabet — drops I, L, O, U so phone scans are unambiguous.
+_CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+_SHORT_ID_LEN = 6  # 6 chars × 5 bits = 30 bits ≈ 1B values
+_SHORT_ID_RETRIES = 10
+
+
+def _gen_short_id() -> str:
+    """Random 30-bit value → 6-char Crockford-base32 string."""
+    n = secrets.randbits(_SHORT_ID_LEN * 5)
+    out = []
+    for _ in range(_SHORT_ID_LEN):
+        out.append(_CROCKFORD[n & 0x1F])
+        n >>= 5
+    return "".join(reversed(out))
+
+
+async def _alloc_unique_short_id(s: AsyncSession) -> str | None:
+    """Try up to {_SHORT_ID_RETRIES} times to mint a fresh short_id. Returns
+    `None` if every attempt collided — caller should still ship the token."""
+    for _ in range(_SHORT_ID_RETRIES):
+        candidate = _gen_short_id()
+        row = (await s.execute(
+            text("SELECT 1 FROM share_links WHERE short_id = :sid"),
+            {"sid": candidate},
+        )).first()
+        if row is None:
+            return candidate
+    return None
 
 
 class CreateShareIn(BaseModel):
@@ -70,7 +100,12 @@ def _public_share_url(token: str) -> str:
 
 
 def _row_to_share_meta(row: Any) -> dict[str, Any]:
-    """share_links row → public-safe dict (never includes the password hash)."""
+    """share_links row → public-safe dict (never includes the password hash).
+
+    Row order matches the SELECT below: id, token, document_id, created_by,
+    expires_at, password_hash, view_count, revoked_at, created_at, short_id.
+    """
+    short_id = row[9] if len(row) > 9 else None
     return {
         "id": str(row[0]),
         "token": row[1],
@@ -81,6 +116,8 @@ def _row_to_share_meta(row: Any) -> dict[str, Any]:
         "view_count": int(row[6] or 0),
         "revoked_at": row[7].isoformat() if row[7] else None,
         "created_at": row[8].isoformat() if row[8] else None,
+        "short_id": short_id,
+        "short_url": f"/share/short/{short_id}" if short_id else None,
         "url": _public_share_url(row[1]),
     }
 
@@ -126,16 +163,17 @@ async def create_share_link(
 
     pwd_hash = hash_password(body.password) if body.password else None
     token = secrets.token_urlsafe(_TOKEN_BYTES)
+    short_id = await _alloc_unique_short_id(s)
 
     row = (await s.execute(
         text("""
             INSERT INTO share_links (
-              token, document_id, created_by, expires_at, password_hash
+              token, document_id, created_by, expires_at, password_hash, short_id
             ) VALUES (
-              :tok, CAST(:doc AS uuid), CAST(:u AS uuid), :ea, :ph
+              :tok, CAST(:doc AS uuid), CAST(:u AS uuid), :ea, :ph, :sid
             )
             RETURNING id, token, document_id, created_by, expires_at,
-                      password_hash, view_count, revoked_at, created_at
+                      password_hash, view_count, revoked_at, created_at, short_id
         """),
         {
             "tok": token,
@@ -143,6 +181,7 @@ async def create_share_link(
             "u": user["id"],
             "ea": expires_at,
             "ph": pwd_hash,
+            "sid": short_id,
         },
     )).first()
     await document_repo.insert_audit(
@@ -195,6 +234,8 @@ async def create_share_link(
             "url": meta["url"],
             "expires_at": meta["expires_at"],
             "has_password": meta["has_password"],
+            "short_id": meta["short_id"],
+            "short_url": meta["short_url"],
             "notified_emails": notified,
         },
         meta={"share_id": meta["id"]},
@@ -218,7 +259,7 @@ async def list_share_links(
     rows = (await s.execute(
         text("""
             SELECT id, token, document_id, created_by, expires_at,
-                   password_hash, view_count, revoked_at, created_at
+                   password_hash, view_count, revoked_at, created_at, short_id
             FROM share_links
             WHERE document_id = CAST(:doc AS uuid) AND revoked_at IS NULL
             ORDER BY created_at DESC
@@ -263,7 +304,7 @@ async def read_shared_document(
     row = (await s.execute(
         text("""
             SELECT id, token, document_id, created_by, expires_at,
-                   password_hash, view_count, revoked_at, created_at
+                   password_hash, view_count, revoked_at, created_at, short_id
             FROM share_links
             WHERE token = :tok
         """),
@@ -319,6 +360,8 @@ async def read_shared_document(
         "expires_at": share_meta["expires_at"],
         "has_password": share_meta["has_password"],
         "view_count": share_meta["view_count"] + 1,
+        "short_id": share_meta["short_id"],
+        "short_url": share_meta["short_url"],
     }
     # Public share links never get to see admin/editor-permissioned blocks —
     # always scrub at the lowest tier ('reader'), regardless of who created
@@ -349,6 +392,29 @@ async def read_shared_document(
         },
         meta={"etag": etag},
     )
+
+
+@router.get(
+    "/share/short/{short_id}",
+    summary="짧은 alias 로 share token 해석 (302)",
+    description=(
+        "QR/모바일 친화 6자리 Crockford-base32 alias 를 token 으로 변환해 "
+        "`/share/{token}` 으로 302 리다이렉트한다. revoked/expired 여부는 "
+        "후속 GET /share/{token} 에서 410 으로 처리된다."
+    ),
+    status_code=307,
+)
+async def resolve_short_share_id(
+    short_id: str,
+    s: AsyncSession = Depends(get_db),
+) -> Response:
+    row = (await s.execute(
+        text("SELECT token FROM share_links WHERE short_id = :sid"),
+        {"sid": short_id.upper()},
+    )).first()
+    if not row:
+        raise NotFound("short share id not found")
+    return RedirectResponse(url=f"/share/{row[0]}", status_code=302)
 
 
 @router.delete(

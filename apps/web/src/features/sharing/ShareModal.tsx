@@ -6,7 +6,12 @@ import {
   revokeShareLink,
   type ShareLink,
 } from './api'
+import { QrShare } from './QrShare'
 import type { Slug } from '@/types/document'
+
+function absShareUrl(url: string): string {
+  return typeof window !== 'undefined' ? `${window.location.origin}${url}` : url
+}
 
 type Tab = 'public' | 'internal'
 
@@ -329,39 +334,42 @@ function PublicLinksTab(props: PublicLinksTabProps) {
             <li
               key={link.id}
               data-testid="share-link-row"
-              className="flex flex-wrap items-center gap-2 rounded border border-gray-200 bg-white px-3 py-2 text-xs dark:border-gray-800 dark:bg-gray-900"
+              className="flex flex-col gap-2 rounded border border-gray-200 bg-white px-3 py-2 text-xs dark:border-gray-800 dark:bg-gray-900"
             >
-              <span className="flex-1 break-all font-mono text-gray-700 dark:text-gray-300">
-                {link.url}
-              </span>
-              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-600">
-                조회 {link.view_count}회
-              </span>
-              {link.has_password && (
-                <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-700">
-                  🔒 비밀번호
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex-1 break-all font-mono text-gray-700 dark:text-gray-300">
+                  {link.url}
                 </span>
-              )}
-              {link.expires_at && (
-                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">
-                  만료: {link.expires_at.slice(0, 10)}
+                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-600">
+                  조회 {link.view_count}회
                 </span>
-              )}
-              <button
-                type="button"
-                onClick={() => onCopy(link)}
-                className="h-6 rounded border border-gray-300 bg-white px-2 text-[11px] text-gray-700 hover:bg-gray-50"
-              >
-                복사
-              </button>
-              <button
-                type="button"
-                onClick={() => onRevoke(link.token)}
-                data-testid="share-revoke-button"
-                className="h-6 rounded border border-red-200 bg-red-50 px-2 text-[11px] font-medium text-red-700 hover:bg-red-100"
-              >
-                해제
-              </button>
+                {link.has_password && (
+                  <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-700">
+                    🔒 비밀번호
+                  </span>
+                )}
+                {link.expires_at && (
+                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">
+                    만료: {link.expires_at.slice(0, 10)}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onCopy(link)}
+                  className="h-6 rounded border border-gray-300 bg-white px-2 text-[11px] text-gray-700 hover:bg-gray-50"
+                >
+                  복사
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRevoke(link.token)}
+                  data-testid="share-revoke-button"
+                  className="h-6 rounded border border-red-200 bg-red-50 px-2 text-[11px] font-medium text-red-700 hover:bg-red-100"
+                >
+                  해제
+                </button>
+              </div>
+              <QrShare url={absShareUrl(link.url)} filename={`share-${link.token.slice(0, 8)}`} />
             </li>
           ))}
         </ul>

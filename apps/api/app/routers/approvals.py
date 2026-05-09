@@ -57,14 +57,17 @@ router = APIRouter(prefix="/api/v1", tags=["approvals"])
 # ── transitions table ───────────────────────────────────────────────────
 
 ALLOWED_TRANSITIONS: dict[str, set[str]] = {
-    "draft": {"in_review"},
-    "in_review": {"approved", "draft"},
-    "approved": {"published"},
+    "draft": {"in_review", "archived"},
+    "in_review": {"approved", "draft", "archived"},
+    "approved": {"published", "archived"},
     "published": {"archived"},
     "archived": {"draft"},
 }
 
 # admin-only edges (rest are editor+).
+# Note: editor+ may archive from draft/in_review/approved (cycle 8 quick-archive
+# button). published→archived stays admin-only because once published, undoing
+# distribution should be a deliberate admin action.
 ADMIN_ONLY_EDGES: set[tuple[str, str]] = {
     ("published", "archived"),
     ("archived", "draft"),

@@ -38,6 +38,7 @@ from .routers.notification_prefs import router as notification_prefs_router
 from .routers.notifications import router as notifications_router
 from .routers.orgs import router as orgs_router
 from .routers.presence import router as presence_router
+from .routers.reactions import router as reactions_router
 from .routers.search import router as search_router
 from .routers.series import router as series_router
 from .routers.sharing import router as sharing_router
@@ -237,6 +238,13 @@ TAGS_METADATA: list[dict[str, str]] = [
         ),
     },
     {
+        "name": "reactions",
+        "description": (
+            "이모지 반응 — 문서 또는 블록에 5종 이모지(👍 ❤️ 🤔 🙏 🎉)를 토글한다. "
+            "댓글과 별개의 가벼운 시그널이며, 작성자에게 `reaction_added` 알림이 INSERT 된다."
+        ),
+    },
+    {
         "name": "subscriptions",
         "description": (
             "문서 팔로우 + 다이제스트. 구독 시 doc_edited / comment_added / "
@@ -388,6 +396,8 @@ def create_app() -> FastAPI:
     app.include_router(backups_router)
     # Cycle 0018 — document subscriptions + digest.
     app.include_router(subscriptions_router)
+    # Cycle 0021 — emoji reactions on docs and blocks.
+    app.include_router(reactions_router)
 
     return app
 

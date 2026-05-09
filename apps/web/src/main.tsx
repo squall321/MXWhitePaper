@@ -79,6 +79,9 @@ const AdminOrgsPage = lazyLogged('AdminOrgs', () =>
 const AdminDashboardPage = lazyLogged('AdminDashboard', () =>
   import('./pages/AdminDashboard').then((m) => ({ default: m.AdminDashboardPage })),
 )
+const ArchivedDocsPage = lazyLogged('ArchivedDocs', () =>
+  import('./pages/ArchivedDocs').then((m) => ({ default: m.ArchivedDocsPage })),
+)
 // `AuditLogPage` has an optional `embedded` prop so it can be reused inside
 // AdminDashboard. Use `React.lazy` directly (lazyLogged's generic requires
 // `ComponentType<never>`).
@@ -302,6 +305,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="admin/orgs" element={<Boundaried name="admin/orgs"><AdminOrgsPage /></Boundaried>} />
                 <Route path="admin/dashboard" element={<Boundaried name="admin/dashboard"><AdminDashboardPage /></Boundaried>} />
                 <Route path="admin/import-csv" element={<Boundaried name="admin/import-csv"><BulkDocImportPage /></Boundaried>} />
+                <Route path="admin/archive" element={<Boundaried name="admin/archive"><ArchivedDocsPage /></Boundaried>} />
                 <Route path="admin/audit" element={<Boundaried name="admin/audit"><AuditLogPage /></Boundaried>} />
                 <Route path="admin/backups" element={<Boundaried name="admin/backups"><BackupAdminPage /></Boundaried>} />
                 <Route path="admin/tags" element={<Boundaried name="admin/tags"><TagManagerPage /></Boundaried>} />

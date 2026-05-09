@@ -47,6 +47,7 @@ export type NotificationKind =
   | 'review_decision'
   | 'subscription_event'
   | 'subscription_digest'
+  | 'reaction_added'
 
 export type NotificationChannel = 'in_app' | 'email'
 
@@ -99,6 +100,7 @@ export const NOTIFICATION_KINDS: NotificationKind[] = [
   'review_decision',
   'subscription_event',
   'subscription_digest',
+  'reaction_added',
 ]
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -107,6 +109,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   review_decision: { in_app: true, email: false },
   subscription_event: { in_app: true, email: false },
   subscription_digest: { in_app: true, email: true },
+  reaction_added: { in_app: true, email: false },
 }
 
 function cloneDefaultNotificationPrefs(): NotificationPrefs {
@@ -116,6 +119,7 @@ function cloneDefaultNotificationPrefs(): NotificationPrefs {
     review_decision: { ...DEFAULT_NOTIFICATION_PREFS.review_decision },
     subscription_event: { ...DEFAULT_NOTIFICATION_PREFS.subscription_event },
     subscription_digest: { ...DEFAULT_NOTIFICATION_PREFS.subscription_digest },
+    reaction_added: { ...DEFAULT_NOTIFICATION_PREFS.reaction_added },
   }
 }
 
