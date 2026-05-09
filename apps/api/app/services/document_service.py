@@ -324,6 +324,19 @@ async def fire_webhook(
     except Exception as e:
         logger.warning("webhook dispatch (%s) skipped: %s", event_kind, e)
 
+    # Cycle 0025 — fan out to automation rules. Best-effort, never raises.
+    AUTO_KINDS = {
+        "doc_published", "doc_archived", "review_decided",
+        "status_transition", "comment_added", "tag_added",
+    }
+    if event_kind in AUTO_KINDS:
+        try:
+            from app.services import automation_dispatcher
+
+            await automation_dispatcher.dispatch_event(event_kind, payload)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("automation dispatch (%s) skipped: %s", event_kind, e)
+
     # Cycle 0018 — fan out to followers. We only handle the four event kinds
     # listed in the subscription contract; anything else (doc_created etc.) is
     # webhook-only.
@@ -541,6 +554,34 @@ def _extract_tag_names(content_json: dict[str, Any]) -> list[str]:
     return out
 
 
+async def _fire_tag_added_events(
+    *,
+    doc_id: str,
+    slug: str,
+    actor_id: str | None,
+    before: list[str],
+    after: list[str],
+) -> None:
+    """Fire one `tag_added` event per net-new tag (Cycle 0025).
+
+    Idempotent: tags already present in `before` are skipped.
+    """
+    before_set = set(before or [])
+    for t in after or []:
+        if t in before_set:
+            continue
+        await fire_webhook(
+            "tag_added",
+            {
+                "event": "tag_added",
+                "document_id": doc_id,
+                "slug": slug,
+                "tag": t,
+                "actor_user_id": actor_id,
+            },
+        )
+
+
 async def create_document(
     s: AsyncSession,
     *,
@@ -650,6 +691,9 @@ async def replace_document(
     _, owner_warnings = await resolve_owners(s, metadata.get("owners"))
     warnings.extend(owner_warnings)
 
+    # Capture before-tags for `tag_added` automation trigger (Cycle 0025).
+    _before_tags = _extract_tag_names(existing.get("content_json") or {})
+
     new_version = await document_repo.update_document(
         s,
         doc_id=existing["id"],
@@ -703,6 +747,10 @@ async def replace_document(
             "change_log": log,
         },
         target_part_id=part_id,
+    )
+    await _fire_tag_added_events(
+        doc_id=doc["id"], slug=doc["slug"], actor_id=actor_id,
+        before=_before_tags, after=_extract_tag_names(validated),
     )
     return doc, warnings
 
@@ -856,6 +904,9 @@ async def _persist_content_change(
             details={"existing": existing["slug"], "new": validated["slug"]},
         )
 
+    # Capture before-tags for `tag_added` automation trigger (Cycle 0025).
+    _before_tags = _extract_tag_names(existing.get("content_json") or {})
+
     new_version = await document_repo.update_document(
         s,
         doc_id=existing["id"],
@@ -903,6 +954,10 @@ async def _persist_content_change(
             "change_log": change_log,
         },
         target_part_id=fresh.get("part_id"),
+    )
+    await _fire_tag_added_events(
+        doc_id=fresh["id"], slug=fresh["slug"], actor_id=actor_id,
+        before=_before_tags, after=_extract_tag_names(validated),
     )
     return fresh
 

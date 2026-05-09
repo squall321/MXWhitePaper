@@ -36,6 +36,7 @@ import { extractUrl } from '@/lib/urlDetect'
 import { ulid } from '../ulid'
 import { toast } from '@/components/ui/Toast'
 import { SnippetPicker } from '@/features/block-library/SnippetPicker'
+import { SmartFileDropZone } from '@/features/upload/SmartFileDropZone'
 
 /**
  * SimpleStackEditor — Notion-style block stack with drag-to-reorder and
@@ -610,25 +611,27 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
           </button>
         ) : (
           <div id={blocksPanelId}>
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void onDragEnd(e)}>
-              <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-4 pl-7 pr-7">
-                  {blocks.map((block, idx) => (
-                    <SortableBlock
-                      key={block.id}
-                      slug={slug}
-                      sectionId={section.id}
-                      index={idx}
-                      block={block}
-                      onDelete={() => void onDelete(block.id)}
-                      isSelected={selected.has(block.id)}
-                      onSelectClick={(ev) => onBlockSelectClick(block.id, ev)}
-                      lazy={blocks.length > LAZY_THRESHOLD}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+            <SmartFileDropZone slug={slug} sectionId={section.id}>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void onDragEnd(e)}>
+                <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-4 pl-7 pr-7">
+                    {blocks.map((block, idx) => (
+                      <SortableBlock
+                        key={block.id}
+                        slug={slug}
+                        sectionId={section.id}
+                        index={idx}
+                        block={block}
+                        onDelete={() => void onDelete(block.id)}
+                        isSelected={selected.has(block.id)}
+                        onSelectClick={(ev) => onBlockSelectClick(block.id, ev)}
+                        lazy={blocks.length > LAZY_THRESHOLD}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            </SmartFileDropZone>
           </div>
         )
       )}

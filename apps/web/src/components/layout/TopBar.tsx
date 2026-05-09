@@ -591,6 +591,18 @@ function ProfileMenu({
               {t('topbar.profile.snippets')}
             </Link>
             <Link
+              to="/me/api-tokens"
+              role="menuitem"
+              onClick={close}
+              data-testid="profile-menu-api-tokens"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-smsg-50 hover:no-underline"
+            >
+              <span aria-hidden="true" className="w-4 text-center text-smsg-700">
+                🔑
+              </span>
+              개인 API 토큰
+            </Link>
+            <Link
               to="/orgs"
               role="menuitem"
               onClick={close}

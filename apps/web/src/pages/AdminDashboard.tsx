@@ -11,6 +11,7 @@ import { ActivityWidget } from '@/features/activity/ActivityWidget'
 import { AdminOrgsPage } from './AdminOrgs'
 import { ArchivedDocsPage } from './ArchivedDocs'
 import { AuditLogPage } from './AuditLog'
+import { AutomationRulesPage } from './AutomationRules'
 import { BackupAdminPage } from './BackupAdmin'
 import { BulkDocImportPage } from './BulkDocImport'
 import { TagManagerPage } from './TagManager'
@@ -35,6 +36,7 @@ type TabKey =
   | 'tags'
   | 'templates'
   | 'webhooks'
+  | 'automation'
   | 'backups'
   | 'import-csv'
   | 'archive'
@@ -49,6 +51,7 @@ const TABS: Array<{ key: TabKey; labelKey: string }> = [
   { key: 'tags', labelKey: 'page.adminDashboard.tab.tags' },
   { key: 'templates', labelKey: 'page.adminDashboard.tab.templates' },
   { key: 'webhooks', labelKey: 'page.adminDashboard.tab.webhooks' },
+  { key: 'automation', labelKey: 'page.adminDashboard.tab.automation' },
   { key: 'backups', labelKey: 'page.adminDashboard.tab.backups' },
   { key: 'import-csv', labelKey: 'page.adminDashboard.tab.importCsv' },
   { key: 'archive', labelKey: 'page.adminDashboard.tab.archive' },
@@ -142,6 +145,11 @@ export function AdminDashboardPage() {
       {tab === 'webhooks' && (
         <div data-testid="admin-tab-webhooks-content">
           <WebhooksSettingsPage />
+        </div>
+      )}
+      {tab === 'automation' && (
+        <div data-testid="admin-tab-automation-content">
+          <AutomationRulesPage />
         </div>
       )}
       {tab === 'backups' && (

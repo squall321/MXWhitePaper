@@ -19,9 +19,11 @@ from .routers.activity import router as activity_router
 from .routers.admin import router as admin_router
 from .routers.ai import router as ai_router
 from .routers.analytics import router as analytics_router
+from .routers.api_tokens import router as api_tokens_router
 from .routers.approvals import router as approvals_router
 from .routers.audit import router as audit_router
 from .routers.auth import router as auth_router
+from .routers.automation import router as automation_router
 from .routers.backups import router as backups_router
 from .routers.bookmarks import router as bookmarks_router
 from .routers.comments import router_doc as comments_doc_router
@@ -39,6 +41,7 @@ from .routers.notifications import router as notifications_router
 from .routers.orgs import router as orgs_router
 from .routers.presence import router as presence_router
 from .routers.reactions import router as reactions_router
+from .routers.read_receipts import router as read_receipts_router
 from .routers.search import router as search_router
 from .routers.series import router as series_router
 from .routers.sharing import router as sharing_router
@@ -245,12 +248,39 @@ TAGS_METADATA: list[dict[str, str]] = [
         ),
     },
     {
+        "name": "read-receipts",
+        "description": (
+            "읽음 확인 — `document_reads`(implicit, heartbeat 누적) 와 "
+            "`read_acks`(explicit `확인했어요` 버튼) 를 조인해 작성자/리뷰어에게 "
+            "독자 명단을 노출한다. ack 는 idempotent (재호출시 시간 + comment 갱신)."
+        ),
+    },
+    {
         "name": "subscriptions",
         "description": (
             "문서 팔로우 + 다이제스트. 구독 시 doc_edited / comment_added / "
             "review_decided / doc_published 알림을 받는다. cadence=instant 면 "
             "즉시 알림, daily/weekly 이면 pending_digest_items 에 적재해 "
             "in-process digest_runner 가 묶어 한 번에 발송."
+        ),
+    },
+    {
+        "name": "api_tokens",
+        "description": (
+            "개인 API 토큰 (Personal Access Token) — 스크립트/CI 가 사용자 본인의 "
+            "JWT 없이 API 를 호출할 때 사용. 토큰 형식 `mxwp_<26자 base32>`. "
+            "평문은 발급/회전 직후 1회만 노출되고 이후 모든 read 응답에서는 "
+            "prefix 만 보인다. revoked_at / expires_at 으로 폐기·만료 관리."
+        ),
+    },
+    {
+        "name": "automation",
+        "description": (
+            "워크플로우 자동화 규칙 (Cycle 0025) — 트리거(이벤트) × 액션(웹훅/알림/"
+            "태그/전이/이메일) 을 admin 이 조합해 등록한다. 디스패처는 doc_published / "
+            "doc_archived / review_decided / status_transition / comment_added / "
+            "tag_added 6종 이벤트를 watch 하며, trigger_filter 의 key=value 동등 "
+            "매칭으로 발화한다."
         ),
     },
 ]
@@ -398,6 +428,12 @@ def create_app() -> FastAPI:
     app.include_router(subscriptions_router)
     # Cycle 0021 — emoji reactions on docs and blocks.
     app.include_router(reactions_router)
+    # Cycle 0023 — read receipts (explicit acks + implicit reads merge).
+    app.include_router(read_receipts_router)
+    # Cycle 0023 — personal API tokens (`mxwp_…` bearer support).
+    app.include_router(api_tokens_router)
+    # Cycle 0025 — workflow automation rules (admin-only CRUD + dispatch).
+    app.include_router(automation_router)
 
     return app
 

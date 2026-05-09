@@ -2,6 +2,8 @@
 
   - get_current_user(request) — Bearer JWT 우선, 없으면 development 환경에 한해
     admin 사용자로 폴백 (Sprint 5 호환). production 에선 401.
+  - 0023: bearer 가 `mxwp_` 로 시작하면 personal access token 으로 해석한다.
+    api_tokens.token_prefix 로 후보를 좁히고 argon2 로 평문을 검증.
   - require_role(*roles) — RBAC dependency factory.
 
 User dict 형태:
@@ -18,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .config import get_settings
 from .db import get_db
 from .errors import Forbidden, Unauthorized
-from .security import decode_token
+from .security import decode_token, verify_password
 
 ROLE_ORDER: dict[str, int] = {
     "reader": 1,
@@ -26,6 +28,12 @@ ROLE_ORDER: dict[str, int] = {
     "owner": 3,
     "admin": 4,
 }
+
+# 0023 — personal API token namespace + prefix length. Mirrored in
+# `routers/api_tokens.py` (single source of truth lives there but we copy
+# the constants here to avoid an import cycle: routers ↔ core/auth).
+_API_TOKEN_NAMESPACE = "mxwp_"
+_API_TOKEN_PREFIX_LEN = 8
 
 
 async def _fetch_user_by_id(s: AsyncSession, uid: str) -> dict[str, Any] | None:
@@ -66,6 +74,76 @@ async def _fetch_admin(s: AsyncSession) -> dict[str, Any] | None:
     }
 
 
+async def _resolve_api_token(
+    s: AsyncSession, full_token: str
+) -> dict[str, Any] | None:
+    """Return the token's user (or None on any failure).
+
+    1. Strip the `mxwp_` namespace, take the first 8 chars as the prefix.
+    2. Look up candidate rows by `token_prefix` (indexed). There may be
+       multiple — argon2-verify each `token_hash` against the full plaintext
+       until one matches.
+    3. Reject if revoked_at IS NOT NULL or expires_at < NOW().
+    4. Bump `last_used_at` so the UI can show "마지막 사용".
+    """
+    body = full_token[len(_API_TOKEN_NAMESPACE):]
+    if len(body) < _API_TOKEN_PREFIX_LEN:
+        return None
+    prefix = body[:_API_TOKEN_PREFIX_LEN]
+
+    rows = (await s.execute(
+        text("""
+            SELECT id, user_id, token_hash, revoked_at, expires_at
+            FROM api_tokens
+            WHERE token_prefix = :p
+        """),
+        {"p": prefix},
+    )).all()
+    if not rows:
+        return None
+
+    matched_id: str | None = None
+    matched_user_id: str | None = None
+    for row in rows:
+        if row[3] is not None:
+            continue
+        if row[4] is not None:
+            # expires_at < NOW() — ask the DB to do the comparison so the
+            # tz handling matches the column.
+            from datetime import UTC, datetime
+            if row[4] <= datetime.now(UTC):
+                continue
+        try:
+            if verify_password(full_token, row[2]):
+                matched_id = str(row[0])
+                matched_user_id = str(row[1])
+                break
+        except Exception:  # noqa: BLE001
+            continue
+
+    if matched_user_id is None or matched_id is None:
+        return None
+
+    user = await _fetch_user_by_id(s, matched_user_id)
+    if not user:
+        return None
+
+    # last_used_at refresh — fire-and-forget; don't block auth on commit issues.
+    try:
+        await s.execute(
+            text(
+                "UPDATE api_tokens SET last_used_at = NOW() "
+                "WHERE id = CAST(:id AS uuid)"
+            ),
+            {"id": matched_id},
+        )
+        await s.commit()
+    except Exception:  # noqa: BLE001
+        await s.rollback()
+
+    return user
+
+
 async def get_current_user(
     request: Request, s: AsyncSession = Depends(get_db)
 ) -> dict[str, Any]:
@@ -75,6 +153,14 @@ async def get_current_user(
     )
     if auth_header and auth_header.lower().startswith("bearer "):
         token = auth_header.split(None, 1)[1].strip()
+
+        # 0023 — personal API token path. JWT path stays unchanged below.
+        if token.startswith(_API_TOKEN_NAMESPACE):
+            user = await _resolve_api_token(s, token)
+            if not user:
+                raise Unauthorized("Invalid or revoked API token")
+            return user
+
         try:
             payload = decode_token(token)
         except ValueError as e:

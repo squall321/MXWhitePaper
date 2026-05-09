@@ -128,6 +128,9 @@ const MySubscriptionsPage = lazyLogged('MySubscriptions', () =>
 const SettingsPage = lazyLogged('Settings', () =>
   import('./pages/Settings').then((m) => ({ default: m.SettingsPage })),
 )
+const ApiTokensPage = lazyLogged('ApiTokens', () =>
+  import('./pages/ApiTokens').then((m) => ({ default: m.ApiTokensPage })),
+)
 const SnippetManagerPage = lazyLogged('SnippetManager', () =>
   import('./pages/SnippetManager').then((m) => ({ default: m.SnippetManagerPage })),
 )
@@ -140,6 +143,11 @@ const SeriesDetailPage = lazyLogged('SeriesDetail', () =>
 const WebhooksSettingsPage = lazyLogged('WebhooksSettings', () =>
   import('./pages/WebhooksSettings').then((m) => ({
     default: m.WebhooksSettingsPage,
+  })),
+)
+const AutomationRulesPage = lazyLogged('AutomationRules', () =>
+  import('./pages/AutomationRules').then((m) => ({
+    default: m.AutomationRulesPage,
   })),
 )
 // `TagPage` accepts a `mode` prop, which doesn't fit `lazyLogged`'s
@@ -311,6 +319,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="admin/tags" element={<Boundaried name="admin/tags"><TagManagerPage /></Boundaried>} />
                 <Route path="admin/templates" element={<Boundaried name="admin/templates"><TemplateManagerPage /></Boundaried>} />
                 <Route path="admin/webhooks" element={<Boundaried name="admin/webhooks"><WebhooksSettingsPage /></Boundaried>} />
+                <Route path="admin/automation" element={<Boundaried name="admin/automation"><AutomationRulesPage /></Boundaried>} />
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
                 <Route path="activity" element={<Boundaried name="activity"><ActivityFeedPage /></Boundaried>} />
@@ -318,6 +327,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="reviews" element={<Boundaried name="reviews"><MyReviewsPage /></Boundaried>} />
                 <Route path="subscriptions" element={<Boundaried name="subscriptions"><MySubscriptionsPage /></Boundaried>} />
                 <Route path="settings" element={<Boundaried name="settings"><SettingsPage /></Boundaried>} />
+                <Route path="me/api-tokens" element={<Boundaried name="me/api-tokens"><ApiTokensPage /></Boundaried>} />
                 <Route path="snippets" element={<Boundaried name="snippets"><SnippetManagerPage /></Boundaried>} />
                 <Route path="series" element={<Boundaried name="series"><SeriesManagerPage /></Boundaried>} />
                 <Route path="series/:slug" element={<Boundaried name="series/:slug"><SeriesDetailPage /></Boundaried>} />

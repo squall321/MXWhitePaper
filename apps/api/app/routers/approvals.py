@@ -489,6 +489,37 @@ async def transition_status(
             target_part_id=doc.get("part_id"),
         )
 
+    # Cycle 0025 — automation triggers. `doc_archived` fires whenever
+    # the target status is `archived`; `status_transition` fires for
+    # *every* transition so admins can write rules like
+    # "(from=in_review, to=approved) → blast notification".
+    if target == "archived":
+        await fire_webhook(
+            "doc_archived",
+            {
+                "event": "doc_archived",
+                "document_id": doc["id"],
+                "slug": doc["slug"],
+                "title": doc["title"],
+                "actor_user_id": user["id"],
+                "from_status": current,
+            },
+            target_part_id=doc.get("part_id"),
+        )
+    await fire_webhook(
+        "status_transition",
+        {
+            "event": "status_transition",
+            "document_id": doc["id"],
+            "slug": doc["slug"],
+            "title": doc["title"],
+            "actor_user_id": user["id"],
+            "from": current,
+            "to": target,
+        },
+        target_part_id=doc.get("part_id"),
+    )
+
     return envelope(data={"slug": slug, "status": target, "from": current})
 
 

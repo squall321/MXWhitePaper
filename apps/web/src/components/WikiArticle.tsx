@@ -37,6 +37,8 @@ import { useAuthStore } from '@/features/auth/store'
 import { DocAnalyticsModal } from '@/features/analytics/DocAnalyticsModal'
 import { SaveAsTemplateModal } from '@/features/templates/SaveAsTemplateModal'
 import { ReactionBar } from '@/features/reactions/ReactionBar'
+import { ReadReceiptPanel } from '@/features/read-receipts/ReadReceiptPanel'
+import { AckReadButton } from '@/features/read-receipts/AckReadButton'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { toast } from '@/components/ui/Toast'
@@ -246,6 +248,7 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
               <span className="ml-1 hidden sm:inline">보관</span>
             </button>
           )}
+          <AckReadButton slug={document.slug} docStatus={workflowStatus} />
           <FavoriteStar slug={document.slug} title={document.title} />
           <BookmarkButton slug={document.slug} title={document.title} />
           <FollowButton slug={document.slug} />
@@ -319,6 +322,11 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           slug={editableSlug}
           onChange={() => setReviewerBump((n) => n + 1)}
         />
+      )}
+      {/* Cycle 0023 — read receipts surface for the doc author / reviewers.
+          Editor+ only; the panel itself is silent on permission errors. */}
+      {editableSlug && (userRole === 'editor' || userRole === 'admin') && (
+        <ReadReceiptPanel slug={editableSlug} />
       )}
       {/* Floating bulk-actions bar — renders only when the bulk-selection
           store has at least one block. Lives at the article level so its
