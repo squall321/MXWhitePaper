@@ -40,6 +40,7 @@ export type Block =
   | DashboardEmbedBlock
   | CalculatorBlock
   | WhiteboardBlock
+  | FormBlock
 export type WhiteboardElement =
   | {
       kind: 'stroke'
@@ -433,6 +434,37 @@ export interface WhiteboardBlock {
   }
   elements: WhiteboardElement[]
   meta?: BlockMeta
+}
+export interface FormBlock {
+  type: 'form'
+  id: Ulid
+  title?: string
+  description?: string
+  /**
+   * @minItems 1
+   */
+  questions: [FormQuestion, ...FormQuestion[]]
+  submit_label?: string
+  thanks_message?: string
+  allow_multiple_responses?: boolean
+  meta?: BlockMeta
+}
+export interface FormQuestion {
+  id: string
+  kind:
+    | 'text'
+    | 'long-text'
+    | 'email'
+    | 'number'
+    | 'select'
+    | 'multi-select'
+    | 'checkbox'
+    | 'rating-5'
+    | 'date'
+  label: string
+  required?: boolean
+  placeholder?: string
+  options?: string[]
 }
 export interface SectionLevel2 {
   id: Ulid

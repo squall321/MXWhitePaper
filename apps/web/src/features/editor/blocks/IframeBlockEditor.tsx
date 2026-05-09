@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { IframeBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   slug: Slug
@@ -17,6 +18,7 @@ interface Props {
  * will render once saved.
  */
 export function IframeBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
@@ -51,14 +53,14 @@ export function IframeBlockEditor({ slug, block }: Props) {
         block.id,
         { src: next.src, title: next.title, height: next.height },
         etag,
-        '임베드 편집',
+        t('editor.iframe.changeLog'),
       )
       apply(result.document, result.etag)
       setError(null)
     } catch (err) {
       if (isPreconditionFailed(err)) {
         setConflict(null)
-        setError('충돌 — 새로고침 필요')
+        setError(t('editor.common.conflict'))
       } else {
         setError((err as Error).message)
       }
@@ -77,8 +79,8 @@ export function IframeBlockEditor({ slug, block }: Props) {
         type="url"
         value={local.src}
         onChange={(e) => schedule({ ...local, src: e.target.value })}
-        placeholder="임베드 URL (사내 화이트리스트만 표시됩니다)"
-        aria-label="임베드 URL"
+        placeholder={t('editor.iframe.urlPlaceholder')}
+        aria-label={t('editor.iframe.urlLabel')}
         className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none"
       />
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_120px]">
@@ -88,8 +90,8 @@ export function IframeBlockEditor({ slug, block }: Props) {
           onChange={(e) =>
             schedule({ ...local, title: e.target.value || undefined })
           }
-          placeholder="제목 (선택)"
-          aria-label="임베드 제목"
+          placeholder={t('editor.iframe.titlePlaceholder')}
+          aria-label={t('editor.iframe.titleLabel')}
           className="rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none"
         />
         <input
@@ -100,13 +102,13 @@ export function IframeBlockEditor({ slug, block }: Props) {
           onChange={(e) =>
             schedule({ ...local, height: Number(e.target.value) || undefined })
           }
-          placeholder="높이"
-          aria-label="높이 (px)"
+          placeholder={t('editor.iframe.heightPlaceholder')}
+          aria-label={t('editor.iframe.heightLabel')}
           className="rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none"
         />
       </div>
       <p className="text-[11px] text-amber-700">
-        ⚠ 사내 화이트리스트가 아닌 도메인은 저장 후 표시되지 않을 수 있습니다.
+        {t('editor.iframe.warning')}
       </p>
 
       {local.src ? (
@@ -119,10 +121,14 @@ export function IframeBlockEditor({ slug, block }: Props) {
         />
       ) : (
         <div className="rounded border border-dashed border-gray-300 bg-white p-6 text-center text-xs text-gray-500">
-          URL을 입력하면 미리보기가 나타납니다.
+          {t('editor.iframe.urlHint')}
         </div>
       )}
-      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      {error && (
+        <p role="status" aria-live="polite" className="text-[11px] text-red-600">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

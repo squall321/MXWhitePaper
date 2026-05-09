@@ -16,6 +16,7 @@ import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { OrgChartBlockView } from '@/components/blocks/OrgChartBlock'
 import { parseCsv } from '@/features/editor/extensions/csv-paste'
 import { BlockHelpDrawer } from '@/features/editor/components/BlockHelpDrawer'
+import { useT } from '@/lib/i18n'
 
 /**
  * Parse a 2-column CSV (Manager, Subordinate) into an org-chart tree. Pure;
@@ -220,18 +221,19 @@ interface NodeRowProps {
 }
 
 function DraggableHandle({ id, isRoot }: { id: string; isRoot: boolean }) {
+  const t = useT()
   const { attributes, listeners, setNodeRef } = useDraggable({ id, disabled: isRoot })
   return (
     <button
       ref={setNodeRef}
       type="button"
-      aria-label={`drag ${id}`}
+      aria-label={t('editor.orgChart.dragLabel', { id })}
       {...attributes}
       {...listeners}
       className="cursor-grab text-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
       disabled={isRoot}
     >
-      ⋮⋮
+      <span aria-hidden="true">⋮⋮</span>
     </button>
   )
 }
@@ -260,6 +262,7 @@ function NodeRow({
   onRemove,
   onUpdate,
 }: NodeRowProps) {
+  const t = useT()
   return (
     <div className="space-y-1" style={{ paddingLeft: depth * 16 }}>
       <DroppableSlot id={node.id}>
@@ -268,40 +271,43 @@ function NodeRow({
           <Input
             value={node.label}
             onChange={(e) => onUpdate(node.id, { label: e.target.value })}
-            placeholder="이름"
+            placeholder={t('editor.orgChart.namePlaceholder')}
             aria-label={`node ${node.id} label`}
             className="flex-1"
           />
           <Input
             value={node.role ?? ''}
             onChange={(e) => onUpdate(node.id, { role: e.target.value })}
-            placeholder="역할"
+            placeholder={t('editor.orgChart.rolePlaceholder')}
             aria-label={`node ${node.id} role`}
             className="w-32"
           />
           <button
             type="button"
             onClick={() => onAddChild(node.id)}
-            aria-label={`add child to ${node.id}`}
+            aria-label={t('editor.orgChart.addChildAria', { id: node.id })}
             className="rounded-md border border-gray-300 bg-white px-2 py-0.5 text-[11px] hover:border-smsg-300 hover:bg-smsg-50"
-            title="이 노드 아래에 자식 추가"
+            title={t('editor.orgChart.addChildTitle')}
           >
-            + 자식 추가
+            {t('editor.orgChart.addChild')}
           </button>
           {!isRoot && (
             <button
               type="button"
               onClick={() => onAddSibling(node.id)}
-              aria-label={`add sibling of ${node.id}`}
+              aria-label={t('editor.orgChart.addSiblingAria', { id: node.id })}
               className="rounded-md border border-gray-300 bg-white px-2 py-0.5 text-[11px] hover:border-smsg-300 hover:bg-smsg-50"
-              title="같은 레벨에 형제 추가"
+              title={t('editor.orgChart.addSiblingTitle')}
             >
-              + 형제 추가
+              {t('editor.orgChart.addSibling')}
             </button>
           )}
           {!isRoot && (
-            <IconButton aria-label={`remove ${node.id}`} onClick={() => onRemove(node.id)}>
-              ×
+            <IconButton
+              aria-label={t('editor.orgChart.removeAria', { id: node.id })}
+              onClick={() => onRemove(node.id)}
+            >
+              <span aria-hidden="true">×</span>
             </IconButton>
           )}
         </div>
@@ -327,6 +333,7 @@ function NodeRow({
 const LAYOUTS: NonNullable<OrgChartBlock['layout']>[] = ['tree', 'horizontal']
 
 export function OrgChartBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const [local, setLocal] = useState<OrgChartBlock>(block)
@@ -343,21 +350,21 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
     setJsonText(JSON.stringify(next.root, null, 2))
     if (!etag) return
     try {
-      const result = await patchBlock(slug, block.id, next, etag, '조직도 편집')
+      const result = await patchBlock(slug, block.id, next, etag, t('editor.orgChart.changeLog'))
       apply(result.document, result.etag)
       setError(null)
     } catch (err) {
-      if (isPreconditionFailed(err)) setError('충돌 — 새로고침 필요')
+      if (isPreconditionFailed(err)) setError(t('editor.common.conflict'))
       else setError((err as Error).message)
     }
   }
 
   const onAddChild = (parentId: string) => {
-    const child: OrgChartNode = { id: ulid(), label: '신규' }
+    const child: OrgChartNode = { id: ulid(), label: t('editor.orgChart.newNode') }
     void push({ ...local, root: addChild(local.root, parentId, child) })
   }
   const onAddSibling = (siblingOfId: string) => {
-    const sib: OrgChartNode = { id: ulid(), label: '신규' }
+    const sib: OrgChartNode = { id: ulid(), label: t('editor.orgChart.newNode') }
     void push({ ...local, root: addSibling(local.root, siblingOfId, sib) })
   }
   const onRemove = (id: string) => void push({ ...local, root: removeNode(local.root, id) })
@@ -377,7 +384,7 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
     try {
       const parsed = JSON.parse(jsonText) as OrgChartNode
       if (!parsed.id || typeof parsed.label !== 'string') {
-        setJsonErr('id, label 필드가 필요합니다.')
+        setJsonErr(t('editor.orgChart.jsonRequired'))
         return
       }
       setJsonErr(null)
@@ -418,7 +425,7 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
     !local.root.label.trim() && (!local.root.children || local.root.children.length === 0)
 
   const seedRoot = () => {
-    void push({ ...local, root: { ...local.root, label: '대표' } })
+    void push({ ...local, root: { ...local.root, label: t('editor.orgChart.seedRootLabel') } })
   }
 
   return (
@@ -429,24 +436,24 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
           className="rounded-md border border-dashed border-smsg-300 bg-white p-4 text-center dark:bg-gray-900"
         >
           <p className="text-sm text-gray-700 dark:text-gray-300">
-            이 블록은 <strong>조직도 트리</strong>를 보여줍니다.
+            {t('editor.orgChart.empty')}
           </p>
           <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row">
             <Button size="sm" type="button" onClick={seedRoot}>
-              루트 노드 추가
+              {t('editor.orgChart.seedRoot')}
             </Button>
             <button
               type="button"
               className="text-xs text-link hover:underline"
               onClick={() => setHelpOpen(true)}
             >
-              도움말 보기
+              {t('common.helpMore')}
             </button>
           </div>
         </div>
       )}
       <div className="flex items-center justify-between gap-2">
-        <Field label="레이아웃">
+        <Field label={t('editor.orgChart.layoutLabel')}>
           <Select
             value={local.layout ?? 'tree'}
             onChange={(e) =>
@@ -464,7 +471,7 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
           type="button"
           onClick={() => setJsonMode((v) => !v)}
         >
-          {jsonMode ? '트리 편집기' : 'JSON 직접 편집'}
+          {jsonMode ? t('editor.orgChart.treeMode') : t('editor.orgChart.jsonMode')}
         </Button>
       </div>
 
@@ -487,11 +494,10 @@ export function OrgChartBlockEditor({ slug, block }: Props) {
 
       <details className="rounded border border-gray-200 bg-white p-2 text-xs">
         <summary className="cursor-pointer font-semibold text-gray-700">
-          엑셀/CSV 붙여넣기로 한 번에 만들기
+          {t('editor.orgChart.csvSection')}
         </summary>
         <p className="mt-2 text-[11px] text-gray-600">
-          첫 줄은 <code className="rounded bg-gray-100 px-1">Manager,Subordinate</code> 헤더,
-          이후 줄에는 <em>관리자, 부하</em> 형식으로 한 쌍씩. 예시:
+          {t('editor.orgChart.csvHelp')}
         </p>
         <pre className="mt-1 rounded bg-gray-50 p-2 font-mono text-[10px] text-gray-700">{`Manager,Subordinate
 CEO,COO
@@ -500,17 +506,21 @@ CTO,Eng-Lead`}</pre>
         <textarea
           aria-label="org-csv-paste"
           rows={4}
-          placeholder={'여기에 붙여넣기 (Cmd/Ctrl + V)'}
+          placeholder={t('editor.orgChart.csvPaste')}
           onPaste={onCsvPaste}
           className="mt-2 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-[11px]"
         />
       </details>
 
-      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      {error && (
+        <p role="status" aria-live="polite" className="text-[11px] text-red-600">
+          {error}
+        </p>
+      )}
 
       <div className="rounded border border-gray-200 bg-white p-2">
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-          미리보기
+          {t('common.preview')}
         </p>
         <OrgChartBlockView block={local} />
       </div>

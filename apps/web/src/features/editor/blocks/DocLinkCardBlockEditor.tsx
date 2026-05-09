@@ -3,6 +3,7 @@ import type { DocLinkCardBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { useDocumentList } from '@/features/document/hooks/useDocumentList'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   slug: Slug
@@ -15,6 +16,7 @@ interface Props {
  * the picker.
  */
 export function DocLinkCardBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
@@ -49,14 +51,14 @@ export function DocLinkCardBlockEditor({ slug, block }: Props) {
         block.id,
         next,
         etag,
-        '문서 링크 편집',
+        t('editor.docLink.changeLog'),
       )
       apply(result.document, result.etag)
       setError(null)
     } catch (err) {
       if (isPreconditionFailed(err)) {
         setConflict(null)
-        setError('충돌 — 새로고침 필요')
+        setError(t('editor.common.conflict'))
       } else {
         setError((err as Error).message)
       }
@@ -84,7 +86,7 @@ export function DocLinkCardBlockEditor({ slug, block }: Props) {
     >
       <div className="space-y-1">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">
-          현재 대상
+          {t('editor.docLink.currentTarget')}
         </p>
         <p className="text-sm text-smsg-900">
           {block.slug ? (
@@ -92,7 +94,7 @@ export function DocLinkCardBlockEditor({ slug, block }: Props) {
               <span className="font-mono">/{block.slug}</span>
             </>
           ) : (
-            <span className="text-gray-400">대상이 설정되지 않았습니다.</span>
+            <span className="text-gray-400">{t('editor.docLink.noTarget')}</span>
           )}
         </p>
         <label className="flex items-center gap-1 text-[11px] text-gray-700">
@@ -100,9 +102,9 @@ export function DocLinkCardBlockEditor({ slug, block }: Props) {
             type="checkbox"
             checked={showSummary}
             onChange={onToggleSummary}
-            aria-label="요약 표시"
+            aria-label={t('editor.docLink.showSummary')}
           />
-          요약 표시
+          {t('editor.docLink.showSummary')}
         </label>
       </div>
 
@@ -111,17 +113,17 @@ export function DocLinkCardBlockEditor({ slug, block }: Props) {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="문서 검색…"
-          aria-label="문서 검색"
+          placeholder={t('editor.docLink.searchPlaceholder')}
+          aria-label={t('editor.docLink.searchLabel')}
           className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none"
         />
         <div className="max-h-48 overflow-y-auto rounded border border-gray-200 bg-white">
           {list.isPending && (
-            <p className="px-2 py-2 text-[11px] text-gray-500">불러오는 중…</p>
+            <p className="px-2 py-2 text-[11px] text-gray-500">{t('editor.docLink.loading')}</p>
           )}
           {!list.isPending && items.length === 0 && (
             <p className="px-2 py-2 text-[11px] text-gray-500">
-              {query ? '결과 없음' : '문서가 없습니다.'}
+              {query ? t('editor.docLink.noResults') : t('editor.docLink.empty')}
             </p>
           )}
           {items.map((it) => (
@@ -144,7 +146,11 @@ export function DocLinkCardBlockEditor({ slug, block }: Props) {
         </div>
       </div>
 
-      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      {error && (
+        <p role="status" aria-live="polite" className="text-[11px] text-red-600">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

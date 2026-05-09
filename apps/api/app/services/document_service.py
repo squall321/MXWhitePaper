@@ -144,7 +144,8 @@ async def fire_webhook(
 
     Wraps `webhook_dispatcher.dispatch` in try/except so a misconfigured hook,
     network error, or assertion in payload construction can never fail the
-    write that triggered the event.
+    write that triggered the event. Also fans out to subscription dispatcher
+    (Cycle 0018) for the kinds subscribers can ask about.
     """
     try:
         await webhook_dispatcher.dispatch(
@@ -152,6 +153,34 @@ async def fire_webhook(
         )
     except Exception as e:
         logger.warning("webhook dispatch (%s) skipped: %s", event_kind, e)
+
+    # Cycle 0018 — fan out to followers. We only handle the four event kinds
+    # listed in the subscription contract; anything else (doc_created etc.) is
+    # webhook-only.
+    SUB_KINDS = {
+        "doc_edited", "comment_added", "review_decided", "doc_published",
+    }
+    if event_kind in SUB_KINDS:
+        doc_id = payload.get("document_id")
+        actor = (
+            payload.get("actor_user_id")
+            or payload.get("author_user_id")
+            or payload.get("reviewer_user_id")
+        )
+        if isinstance(doc_id, str) and doc_id:
+            try:
+                from app.services import digest_runner
+
+                await digest_runner.dispatch_subscription_event(
+                    event_kind,
+                    document_id=doc_id,
+                    payload=payload,
+                    actor_user_id=actor if isinstance(actor, str) else None,
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "subscription dispatch (%s) skipped: %s", event_kind, e,
+                )
 
 
 async def reindex_meili(s: AsyncSession, *, doc_id: str, archived: bool = False) -> None:

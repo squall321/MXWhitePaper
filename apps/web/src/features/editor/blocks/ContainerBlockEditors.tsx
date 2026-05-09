@@ -14,6 +14,7 @@ import {
   PALETTE_ITEMS,
   type PaletteItem,
 } from '../components/BlockInsertPalette'
+import { useT, t as tStatic } from '@/lib/i18n'
 
 interface SlotPaletteState {
   /** Path identifying the slot the user clicked (e.g. tab/item/column index). */
@@ -53,7 +54,7 @@ function useContainerPatch<B extends Block>(
     } catch (err) {
       if (isPreconditionFailed(err)) {
         setConflict(null)
-        setError('충돌 — 새로고침 필요')
+        setError(tStatic('editor.common.conflict'))
       } else {
         setError((err as Error).message)
       }
@@ -79,7 +80,8 @@ interface TabsProps {
 }
 
 export function TabsBlockEditor({ slug, block }: TabsProps) {
-  const { persist, error } = useContainerPatch<TabsBlock>(slug, block.id, '탭 편집')
+  const t = useT()
+  const { persist, error } = useContainerPatch<TabsBlock>(slug, block.id, t('editor.tabs.changeLog'))
   const [active, setActive] = useState(0)
   const [palette, setPalette] = useState<SlotPaletteState | null>(null)
 
@@ -87,11 +89,14 @@ export function TabsBlockEditor({ slug, block }: TabsProps) {
   const tab = tabs[active] ?? tabs[0]
 
   const setLabel = (idx: number, label: string) => {
-    const next = tabs.map((t, i) => (i === idx ? { ...t, label } : t)) as TabsBlock['tabs']
+    const next = tabs.map((tab2, i) => (i === idx ? { ...tab2, label } : tab2)) as TabsBlock['tabs']
     void persist({ tabs: next })
   }
   const addTab = () => {
-    const next = [...tabs, { label: `탭 ${tabs.length + 1}`, blocks: [] }] as TabsBlock['tabs']
+    const next = [
+      ...tabs,
+      { label: t('editor.tabs.newTabName', { n: tabs.length + 1 }), blocks: [] },
+    ] as TabsBlock['tabs']
     void persist({ tabs: next })
     setActive(next.length - 1)
   }
@@ -111,24 +116,24 @@ export function TabsBlockEditor({ slug, block }: TabsProps) {
   return (
     <div data-tabs-block-editor data-block-id={block.id} className="my-3 rounded border border-smsg-100 bg-white">
       <div role="tablist" className="flex flex-wrap items-center gap-1 border-b border-gray-200 p-1 text-xs">
-        {tabs.map((t, i) => (
+        {tabs.map((tab2, i) => (
           <div key={i} className={`flex items-center gap-1 rounded ${active === i ? 'bg-smsg-700 text-white' : 'bg-smsg-100 text-gray-700'}`}>
             <input
               type="text"
-              value={t.label}
+              value={tab2.label}
               onChange={(e) => setLabel(i, e.target.value)}
               onFocus={() => setActive(i)}
-              aria-label={`탭 ${i + 1} 이름`}
+              aria-label={t('editor.tabs.tabNameLabel', { n: i + 1 })}
               className="bg-transparent px-2 py-1 outline-none placeholder:text-current"
             />
             <button
               type="button"
-              aria-label={`탭 ${i + 1} 삭제`}
+              aria-label={t('editor.tabs.removeTab', { n: i + 1 })}
               onClick={() => removeTab(i)}
               disabled={tabs.length <= 1}
               className="rounded px-1 hover:bg-black/10 disabled:opacity-30"
             >
-              ✕
+              <span aria-hidden="true">✕</span>
             </button>
           </div>
         ))}
@@ -137,7 +142,7 @@ export function TabsBlockEditor({ slug, block }: TabsProps) {
           onClick={addTab}
           className="rounded border border-dashed border-smsg-300 px-2 py-1 text-smsg-700 hover:bg-smsg-100"
         >
-          + 탭
+          {t('editor.tabs.addTab')}
         </button>
       </div>
       <div className="space-y-3 p-3">
@@ -161,7 +166,11 @@ export function TabsBlockEditor({ slug, block }: TabsProps) {
           onClose={() => setPalette(null)}
         />
       )}
-      {error && <p className="px-3 pb-2 text-[11px] text-red-600">{error}</p>}
+      {error && (
+        <p role="status" aria-live="polite" className="px-3 pb-2 text-[11px] text-red-600">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
@@ -174,10 +183,11 @@ interface AccordionProps {
 }
 
 export function AccordionBlockEditor({ slug, block }: AccordionProps) {
+  const t = useT()
   const { persist, error } = useContainerPatch<AccordionBlock>(
     slug,
     block.id,
-    '아코디언 편집',
+    t('editor.accordion.changeLog'),
   )
   const [palette, setPalette] = useState<(SlotPaletteState & { itemIdx: number }) | null>(
     null,
@@ -192,7 +202,7 @@ export function AccordionBlockEditor({ slug, block }: AccordionProps) {
   const addItem = () => {
     const next = [
       ...items,
-      { label: `항목 ${items.length + 1}`, blocks: [] },
+      { label: t('editor.accordion.newItemName', { n: items.length + 1 }), blocks: [] },
     ] as AccordionBlock['items']
     void persist({ items: next })
   }
@@ -222,7 +232,7 @@ export function AccordionBlockEditor({ slug, block }: AccordionProps) {
               value={it.label}
               onChange={(e) => setLabel(i, e.target.value)}
               onClick={(e) => e.preventDefault()}
-              aria-label={`항목 ${i + 1} 이름`}
+              aria-label={t('editor.accordion.itemNameLabel', { n: i + 1 })}
               className="flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none"
             />
             <button
@@ -232,10 +242,10 @@ export function AccordionBlockEditor({ slug, block }: AccordionProps) {
                 removeItem(i)
               }}
               disabled={items.length <= 1}
-              aria-label={`항목 ${i + 1} 삭제`}
+              aria-label={t('editor.accordion.removeItem', { n: i + 1 })}
               className="rounded px-1 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
             >
-              ✕
+              <span aria-hidden="true">✕</span>
             </button>
           </summary>
           <div className="space-y-3 border-t border-gray-100 p-3">
@@ -254,7 +264,7 @@ export function AccordionBlockEditor({ slug, block }: AccordionProps) {
         onClick={addItem}
         className="rounded border border-dashed border-smsg-300 px-2 py-1 text-xs text-smsg-700 hover:bg-smsg-100"
       >
-        + 항목
+        {t('editor.accordion.addItem')}
       </button>
 
       {palette && (
@@ -269,7 +279,11 @@ export function AccordionBlockEditor({ slug, block }: AccordionProps) {
           onClose={() => setPalette(null)}
         />
       )}
-      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      {error && (
+        <p role="status" aria-live="polite" className="text-[11px] text-red-600">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
@@ -282,7 +296,8 @@ interface ColumnsProps {
 }
 
 export function ColumnsBlockEditor({ slug, block }: ColumnsProps) {
-  const { persist, error } = useContainerPatch<ColumnsBlock>(slug, block.id, '컬럼 편집')
+  const t = useT()
+  const { persist, error } = useContainerPatch<ColumnsBlock>(slug, block.id, t('editor.columns.changeLog'))
   const [palette, setPalette] = useState<(SlotPaletteState & { colIdx: number }) | null>(
     null,
   )
@@ -325,15 +340,15 @@ export function ColumnsBlockEditor({ slug, block }: ColumnsProps) {
             className="space-y-3 rounded border border-dashed border-gray-200 bg-white p-2"
           >
             <div className="flex items-center justify-between text-[11px] text-gray-500">
-              <span>컬럼 {i + 1}</span>
+              <span>{t('editor.columns.label', { n: i + 1 })}</span>
               <button
                 type="button"
                 onClick={() => removeColumn(i)}
                 disabled={cols.length <= 2}
-                aria-label={`컬럼 ${i + 1} 삭제`}
+                aria-label={t('editor.columns.removeColumn', { n: i + 1 })}
                 className="rounded px-1 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
               >
-                ✕
+                <span aria-hidden="true">✕</span>
               </button>
             </div>
             {col.map((b) => (
@@ -352,7 +367,7 @@ export function ColumnsBlockEditor({ slug, block }: ColumnsProps) {
         disabled={cols.length >= 4}
         className="rounded border border-dashed border-smsg-300 px-2 py-1 text-xs text-smsg-700 hover:bg-smsg-100 disabled:opacity-40"
       >
-        + 컬럼
+        {t('editor.columns.addColumn')}
       </button>
 
       {palette && (
@@ -367,7 +382,11 @@ export function ColumnsBlockEditor({ slug, block }: ColumnsProps) {
           onClose={() => setPalette(null)}
         />
       )}
-      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      {error && (
+        <p role="status" aria-live="polite" className="text-[11px] text-red-600">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
@@ -380,6 +399,7 @@ interface SlotAddButtonProps {
 }
 
 function SlotAddButton({ slotKey, onOpen }: SlotAddButtonProps) {
+  const t = useT()
   return (
     <button
       type="button"
@@ -387,7 +407,7 @@ function SlotAddButton({ slotKey, onOpen }: SlotAddButtonProps) {
       onClick={(e) => onOpen({ slotKey, x: e.clientX, y: e.clientY })}
       className="w-full rounded border border-dashed border-smsg-200 bg-white px-2 py-1.5 text-[11px] text-smsg-700 hover:border-smsg-500 hover:bg-smsg-50"
     >
-      + 블록 추가
+      {t('editor.containers.addBlock')}
     </button>
   )
 }

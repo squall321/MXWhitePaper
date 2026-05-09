@@ -230,6 +230,23 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     slash: '/화이트보드',
     preview: '🎨 free-draw board',
   },
+  {
+    kind: 'form',
+    label: '설문',
+    labelKey: 'palette.form',
+    icon: '📋',
+    build: () => ({
+      type: 'form',
+      id: ulid(),
+      title: '새 설문',
+      questions: [
+        { id: ulid(), kind: 'text', label: '질문 1', required: false },
+      ],
+    }),
+    hint: '독자가 채워서 제출하는 설문/체크리스트/퀴즈.',
+    slash: '/설문',
+    preview: '📋 설문 폼',
+  },
 ]
 
 interface Props {

@@ -5,6 +5,7 @@ import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { DashboardEmbedBlockView } from '@/components/blocks/DashboardEmbedBlock'
 import { BlockHelpDrawer } from '@/features/editor/components/BlockHelpDrawer'
+import { useT } from '@/lib/i18n'
 
 const PROVIDERS: DashboardEmbedBlock['provider'][] = ['grafana', 'tableau', 'superset']
 
@@ -37,6 +38,7 @@ function rowsToParams(rows: ParamRow[]): Record<string, string> {
  * params editor + a sandboxed live preview that mirrors read mode.
  */
 export function DashboardEmbedBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const [local, setLocal] = useState<DashboardEmbedBlock>(block)
@@ -48,11 +50,11 @@ export function DashboardEmbedBlockEditor({ slug, block }: Props) {
     setLocal(next)
     if (!etag) return
     try {
-      const result = await patchBlock(slug, block.id, next, etag, '대시보드 편집')
+      const result = await patchBlock(slug, block.id, next, etag, t('editor.dashboard.changeLog'))
       apply(result.document, result.etag)
       setError(null)
     } catch (err) {
-      if (isPreconditionFailed(err)) setError('충돌 — 새로고침 필요')
+      if (isPreconditionFailed(err)) setError(t('editor.common.conflict'))
       else setError((err as Error).message)
     }
   }
@@ -72,7 +74,7 @@ export function DashboardEmbedBlockEditor({ slug, block }: Props) {
           className="rounded-md border border-dashed border-smsg-300 bg-white p-4 text-center dark:bg-gray-900"
         >
           <p className="text-sm text-gray-700 dark:text-gray-300">
-            이 블록은 <strong>외부 대시보드 패널</strong>(Grafana / Tableau / Superset)을 임베드합니다.
+            {t('editor.dashboard.empty')}
           </p>
           <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row">
             <Button
@@ -80,43 +82,45 @@ export function DashboardEmbedBlockEditor({ slug, block }: Props) {
               type="button"
               onClick={() => setLocal({ ...local, panelId: '' })}
             >
-              URL 입력
+              {t('editor.dashboard.urlInput')}
             </Button>
             <button
               type="button"
               className="text-xs text-link hover:underline"
               onClick={() => setHelpOpen(true)}
             >
-              도움말 보기
+              {t('common.helpMore')}
             </button>
           </div>
         </div>
       )}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Field label="제공자">
+        <Field label={t('editor.dashboard.provider')}>
           <Select
             value={local.provider}
             onChange={(e) =>
               void push({ ...local, provider: e.target.value as DashboardEmbedBlock['provider'] })
             }
+            aria-label={t('editor.dashboard.provider')}
           >
             {PROVIDERS.map((p) => (
               <option key={p} value={p}>{p}</option>
             ))}
           </Select>
         </Field>
-        <Field label="Panel ID">
+        <Field label={t('editor.dashboard.panelId')}>
           <Input
             value={local.panelId}
             onChange={(e) => setLocal({ ...local, panelId: e.target.value })}
             onBlur={() => void push(local)}
             placeholder="dashboard-uid/panel-id"
+            aria-label={t('editor.dashboard.panelId')}
           />
         </Field>
       </div>
 
       <div className="space-y-1.5">
-        <p className="text-xs font-medium text-gray-700">파라미터</p>
+        <p className="text-xs font-medium text-gray-700">{t('editor.dashboard.params')}</p>
         {rows.map((r, i) => (
           <div key={i} className="flex items-center gap-2">
             <Input
@@ -147,7 +151,7 @@ export function DashboardEmbedBlockEditor({ slug, block }: Props) {
               aria-label={`param ${i} remove`}
               onClick={() => commitRows(rows.filter((_, j) => j !== i))}
             >
-              ×
+              <span aria-hidden="true">×</span>
             </IconButton>
           </div>
         ))}
@@ -157,15 +161,19 @@ export function DashboardEmbedBlockEditor({ slug, block }: Props) {
           type="button"
           onClick={() => setRows([...rows, { key: '', value: '' }])}
         >
-          + 파라미터
+          {t('editor.dashboard.addParam')}
         </Button>
       </div>
 
-      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      {error && (
+        <p role="status" aria-live="polite" className="text-[11px] text-red-600">
+          {error}
+        </p>
+      )}
 
       <div className="rounded border border-gray-200 bg-white p-2">
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-          미리보기
+          {t('editor.dashboard.preview')}
         </p>
         <DashboardEmbedBlockView block={local} />
       </div>

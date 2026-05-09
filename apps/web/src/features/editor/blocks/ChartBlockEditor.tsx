@@ -4,6 +4,7 @@ import { ChartBlockView } from '@/components/blocks/ChartBlock'
 import { useEditorStore } from '@/features/editor/state'
 import { parseCsv } from '@/features/editor/extensions/csv-paste'
 import { tableToChartData } from '@/features/editor/tableToChart'
+import { useT } from '@/lib/i18n'
 
 interface ChartBlockEditorProps {
   block: ChartBlock
@@ -12,7 +13,8 @@ interface ChartBlockEditorProps {
 
 interface ChartTypeMeta {
   type: ChartBlock['chartType']
-  label: string
+  /** i18n key for the visible label. */
+  labelKey: string
   thumb: string
 }
 
@@ -30,12 +32,12 @@ const CHART_TYPES: ChartBlock['chartType'][] = [
  * of each chart type. Kept inline (no asset shipping) to avoid bundle bloat.
  */
 const CHART_TYPE_META: ReadonlyArray<ChartTypeMeta> = [
-  { type: 'line', label: '선', thumb: '╱╲╱' },
-  { type: 'bar', label: '막대', thumb: '▁▄▆█' },
-  { type: 'pie', label: '원', thumb: '◔◑◕●' },
-  { type: 'area', label: '면적', thumb: '▁▃▅▇' },
-  { type: 'radar', label: '레이더', thumb: '⌬' },
-  { type: 'scatter', label: '산점', thumb: '· · · ·' },
+  { type: 'line', labelKey: 'editor.chart.type.line', thumb: '╱╲╱' },
+  { type: 'bar', labelKey: 'editor.chart.type.bar', thumb: '▁▄▆█' },
+  { type: 'pie', labelKey: 'editor.chart.type.pie', thumb: '◔◑◕●' },
+  { type: 'area', labelKey: 'editor.chart.type.area', thumb: '▁▃▅▇' },
+  { type: 'radar', labelKey: 'editor.chart.type.radar', thumb: '⌬' },
+  { type: 'scatter', labelKey: 'editor.chart.type.scatter', thumb: '· · · ·' },
 ]
 
 /**
@@ -63,6 +65,7 @@ const SAMPLE_DATA: ChartBlock['data'] = {
  * The live ChartBlockView renders below the grid for instant preview.
  */
 export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
+  const t = useT()
   const draft = useEditorStore((s) => s.draft)
   const [convertHint, setConvertHint] = useState<string | null>(null)
 
@@ -111,17 +114,17 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
   const convertFromTable = () => {
     const table = findFirstTable(draft)
     if (!table) {
-      setConvertHint('변환 가능한 표가 없습니다.')
+      setConvertHint(t('editor.chart.noTable'))
       return
     }
     const next = tableToChartData(table)
     onChange({ ...block, data: next })
-    setConvertHint(`${table.headers.length - 1}개 시리즈 변환됨`)
+    setConvertHint(t('editor.chart.seriesConverted', { n: table.headers.length - 1 }))
   }
 
   const seedSample = () => {
     onChange({ ...block, data: SAMPLE_DATA })
-    setConvertHint('샘플 데이터 적용됨')
+    setConvertHint(t('editor.chart.sampleApplied'))
   }
 
   // Convert raw CSV text → chart data. Pulled out of the paste handler so
@@ -131,7 +134,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
   const applyCsvText = (text: string): boolean => {
     const parsed = parseCsv(text)
     if (!parsed) {
-      setConvertHint('CSV 형식이 아닙니다 — 첫 줄=헤더, 첫 칸=라벨로 입력하세요')
+      setConvertHint(t('editor.chart.notCsv'))
       return false
     }
     const labels = parsed.rows.map((r) => r[0] ?? '')
@@ -144,7 +147,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
       }),
     }))
     onChange({ ...block, data: { labels, series } })
-    setConvertHint(`CSV 적용됨 — ${parsed.rows.length}행 × ${seriesCount}계열`)
+    setConvertHint(t('editor.chart.csvApplied', { rows: parsed.rows.length, cols: seriesCount }))
     return true
   }
 
@@ -156,7 +159,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
   const [csvDraft, setCsvDraft] = useState('')
   const onApplyClick = () => {
     if (!csvDraft.trim()) {
-      setConvertHint('붙여넣을 텍스트가 비어 있습니다')
+      setConvertHint(t('editor.chart.csvEmpty'))
       return
     }
     applyCsvText(csvDraft)
@@ -171,25 +174,27 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
     <div className="space-y-3 rounded border border-smsg-100 bg-smsg-100/40 p-3">
       <div className="grid grid-cols-2 gap-2 text-xs">
         <label className="block">
-          <span className="mb-1 block text-gray-600">제목</span>
+          <span className="mb-1 block text-gray-600">{t('editor.chart.title')}</span>
           <input
             value={block.title ?? ''}
             onChange={(e) => onChange({ ...block, title: e.target.value })}
+            aria-label={t('editor.chart.title')}
             className="w-full rounded border border-gray-300 px-2 py-1"
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-gray-600">차트 종류</span>
+          <span className="mb-1 block text-gray-600">{t('editor.chart.type')}</span>
           <select
             value={block.chartType}
             onChange={(e) =>
               onChange({ ...block, chartType: e.target.value as ChartBlock['chartType'] })
             }
+            aria-label={t('editor.chart.type')}
             className="w-full rounded border border-gray-300 px-2 py-1"
           >
-            {CHART_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
+            {CHART_TYPES.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
               </option>
             ))}
           </select>
@@ -197,7 +202,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
       </div>
 
       {/* Type previews — quick visual switcher. */}
-      <div role="radiogroup" aria-label="차트 종류 미리보기" className="flex flex-wrap gap-1">
+      <div role="radiogroup" aria-label={t('editor.chart.typePreviewLabel')} className="flex flex-wrap gap-1">
         {CHART_TYPE_META.map((meta) => {
           const isOn = block.chartType === meta.type
           return (
@@ -214,8 +219,8 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
                   : 'border-gray-200 bg-white text-gray-600 hover:border-smsg-300'
               }`}
             >
-              <span aria-hidden className="text-[14px] leading-none">{meta.thumb}</span>
-              <span>{meta.label}</span>
+              <span aria-hidden="true" className="text-[14px] leading-none">{meta.thumb}</span>
+              <span>{t(meta.labelKey)}</span>
             </button>
           )
         })}
@@ -261,11 +266,11 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
                 <td className="px-2 py-1">
                   <button
                     type="button"
-                    aria-label={`row ${lIdx + 1} remove`}
+                    aria-label={t('editor.chart.removeRow', { n: lIdx + 1 })}
                     onClick={() => removeRow(lIdx)}
                     className="text-gray-400 hover:text-red-600"
                   >
-                    ×
+                    <span aria-hidden="true">×</span>
                   </button>
                 </td>
               </tr>
@@ -280,41 +285,41 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
           onClick={addRow}
           className="rounded border border-gray-300 bg-white px-2 py-1 hover:bg-smsg-100"
         >
-          + 행
+          {t('editor.chart.addRow')}
         </button>
         <button
           type="button"
           onClick={addSeries}
           className="rounded border border-gray-300 bg-white px-2 py-1 hover:bg-smsg-100"
         >
-          + 시리즈
+          {t('editor.chart.addSeries')}
         </button>
         <button
           type="button"
           onClick={convertFromTable}
           className="rounded border border-smsg-500 bg-white px-2 py-1 text-smsg-700 hover:bg-smsg-100"
         >
-          표 → 차트
+          {t('editor.chart.fromTable')}
         </button>
         <button
           type="button"
           onClick={seedSample}
           className="rounded border border-gray-300 bg-white px-2 py-1 hover:bg-smsg-100"
         >
-          샘플 데이터 사용
+          {t('editor.chart.useSample')}
         </button>
         {convertHint && (
-          <span className="self-center text-[11px] text-gray-500">{convertHint}</span>
+          <span role="status" aria-live="polite" className="self-center text-[11px] text-gray-500">
+            {convertHint}
+          </span>
         )}
       </div>
 
       <details className="rounded border border-gray-200 bg-white p-2 text-xs" open>
-        <summary className="cursor-pointer text-gray-600">CSV 붙여넣기 / 직접 입력</summary>
+        <summary className="cursor-pointer text-gray-600">{t('editor.chart.csvSection')}</summary>
         <div className="mt-2 space-y-2">
           <p className="rounded bg-gray-50 p-2 text-[11px] leading-relaxed text-gray-600">
-            <strong className="font-semibold text-gray-800">형식:</strong>{' '}
-            첫 줄 = 헤더(첫 칸은 라벨, 나머지는 계열명), 다음 줄부터 = 데이터.
-            엑셀 표를 그대로 복사 → 붙여넣기도 됩니다 (탭 구분자 자동 인식).
+            {t('editor.chart.csvHint')}
             <br />
             <span className="font-mono text-[10px] text-gray-500">
               월,매출,비용{'\n'}1월,120,80{'\n'}2월,150,90
@@ -336,7 +341,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
               data-action="apply-csv"
               className="rounded bg-smsg-700 px-3 py-1 text-[11px] font-semibold text-white hover:bg-smsg-900 disabled:opacity-50"
             >
-              차트에 적용
+              {t('editor.chart.apply')}
             </button>
             <button
               type="button"
@@ -344,7 +349,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
               data-action="load-csv-example"
               className="rounded border border-gray-300 px-3 py-1 text-[11px] text-gray-700 hover:border-smsg-500 hover:text-smsg-900"
             >
-              예시 채우기
+              {t('editor.chart.loadExample')}
             </button>
             <button
               type="button"
@@ -354,7 +359,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
               }}
               className="rounded border border-gray-300 px-3 py-1 text-[11px] text-gray-500 hover:border-red-300 hover:text-red-600"
             >
-              지우기
+              {t('editor.chart.clear')}
             </button>
           </div>
         </div>

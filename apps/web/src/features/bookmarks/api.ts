@@ -96,6 +96,26 @@ export async function postRead(
   return unwrap(res)
 }
 
+export interface AnchorSampleInput {
+  section_id?: string | null
+  block_id?: string | null
+}
+
+export async function postReadAnchor(
+  document_id: string,
+  body: AnchorSampleInput,
+): Promise<{ recorded: boolean }> {
+  const res = await apiClient.post<ApiEnvelope<{ recorded: boolean }>>(
+    '/reads/anchor',
+    {
+      document_id,
+      section_id: body.section_id ?? null,
+      block_id: body.block_id ?? null,
+    },
+  )
+  return unwrap(res)
+}
+
 export async function listRecentReads(limit = 50): Promise<RecentRead[]> {
   const res = await apiClient.get<ApiEnvelope<{ items: RecentRead[] }>>(
     '/reads/recent',

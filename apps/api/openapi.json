@@ -15,6 +15,44 @@
         "title": "AddReviewersIn",
         "type": "object"
       },
+      "AnchorIn": {
+        "properties": {
+          "block_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Id"
+          },
+          "document_id": {
+            "minLength": 1,
+            "title": "Document Id",
+            "type": "string"
+          },
+          "section_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Id"
+          }
+        },
+        "required": [
+          "document_id"
+        ],
+        "title": "AnchorIn",
+        "type": "object"
+      },
       "Body_import_docx_api_v1_imports_docx_post": {
         "properties": {
           "file": {
@@ -568,6 +606,37 @@
         "title": "PartUpdate",
         "type": "object"
       },
+      "PatchSubscriptionIn": {
+        "properties": {
+          "digest_cadence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Digest Cadence"
+          },
+          "events": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
+          }
+        },
+        "title": "PatchSubscriptionIn",
+        "type": "object"
+      },
       "PolishBody": {
         "properties": {
           "text": {
@@ -624,6 +693,17 @@
           }
         },
         "title": "ResolveIn",
+        "type": "object"
+      },
+      "ResponseIn": {
+        "properties": {
+          "answers": {
+            "additionalProperties": true,
+            "title": "Answers",
+            "type": "object"
+          }
+        },
+        "title": "ResponseIn",
         "type": "object"
       },
       "RunNowIn": {
@@ -1043,6 +1123,37 @@
           }
         },
         "title": "SnippetPatchIn",
+        "type": "object"
+      },
+      "SubscribeIn": {
+        "properties": {
+          "digest_cadence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Digest Cadence"
+          },
+          "events": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
+          }
+        },
+        "title": "SubscribeIn",
         "type": "object"
       },
       "SummarizeBody": {
@@ -2165,6 +2276,110 @@
         ]
       }
     },
+    "/api/v1/analytics/documents/{slug}": {
+      "get": {
+        "operationId": "document_analytics_api_v1_analytics_documents__slug__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Document Analytics Api V1 Analytics Documents  Slug  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서별 상세 분석 (editor+ or doc owner)",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/v1/analytics/inactive-docs": {
+      "get": {
+        "operationId": "inactive_docs_api_v1_analytics_inactive_docs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since_days",
+            "required": false,
+            "schema": {
+              "default": 90,
+              "maximum": 365,
+              "minimum": 7,
+              "title": "Since Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Inactive Docs Api V1 Analytics Inactive Docs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "장기 미열람/미수정 문서 (admin)",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
     "/api/v1/analytics/overview": {
       "get": {
         "operationId": "overview_api_v1_analytics_overview_get",
@@ -2183,6 +2398,65 @@
           }
         },
         "summary": "대시보드 오버뷰",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/v1/analytics/top-docs": {
+      "get": {
+        "operationId": "top_docs_api_v1_analytics_top_docs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Top Docs Api V1 Analytics Top Docs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "조직 단위 인기 문서 (reader+)",
         "tags": [
           "analytics"
         ]
@@ -4860,6 +5134,145 @@
         ]
       }
     },
+    "/api/v1/documents/{slug}/subscribe": {
+      "delete": {
+        "operationId": "unsubscribe_api_v1_documents__slug__subscribe_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 구독 해제 (본인)",
+        "tags": [
+          "subscriptions"
+        ]
+      },
+      "post": {
+        "operationId": "subscribe_api_v1_documents__slug__subscribe_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscribeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Subscribe Api V1 Documents  Slug  Subscribe Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 구독 (reader+) — 이미 구독 중이면 events/cadence 업데이트",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/api/v1/documents/{slug}/subscribers": {
+      "get": {
+        "operationId": "list_subscribers_api_v1_documents__slug__subscribers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Subscribers Api V1 Documents  Slug  Subscribers Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "구독자 목록 (editor+)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
     "/api/v1/documents/{slug}/transition": {
       "post": {
         "operationId": "transition_status_api_v1_documents__slug__transition_post",
@@ -5556,6 +5969,198 @@
         ]
       }
     },
+    "/api/v1/forms/{slug}/{block_id}/aggregate": {
+      "get": {
+        "operationId": "aggregate_api_v1_forms__slug___block_id__aggregate_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "block_id",
+            "required": true,
+            "schema": {
+              "title": "Block Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Aggregate Api V1 Forms  Slug   Block Id  Aggregate Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "폼 응답 집계 (editor+)",
+        "tags": [
+          "forms"
+        ]
+      }
+    },
+    "/api/v1/forms/{slug}/{block_id}/responses": {
+      "get": {
+        "operationId": "list_responses_api_v1_forms__slug___block_id__responses_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "block_id",
+            "required": true,
+            "schema": {
+              "title": "Block Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Responses Api V1 Forms  Slug   Block Id  Responses Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "폼 응답 목록 (editor+, 페이지네이션)",
+        "tags": [
+          "forms"
+        ]
+      },
+      "post": {
+        "operationId": "submit_response_api_v1_forms__slug___block_id__responses_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "block_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Block Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResponseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Submit Response Api V1 Forms  Slug   Block Id  Responses Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "폼 응답 제출 (reader+)",
+        "tags": [
+          "forms"
+        ]
+      }
+    },
     "/api/v1/glossary": {
       "get": {
         "operationId": "list_glossary_api_v1_glossary_get",
@@ -6147,6 +6752,29 @@
         "summary": "내가 리뷰어로 지정된 문서 (pending + changes_requested)",
         "tags": [
           "approvals"
+        ]
+      }
+    },
+    "/api/v1/me/subscriptions": {
+      "get": {
+        "operationId": "list_my_subscriptions_api_v1_me_subscriptions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List My Subscriptions Api V1 Me Subscriptions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "내가 팔로우 중인 문서",
+        "tags": [
+          "subscriptions"
         ]
       }
     },
@@ -6825,6 +7453,50 @@
           }
         },
         "summary": "열람 기록 (reader+, accumulate read_seconds)",
+        "tags": [
+          "bookmarks"
+        ]
+      }
+    },
+    "/api/v1/reads/anchor": {
+      "post": {
+        "description": "useReadingTimeTracker 가 anchor 변경시마다 호출. section/block 둘 다\nnull 이면 의미가 없으니 silent no-op (200 으로 응답).",
+        "operationId": "post_read_anchor_api_v1_reads_anchor_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnchorIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Read Anchor Api V1 Reads Anchor Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "anchor 샘플 기록 (cycle 0016)",
         "tags": [
           "bookmarks"
         ]
@@ -7896,6 +8568,61 @@
         "summary": "사용 마커 — use_count 만 ++ (reader+)",
         "tags": [
           "snippets"
+        ]
+      }
+    },
+    "/api/v1/subscriptions/{sid}": {
+      "patch": {
+        "operationId": "patch_subscription_api_v1_subscriptions__sid__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Sid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSubscriptionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Subscription Api V1 Subscriptions  Sid  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "구독 설정 수정 (본인)",
+        "tags": [
+          "subscriptions"
         ]
       }
     },
@@ -9057,6 +9784,10 @@
     {
       "description": "예약 백업 + 즉시 백업. 일정(daily/weekly/monthly) 단위로 모든 문서를 선택한 포맷(json/html/md/docx/pptx) 으로 렌더해 zip 으로 묶어 MinIO 에 적재. asyncio in-process 스케줄러 — 단일 replica 한정.",
       "name": "backups"
+    },
+    {
+      "description": "문서 팔로우 + 다이제스트. 구독 시 doc_edited / comment_added / review_decided / doc_published 알림을 받는다. cadence=instant 면 즉시 알림, daily/weekly 이면 pending_digest_items 에 적재해 in-process digest_runner 가 묶어 한 번에 발송.",
+      "name": "subscriptions"
     }
   ]
 }

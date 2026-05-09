@@ -29,6 +29,26 @@ vi.mock('@/features/analytics/api', () => ({
     Promise.resolve([
       { target: 'document:cae', slug: 'cae', title: 'CAE Intro', count: 7 },
     ]),
+  getTopDocs: () =>
+    Promise.resolve([
+      {
+        slug: 'cae',
+        title: 'CAE Intro',
+        views: 42,
+        unique_readers: 7,
+        avg_read_seconds: 60,
+      },
+    ]),
+  getInactiveDocs: () =>
+    Promise.resolve([
+      {
+        slug: 'old',
+        title: 'Old Doc',
+        last_edited: '2026-01-01T00:00:00Z',
+        last_read: null,
+        owner_name: 'Alice',
+      },
+    ]),
 }))
 
 const authState = {
@@ -90,5 +110,20 @@ describe('<AnalyticsPage />', () => {
     authState.current = { user: null }
     const html = render(<AnalyticsPage />)
     expect(html).not.toContain('사용량 분석')
+  })
+
+  it('renders tab navigation including the admin-only inactive tab', () => {
+    const html = render(<AnalyticsPage />)
+    expect(html).toContain('analytics-tabs')
+    expect(html).toContain('인기 문서')
+    expect(html).toContain('비활성 문서')
+    expect(html).toContain('활동 추이')
+  })
+
+  it('hides the inactive-docs tab for non-admin users', () => {
+    authState.current = { user: { id: 'u2', email: 'r@b', role: 'reader' } }
+    const html = render(<AnalyticsPage />)
+    expect(html).toContain('인기 문서')
+    expect(html).not.toContain('비활성 문서')
   })
 })

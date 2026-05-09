@@ -13,6 +13,7 @@ import { AdminOrgsPage } from './AdminOrgs'
 import { BackupAdminPage } from './BackupAdmin'
 import { TagManagerPage } from './TagManager'
 import { WebhooksSettingsPage } from './WebhooksSettings'
+import { useT } from '@/lib/i18n'
 import {
   type AdminAuditEntry,
   type AdminHealth,
@@ -34,15 +35,16 @@ type TabKey =
   | 'webhooks'
   | 'backups'
 
-const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'users', label: '사용자' },
-  { key: 'audit', label: '감사 로그' },
-  { key: 'health', label: '시스템 상태' },
-  { key: 'maintenance', label: '유지보수' },
-  { key: 'orgs', label: '조직' },
-  { key: 'tags', label: '태그' },
-  { key: 'webhooks', label: '웹훅' },
-  { key: 'backups', label: '백업' },
+/** Tabs reference an i18n key; the visible label is resolved at render. */
+const TABS: Array<{ key: TabKey; labelKey: string }> = [
+  { key: 'users', labelKey: 'page.adminDashboard.tab.users' },
+  { key: 'audit', labelKey: 'page.adminDashboard.tab.audit' },
+  { key: 'health', labelKey: 'page.adminDashboard.tab.health' },
+  { key: 'maintenance', labelKey: 'page.adminDashboard.tab.maintenance' },
+  { key: 'orgs', labelKey: 'page.adminDashboard.tab.orgs' },
+  { key: 'tags', labelKey: 'page.adminDashboard.tab.tags' },
+  { key: 'webhooks', labelKey: 'page.adminDashboard.tab.webhooks' },
+  { key: 'backups', labelKey: 'page.adminDashboard.tab.backups' },
 ]
 
 const ROLE_OPTIONS = [
@@ -62,6 +64,7 @@ const ROLE_OPTIONS = [
  *   - 조직: 기존 `/admin/orgs` 페이지를 탭으로 임베드
  */
 export function AdminDashboardPage() {
+  const t = useT()
   const user = useAuthStore((s) => s.user)
   const role = user?.role ?? ''
   const [tab, setTab] = useState<TabKey>('users')
@@ -72,36 +75,36 @@ export function AdminDashboardPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-8" data-testid="admin-dashboard-page">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold text-smsg-900">관리자 대시보드</h1>
+        <h1 className="text-2xl font-bold text-smsg-900">{t('page.adminDashboard.title')}</h1>
         <p className="mt-1 text-sm text-gray-600">
-          유저/감사/헬스/유지보수 — 운영 전용. 모든 변경은 audit_logs 에 남습니다.
+          {t('page.adminDashboard.subtitle')}
         </p>
       </header>
 
       <div className="mb-6" data-testid="admin-activity-widget-slot">
-        <ActivityWidget title="최근 활동 — 시스템 전체" />
+        <ActivityWidget title={t('page.adminDashboard.activityTitle')} />
       </div>
 
       <nav
         role="tablist"
-        aria-label="관리자 탭"
+        aria-label={t('page.adminDashboard.tabsAria')}
         className="mb-6 flex flex-wrap gap-1 border-b border-gray-200"
       >
-        {TABS.map((t) => (
+        {TABS.map((tabDef) => (
           <button
-            key={t.key}
+            key={tabDef.key}
             role="tab"
-            aria-selected={tab === t.key}
-            data-testid={`admin-tab-${t.key}`}
-            onClick={() => setTab(t.key)}
+            aria-selected={tab === tabDef.key}
+            data-testid={`admin-tab-${tabDef.key}`}
+            onClick={() => setTab(tabDef.key)}
             className={
               'border-b-2 px-3 py-2 text-sm transition-colors ' +
-              (tab === t.key
+              (tab === tabDef.key
                 ? 'border-smsg-700 text-smsg-900 font-semibold'
                 : 'border-transparent text-gray-600 hover:text-smsg-900')
             }
           >
-            {t.label}
+            {t(tabDef.labelKey)}
           </button>
         ))}
       </nav>
@@ -136,6 +139,7 @@ export function AdminDashboardPage() {
 
 // ── Users ───────────────────────────────────────────────────────────────
 function UsersTab() {
+  const t = useT()
   const qc = useQueryClient()
   const [q, setQ] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
@@ -154,35 +158,43 @@ function UsersTab() {
     async (id: string, body: Parameters<typeof patchAdminUser>[1]) => {
       try {
         await patchAdminUser(id, body)
-        toast.success('변경 저장됨')
+        toast.success(t('page.adminDashboard.users.saved'))
         await qc.invalidateQueries({ queryKey: ['admin', 'users'] })
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : '저장 실패')
+        toast.error(err instanceof Error ? err.message : t('page.adminDashboard.users.saveFail'))
       }
     },
-    [qc],
+    [qc, t],
   )
 
   return (
     <section data-testid="admin-users-tab" className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label className="block text-xs text-gray-600">검색</label>
+          <label className="block text-xs text-gray-600" htmlFor="admin-users-q">
+            {t('page.adminDashboard.users.search')}
+          </label>
           <Input
+            id="admin-users-q"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="이름/이메일"
+            placeholder={t('page.adminDashboard.users.searchPlaceholder')}
             data-testid="admin-users-q"
+            aria-label={t('page.adminDashboard.users.search')}
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-600">role</label>
+          <label className="block text-xs text-gray-600" htmlFor="admin-users-role">
+            {t('page.adminDashboard.users.role')}
+          </label>
           <Select
+            id="admin-users-role"
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
             data-testid="admin-users-role"
+            aria-label={t('page.adminDashboard.users.role')}
           >
-            <option value="">전체</option>
+            <option value="">{t('page.adminDashboard.users.allRoles')}</option>
             {ROLE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -192,11 +204,15 @@ function UsersTab() {
         </div>
       </div>
 
-      {isPending && <p className="text-sm text-gray-500">불러오는 중…</p>}
+      {isPending && (
+        <p role="status" aria-live="polite" className="text-sm text-gray-500">
+          {t('common.loading')}
+        </p>
+      )}
       {isError && (
         <ErrorState
-          title="유저를 불러올 수 없습니다"
-          description={error instanceof Error ? error.message : '오류'}
+          title={t('page.adminDashboard.users.fetchFail')}
+          description={error instanceof Error ? error.message : t('common.error')}
           onRetry={() => void refetch()}
         />
       )}
@@ -207,10 +223,10 @@ function UsersTab() {
             <table className="w-full text-sm" data-testid="admin-users-table">
               <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-3 py-2">이름 / 이메일</th>
-                  <th className="px-3 py-2">role</th>
-                  <th className="px-3 py-2">활성</th>
-                  <th className="px-3 py-2">마지막 로그인</th>
+                  <th className="px-3 py-2">{t('page.adminDashboard.users.colName')}</th>
+                  <th className="px-3 py-2">{t('page.adminDashboard.users.colRole')}</th>
+                  <th className="px-3 py-2">{t('page.adminDashboard.users.colActive')}</th>
+                  <th className="px-3 py-2">{t('page.adminDashboard.users.colLastLogin')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -220,7 +236,7 @@ function UsersTab() {
                 {data.length === 0 && (
                   <tr>
                     <td className="px-3 py-6 text-center text-gray-500" colSpan={4}>
-                      유저가 없습니다
+                      {t('page.adminDashboard.users.empty')}
                     </td>
                   </tr>
                 )}
@@ -240,6 +256,7 @@ function UserRow({
   user: AdminUser
   onPatch: (id: string, body: Parameters<typeof patchAdminUser>[1]) => void
 }) {
+  const t = useT()
   const [role, setRole] = useState(user.role)
   const [active, setActive] = useState(user.is_active)
   const dirty = role !== user.role || active !== user.is_active
@@ -254,6 +271,7 @@ function UserRow({
           value={role}
           onChange={(e) => setRole(e.target.value as AdminUser['role'])}
           data-testid={`admin-user-role-${user.email}`}
+          aria-label={t('page.adminDashboard.users.role')}
         >
           {ROLE_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -269,8 +287,13 @@ function UserRow({
             checked={active}
             onChange={(e) => setActive(e.target.checked)}
             data-testid={`admin-user-active-${user.email}`}
+            aria-label={t('page.adminDashboard.users.colActive')}
           />
-          <span className="text-xs text-gray-600">{active ? '활성' : '비활성'}</span>
+          <span className="text-xs text-gray-600">
+            {active
+              ? t('page.adminDashboard.users.active')
+              : t('page.adminDashboard.users.inactive')}
+          </span>
         </label>
       </td>
       <td className="px-3 py-2 text-xs text-gray-500">
@@ -285,7 +308,7 @@ function UserRow({
             data-testid={`admin-user-save-${user.email}`}
             onClick={() => onPatch(user.id, { role, is_active: active })}
           >
-            저장
+            {t('page.adminDashboard.users.save')}
           </Button>
         </div>
       </td>
@@ -295,6 +318,7 @@ function UserRow({
 
 // ── Audit logs ──────────────────────────────────────────────────────────
 function AuditTab() {
+  const t = useT()
   const [action, setAction] = useState('')
   const [user, setUser] = useState('')
   const [since, setSince] = useState('')
@@ -318,30 +342,42 @@ function AuditTab() {
     <section data-testid="admin-audit-tab" className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label className="block text-xs text-gray-600">action</label>
+          <label className="block text-xs text-gray-600" htmlFor="admin-audit-action">
+            {t('page.adminDashboard.audit.action')}
+          </label>
           <Input
+            id="admin-audit-action"
             value={action}
             onChange={(e) => setAction(e.target.value)}
             placeholder="document.create"
             data-testid="admin-audit-action"
+            aria-label={t('page.adminDashboard.audit.action')}
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-600">user</label>
+          <label className="block text-xs text-gray-600" htmlFor="admin-audit-user">
+            {t('page.adminDashboard.audit.user')}
+          </label>
           <Input
+            id="admin-audit-user"
             value={user}
             onChange={(e) => setUser(e.target.value)}
-            placeholder="이메일/UUID"
+            placeholder={t('page.adminDashboard.audit.userPlaceholder')}
             data-testid="admin-audit-user"
+            aria-label={t('page.adminDashboard.audit.user')}
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-600">since (ISO)</label>
+          <label className="block text-xs text-gray-600" htmlFor="admin-audit-since">
+            {t('page.adminDashboard.audit.since')}
+          </label>
           <Input
+            id="admin-audit-since"
             value={since}
             onChange={(e) => setSince(e.target.value)}
             placeholder="2026-05-01T00:00:00Z"
             data-testid="admin-audit-since"
+            aria-label={t('page.adminDashboard.audit.since')}
           />
         </div>
         <Button
@@ -350,15 +386,19 @@ function AuditTab() {
           onClick={() => void refetch()}
           data-testid="admin-audit-refresh"
         >
-          새로고침
+          {t('common.refresh')}
         </Button>
       </div>
 
-      {isPending && <p className="text-sm text-gray-500">불러오는 중…</p>}
+      {isPending && (
+        <p role="status" aria-live="polite" className="text-sm text-gray-500">
+          {t('common.loading')}
+        </p>
+      )}
       {isError && (
         <ErrorState
-          title="감사 로그 불러오기 실패"
-          description={error instanceof Error ? error.message : '오류'}
+          title={t('page.adminDashboard.audit.fetchFail')}
+          description={error instanceof Error ? error.message : t('common.error')}
           onRetry={() => void refetch()}
         />
       )}
@@ -373,7 +413,7 @@ function AuditTab() {
             ))}
             {data.length === 0 && (
               <li className="px-3 py-6 text-center text-gray-500">
-                일치하는 항목 없음
+                {t('page.adminDashboard.audit.empty')}
               </li>
             )}
           </ul>
@@ -402,6 +442,7 @@ function AuditRow({ row }: { row: AdminAuditEntry }) {
 
 // ── Health ──────────────────────────────────────────────────────────────
 function HealthTab() {
+  const t = useT()
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['admin', 'health'],
     queryFn: getAdminHealth,
@@ -411,21 +452,25 @@ function HealthTab() {
   return (
     <section data-testid="admin-health-tab" className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-smsg-900">시스템 상태</h2>
+        <h2 className="text-lg font-semibold text-smsg-900">{t('page.adminDashboard.health.title')}</h2>
         <Button
           size="sm"
           variant="secondary"
           onClick={() => void refetch()}
           data-testid="admin-health-refresh"
         >
-          새로고침
+          {t('common.refresh')}
         </Button>
       </div>
-      {isPending && <p className="text-sm text-gray-500">불러오는 중…</p>}
+      {isPending && (
+        <p role="status" aria-live="polite" className="text-sm text-gray-500">
+          {t('common.loading')}
+        </p>
+      )}
       {isError && (
         <ErrorState
-          title="헬스 정보 실패"
-          description={error instanceof Error ? error.message : '오류'}
+          title={t('page.adminDashboard.health.fetchFail')}
+          description={error instanceof Error ? error.message : t('common.error')}
           onRetry={() => void refetch()}
         />
       )}
@@ -435,15 +480,16 @@ function HealthTab() {
 }
 
 function HealthGrid({ h }: { h: AdminHealth }) {
+  const t = useT()
   const items: Array<{ label: string; value: number }> = [
-    { label: '활성 문서', value: h.docs_active },
-    { label: '아카이브 문서', value: h.docs_archived },
-    { label: '활성 유저', value: h.users_active },
-    { label: '비활성 유저', value: h.users_inactive },
-    { label: '24h 감사 로그', value: h.audit_24h },
-    { label: '이미지', value: h.images },
-    { label: 'pending 업로드', value: h.pending_uploads },
-    { label: 'Meili 인덱스', value: h.meilisearch_docs },
+    { label: t('page.adminDashboard.health.docsActive'), value: h.docs_active },
+    { label: t('page.adminDashboard.health.docsArchived'), value: h.docs_archived },
+    { label: t('page.adminDashboard.health.usersActive'), value: h.users_active },
+    { label: t('page.adminDashboard.health.usersInactive'), value: h.users_inactive },
+    { label: t('page.adminDashboard.health.audit24h'), value: h.audit_24h },
+    { label: t('page.adminDashboard.health.images'), value: h.images },
+    { label: t('page.adminDashboard.health.pendingUploads'), value: h.pending_uploads },
+    { label: t('page.adminDashboard.health.meiliDocs'), value: h.meilisearch_docs },
   ]
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="admin-health-grid">
@@ -461,6 +507,7 @@ function HealthGrid({ h }: { h: AdminHealth }) {
 
 // ── Maintenance ─────────────────────────────────────────────────────────
 function MaintenanceTab() {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   const [last, setLast] = useState<{
     at: string
@@ -478,22 +525,26 @@ function MaintenanceTab() {
         compacted: res.compacted_versions,
       })
       toast.success(
-        `정리 완료 — pending ${res.purged_pending}, versions ${res.compacted_versions}`,
+        t('page.adminDashboard.maintenance.success', {
+          p: res.purged_pending,
+          v: res.compacted_versions,
+        }),
       )
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '유지보수 실패')
+      toast.error(err instanceof Error ? err.message : t('page.adminDashboard.maintenance.fail'))
     } finally {
       setBusy(false)
     }
-  }, [])
+  }, [t])
 
   return (
     <section data-testid="admin-maintenance-tab" className="space-y-4">
       <Card padded="lg">
-        <h2 className="text-lg font-semibold text-smsg-900">유지보수</h2>
+        <h2 className="text-lg font-semibold text-smsg-900">
+          {t('page.adminDashboard.maintenance.title')}
+        </h2>
         <p className="mt-1 text-sm text-gray-600">
-          만료된 임시 업로드를 정리하고, 오래된 버전을 보존 정책에 따라 압축합니다.
-          한 번 클릭으로 두 sweep 가 모두 실행됩니다.
+          {t('page.adminDashboard.maintenance.description')}
         </p>
         <div className="mt-4">
           <Button
@@ -503,13 +554,23 @@ function MaintenanceTab() {
             disabled={busy}
             data-testid="admin-maintenance-run"
           >
-            {busy ? '실행 중…' : '유지보수 실행'}
+            {busy
+              ? t('page.adminDashboard.maintenance.running')
+              : t('page.adminDashboard.maintenance.run')}
           </Button>
         </div>
         {last && (
-          <p className="mt-4 text-xs text-gray-500" data-testid="admin-maintenance-last">
-            마지막 실행: {new Date(last.at).toLocaleString()} — pending {last.purged}, versions{' '}
-            {last.compacted}
+          <p
+            className="mt-4 text-xs text-gray-500"
+            data-testid="admin-maintenance-last"
+            role="status"
+            aria-live="polite"
+          >
+            {t('page.adminDashboard.maintenance.last', {
+              at: new Date(last.at).toLocaleString(),
+              p: last.purged,
+              v: last.compacted,
+            })}
           </p>
         )}
       </Card>

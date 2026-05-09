@@ -4,6 +4,7 @@ import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { useUploadFile } from '@/features/upload/hooks/useUploadFile'
 import { fileDownloadUrl } from '@/features/upload/uploadFile'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   slug: Slug
@@ -31,6 +32,7 @@ function formatSize(size: number | undefined): string {
  * mime emoji + filename + size + "다운로드" link → `/files/:id/download`.
  */
 export function FileBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
@@ -78,14 +80,14 @@ export function FileBlockEditor({ slug, block }: Props) {
           mime: next.mime,
         },
         etag,
-        '파일 편집',
+        t('editor.file.changeLog'),
       )
       apply(result.document, result.etag)
       setError(null)
     } catch (err) {
       if (isPreconditionFailed(err)) {
         setConflict(null)
-        setError('충돌 — 새로고침 필요')
+        setError(t('editor.common.conflict'))
       } else {
         setError((err as Error).message)
       }
@@ -149,8 +151,8 @@ export function FileBlockEditor({ slug, block }: Props) {
             type="text"
             value={local.name ?? ''}
             onChange={(e) => schedule({ ...local, name: e.target.value })}
-            placeholder="파일명"
-            aria-label="파일명"
+            placeholder={t('editor.file.namePlaceholder')}
+            aria-label={t('editor.file.nameLabel')}
             className="w-full rounded border border-transparent px-1 py-0.5 font-medium text-smsg-900 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none"
           />
           <p className="text-[11px] text-gray-500">
@@ -164,9 +166,9 @@ export function FileBlockEditor({ slug, block }: Props) {
               href={downloadHref}
               className="rounded border border-smsg-300 px-2 py-1 text-xs text-smsg-700 hover:bg-smsg-100"
               download={local.name}
-              aria-label="다운로드"
+              aria-label={t('editor.file.download')}
             >
-              다운로드
+              {t('editor.file.download')}
             </a>
           )}
           <button
@@ -175,7 +177,7 @@ export function FileBlockEditor({ slug, block }: Props) {
             disabled={busy}
             className="rounded border border-smsg-300 px-2 py-1 text-xs text-smsg-700 hover:bg-smsg-100 disabled:opacity-50"
           >
-            {hasFile ? '교체' : '업로드'}
+            {hasFile ? t('editor.file.replace') : t('editor.file.upload')}
           </button>
         </div>
       </div>
@@ -186,7 +188,7 @@ export function FileBlockEditor({ slug, block }: Props) {
           aria-valuenow={pct}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label="파일 업로드 진행률"
+          aria-label={t('editor.file.uploadProgress')}
           className="h-1.5 w-full overflow-hidden rounded bg-gray-200"
         >
           <div
@@ -201,18 +203,22 @@ export function FileBlockEditor({ slug, block }: Props) {
         type="file"
         onChange={onPickFile}
         className="hidden"
-        aria-label="파일 선택"
+        aria-label={t('editor.file.pickerLabel')}
       />
 
       {error && (
-        <div className="flex items-center justify-between rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700">
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center justify-between rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700"
+        >
           <span>{error}</span>
           <button
             type="button"
             onClick={onRetry}
             className="ml-2 rounded border border-red-300 bg-white px-2 py-0.5 text-red-700 hover:bg-red-100"
           >
-            다시 시도
+            {t('editor.file.retry')}
           </button>
         </div>
       )}

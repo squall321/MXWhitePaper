@@ -25,6 +25,7 @@ import { Input, Field } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { toast } from '@/components/ui/Toast'
 import { ErrorState } from '@/components/ui/ErrorState'
+import { useT } from '@/lib/i18n'
 
 type Level = 'division' | 'team' | 'group' | 'part'
 
@@ -51,6 +52,7 @@ interface DeleteTarget {
 }
 
 export function AdminOrgsPage() {
+  const t = useT()
   const user = useAuthStore((s) => s.user)
   const role = user?.role ?? ''
   const { data, isPending, isError, error, refetch } = useOrgTree()
@@ -68,14 +70,18 @@ export function AdminOrgsPage() {
   if (role !== 'admin') return <Navigate to="/" replace />
 
   if (isPending) {
-    return <p className="px-6 py-10 text-sm text-gray-500">불러오는 중…</p>
+    return (
+      <p role="status" aria-live="polite" className="px-6 py-10 text-sm text-gray-500">
+        {t('common.loading')}
+      </p>
+    )
   }
   if (isError) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-10">
         <ErrorState
-          title="조직 트리를 불러올 수 없습니다"
-          description={error instanceof Error ? error.message : '알 수 없는 오류'}
+          title={t('page.adminOrgs.fetchFail')}
+          description={error instanceof Error ? error.message : t('page.adminOrgs.fetchFailUnknown')}
           onRetry={() => void refetch()}
         />
       </div>
@@ -87,37 +93,41 @@ export function AdminOrgsPage() {
     <div className="mx-auto max-w-5xl px-6 py-8" data-testid="admin-orgs-page">
       <header className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-smsg-900">조직 관리</h1>
+          <h1 className="text-2xl font-bold text-smsg-900">{t('page.adminOrgs.title')}</h1>
           <p className="mt-1 text-sm text-gray-600">
-            사업부 → 팀 → 그룹 → 파트 4단계 조직 트리를 관리합니다.
+            {t('page.adminOrgs.subtitle')}
           </p>
         </div>
         <Button
           variant="primary"
           size="md"
           onClick={() =>
-            setAddTarget({ level: 'division', parent: {}, parentLabel: '최상위' })
+            setAddTarget({
+              level: 'division',
+              parent: {},
+              parentLabel: t('page.adminOrgs.parentTopLevel'),
+            })
           }
         >
-          + 사업부 추가
+          {t('page.adminOrgs.addDivision')}
         </Button>
       </header>
 
       {tree.length === 0 ? (
         <Card>
           <p className="py-10 text-center text-sm text-gray-500">
-            조직이 없습니다.{' '}
+            {t('page.adminOrgs.empty')}{' '}
             <button
               className="text-smsg-700 underline"
               onClick={() =>
                 setAddTarget({
                   level: 'division',
                   parent: {},
-                  parentLabel: '최상위',
+                  parentLabel: t('page.adminOrgs.parentTopLevel'),
                 })
               }
             >
-              + 사업부 추가
+              {t('page.adminOrgs.addDivision')}
             </button>
           </p>
         </Card>
@@ -142,7 +152,7 @@ export function AdminOrgsPage() {
           onSuccess={() => {
             setAddTarget(null)
             refresh()
-            toast.success('추가되었습니다.')
+            toast.success(t('page.adminOrgs.added'))
           }}
         />
       )}
@@ -153,7 +163,7 @@ export function AdminOrgsPage() {
           onSuccess={() => {
             setEditTarget(null)
             refresh()
-            toast.success('수정되었습니다.')
+            toast.success(t('page.adminOrgs.edited'))
           }}
         />
       )}
@@ -164,7 +174,7 @@ export function AdminOrgsPage() {
           onSuccess={() => {
             setDeleteTarget(null)
             refresh()
-            toast.success('삭제되었습니다.')
+            toast.success(t('page.adminOrgs.deleted'))
           }}
         />
       )}
@@ -185,6 +195,7 @@ function DivisionRow({
   onEdit,
   onDelete,
 }: { division: OrgDivision } & RowHandlers) {
+  const t = useT()
   const teams = Array.isArray(division.teams) ? division.teams : []
   return (
     <Card>
@@ -192,7 +203,7 @@ function DivisionRow({
         depth={0}
         slug={division.slug}
         name={division.name}
-        levelLabel="사업부"
+        levelLabel={t('page.adminOrgs.level.division')}
         onEdit={() =>
           onEdit({
             level: 'division',
@@ -222,7 +233,7 @@ function DivisionRow({
               })
             }
           >
-            + 팀 추가
+            {t('page.adminOrgs.addTeam')}
           </Button>
         }
       />
@@ -257,6 +268,7 @@ function TeamRow({
   divisionSlug: string
   divisionName: string
 } & RowHandlers) {
+  const t = useT()
   const groups = Array.isArray(team.groups) ? team.groups : []
   return (
     <li>
@@ -264,7 +276,7 @@ function TeamRow({
         depth={1}
         slug={team.slug}
         name={team.name}
-        levelLabel="팀"
+        levelLabel={t('page.adminOrgs.level.team')}
         onEdit={() =>
           onEdit({
             level: 'team',
@@ -294,7 +306,7 @@ function TeamRow({
               })
             }
           >
-            + 그룹 추가
+            {t('page.adminOrgs.addGroup')}
           </Button>
         }
       />
@@ -332,13 +344,14 @@ function GroupRow({
   teamSlug: string
   parentLabel: string
 } & RowHandlers) {
+  const t = useT()
   return (
     <li>
       <NodeRow
         depth={2}
         slug={group.slug}
         name={group.name}
-        levelLabel="그룹"
+        levelLabel={t('page.adminOrgs.level.group')}
         onEdit={() =>
           onEdit({
             level: 'group',
@@ -372,7 +385,7 @@ function GroupRow({
               })
             }
           >
-            + 파트 추가
+            {t('page.adminOrgs.addPart')}
           </Button>
         }
       />
@@ -410,13 +423,14 @@ function PartRow({
   onEdit: (t: EditTarget) => void
   onDelete: (t: DeleteTarget) => void
 }) {
+  const t = useT()
   return (
     <li>
       <NodeRow
         depth={3}
         slug={part.slug}
         name={part.name}
-        levelLabel="파트"
+        levelLabel={t('page.adminOrgs.level.part')}
         onEdit={() =>
           onEdit({
             level: 'part',
@@ -464,6 +478,7 @@ function NodeRow({
   onDelete: () => void
   addButton?: ReactNode
 }) {
+  const t = useT()
   return (
     <div
       className="flex items-center justify-between rounded-md py-1 hover:bg-smsg-50"
@@ -479,17 +494,17 @@ function NodeRow({
       </div>
       <div className="flex items-center gap-1">
         {addButton}
-        <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`${name} 수정`}>
-          이름수정
+        <Button variant="ghost" size="sm" onClick={onEdit} aria-label={t('page.adminOrgs.editAria', { name })}>
+          {t('page.adminOrgs.editName')}
         </Button>
         <Button
           variant="ghost"
           size="sm"
           onClick={onDelete}
-          aria-label={`${name} 삭제`}
+          aria-label={t('page.adminOrgs.deleteAria', { name })}
           className="text-red-600 hover:bg-red-50"
         >
-          🗑 삭제
+          {t('page.adminOrgs.deleteIcon')}
         </Button>
       </div>
     </div>
@@ -506,20 +521,21 @@ function AddNodeModal({
   onClose: () => void
   onSuccess: () => void
 }) {
+  const t = useT()
   const [slug, setSlug] = useState('')
   const [name, setName] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const labels: Record<Level, string> = {
-    division: '사업부',
-    team: '팀',
-    group: '그룹',
-    part: '파트',
+  const labelKeys: Record<Level, string> = {
+    division: 'page.adminOrgs.level.division',
+    team: 'page.adminOrgs.level.team',
+    group: 'page.adminOrgs.level.group',
+    part: 'page.adminOrgs.level.part',
   }
-  const title = `새 ${labels[target.level]} 추가`
+  const title = t('page.adminOrgs.addTitle', { label: t(labelKeys[target.level]) })
 
   async function submit() {
     if (!slug || !name) {
-      toast.warn('slug와 이름을 입력하세요.')
+      toast.warn(t('page.adminOrgs.requireSlugName'))
       return
     }
     setSubmitting(true)
@@ -551,7 +567,7 @@ function AddNodeModal({
       onSuccess()
     } catch (err) {
       const e = err as { response?: { data?: { error?: { message?: string } } } }
-      toast.error(e.response?.data?.error?.message ?? '추가 실패')
+      toast.error(e.response?.data?.error?.message ?? t('page.adminOrgs.addFail'))
     } finally {
       setSubmitting(false)
     }
@@ -566,31 +582,33 @@ function AddNodeModal({
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            취소
+            {t('page.adminOrgs.cancel')}
           </Button>
           <Button variant="primary" onClick={submit} loading={submitting}>
-            추가
+            {t('page.adminOrgs.add')}
           </Button>
         </div>
       }
     >
       <div className="space-y-3">
         <p className="text-xs text-gray-500">
-          상위: <span className="font-medium">{target.parentLabel}</span>
+          {t('page.adminOrgs.parent')}: <span className="font-medium">{target.parentLabel}</span>
         </p>
-        <Field label="slug (영문, 숫자, 하이픈)">
+        <Field label={t('page.adminOrgs.slugLabel')}>
           <Input
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
-            placeholder="example-slug"
+            placeholder={t('page.adminOrgs.slugPlaceholder')}
+            aria-label={t('page.adminOrgs.slugLabel')}
             autoFocus
           />
         </Field>
-        <Field label="이름">
+        <Field label={t('page.adminOrgs.nameLabel')}>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="표시 이름"
+            placeholder={t('page.adminOrgs.namePlaceholder')}
+            aria-label={t('page.adminOrgs.nameLabel')}
           />
         </Field>
       </div>
@@ -607,18 +625,19 @@ function EditNodeModal({
   onClose: () => void
   onSuccess: () => void
 }) {
+  const t = useT()
   const [name, setName] = useState(target.name)
   const [submitting, setSubmitting] = useState(false)
-  const labels: Record<Level, string> = {
-    division: '사업부',
-    team: '팀',
-    group: '그룹',
-    part: '파트',
+  const labelKeys: Record<Level, string> = {
+    division: 'page.adminOrgs.level.division',
+    team: 'page.adminOrgs.level.team',
+    group: 'page.adminOrgs.level.group',
+    part: 'page.adminOrgs.level.part',
   }
 
   async function submit() {
     if (!name) {
-      toast.warn('이름은 비울 수 없습니다.')
+      toast.warn(t('page.adminOrgs.requireName'))
       return
     }
     setSubmitting(true)
@@ -646,7 +665,7 @@ function EditNodeModal({
       onSuccess()
     } catch (err) {
       const e = err as { response?: { data?: { error?: { message?: string } } } }
-      toast.error(e.response?.data?.error?.message ?? '수정 실패')
+      toast.error(e.response?.data?.error?.message ?? t('page.adminOrgs.editFail'))
     } finally {
       setSubmitting(false)
     }
@@ -656,25 +675,26 @@ function EditNodeModal({
     <Modal
       open
       onClose={onClose}
-      title={`${labels[target.level]} 이름 수정`}
+      title={t('page.adminOrgs.editTitle', { label: t(labelKeys[target.level]) })}
       size="sm"
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            취소
+            {t('page.adminOrgs.cancel')}
           </Button>
           <Button variant="primary" onClick={submit} loading={submitting}>
-            저장
+            {t('page.adminOrgs.save')}
           </Button>
         </div>
       }
     >
       <div className="space-y-3">
         <p className="text-xs text-gray-500">slug: {target.slug}</p>
-        <Field label="이름">
+        <Field label={t('page.adminOrgs.nameLabel')}>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
+            aria-label={t('page.adminOrgs.nameLabel')}
             autoFocus
           />
         </Field>
@@ -692,13 +712,14 @@ function DeleteConfirmModal({
   onClose: () => void
   onSuccess: () => void
 }) {
+  const t = useT()
   const [submitting, setSubmitting] = useState(false)
   const [docCount, setDocCount] = useState<number | null>(null)
-  const labels: Record<Level, string> = {
-    division: '사업부',
-    team: '팀',
-    group: '그룹',
-    part: '파트',
+  const labelKeys: Record<Level, string> = {
+    division: 'page.adminOrgs.level.division',
+    team: 'page.adminOrgs.level.team',
+    group: 'page.adminOrgs.level.group',
+    part: 'page.adminOrgs.level.part',
   }
 
   // Fetch doc count when deleting a part — show warning.
@@ -734,7 +755,7 @@ function DeleteConfirmModal({
       onSuccess()
     } catch (err) {
       const e = err as { response?: { data?: { error?: { message?: string } } } }
-      toast.error(e.response?.data?.error?.message ?? '삭제 실패')
+      toast.error(e.response?.data?.error?.message ?? t('page.adminOrgs.deleteFail'))
     } finally {
       setSubmitting(false)
     }
@@ -744,32 +765,31 @@ function DeleteConfirmModal({
     <Modal
       open
       onClose={onClose}
-      title={`${labels[target.level]} 삭제`}
+      title={t('page.adminOrgs.deleteTitle', { label: t(labelKeys[target.level]) })}
       size="sm"
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            취소
+            {t('page.adminOrgs.cancel')}
           </Button>
           <Button variant="danger" onClick={submit} loading={submitting}>
-            삭제
+            {t('page.adminOrgs.delete')}
           </Button>
         </div>
       }
     >
       <div className="space-y-2 text-sm text-gray-700">
         <p>
-          <span className="font-semibold">{target.name}</span>{' '}
-          (<span className="text-gray-500">/{target.slug}</span>) 을(를) 삭제하시겠습니까?
+          {t('page.adminOrgs.confirmDelete', { name: target.name, slug: target.slug })}
         </p>
         {target.childCount > 0 && (
           <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-900">
-            ⚠ 하위 항목 {target.childCount}개가 함께 삭제됩니다.
+            {t('page.adminOrgs.warnChildren', { n: target.childCount })}
           </p>
         )}
         {target.level === 'part' && docCount !== null && docCount > 0 && (
           <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-900">
-            ⚠ 이 파트의 문서 {docCount}건은 미배치 상태가 됩니다.
+            {t('page.adminOrgs.warnDocs', { n: docCount })}
           </p>
         )}
       </div>

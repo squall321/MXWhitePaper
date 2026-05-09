@@ -50,6 +50,12 @@ class ReadIn(BaseModel):
     read_seconds: int = Field(..., ge=0, le=24 * 60 * 60)
 
 
+class AnchorIn(BaseModel):
+    document_id: str = Field(..., min_length=1)
+    section_id: str | None = Field(default=None, max_length=200)
+    block_id: str | None = Field(default=None, max_length=200)
+
+
 _UUID_LEN = 36
 _UUID_DASHES = 4
 
@@ -294,6 +300,35 @@ async def post_read(
         "read_seconds": int(row[0]),
         "read_at": row[1].isoformat() if row[1] else None,
     })
+
+
+@router.post("/reads/anchor", summary="anchor 샘플 기록 (cycle 0016)")
+async def post_read_anchor(
+    body: AnchorIn,
+    s: AsyncSession = Depends(get_db),
+    user: dict[str, Any] = Depends(require_reader),
+) -> dict[str, Any]:
+    """useReadingTimeTracker 가 anchor 변경시마다 호출. section/block 둘 다
+    null 이면 의미가 없으니 silent no-op (200 으로 응답)."""
+    if not body.section_id and not body.block_id:
+        return envelope(data={"recorded": False})
+    doc_id = await _resolve_doc_id(s, body.document_id)
+    await s.execute(
+        text("""
+            INSERT INTO anchor_samples
+              (user_id, document_id, section_id, block_id)
+            VALUES
+              (CAST(:u AS uuid), CAST(:d AS uuid), :sec, :blk)
+        """),
+        {
+            "u": user["id"],
+            "d": doc_id,
+            "sec": body.section_id,
+            "blk": body.block_id,
+        },
+    )
+    await s.commit()
+    return envelope(data={"recorded": True})
 
 
 @router.get("/reads/recent", summary="최근 열람 문서 (reader+)")

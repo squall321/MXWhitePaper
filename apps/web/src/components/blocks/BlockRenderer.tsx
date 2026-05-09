@@ -28,6 +28,7 @@ import { DashboardEmbedBlockView } from './DashboardEmbedBlock'
 import { CalculatorBlockView } from './CalculatorBlock'
 import { OrgChartBlockView } from './OrgChartBlock'
 import { WhiteboardBlockView } from './WhiteboardBlock'
+import { FormBlockView } from './FormBlock'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { InlineTextBlockEditor } from '@/features/editor/components/InlineTextBlockEditor'
 import { ListBlockEditor } from '@/features/editor/components/ListBlockEditor'
@@ -40,6 +41,7 @@ import { DashboardEmbedBlockEditor } from '@/features/editor/blocks/DashboardEmb
 import { CalculatorBlockEditor } from '@/features/editor/blocks/CalculatorBlockEditor'
 import { OrgChartBlockEditor } from '@/features/editor/blocks/OrgChartBlockEditor'
 import { WhiteboardBlockEditor } from '@/features/editor/blocks/WhiteboardBlockEditor'
+import { FormBlockEditor } from '@/features/editor/blocks/FormBlockEditor'
 import { FlowBlockEditor } from '@/features/editor/blocks/FlowBlockEditor'
 import { GanttBlockEditor } from '@/features/editor/blocks/GanttBlockEditor'
 import { KpiCardsBlockEditor } from '@/features/editor/blocks/KpiCardsBlockEditor'
@@ -232,6 +234,9 @@ function BlockRendererInner({ block }: { block: Block }) {
     if (block.type === 'whiteboard') {
       return <WhiteboardBlockEditor slug={editorSlug} block={block} />
     }
+    if (block.type === 'form') {
+      return <FormBlockEditor slug={editorSlug} block={block} />
+    }
     if (block.type === 'flow') {
       return <FlowBlockEditor slug={editorSlug} block={block} />
     }
@@ -328,6 +333,8 @@ function BlockRendererInner({ block }: { block: Block }) {
       return <OrgChartBlockView block={block} />
     case 'whiteboard':
       return <WhiteboardBlockView block={block} />
+    case 'form':
+      return <FormBlockView block={block} />
     default:
       return (
         <PlaceholderBlockView

@@ -4,6 +4,7 @@ import { Field, Input } from '@/components/ui'
 import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { GanttBlockView } from '@/components/blocks/GanttBlock'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   slug: Slug
@@ -37,6 +38,7 @@ export function shiftDate(iso: string, days: number): string {
  * have a recharts-free SVG view).
  */
 export function GanttBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const [local, setLocal] = useState<GanttBlock>(block)
@@ -46,11 +48,11 @@ export function GanttBlockEditor({ slug, block }: Props) {
     setLocal(next)
     if (!etag) return
     try {
-      const result = await patchBlock(slug, block.id, next, etag, '간트 편집')
+      const result = await patchBlock(slug, block.id, next, etag, t('editor.gantt.changeLog'))
       apply(result.document, result.etag)
       setError(null)
     } catch (err) {
-      if (isPreconditionFailed(err)) setError('충돌 — 새로고침 필요')
+      if (isPreconditionFailed(err)) setError(t('editor.common.conflict'))
       else setError((err as Error).message)
     }
   }
@@ -69,7 +71,15 @@ export function GanttBlockEditor({ slug, block }: Props) {
     const end = shiftDate(start, 3)
     const next: GanttBlock = {
       ...local,
-      tasks: [...local.tasks, { name: `작업 ${local.tasks.length + 1}`, start, end, progress: 0 }],
+      tasks: [
+        ...local.tasks,
+        {
+          name: t('editor.gantt.newTaskName', { n: local.tasks.length + 1 }),
+          start,
+          end,
+          progress: 0,
+        },
+      ],
     }
     void push(next)
   }
@@ -90,29 +100,29 @@ export function GanttBlockEditor({ slug, block }: Props) {
     >
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-          간트 작업 ({local.tasks.length})
+          {t('editor.gantt.tasksHeader', { n: local.tasks.length })}
         </p>
         <button
           type="button"
           onClick={add}
           className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
-          aria-label="add gantt task"
+          aria-label={t('editor.gantt.addTask')}
         >
-          + 작업 추가
+          {t('editor.gantt.addTask')}
         </button>
       </div>
 
       {local.tasks.length === 0 ? (
-        <p className="text-xs text-gray-500">작업이 없습니다. 위의 “+ 작업 추가” 버튼으로 시작하세요.</p>
+        <p className="text-xs text-gray-500">{t('editor.gantt.empty')}</p>
       ) : (
         <div className="overflow-x-auto rounded border border-gray-200 bg-white">
           <table className="w-full text-xs">
             <thead className="bg-gray-50 text-gray-600">
               <tr>
-                <th className="px-2 py-1 text-left">이름</th>
-                <th className="px-2 py-1 text-left">시작 (YYYY-MM-DD)</th>
-                <th className="px-2 py-1 text-left">종료 (YYYY-MM-DD)</th>
-                <th className="px-2 py-1 text-left">진행 %</th>
+                <th className="px-2 py-1 text-left">{t('editor.gantt.colName')}</th>
+                <th className="px-2 py-1 text-left">{t('editor.gantt.colStart')}</th>
+                <th className="px-2 py-1 text-left">{t('editor.gantt.colEnd')}</th>
+                <th className="px-2 py-1 text-left">{t('editor.gantt.colProgress')}</th>
                 <th className="px-2 py-1"></th>
               </tr>
             </thead>
@@ -174,9 +184,13 @@ export function GanttBlockEditor({ slug, block }: Props) {
         </div>
       )}
 
-      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      {error && (
+        <p role="status" aria-live="polite" className="text-[11px] text-red-600">
+          {error}
+        </p>
+      )}
 
-      <Field label="미리보기">
+      <Field label={t('editor.gantt.preview')}>
         <div className="rounded border border-gray-200 bg-white p-2">
           <GanttBlockView block={local} />
         </div>

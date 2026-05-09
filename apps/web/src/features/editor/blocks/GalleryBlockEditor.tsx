@@ -22,6 +22,7 @@ import {
   ImageDropzone,
   type ImageDropzoneHandle,
 } from '@/features/upload/components/ImageDropzone'
+import { useT } from '@/lib/i18n'
 
 interface GalleryBlockEditorProps {
   slug: Slug
@@ -36,6 +37,7 @@ type GalleryItem = GalleryBlock['items'][number]
  * dropzone.
  */
 export function GalleryBlockEditor({ slug, block }: GalleryBlockEditorProps) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const applySnapshot = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
@@ -56,13 +58,13 @@ export function GalleryBlockEditor({ slug, block }: GalleryBlockEditorProps) {
         block.id,
         { items: items as GalleryBlock['items'] },
         etag,
-        '갤러리 편집',
+        t('editor.gallery.changeLog'),
       )
       applySnapshot(result.document, result.etag)
     } catch (err) {
       if (isPreconditionFailed(err)) {
         setConflict(null)
-        setError('충돌 — 새로고침 필요')
+        setError(t('editor.common.conflict'))
       } else {
         setError((err as Error).message)
       }
@@ -134,9 +136,13 @@ export function GalleryBlockEditor({ slug, block }: GalleryBlockEditorProps) {
           onClick={() => dropzoneRef.current?.openFilePicker()}
           className="rounded border border-dashed border-smsg-300 px-3 py-1 text-xs text-smsg-700 hover:bg-smsg-100"
         >
-          + 추가
+          {t('editor.gallery.add')}
         </button>
-        {error && <span className="text-xs text-red-600">{error}</span>}
+        {error && (
+          <span role="status" aria-live="polite" className="text-xs text-red-600">
+            {error}
+          </span>
+        )}
       </div>
 
       {/* Hidden dropzone for + 추가. */}
@@ -164,6 +170,7 @@ interface SortableTileProps {
 }
 
 function SortableTile({ item, onCaption, onAlt, onRemove, disabled }: SortableTileProps) {
+  const t = useT()
   const sortable = useSortable({ id: item.imageId })
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable
   const { data: image } = useImage(item.imageId || undefined)
@@ -191,19 +198,19 @@ function SortableTile({ item, onCaption, onAlt, onRemove, disabled }: SortableTi
           type="button"
           {...attributes}
           {...listeners}
-          aria-label="순서 변경"
+          aria-label={t('editor.gallery.reorder')}
           className="absolute left-1 top-1 cursor-grab rounded bg-white/80 px-1 text-xs shadow"
         >
-          ⠿
+          <span aria-hidden="true">⠿</span>
         </button>
         <button
           type="button"
           onClick={onRemove}
-          aria-label="이미지 삭제"
+          aria-label={t('editor.gallery.removeItem')}
           disabled={disabled}
           className="absolute right-1 top-1 rounded bg-white/80 px-1 text-xs shadow hover:text-red-600"
         >
-          ✕
+          <span aria-hidden="true">✕</span>
         </button>
       </div>
       <div className="space-y-1 px-2 py-1 text-xs">
@@ -214,7 +221,8 @@ function SortableTile({ item, onCaption, onAlt, onRemove, disabled }: SortableTi
             const v = e.target.value
             if (v !== (item.caption ?? '')) onCaption(v)
           }}
-          placeholder="캡션 입력..."
+          placeholder={t('editor.gallery.captionPlaceholder')}
+          aria-label={t('editor.image.captionLabel')}
           className="w-full rounded border border-transparent px-1 py-0.5 hover:border-gray-200 focus:border-smsg-500 focus:outline-none"
         />
         <input
@@ -225,6 +233,7 @@ function SortableTile({ item, onCaption, onAlt, onRemove, disabled }: SortableTi
             if (v !== (item.alt ?? '')) onAlt(v)
           }}
           placeholder="alt"
+          aria-label={t('editor.image.altLabel')}
           className="w-full rounded border border-transparent px-1 py-0.5 text-gray-500 hover:border-gray-200 focus:border-smsg-500 focus:outline-none"
         />
       </div>

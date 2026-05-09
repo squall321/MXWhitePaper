@@ -1,5 +1,6 @@
 import type { MathBlock } from '@/types/document'
 import { MathBlockView } from '@/components/blocks/MathBlock'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   block: MathBlock
@@ -11,29 +12,32 @@ interface Props {
  * every keystroke since KaTeX is fast enough at this scale.
  */
 export function MathBlockEditor({ block, onChange }: Props) {
+  const t = useT()
   return (
     <div className="space-y-2 rounded border border-smsg-100 bg-smsg-100/40 p-3">
       <div className="grid grid-cols-2 gap-2 text-xs">
         <label className="block">
-          <span className="mb-1 block text-gray-600">표시 방식</span>
+          <span className="mb-1 block text-gray-600">{t('editor.math.display')}</span>
           <select
             value={block.display ?? 'block'}
             onChange={(e) =>
               onChange({ ...block, display: e.target.value as 'block' | 'inline' })
             }
+            aria-label={t('editor.math.display')}
             className="w-full rounded border border-gray-300 px-2 py-1"
           >
-            <option value="block">block (수식 한 줄)</option>
-            <option value="inline">inline (문장 안)</option>
+            <option value="block">{t('editor.math.displayBlock')}</option>
+            <option value="inline">{t('editor.math.displayInline')}</option>
           </select>
         </label>
       </div>
       <label className="block text-xs">
-        <span className="mb-1 block text-gray-600">LaTeX</span>
+        <span className="mb-1 block text-gray-600">{t('editor.math.latex')}</span>
         <textarea
           value={block.expression}
           onChange={(e) => onChange({ ...block, expression: e.target.value })}
           rows={3}
+          aria-label={t('editor.math.latex')}
           className="w-full rounded border border-gray-300 px-2 py-1 font-mono"
         />
       </label>

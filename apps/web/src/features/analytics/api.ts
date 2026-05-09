@@ -57,3 +57,77 @@ export async function getTopViews(days: number = 7): Promise<TopViewedDoc[]> {
   )
   return unwrap<TopViewedDoc[]>(res)
 }
+
+// ── Cycle 0016 — per-doc + inactive + top docs ────────────────────────
+
+export interface DocViewBucket {
+  date: string
+  views: number
+}
+
+export interface DocReferrer {
+  kind: string
+  count: number
+}
+
+export interface DocSectionAttention {
+  section_id: string
+  section_title: string
+  est_seconds_per_visitor: number
+}
+
+export interface DocAnalytics {
+  slug: string
+  title: string
+  total_views: number
+  unique_readers: number
+  avg_read_seconds: number
+  median_read_seconds: number
+  last_30_days: DocViewBucket[]
+  top_referrers: DocReferrer[]
+  section_attention: DocSectionAttention[]
+}
+
+export async function getDocAnalytics(slug: string): Promise<DocAnalytics> {
+  const res = await apiClient.get<ApiEnvelope<DocAnalytics>>(
+    `/analytics/documents/${encodeURIComponent(slug)}`,
+  )
+  return unwrap<DocAnalytics>(res)
+}
+
+export interface InactiveDoc {
+  slug: string
+  title: string
+  last_edited: string | null
+  last_read: string | null
+  owner_name: string
+}
+
+export async function getInactiveDocs(
+  sinceDays: number = 90,
+): Promise<InactiveDoc[]> {
+  const res = await apiClient.get<ApiEnvelope<InactiveDoc[]>>(
+    '/analytics/inactive-docs',
+    { params: { since_days: sinceDays } },
+  )
+  return unwrap<InactiveDoc[]>(res)
+}
+
+export interface TopDoc {
+  slug: string
+  title: string
+  views: number
+  unique_readers: number
+  avg_read_seconds: number
+}
+
+export async function getTopDocs(
+  days: number = 30,
+  limit: number = 20,
+): Promise<TopDoc[]> {
+  const res = await apiClient.get<ApiEnvelope<TopDoc[]>>(
+    '/analytics/top-docs',
+    { params: { days, limit } },
+  )
+  return unwrap<TopDoc[]>(res)
+}

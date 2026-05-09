@@ -4,6 +4,7 @@ import { Button, Card, EmptyState } from '@/components/ui'
 import { useRecentStore } from '@/features/recent/store'
 import { formatRelative } from '@/features/recent/components/RecentRail'
 import type { AppOutletContext } from '@/App'
+import { useT } from '@/lib/i18n'
 
 /**
  * Full "최근 본 문서" page. Lists every persisted entry (cap 20). Each row
@@ -12,6 +13,7 @@ import type { AppOutletContext } from '@/App'
  * Sidebars are cleared so the list takes the full content width.
  */
 export function RecentPage() {
+  const t = useT()
   const items = useRecentStore((s) => s.items)
   const remove = useRecentStore((s) => s.remove)
   const clear = useRecentStore((s) => s.clear)
@@ -31,26 +33,26 @@ export function RecentPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-smsg-900 sm:text-3xl">
-            최근 본 문서
+            {t('page.recent.title')}
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            최근 열어본 백서 최대 20개를 기록합니다. 기록은 이 브라우저에만 저장돼요.
+            {t('page.recent.subtitle')}
           </p>
         </div>
         {items.length > 0 && (
           <Button variant="ghost" onClick={() => clear()}>
-            전체 지우기
+            {t('page.recent.clearAll')}
           </Button>
         )}
       </header>
 
       {items.length === 0 ? (
         <EmptyState
-          title="아직 본 문서가 없어요"
-          description="메인에서 카드를 클릭해 보세요."
+          title={t('page.recent.empty.title')}
+          description={t('page.recent.empty.description')}
           action={
             <Link to="/" className="inline-block">
-              <Button>홈으로</Button>
+              <Button>{t('page.recent.home')}</Button>
             </Link>
           }
         />
@@ -80,9 +82,9 @@ export function RecentPage() {
                 <button
                   type="button"
                   onClick={() => remove(doc.slug)}
-                  aria-label={`${doc.title} 기록 삭제`}
+                  aria-label={t('page.recent.removeAria', { title: doc.title })}
                   className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600"
-                  title="지우기"
+                  title={t('page.recent.removeTitle')}
                 >
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                     <path d="M3.7 3.7l8.6 8.6M12.3 3.7l-8.6 8.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

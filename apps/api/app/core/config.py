@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     # 라우터는 켜둔 채로 남겨도 무방 — run-now 호출은 여전히 동작.
     backup_enabled: bool = Field(default=True)
 
+    # 0018 — Subscription digest runner (asyncio in-process ticker). 라우터/
+    # dispatcher 는 항상 동작 — 이 플래그는 runner ticker 만 게이트한다.
+    subscription_digest_enabled: bool = Field(default=True)
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

@@ -12,6 +12,7 @@ import { useRecentStore } from '@/features/recent/store'
 import { useSettingsStore } from '@/features/settings/store'
 import { KeyboardShortcutsModal } from '@/features/editor/components/KeyboardShortcutsModal'
 import { Link } from 'react-router-dom'
+import { useT } from '@/lib/i18n'
 
 interface AppShellProps {
   children: ReactNode
@@ -48,6 +49,7 @@ const DEFAULT_LEFT = <OrgTreeBlock />
  * button on every breakpoint, so users can pop it in as a Drawer.
  */
 export function AppShell({ children, left, right, onOpenPalette }: AppShellProps) {
+  const t = useT()
   const [navOpen, setNavOpen] = useState(false)
   const [tocOpen, setTocOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -72,7 +74,7 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
 
   return (
     <div className="min-h-screen bg-white text-smsg-900 dark:bg-gray-950 dark:text-gray-100">
-      <a href="#main" className="skip-to-content">본문으로 건너뛰기</a>
+      <a href="#main" className="skip-to-content">{t('shell.skipToContent')}</a>
 
       <TopBar
         onOpenPalette={onOpenPalette}
@@ -95,15 +97,20 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
       <div className={`grid min-h-[calc(100vh-var(--header-h))] pt-[calc(var(--header-h)+2rem)] ${gridCls}`}>
         {/* Left tree — visible md+ only when the page provides a left slot. */}
         {hasLeft && (
-          <aside className="hidden border-r border-gray-200 bg-white md:block dark:border-gray-800 dark:bg-gray-900">
+          <aside
+            role="complementary"
+            aria-label={t('shell.orgTree')}
+            className="hidden border-r border-gray-200 bg-white md:block dark:border-gray-800 dark:bg-gray-900"
+          >
             <div className="sticky top-[calc(var(--header-h)+2rem)] max-h-[calc(100vh-var(--header-h)-2rem)] overflow-y-auto py-3">
-              <RailBoundary name="조직 트리">{leftNode}</RailBoundary>
+              <RailBoundary name={t('shell.orgTree')}>{leftNode}</RailBoundary>
             </div>
           </aside>
         )}
 
         <main
           id="main"
+          role="main"
           tabIndex={-1}
           className="min-w-0 px-4 py-4 sm:px-6 sm:py-6 lg:px-8 isolate"
         >
@@ -112,9 +119,13 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
 
         {/* Right rail — visible lg+ only. md hides; mobile uses Drawer. */}
         {hasRight && (
-          <aside className="hidden border-l border-gray-200 bg-white lg:block dark:border-gray-800 dark:bg-gray-900">
+          <aside
+            role="complementary"
+            aria-label={t('shell.rightPanel')}
+            className="hidden border-l border-gray-200 bg-white lg:block dark:border-gray-800 dark:bg-gray-900"
+          >
             <div className="sticky top-[calc(var(--header-h)+2rem)] max-h-[calc(100vh-var(--header-h)-2rem)] overflow-y-auto py-3">
-              <RailBoundary name="우측 패널">{right}</RailBoundary>
+              <RailBoundary name={t('shell.rightPanel')}>{right}</RailBoundary>
             </div>
           </aside>
         )}
@@ -129,14 +140,14 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
         <button
           type="button"
           onClick={() => setTocOpen(true)}
-          aria-label="측면 패널 열기"
+          aria-label={t('shell.openSidePanel')}
           style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
           className="fixed right-4 z-drawer inline-flex items-center gap-1.5 rounded-full bg-smsg-700 px-4 py-2 text-sm font-medium text-white shadow-lg transition-all duration-base ease-out-soft hover:-translate-y-0.5 hover:bg-smsg-900 lg:hidden"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M2 3h12v2H2zM2 7h12v2H2zM2 11h12v2H2z" fill="currentColor" />
           </svg>
-          측면 패널
+          {t('shell.sidePanel')}
         </button>
       )}
 
@@ -149,13 +160,13 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
           open={tocOpen}
           onClose={() => setTocOpen(false)}
           side="bottom"
-          ariaLabel="측면 패널"
+          ariaLabel={t('shell.sidePanel')}
         >
           <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">측면 패널</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">{t('shell.sidePanel')}</h2>
             <button
               type="button"
-              aria-label="닫기"
+              aria-label={t('common.close')}
               onClick={() => setTocOpen(false)}
               className="rounded p-1 text-gray-500 hover:bg-gray-100"
             >
@@ -179,10 +190,11 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
 
 /** Default OrgTree block reused by HomePage and as the AppShell fallback. */
 function OrgTreeBlock() {
+  const t = useT()
   return (
     <>
       <h2 className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-        조직
+        {t('shell.org')}
       </h2>
       <OrgTree />
     </>
@@ -195,25 +207,30 @@ function OrgTreeBlock() {
  * peek for the most common toggles + a deep-link to the full page.
  */
 function SettingsQuickModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT()
   const notifications = useSettingsStore((s) => s.notifications)
   const darkMode = useSettingsStore((s) => s.darkMode)
   const setOne = useSettingsStore((s) => s.set)
 
   return (
-    <Modal open={open} onClose={onClose} title="빠른 환경설정" size="sm">
+    <Modal open={open} onClose={onClose} title={t('page.settings.quickTitle')} size="sm">
       <div className="space-y-3 px-5 py-4">
         <Toggle
-          label="알림"
+          label={t('settings.notifications')}
           checked={notifications}
           onChange={(v) => setOne('notifications', v)}
         />
         <Toggle
-          label="다크 모드 (베타)"
+          label={t('page.settings.quickDarkBeta')}
           checked={darkMode}
           onChange={(v) => setOne('darkMode', v)}
         />
         <p className="text-xs text-gray-500">
-          전체 옵션은 <Link to="/settings" onClick={onClose} className="text-link hover:underline">환경설정 페이지</Link>에서 확인하세요.
+          {t('page.settings.quickFull')}{' '}
+          <Link to="/settings" onClick={onClose} className="text-link hover:underline">
+            {t('page.settings.quickFullLink')}
+          </Link>
+          {t('page.settings.quickFullSuffix')}
         </p>
       </div>
     </Modal>
@@ -253,25 +270,26 @@ function Toggle({
 }
 
 function FavoritesDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT()
   const items = useFavoritesStore((s) => s.items)
   const remove = useFavoritesStore((s) => s.remove)
 
   return (
-    <Drawer open={open} onClose={onClose} side="right" ariaLabel="즐겨찾기">
+    <Drawer open={open} onClose={onClose} side="right" ariaLabel={t('shell.favorites')}>
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">즐겨찾기</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">{t('shell.favorites')}</h2>
         <button
           type="button"
-          aria-label="닫기"
+          aria-label={t('common.close')}
           onClick={onClose}
           className="rounded p-1 text-gray-500 hover:bg-gray-100"
         >
-          ✕
+          <span aria-hidden="true">✕</span>
         </button>
       </div>
       {items.length === 0 ? (
         <p className="px-4 py-6 text-sm text-gray-500">
-          아직 즐겨찾기한 문서가 없어요. 문서 헤더의 별 아이콘을 눌러 추가하세요.
+          {t('shell.favoritesEmpty')}
         </p>
       ) : (
         <ul className="divide-y divide-gray-100">
@@ -288,11 +306,11 @@ function FavoritesDrawer({ open, onClose }: { open: boolean; onClose: () => void
               <button
                 type="button"
                 onClick={() => remove(it.slug)}
-                aria-label={`${it.title} 즐겨찾기에서 제거`}
+                aria-label={t('shell.removeFavoriteAria', { title: it.title })}
                 className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600"
-                title="제거"
+                title={t('shell.removeFavoriteTitle')}
               >
-                ✕
+                <span aria-hidden="true">✕</span>
               </button>
             </li>
           ))}
@@ -303,23 +321,24 @@ function FavoritesDrawer({ open, onClose }: { open: boolean; onClose: () => void
 }
 
 function RecentDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT()
   const items = useRecentStore((s) => s.items)
 
   return (
-    <Drawer open={open} onClose={onClose} side="right" ariaLabel="최근 활동">
+    <Drawer open={open} onClose={onClose} side="right" ariaLabel={t('shell.recent')}>
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">최근 활동</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">{t('shell.recent')}</h2>
         <button
           type="button"
-          aria-label="닫기"
+          aria-label={t('common.close')}
           onClick={onClose}
           className="rounded p-1 text-gray-500 hover:bg-gray-100"
         >
-          ✕
+          <span aria-hidden="true">✕</span>
         </button>
       </div>
       {items.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-gray-500">최근 본 문서가 없어요.</p>
+        <p className="px-4 py-6 text-sm text-gray-500">{t('shell.recentEmpty')}</p>
       ) : (
         <ul className="divide-y divide-gray-100">
           {items.slice(0, 20).map((it) => (

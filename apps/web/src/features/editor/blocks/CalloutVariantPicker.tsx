@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { CalloutBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   slug: Slug
@@ -10,13 +11,14 @@ interface Props {
 
 const VARIANTS: {
   value: CalloutBlock['variant']
-  label: string
+  /** i18n key for the user-visible label. */
+  labelKey: string
   swatch: string
 }[] = [
-  { value: 'info', label: '정보', swatch: 'bg-smsg-100 text-smsg-700' },
-  { value: 'warn', label: '경고', swatch: 'bg-amber-100 text-amber-800' },
-  { value: 'danger', label: '위험', swatch: 'bg-red-100 text-red-700' },
-  { value: 'tip', label: '팁', swatch: 'bg-emerald-100 text-emerald-700' },
+  { value: 'info', labelKey: 'editor.callout.info', swatch: 'bg-smsg-100 text-smsg-700' },
+  { value: 'warn', labelKey: 'editor.callout.warn', swatch: 'bg-amber-100 text-amber-800' },
+  { value: 'danger', labelKey: 'editor.callout.danger', swatch: 'bg-red-100 text-red-700' },
+  { value: 'tip', labelKey: 'editor.callout.tip', swatch: 'bg-emerald-100 text-emerald-700' },
 ]
 
 /**
@@ -25,6 +27,7 @@ const VARIANTS: {
  * text editor (which owns text-level edits) is unaffected.
  */
 export function CalloutVariantPicker({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
@@ -38,14 +41,14 @@ export function CalloutVariantPicker({ slug, block }: Props) {
         block.id,
         { variant },
         etag,
-        '콜아웃 색상',
+        t('editor.callout.changeLog'),
       )
       apply(result.document, result.etag)
       setError(null)
     } catch (err) {
       if (isPreconditionFailed(err)) {
         setConflict(null)
-        setError('충돌 — 새로고침 필요')
+        setError(t('editor.common.conflict'))
       } else {
         setError((err as Error).message)
       }
@@ -56,11 +59,12 @@ export function CalloutVariantPicker({ slug, block }: Props) {
     <div className="mb-1 flex flex-wrap items-center gap-1 text-[11px]">
       {VARIANTS.map((v) => {
         const active = (block.variant ?? 'info') === v.value
+        const label = t(v.labelKey)
         return (
           <button
             key={v.value}
             type="button"
-            aria-label={`${v.label} 콜아웃`}
+            aria-label={t('editor.callout.variantLabel', { label })}
             aria-pressed={active}
             onClick={() => void onPick(v.value)}
             className={
@@ -69,11 +73,15 @@ export function CalloutVariantPicker({ slug, block }: Props) {
               (active ? ' ring-2 ring-offset-1 ring-current' : ' opacity-60 hover:opacity-100')
             }
           >
-            {v.label}
+            {label}
           </button>
         )
       })}
-      {error && <span className="text-red-600">{error}</span>}
+      {error && (
+        <span role="status" aria-live="polite" className="text-red-600">
+          {error}
+        </span>
+      )}
     </div>
   )
 }

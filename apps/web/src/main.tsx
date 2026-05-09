@@ -97,6 +97,11 @@ const ReadListPage = lazyLogged('ReadList', () =>
 const MyReviewsPage = lazyLogged('MyReviews', () =>
   import('./pages/MyReviews').then((m) => ({ default: m.MyReviewsPage })),
 )
+const MySubscriptionsPage = lazyLogged('MySubscriptions', () =>
+  import('./pages/MySubscriptions').then((m) => ({
+    default: m.MySubscriptionsPage,
+  })),
+)
 const SettingsPage = lazyLogged('Settings', () =>
   import('./pages/Settings').then((m) => ({ default: m.SettingsPage })),
 )
@@ -284,6 +289,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="activity" element={<Boundaried name="activity"><ActivityFeedPage /></Boundaried>} />
                 <Route path="reads" element={<Boundaried name="reads"><ReadListPage /></Boundaried>} />
                 <Route path="reviews" element={<Boundaried name="reviews"><MyReviewsPage /></Boundaried>} />
+                <Route path="subscriptions" element={<Boundaried name="subscriptions"><MySubscriptionsPage /></Boundaried>} />
                 <Route path="settings" element={<Boundaried name="settings"><SettingsPage /></Boundaried>} />
                 <Route path="snippets" element={<Boundaried name="snippets"><SnippetManagerPage /></Boundaried>} />
                 <Route path="series" element={<Boundaried name="series"><SeriesManagerPage /></Boundaried>} />

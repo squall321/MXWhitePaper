@@ -254,3 +254,11 @@ export function setAnchorBlockId(slug: string, blockId: string | null): void {
   w.__mxPresenceAnchor = w.__mxPresenceAnchor ?? {}
   w.__mxPresenceAnchor[slug] = blockId
 }
+
+/** Read the latest anchor block id observed for `slug`. */
+export function getAnchorBlockId(slug: string): string | null {
+  const w = globalThis as unknown as {
+    __mxPresenceAnchor?: Record<string, string | null>
+  }
+  return w.__mxPresenceAnchor?.[slug] ?? null
+}

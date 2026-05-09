@@ -82,6 +82,64 @@ describe('i18n.t()', () => {
       expect((ko as Record<string, unknown>)[k]).toBeDefined()
     }
   })
+
+  it('key counts match between ko and en (no orphans)', () => {
+    const koKeys = Object.keys(ko).sort()
+    const enKeys = Object.keys(en).sort()
+    expect(enKeys).toEqual(koKeys)
+  })
+
+  it('bundle has at least 350 keys after the cycle 7 extraction', () => {
+    expect(Object.keys(ko).length).toBeGreaterThanOrEqual(350)
+  })
+
+  it('namespace coverage — editor.* keys span every block', () => {
+    const editorKeys = Object.keys(ko).filter((k) => k.startsWith('editor.'))
+    expect(editorKeys.length).toBeGreaterThan(150)
+    // Spot-check a key from every block we extracted in cycle 7.
+    const namespaces = [
+      'editor.table.',
+      'editor.code.',
+      'editor.callout.',
+      'editor.video.',
+      'editor.iframe.',
+      'editor.file.',
+      'editor.docLink.',
+      'editor.tabs.',
+      'editor.accordion.',
+      'editor.columns.',
+      'editor.flow.',
+      'editor.orgChart.',
+      'editor.gantt.',
+      'editor.chart.',
+      'editor.kpi.',
+      'editor.math.',
+      'editor.calc.',
+      'editor.dataSource.',
+      'editor.dashboard.',
+      'editor.image.',
+      'editor.gallery.',
+      'editor.wb.',
+    ]
+    for (const ns of namespaces) {
+      const matches = editorKeys.filter((k) => k.startsWith(ns))
+      expect(matches.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('namespace coverage — page.* keys cover the Recent / AdminDashboard / AdminOrgs / Analytics surfaces', () => {
+    const pageKeys = Object.keys(ko).filter((k) => k.startsWith('page.'))
+    for (const ns of [
+      'page.recent.',
+      'page.adminDashboard.',
+      'page.adminOrgs.',
+      'page.analytics.',
+      'page.settings.',
+    ]) {
+      const matches = pageKeys.filter((k) => k.startsWith(ns))
+      expect(matches.length).toBeGreaterThan(0)
+    }
+  })
 })
 
 describe('i18n hooks (useT / useLocale)', () => {

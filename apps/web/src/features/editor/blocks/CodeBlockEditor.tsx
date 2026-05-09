@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CodeBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   slug: Slug
@@ -34,6 +35,7 @@ const LANGUAGES = [
  * behaviour, not focus-leave.
  */
 export function CodeBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
@@ -72,14 +74,14 @@ export function CodeBlockEditor({ slug, block }: Props) {
           filename: next.filename,
         },
         etag,
-        '코드 편집',
+        t('editor.code.changeLog'),
       )
       apply(result.document, result.etag)
       setError(null)
     } catch (err) {
       if (isPreconditionFailed(err)) {
         setConflict(null)
-        setError('충돌 — 새로고침 필요')
+        setError(t('editor.common.conflict'))
       } else {
         setError((err as Error).message)
       }
@@ -111,7 +113,7 @@ export function CodeBlockEditor({ slug, block }: Props) {
     >
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-800 bg-gray-800 px-2 py-1.5 text-xs">
         <select
-          aria-label="언어"
+          aria-label={t('editor.code.language')}
           value={local.language || 'text'}
           onChange={(e) => schedule({ ...local, language: e.target.value })}
           className="rounded border border-gray-700 bg-gray-900 px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-smsg-300"
@@ -128,12 +130,12 @@ export function CodeBlockEditor({ slug, block }: Props) {
           onChange={(e) =>
             schedule({ ...local, filename: e.target.value || undefined })
           }
-          placeholder="파일명 (선택)"
-          aria-label="파일명"
+          placeholder={t('editor.code.filenamePlaceholder')}
+          aria-label={t('editor.code.filename')}
           className="flex-1 min-w-[120px] rounded border border-transparent bg-transparent px-1 py-0.5 text-gray-300 placeholder:text-gray-500 hover:border-gray-700 focus:border-smsg-500 focus:bg-gray-900 focus:outline-none"
         />
         {error && (
-          <span className="text-[11px] text-red-300">{error}</span>
+          <span role="status" aria-live="polite" className="text-[11px] text-red-300">{error}</span>
         )}
       </div>
       <textarea
@@ -141,7 +143,7 @@ export function CodeBlockEditor({ slug, block }: Props) {
         onChange={(e) => schedule({ ...local, code: e.target.value })}
         onKeyDown={onTabKey}
         rows={Math.max(6, Math.min(24, local.code.split('\n').length + 1))}
-        aria-label="코드"
+        aria-label={t('editor.code.codeLabel')}
         spellCheck={false}
         className="block w-full resize-y border-0 bg-gray-900 p-3 font-mono text-[13px] leading-6 text-gray-100 outline-none focus:bg-gray-950"
       />

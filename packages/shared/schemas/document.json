@@ -193,7 +193,8 @@
         { "$ref": "#/$defs/DataSourceBlock" },
         { "$ref": "#/$defs/DashboardEmbedBlock" },
         { "$ref": "#/$defs/CalculatorBlock" },
-        { "$ref": "#/$defs/WhiteboardBlock" }
+        { "$ref": "#/$defs/WhiteboardBlock" },
+        { "$ref": "#/$defs/FormBlock" }
       ]
     },
 
@@ -716,6 +717,43 @@
           }
         }
       ]
+    },
+
+    "FormBlock": {
+      "type": "object",
+      "required": ["type", "id", "questions"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "form" },
+        "id": { "$ref": "#/$defs/Ulid" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "questions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/FormQuestion" },
+          "minItems": 1
+        },
+        "submit_label": { "type": "string", "default": "제출" },
+        "thanks_message": { "type": "string", "default": "응답해 주셔서 감사합니다." },
+        "allow_multiple_responses": { "type": "boolean", "default": false },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "FormQuestion": {
+      "type": "object",
+      "required": ["id", "kind", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "enum": ["text", "long-text", "email", "number", "select", "multi-select", "checkbox", "rating-5", "date"] },
+        "label": { "type": "string" },
+        "required": { "type": "boolean", "default": false },
+        "placeholder": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
     },
 
     "RelatedDoc": {

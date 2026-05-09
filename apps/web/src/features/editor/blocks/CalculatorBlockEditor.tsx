@@ -6,6 +6,7 @@ import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { CalculatorBlockView } from '@/components/blocks/CalculatorBlock'
 import { BlockHelpDrawer } from '@/features/editor/components/BlockHelpDrawer'
+import { useT, t as tStatic } from '@/lib/i18n'
 
 const KINDS: NonNullable<CalculatorBlock['inputs'][number]['kind']>[] = [
   'number',
@@ -56,7 +57,7 @@ interface Props {
 
 /** Validate the formula with mathjs `parse` (does not execute). */
 export function validateFormula(formula: string): { ok: true } | { ok: false; error: string } {
-  if (!formula.trim()) return { ok: false, error: '수식이 비어 있습니다.' }
+  if (!formula.trim()) return { ok: false, error: tStatic('editor.calc.formulaEmpty') }
   try {
     parse(formula)
     return { ok: true }
@@ -95,6 +96,7 @@ export function formatResult(raw: string, unit?: string): string {
  * label. The live `CalculatorBlockView` below acts as a preview.
  */
 export function CalculatorBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const [local, setLocal] = useState<CalculatorBlock>(block)
@@ -109,11 +111,11 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
     setLocal(next)
     if (!etag) return
     try {
-      const result = await patchBlock(slug, block.id, next, etag, '계산기 편집')
+      const result = await patchBlock(slug, block.id, next, etag, t('editor.calc.changeLog'))
       apply(result.document, result.etag)
       setError(null)
     } catch (err) {
-      if (isPreconditionFailed(err)) setError('충돌 — 새로고침 필요')
+      if (isPreconditionFailed(err)) setError(t('editor.common.conflict'))
       else setError((err as Error).message)
     }
   }
@@ -125,7 +127,7 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
   const addInput = () => {
     const next: CalculatorBlock['inputs'][number] = {
       name: `var${local.inputs.length + 1}`,
-      label: `변수 ${local.inputs.length + 1}`,
+      label: t('editor.calc.newVar', { n: local.inputs.length + 1 }),
       kind: 'number',
       default: 0,
     }
@@ -158,7 +160,7 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
           className="rounded-md border border-dashed border-smsg-300 bg-white p-4 text-center dark:bg-gray-900"
         >
           <p className="text-sm text-gray-700 dark:text-gray-300">
-            이 블록은 <strong>입력값을 받아 수식을 계산</strong>해 결과를 보여줍니다.
+            {t('editor.calc.empty')}
           </p>
           <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row">
             <Button
@@ -166,72 +168,73 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
               type="button"
               onClick={() => applyTemplate('roi')}
             >
-              수식 + 입력 변수 추가 (ROI 예시)
+              {t('editor.calc.addRoiTemplate')}
             </Button>
             <button
               type="button"
               className="text-xs text-link hover:underline"
               onClick={() => setHelpOpen(true)}
             >
-              도움말 보기
+              {t('common.helpMore')}
             </button>
           </div>
         </div>
       )}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <Field label="결과 라벨">
+        <Field label={t('editor.calc.resultLabel')}>
           <Input
             value={local.label ?? ''}
             onChange={(e) => setLocal({ ...local, label: e.target.value })}
             onBlur={() => void push(local)}
-            placeholder="예: 총합"
+            placeholder={t('editor.calc.resultPlaceholder')}
+            aria-label={t('editor.calc.resultLabel')}
           />
         </Field>
-        <Field label="템플릿">
+        <Field label={t('editor.calc.template')}>
           <Select
             value={templateId}
             onChange={(e) => applyTemplate(e.target.value)}
-            aria-label="calculator template"
+            aria-label={t('editor.calc.template')}
           >
-            <option value="">선택…</option>
-            {CALCULATOR_TEMPLATES.map((t) => (
-              <option key={t.id} value={t.id}>{t.label}</option>
+            <option value="">{t('editor.calc.templatePick')}</option>
+            {CALCULATOR_TEMPLATES.map((tpl) => (
+              <option key={tpl.id} value={tpl.id}>{tpl.label}</option>
             ))}
           </Select>
         </Field>
       </div>
 
-      <Field label="단위 (선택)">
+      <Field label={t('editor.calc.unit')}>
         <Input
           value={unit}
           onChange={(e) => setUnit(e.target.value)}
-          placeholder="예: 원, %, kg"
-          aria-label="unit suffix"
+          placeholder={t('editor.calc.unitPlaceholder')}
+          aria-label={t('editor.calc.unit')}
         />
       </Field>
 
       <div className="space-y-2">
-        <p className="text-xs font-medium text-gray-700">입력 변수</p>
+        <p className="text-xs font-medium text-gray-700">{t('editor.calc.inputsHeader')}</p>
         {local.inputs.map((inp, i) => (
           <div
             key={i}
             className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_1fr_auto_auto_auto]"
           >
-            <Field label="이름">
+            <Field label={t('editor.calc.inputName')}>
               <Input
                 value={inp.name}
                 onChange={(e) => updateInput(i, { name: e.target.value })}
                 aria-label={`input ${i} name`}
               />
             </Field>
-            <Field label="라벨">
+            <Field label={t('editor.calc.inputLabel')}>
               <Input
                 value={inp.label}
                 onChange={(e) => updateInput(i, { label: e.target.value })}
                 aria-label={`input ${i} label`}
               />
             </Field>
-            <Field label="종류">
+            <Field label={t('editor.calc.inputKind')}>
               <Select
                 value={inp.kind ?? 'number'}
                 onChange={(e) =>
@@ -246,7 +249,7 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
                 ))}
               </Select>
             </Field>
-            <Field label="기본값">
+            <Field label={t('editor.calc.inputDefault')}>
               <Input
                 value={inp.default == null ? '' : String(inp.default)}
                 onChange={(e) =>
@@ -264,18 +267,18 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
               aria-label={`input ${i} remove`}
               onClick={() => removeInput(i)}
             >
-              ×
+              <span aria-hidden="true">×</span>
             </IconButton>
           </div>
         ))}
         <Button variant="secondary" size="sm" type="button" onClick={addInput}>
-          + 입력 변수
+          {t('editor.calc.addInput')}
         </Button>
       </div>
 
       <Field
-        label="수식"
-        hint={formulaCheck.ok ? '구문 OK' : undefined}
+        label={t('editor.calc.formula')}
+        hint={formulaCheck.ok ? t('editor.calc.formulaOk') : undefined}
         error={!formulaCheck.ok ? formulaCheck.error : undefined}
       >
         <textarea
@@ -283,22 +286,26 @@ export function CalculatorBlockEditor({ slug, block }: Props) {
           onChange={(e) => setLocal({ ...local, formula: e.target.value })}
           onBlur={() => void push(local)}
           rows={3}
-          aria-label="formula"
+          aria-label={t('editor.calc.formula')}
           aria-invalid={!formulaCheck.ok || undefined}
           className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-xs"
         />
       </Field>
 
-      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      {error && (
+        <p role="status" aria-live="polite" className="text-[11px] text-red-600">
+          {error}
+        </p>
+      )}
 
       <div className="rounded border border-gray-200 bg-white p-2">
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-          미리보기
+          {t('editor.calc.preview')}
         </p>
         <CalculatorBlockView block={local} />
         {unit && (
           <p className="mt-2 text-[11px] text-gray-500" data-testid="formatted-hint">
-            * 결과는 천 단위 콤마와 단위 “{unit}”로 포매팅됩니다
+            {t('editor.calc.unitHint', { unit })}
           </p>
         )}
       </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { postRead } from '../api'
+import { postRead, postReadAnchor } from '../api'
+import { getAnchorBlockId } from '@/features/presence/usePresence'
 
 const FLUSH_INTERVAL_MS = 30_000
 
@@ -14,6 +15,7 @@ export function useReadingTimeTracker(slug: string | undefined) {
   const accumulatedRef = useRef<number>(0)
   const lastTickRef = useRef<number>(Date.now())
   const slugRef = useRef<string | undefined>(slug)
+  const lastAnchorRef = useRef<string | null>(null)
 
   useEffect(() => {
     slugRef.current = slug
@@ -27,6 +29,7 @@ export function useReadingTimeTracker(slug: string | undefined) {
     let timer: ReturnType<typeof setInterval> | null = null
     accumulatedRef.current = 0
     lastTickRef.current = Date.now()
+    lastAnchorRef.current = null
 
     const flush = () => {
       const seconds = Math.floor(accumulatedRef.current)
@@ -36,6 +39,17 @@ export function useReadingTimeTracker(slug: string | undefined) {
       void postRead(targetSlug, seconds).catch(() => {
         /* network blip — drop the flush silently */
       })
+      // Cycle 0016 — also persist the current anchor sample, but only if
+      // the anchor changed since the last flush. This keeps the table
+      // sparse (no row per 30s for an idle reader) while still giving the
+      // heat-map enough signal.
+      const anchor = getAnchorBlockId(targetSlug)
+      if (anchor && anchor !== lastAnchorRef.current) {
+        lastAnchorRef.current = anchor
+        void postReadAnchor(targetSlug, { block_id: anchor }).catch(() => {
+          /* anchor sample is best-effort */
+        })
+      }
     }
 
     const tick = () => {

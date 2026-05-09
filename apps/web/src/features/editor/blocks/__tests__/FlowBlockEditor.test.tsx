@@ -31,10 +31,10 @@ describe('FLOW_KINDS', () => {
     ])
   })
 
-  it('every kind has a starter source + label', () => {
+  it('every kind has a starter source + i18n label key', () => {
     for (const k of FLOW_KINDS) {
       expect(k.source.length).toBeGreaterThan(0)
-      expect(k.label.length).toBeGreaterThan(0)
+      expect(k.labelKey.length).toBeGreaterThan(0)
       expect(k.detect.length).toBeGreaterThan(0)
     }
   })
@@ -44,7 +44,7 @@ describe('FLOW_EXAMPLES', () => {
   it('exposes 3 ready-to-paste cheat-sheet samples', () => {
     expect(FLOW_EXAMPLES.length).toBe(3)
     for (const ex of FLOW_EXAMPLES) {
-      expect(ex.label.length).toBeGreaterThan(0)
+      expect(ex.labelKey.length).toBeGreaterThan(0)
       expect(ex.source.length).toBeGreaterThan(0)
     }
   })
@@ -71,9 +71,9 @@ describe('<FlowBlockEditor /> static render', () => {
     useEditorStore.getState().reset()
     useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
     const html = renderToStaticMarkup(<FlowBlockEditor slug="test" block={block} />)
-    expect(html).toContain('aria-label="flow source"')
-    expect(html).toContain('aria-label="flow kind"')
-    expect(html).toContain('aria-label="cheat sheet"')
+    expect(html).toContain('aria-label="Mermaid 소스"')
+    expect(html).toContain('aria-label="다이어그램 종류"')
+    expect(html).toContain('aria-label="이렇게 쓰세요"')
     expect(html).toContain('순서도')
     expect(html).toContain('시퀀스')
     expect(html).toContain('이렇게 쓰세요')

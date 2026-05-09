@@ -28,6 +28,7 @@ from .routers.comments import router_one as comments_one_router
 from .routers.documents import router as documents_router
 from .routers.exports import router as exports_router
 from .routers.files import router as files_router
+from .routers.forms import router as forms_router
 from .routers.glossary import router as glossary_router
 from .routers.imports import router as imports_router
 from .routers.links_graph import router as links_graph_router
@@ -38,6 +39,7 @@ from .routers.search import router as search_router
 from .routers.series import router as series_router
 from .routers.sharing import router as sharing_router
 from .routers.snippets import router as snippets_router
+from .routers.subscriptions import router as subscriptions_router
 from .routers.tags import router as tags_router
 from .routers.uploads import images_router, uploads_router
 from .routers.users import router as users_router
@@ -215,6 +217,15 @@ TAGS_METADATA: list[dict[str, str]] = [
             "MinIO 에 적재. asyncio in-process 스케줄러 — 단일 replica 한정."
         ),
     },
+    {
+        "name": "subscriptions",
+        "description": (
+            "문서 팔로우 + 다이제스트. 구독 시 doc_edited / comment_added / "
+            "review_decided / doc_published 알림을 받는다. cadence=instant 면 "
+            "즉시 알림, daily/weekly 이면 pending_digest_items 에 적재해 "
+            "in-process digest_runner 가 묶어 한 번에 발송."
+        ),
+    },
 ]
 
 
@@ -227,17 +238,37 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     settings = get_settings()
     task: _asyncio.Task[None] | None = None
+    pruner_task: _asyncio.Task[None] | None = None
+    digest_task: _asyncio.Task[None] | None = None
     if settings.backup_enabled:
         from .services.backup_runner import backup_ticker
 
         task = _asyncio.create_task(backup_ticker(), name="mxwp-backup-ticker")
+
+    # Cycle 0016 — daily prune of anchor_samples (>30d old). Same single-
+    # replica caveat as the backup ticker.
+    from .services.analytics_pruner import analytics_pruner
+
+    pruner_task = _asyncio.create_task(
+        analytics_pruner(), name="mxwp-analytics-pruner",
+    )
+
+    # Cycle 0018 — subscription digest runner. Single-replica.
+    if getattr(settings, "subscription_digest_enabled", False):
+        from .services.digest_runner import digest_ticker
+
+        digest_task = _asyncio.create_task(
+            digest_ticker(), name="mxwp-digest-ticker",
+        )
     try:
         yield
     finally:
-        if task is not None:
-            task.cancel()
+        for t in (task, pruner_task, digest_task):
+            if t is None:
+                continue
+            t.cancel()
             try:
-                await task
+                await t
             except (BaseException,):  # noqa: BLE001 — cancel is expected
                 pass
 
@@ -324,10 +355,14 @@ def create_app() -> FastAPI:
     app.include_router(activity_router)
     # 실시간 프리젠스 — heartbeat + SSE
     app.include_router(presence_router)
+    # 임베디드 폼/설문 블록 응답
+    app.include_router(forms_router)
     # Outgoing webhook integrations (Slack/Discord/...).
     app.include_router(webhooks_router)
     # Cycle 0015 — scheduled backups + ad-hoc run-now (admin).
     app.include_router(backups_router)
+    # Cycle 0018 — document subscriptions + digest.
+    app.include_router(subscriptions_router)
 
     return app
 

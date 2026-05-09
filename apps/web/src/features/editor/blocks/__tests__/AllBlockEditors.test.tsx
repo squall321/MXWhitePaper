@@ -238,7 +238,7 @@ const CASES: Array<{
       engine: 'mermaid',
       source: 'graph LR\n  A-->B',
     } satisfies FlowBlock,
-    expect: 'aria-label="flow source"',
+    expect: 'aria-label="Mermaid 소스"',
   },
   {
     type: 'gallery',
@@ -366,7 +366,7 @@ const CASES: Array<{
       ],
       formula: 'a + b',
     } satisfies CalculatorBlock,
-    expect: 'formula',
+    expect: 'aria-label="수식"',
   },
   {
     type: 'whiteboard',

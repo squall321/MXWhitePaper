@@ -10,6 +10,7 @@ import { SectionRenderer } from './SectionRenderer'
 import { Badge } from '@/components/ui'
 import { FavoriteStar } from '@/features/favorites/components/FavoriteStar'
 import { BookmarkButton } from '@/features/bookmarks/components/BookmarkButton'
+import { FollowButton } from '@/features/subscriptions/FollowButton'
 import { estimateReadingTimeMinutes } from '@/lib/readingTime'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
 import { BulkActionsBar } from '@/features/editor/components/BulkActionsBar'
@@ -24,6 +25,8 @@ import { BlockPresenceMarker } from '@/features/presence/BlockPresenceMarker'
 import { useAnchorBlockTracker } from '@/features/presence/useAnchorBlockTracker'
 import { useState } from 'react'
 import type { DocStatus } from '@/features/approvals/api'
+import { useAuthStore } from '@/features/auth/store'
+import { DocAnalyticsModal } from '@/features/analytics/DocAnalyticsModal'
 
 interface WikiArticleProps {
   document: DocumentJSONV10
@@ -87,6 +90,12 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
   // the heartbeat can broadcast where each viewer is reading.
   useAnchorBlockTracker(document.slug)
 
+  // Cycle 0016 — per-doc analytics modal (editor+ visible).
+  const userRole = useAuthStore((s) => s.user?.role)
+  const canViewAnalytics =
+    !!editableSlug && (userRole === 'editor' || userRole === 'admin')
+  const [analyticsOpen, setAnalyticsOpen] = useState(false)
+
   return (
     <article className="relative space-y-6">
       <OfflineBanner />
@@ -121,8 +130,22 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           {row?.id && (
             <AddToSeriesButton slug={document.slug} documentId={row.id} />
           )}
+          {canViewAnalytics && (
+            <button
+              type="button"
+              onClick={() => setAnalyticsOpen(true)}
+              className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 hover:text-smsg-700"
+              data-testid="open-doc-analytics"
+              aria-label="문서 통계"
+              title="문서 통계"
+            >
+              <span aria-hidden="true">📊</span>
+              <span className="ml-1 hidden sm:inline">통계</span>
+            </button>
+          )}
           <FavoriteStar slug={document.slug} title={document.title} />
           <BookmarkButton slug={document.slug} title={document.title} />
+          <FollowButton slug={document.slug} />
         </div>
         <ReadingTimePill document={document} />
         {document.summary && (
@@ -193,6 +216,13 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
       {/* Right-margin presence dots — sibling overlay layer that polls
           getBoundingClientRect every 200ms; never touches block internals. */}
       <BlockPresenceMarker slug={document.slug} />
+      {canViewAnalytics && (
+        <DocAnalyticsModal
+          slug={document.slug}
+          open={analyticsOpen}
+          onClose={() => setAnalyticsOpen(false)}
+        />
+      )}
     </article>
   )
 }

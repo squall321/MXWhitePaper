@@ -122,7 +122,7 @@ describe('<CalculatorBlockEditor /> static render', () => {
     const html = renderToStaticMarkup(
       <CalculatorBlockEditor slug="test" block={block} />,
     )
-    expect(html).toContain('aria-label="formula"')
+    expect(html).toContain('aria-label="수식"')
     expect(html).toContain('aria-label="input 0 name"')
     expect(html).toContain('aria-label="input 1 name"')
     expect(html).toContain('수식')

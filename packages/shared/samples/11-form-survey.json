@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "id": "01J9X1Y2Z3A4B5C6D7E8F9G0FM",
+  "slug": "form-survey-sample",
+  "title": "폼/설문 샘플",
+  "summary": "텍스트·이메일·단일/복수 선택·별점이 모두 포함된 폼 블록 예제.",
+  "metadata": {
+    "division": "MX",
+    "owners": ["u-anyone"],
+    "tags": ["form", "survey", "예제"],
+    "confidentiality": "internal"
+  },
+  "sections": [
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9GFS1",
+      "number": "1",
+      "level": 1,
+      "title": "온보딩 설문",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9GFP1",
+          "text": "신규 입사자 대상 간단 설문입니다. 익명으로 처리되지 않으며, 응답은 인사팀이 검토합니다."
+        },
+        {
+          "type": "form",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9GFF1",
+          "title": "신규 입사자 온보딩 설문",
+          "description": "5분 안에 완료되는 짧은 설문입니다.",
+          "submit_label": "제출하기",
+          "thanks_message": "응답해 주셔서 감사합니다. 인사팀에서 빠른 시일 내에 검토하겠습니다.",
+          "allow_multiple_responses": false,
+          "questions": [
+            {
+              "id": "q-name",
+              "kind": "text",
+              "label": "이름",
+              "required": true,
+              "placeholder": "홍길동"
+            },
+            {
+              "id": "q-email",
+              "kind": "email",
+              "label": "이메일",
+              "required": true,
+              "placeholder": "name@example.com"
+            },
+            {
+              "id": "q-team",
+              "kind": "select",
+              "label": "소속 팀",
+              "required": true,
+              "options": ["MX 1팀", "MX 2팀", "MX 3팀", "기타"]
+            },
+            {
+              "id": "q-tools",
+              "kind": "multi-select",
+              "label": "자주 쓰는 협업 도구",
+              "required": false,
+              "options": ["Slack", "Notion", "Figma", "Jira", "기타"]
+            },
+            {
+              "id": "q-rating",
+              "kind": "rating-5",
+              "label": "온보딩 만족도",
+              "required": true
+            },
+            {
+              "id": "q-comments",
+              "kind": "long-text",
+              "label": "기타 의견",
+              "required": false,
+              "placeholder": "자유롭게 적어주세요"
+            }
+          ]
+        }
+      ],
+      "subsections": []
+    }
+  ]
+}

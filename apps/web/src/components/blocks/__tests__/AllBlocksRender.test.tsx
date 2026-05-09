@@ -240,6 +240,15 @@ const BLOCKS: Record<string, Block> = {
       },
     ],
   },
+  form: {
+    type: 'form',
+    id: ID(28),
+    title: '온보딩 설문',
+    questions: [
+      { id: 'q1', kind: 'text', label: '이름', required: true },
+      { id: 'q2', kind: 'rating-5', label: '만족도' },
+    ],
+  },
 }
 
 describe('<BlockRenderer /> read-mode coverage — every block type', () => {
@@ -248,7 +257,7 @@ describe('<BlockRenderer /> read-mode coverage — every block type', () => {
     useEditorStore.getState().reset()
   })
 
-  // 27 explicit cases — one per SSOT block type.
+  // 28 explicit cases — one per SSOT block type.
   for (const [type, block] of Object.entries(BLOCKS)) {
     it(`renders ${type} without throwing and produces non-empty HTML`, () => {
       const html = renderToStaticMarkup(harness(<BlockRenderer block={block} />))

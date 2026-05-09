@@ -73,7 +73,7 @@ export function SettingsPage() {
           />
           <ToggleRow
             label={t('settings.theme.dark')}
-            description="아직 베타입니다. 토큰만 준비되어 있어요."
+            description={t('settings.darkBetaHelp')}
             checked={darkMode}
             onChange={(v) => {
               setOne('darkMode', v)

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { TableBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   slug: Slug
@@ -25,6 +26,7 @@ interface Props {
  *     header row.
  */
 export function TableBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
@@ -58,14 +60,14 @@ export function TableBlockEditor({ slug, block }: Props) {
         block.id,
         { headers: next.headers, rows: next.rows },
         etag,
-        '표 편집',
+        t('editor.table.changeLog'),
       )
       apply(result.document, result.etag)
       setError(null)
     } catch (err) {
       if (isPreconditionFailed(err)) {
         setConflict(null)
-        setError('충돌 — 새로고침 필요')
+        setError(t('editor.common.conflict'))
       } else {
         setError((err as Error).message)
       }
@@ -108,7 +110,10 @@ export function TableBlockEditor({ slug, block }: Props) {
     schedule({ ...local, rows })
   }
   const addColumn = () => {
-    const headers = [...local.headers, `열 ${local.headers.length + 1}`]
+    const headers = [
+      ...local.headers,
+      t('editor.table.newColumnName', { n: local.headers.length + 1 }),
+    ]
     const rows = local.rows.map((r) => [...r, ''])
     schedule({ ...local, headers, rows })
   }
@@ -136,17 +141,17 @@ export function TableBlockEditor({ slug, block }: Props) {
                     type="text"
                     value={h}
                     onChange={(e) => setHeader(c, e.target.value)}
-                    aria-label={`헤더 ${c + 1}`}
+                    aria-label={t('editor.table.headerLabel', { n: c + 1 })}
                     className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 font-semibold text-smsg-900 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none"
                   />
                   <button
                     type="button"
-                    aria-label={`열 ${c + 1} 삭제`}
+                    aria-label={t('editor.table.removeColumn', { n: c + 1 })}
                     onClick={() => removeColumn(c)}
                     disabled={local.headers.length <= 1}
                     className="absolute right-0 top-0 hidden rounded px-1 text-[10px] text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 group-hover/col:block"
                   >
-                    ✕
+                    <span aria-hidden="true">✕</span>
                   </button>
                 </th>
               ))}
@@ -159,29 +164,29 @@ export function TableBlockEditor({ slug, block }: Props) {
                   <div className="flex flex-col items-center gap-0.5 py-1 opacity-0 transition-opacity group-hover/row:opacity-100">
                     <button
                       type="button"
-                      aria-label={`행 ${r + 1} 위로`}
+                      aria-label={t('editor.table.moveRowUp', { n: r + 1 })}
                       onClick={() => moveRow(r, -1)}
                       disabled={r === 0}
                       className="rounded px-1 hover:bg-smsg-100 disabled:opacity-30"
                     >
-                      ▲
+                      <span aria-hidden="true">▲</span>
                     </button>
                     <button
                       type="button"
-                      aria-label={`행 ${r + 1} 아래로`}
+                      aria-label={t('editor.table.moveRowDown', { n: r + 1 })}
                       onClick={() => moveRow(r, 1)}
                       disabled={r === local.rows.length - 1}
                       className="rounded px-1 hover:bg-smsg-100 disabled:opacity-30"
                     >
-                      ▼
+                      <span aria-hidden="true">▼</span>
                     </button>
                     <button
                       type="button"
-                      aria-label={`행 ${r + 1} 삭제`}
+                      aria-label={t('editor.table.removeRow', { n: r + 1 })}
                       onClick={() => removeRow(r)}
                       className="rounded px-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
                     >
-                      ✕
+                      <span aria-hidden="true">✕</span>
                     </button>
                   </div>
                 </td>
@@ -194,7 +199,7 @@ export function TableBlockEditor({ slug, block }: Props) {
                       type="text"
                       value={cell}
                       onChange={(e) => setCell(r, c, e.target.value)}
-                      aria-label={`${r + 1}행 ${c + 1}열`}
+                      aria-label={t('editor.table.cellLabel', { r: r + 1, c: c + 1 })}
                       className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none"
                     />
                   </td>
@@ -211,16 +216,16 @@ export function TableBlockEditor({ slug, block }: Props) {
           onClick={addRow}
           className="rounded border border-dashed border-smsg-300 px-2 py-1 text-smsg-700 hover:bg-smsg-100"
         >
-          + 행
+          {t('editor.table.addRow')}
         </button>
         <button
           type="button"
           onClick={addColumn}
           className="rounded border border-dashed border-smsg-300 px-2 py-1 text-smsg-700 hover:bg-smsg-100"
         >
-          + 열
+          {t('editor.table.addColumn')}
         </button>
-        {error && <span className="text-red-600">{error}</span>}
+        {error && <span role="status" aria-live="polite" className="text-red-600">{error}</span>}
       </div>
     </div>
   )

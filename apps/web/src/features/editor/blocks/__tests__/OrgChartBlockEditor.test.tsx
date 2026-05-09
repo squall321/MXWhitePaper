@@ -101,7 +101,9 @@ describe('<OrgChartBlockEditor />', () => {
     )
     expect(html).toContain('aria-label="node r label"')
     expect(html).toContain('aria-label="node a label"')
-    expect(html).toContain('aria-label="add child to r"')
+    // ARIA labels for the inline action buttons are now i18n-driven (defaults
+    // to Korean) — match the localized form.
+    expect(html).toContain('aria-label="r 아래에 자식 추가"')
   })
 
   it('exposes the CSV paste textarea', () => {

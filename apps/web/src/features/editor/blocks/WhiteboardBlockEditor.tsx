@@ -13,6 +13,7 @@ import type {
 import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { WhiteboardElementsLayer } from '@/components/blocks/WhiteboardBlock'
+import { useT } from '@/lib/i18n'
 
 /**
  * In-house whiteboard editor — pen / shapes / text / eraser, persisted as
@@ -222,6 +223,7 @@ export function resizeShape(
 /* ---------- React component ---------- */
 
 export function WhiteboardBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
 
@@ -272,17 +274,17 @@ export function WhiteboardBlockEditor({ slug, block }: Props) {
           block.id,
           { ...block, elements: next },
           etag,
-          '화이트보드 편집',
+          t('editor.wb.changeLog'),
         )
         apply(result.document, result.etag)
         setError(null)
         setSavedOnce(true)
       } catch (err) {
-        if (isPreconditionFailed(err)) setError('충돌 — 새로고침 필요')
+        if (isPreconditionFailed(err)) setError(t('editor.common.conflict'))
         else setError((err as Error).message)
       }
     },
-    [apply, block, etag, slug],
+    [apply, block, etag, slug, t],
   )
 
   const schedulePersist = useCallback(
@@ -418,24 +420,24 @@ export function WhiteboardBlockEditor({ slug, block }: Props) {
     >
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
-        <ToolButton tool={tool} setTool={setTool} value="pen" label="펜" />
-        <ToolButton tool={tool} setTool={setTool} value="eraser" label="지우개" />
-        <ToolButton tool={tool} setTool={setTool} value="rect" label="사각형" />
-        <ToolButton tool={tool} setTool={setTool} value="ellipse" label="원" />
-        <ToolButton tool={tool} setTool={setTool} value="line" label="선" />
-        <ToolButton tool={tool} setTool={setTool} value="arrow" label="화살표" />
-        <ToolButton tool={tool} setTool={setTool} value="text" label="텍스트" />
+        <ToolButton tool={tool} setTool={setTool} value="pen" label={t('editor.wb.tool.pen')} />
+        <ToolButton tool={tool} setTool={setTool} value="eraser" label={t('editor.wb.tool.eraser')} />
+        <ToolButton tool={tool} setTool={setTool} value="rect" label={t('editor.wb.tool.rect')} />
+        <ToolButton tool={tool} setTool={setTool} value="ellipse" label={t('editor.wb.tool.ellipse')} />
+        <ToolButton tool={tool} setTool={setTool} value="line" label={t('editor.wb.tool.line')} />
+        <ToolButton tool={tool} setTool={setTool} value="arrow" label={t('editor.wb.tool.arrow')} />
+        <ToolButton tool={tool} setTool={setTool} value="text" label={t('editor.wb.tool.text')} />
 
-        <span className="mx-1 h-5 w-px bg-gray-300" aria-hidden />
+        <span className="mx-1 h-5 w-px bg-gray-300" aria-hidden="true" />
 
-        <div className="flex items-center gap-1" role="radiogroup" aria-label="색상">
+        <div className="flex items-center gap-1" role="radiogroup" aria-label={t('editor.wb.colorGroup')}>
           {WB_COLORS.map((c) => (
             <button
               key={c}
               type="button"
               role="radio"
               aria-checked={color === c}
-              aria-label={`색상 ${c}`}
+              aria-label={t('editor.wb.colorLabel', { color: c })}
               onClick={() => setColor(c)}
               className={`h-5 w-5 rounded-full border ${color === c ? 'border-black ring-2 ring-smsg-400' : 'border-gray-400'}`}
               style={{ background: c }}
@@ -443,16 +445,16 @@ export function WhiteboardBlockEditor({ slug, block }: Props) {
           ))}
           <input
             type="color"
-            aria-label="사용자 색상"
+            aria-label={t('editor.wb.customColor')}
             value={color}
             onChange={(e) => setColor(e.target.value)}
             className="h-5 w-7 cursor-pointer rounded border border-gray-300"
           />
         </div>
 
-        <span className="mx-1 h-5 w-px bg-gray-300" aria-hidden />
+        <span className="mx-1 h-5 w-px bg-gray-300" aria-hidden="true" />
 
-        <div className="flex items-center gap-1" role="radiogroup" aria-label="굵기">
+        <div className="flex items-center gap-1" role="radiogroup" aria-label={t('editor.wb.widthGroup')}>
           {WB_WIDTHS.map((wp) => (
             <button
               key={wp}
@@ -467,14 +469,14 @@ export function WhiteboardBlockEditor({ slug, block }: Props) {
               <span
                 className="block rounded-full bg-current"
                 style={{ width: wp * 2, height: wp * 2 }}
-                aria-hidden
+                aria-hidden="true"
               />
               <span className="sr-only">{wp}</span>
             </button>
           ))}
         </div>
 
-        <span className="mx-1 h-5 w-px bg-gray-300" aria-hidden />
+        <span className="mx-1 h-5 w-px bg-gray-300" aria-hidden="true" />
 
         <button
           type="button"
@@ -482,7 +484,7 @@ export function WhiteboardBlockEditor({ slug, block }: Props) {
           className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-40"
           disabled={undoStack.current.length === 0}
         >
-          되돌리기
+          {t('editor.wb.undo')}
         </button>
         <button
           type="button"
@@ -490,18 +492,22 @@ export function WhiteboardBlockEditor({ slug, block }: Props) {
           className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-40"
           disabled={redoStack.current.length === 0}
         >
-          다시실행
+          {t('editor.wb.redo')}
         </button>
         <button
           type="button"
           onClick={onClear}
           className="rounded-md border border-red-300 bg-white px-2 py-1 text-xs text-red-700 hover:bg-red-50"
         >
-          지우기
+          {t('editor.wb.clear')}
         </button>
       </div>
 
-      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      {error && (
+        <p role="status" aria-live="polite" className="text-[11px] text-red-600">
+          {error}
+        </p>
+      )}
 
       {/* Canvas */}
       <div className="relative rounded border border-gray-200 bg-white">
@@ -509,7 +515,7 @@ export function WhiteboardBlockEditor({ slug, block }: Props) {
           ref={svgRef}
           viewBox={`0 0 ${block.viewbox.w} ${block.viewbox.h}`}
           width="100%"
-          aria-label="화이트보드 캔버스"
+          aria-label={t('editor.wb.canvasLabel')}
           data-whiteboard-canvas
           className="block max-w-full touch-none select-none"
           style={{ aspectRatio: `${block.viewbox.w}/${block.viewbox.h}` }}
@@ -524,7 +530,7 @@ export function WhiteboardBlockEditor({ slug, block }: Props) {
           <input
             autoFocus
             type="text"
-            aria-label="텍스트 입력"
+            aria-label={t('editor.wb.textInput')}
             value={textValue}
             onChange={(e) => setTextValue(e.target.value)}
             onBlur={commitText}

@@ -18,6 +18,7 @@ import { CropOverlay } from '@/features/upload/CropOverlay'
 import { uploadImage } from '@/features/upload/uploadImage'
 import { loadImageElement, rotateImageToBlob } from '@/features/upload/canvasEncode'
 import { rotate90 } from '@/features/upload/cropMath'
+import { useT } from '@/lib/i18n'
 
 /**
  * Pure keyboard policy for caption/alt inputs. Extracted so we can unit-test
@@ -163,6 +164,7 @@ export function ImageBlockEditor({
   block,
   autoFocusCaption,
 }: ImageBlockEditorProps) {
+  const t = useT()
   const { data: image } = useImage(block.imageId || undefined)
   const etag = useEditorStore((s) => s.etag)
   const applySnapshot = useEditorStore((s) => s.applyServerSnapshot)
@@ -224,13 +226,13 @@ export function ImageBlockEditor({
       setBusy(true)
       setError(null)
       try {
-        const result = await patchBlock(slug, block.id, patch, etag, '이미지 편집')
+        const result = await patchBlock(slug, block.id, patch, etag, t('editor.image.changeLog'))
         applySnapshot(result.document, result.etag)
         setSavedOnce(true)
       } catch (err) {
         if (isPreconditionFailed(err)) {
           setConflict(null)
-          setError('충돌 — 새로고침 필요')
+          setError(t('editor.common.conflict'))
         } else {
           setError((err as Error).message)
         }
@@ -238,7 +240,7 @@ export function ImageBlockEditor({
         setBusy(false)
       }
     },
-    [etag, slug, block.id, applySnapshot, setConflict],
+    [etag, slug, block.id, applySnapshot, setConflict, t],
   )
 
   const onCaptionKey = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -346,7 +348,7 @@ export function ImageBlockEditor({
         {/* Hover toolbar */}
         <div className="absolute right-2 top-2 flex items-center gap-1 rounded-md bg-white/95 p-1 text-xs opacity-0 shadow-md backdrop-blur-sm transition-all duration-base group-hover:opacity-100 group-focus-within:opacity-100">
           <select
-            aria-label="크기"
+            aria-label={t('editor.image.size')}
             value={block.width ?? 'md'}
             onChange={onWidth}
             disabled={busy}
@@ -359,7 +361,7 @@ export function ImageBlockEditor({
             ))}
           </select>
           <select
-            aria-label="정렬"
+            aria-label={t('editor.image.align')}
             value={block.meta?.align ?? 'center'}
             onChange={onAlign}
             disabled={busy}
@@ -373,53 +375,53 @@ export function ImageBlockEditor({
           </select>
           <button
             type="button"
-            title="자르기"
-            aria-label="이미지 자르기"
+            title={t('editor.image.crop')}
+            aria-label={t('editor.image.cropAria')}
             data-action="crop"
             onClick={() => setCropOpen(true)}
             disabled={busy || usingSample}
             className="rounded px-1 hover:bg-smsg-100 disabled:opacity-40"
           >
-            ✂
+            <span aria-hidden="true">✂</span>
           </button>
           <button
             type="button"
-            title="회전 (90°)"
-            aria-label="이미지 90도 회전"
+            title={t('editor.image.rotateTitle')}
+            aria-label={t('editor.image.rotateAria')}
             data-action="rotate"
             onClick={() => void onRotateClick()}
             disabled={busy || rotateBusy || usingSample}
             className="rounded px-1 hover:bg-smsg-100 disabled:opacity-40"
           >
-            ↻
+            <span aria-hidden="true">↻</span>
           </button>
           <button
             type="button"
-            title="교체"
-            aria-label="이미지 교체"
+            title={t('editor.image.replaceTitle')}
+            aria-label={t('editor.image.replaceAria')}
             onClick={onReplaceClick}
             className="rounded px-1 hover:bg-smsg-100"
           >
-            🔁
+            <span aria-hidden="true">🔁</span>
           </button>
           <button
             type="button"
-            title="샘플 이미지 갤러리"
-            aria-label="샘플 이미지 갤러리"
+            title={t('editor.image.galleryTitle')}
+            aria-label={t('editor.image.galleryTitle')}
             onClick={() => setGalleryOpen((v) => !v)}
             className="rounded px-1 hover:bg-smsg-100"
           >
-            🖻
+            <span aria-hidden="true">🖻</span>
           </button>
           {image && (
             <a
               href={image.urls.orig}
               download
-              title="다운로드"
-              aria-label="원본 다운로드"
+              title={t('editor.image.downloadTitle')}
+              aria-label={t('editor.image.downloadAria')}
               className="rounded px-1 hover:bg-smsg-100"
             >
-              ⬇
+              <span aria-hidden="true">⬇</span>
             </a>
           )}
         </div>
@@ -434,8 +436,8 @@ export function ImageBlockEditor({
           onChange={(e) => setCaption(e.target.value)}
           onKeyDown={onCaptionKey}
           onBlur={onCaptionBlur}
-          placeholder="캡션 입력..."
-          aria-label="이미지 캡션"
+          placeholder={t('editor.image.captionPlaceholder')}
+          aria-label={t('editor.image.captionLabel')}
           data-pulsing={captionPulsing ? '' : undefined}
           className={`w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-center transition-shadow hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none ${
             captionPulsing
@@ -451,44 +453,50 @@ export function ImageBlockEditor({
             onChange={(e) => setAlt(e.target.value)}
             onKeyDown={onAltKey}
             onBlur={onAltBlur}
-            placeholder="대체 텍스트 (alt)"
-            aria-label="이미지 alt 텍스트"
+            placeholder={t('editor.image.altPlaceholder')}
+            aria-label={t('editor.image.altLabel')}
             className="flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none"
           />
           <input
             type="text"
             defaultValue={block.link ?? ''}
             onBlur={onLink}
-            placeholder="링크 (URL or slug)"
-            aria-label="이미지 링크"
+            placeholder={t('editor.image.linkPlaceholder')}
+            aria-label={t('editor.image.linkLabel')}
             className="w-40 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none"
           />
         </div>
         {altWarn && !altChipDismissed && (
           <div
             data-alt-warning
+            role="status"
+            aria-live="polite"
             className="flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-0.5 text-[11px] text-amber-800"
           >
-            <span aria-hidden>⚠</span>
-            <span className="flex-1">alt 입력 추천 — 접근성/검색에 도움이 돼요.</span>
+            <span aria-hidden="true">⚠</span>
+            <span className="flex-1">{t('editor.image.altWarn')}</span>
             <button
               type="button"
               onClick={() => altRef.current?.focus()}
               className="rounded bg-amber-100 px-2 py-0.5 font-medium hover:bg-amber-200"
             >
-              alt 입력
+              {t('editor.image.altInsert')}
             </button>
             <button
               type="button"
-              aria-label="이번 세션에서는 숨기기"
+              aria-label={t('editor.image.altDismiss')}
               onClick={() => setAltChipDismissed(true)}
               className="rounded px-1 hover:bg-amber-100"
             >
-              ✕
+              <span aria-hidden="true">✕</span>
             </button>
           </div>
         )}
-        {error && <p className="text-red-600">{error}</p>}
+        {error && (
+          <p role="status" aria-live="polite" className="text-red-600">
+            {error}
+          </p>
+        )}
       </div>
 
       {/* Sample image gallery — appears when toggled on by 🖻 chip. */}
@@ -501,7 +509,7 @@ export function ImageBlockEditor({
             <button
               key={sample.id}
               type="button"
-              aria-label={`샘플 ${sample.label}`}
+              aria-label={t('editor.image.sampleLabel', { label: sample.label })}
               data-sample-id={sample.id}
               onClick={() => {
                 void persist({ imageId: `sample:${sample.id}` })

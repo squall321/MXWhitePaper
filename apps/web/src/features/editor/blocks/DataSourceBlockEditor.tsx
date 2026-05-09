@@ -7,12 +7,14 @@ import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { DataSourceBlockView } from '@/components/blocks/DataSourceBlock'
 import { BlockHelpDrawer } from '@/features/editor/components/BlockHelpDrawer'
+import { useT } from '@/lib/i18n'
 
 const RENDER_OPTIONS: DataSourceBlock['render'][] = ['table', 'chart', 'kpi-cards']
-const RENDER_LABEL: Record<DataSourceBlock['render'], string> = {
-  table: '표',
-  chart: '차트',
-  'kpi-cards': 'KPI 카드',
+/** i18n key for each render mode label. */
+const RENDER_LABEL_KEY: Record<DataSourceBlock['render'], string> = {
+  table: 'editor.dataSource.renderTable',
+  chart: 'editor.dataSource.renderChart',
+  'kpi-cards': 'editor.dataSource.renderKpi',
 }
 
 interface Props {
@@ -33,6 +35,7 @@ function pickEndpoint(w: WidgetRegistryEntry): string {
  * refresh interval, and live-preview the same `DataSourceBlockView`.
  */
 export function DataSourceBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const [local, setLocal] = useState<DataSourceBlock>(block)
@@ -53,11 +56,11 @@ export function DataSourceBlockEditor({ slug, block }: Props) {
     setLocal(next)
     if (!etag) return
     try {
-      const result = await patchBlock(slug, block.id, next, etag, '데이터 소스 편집')
+      const result = await patchBlock(slug, block.id, next, etag, t('editor.dataSource.changeLog'))
       apply(result.document, result.etag)
       setError(null)
     } catch (err) {
-      if (isPreconditionFailed(err)) setError('충돌 — 새로고침 필요')
+      if (isPreconditionFailed(err)) setError(t('editor.common.conflict'))
       else setError((err as Error).message)
     }
   }
@@ -82,7 +85,7 @@ export function DataSourceBlockEditor({ slug, block }: Props) {
         setParamsErr(null)
         void push({ ...local, params: parsed })
       } else {
-        setParamsErr('JSON 객체여야 합니다.')
+        setParamsErr(t('editor.dataSource.paramsObjectRequired'))
       }
     } catch (err) {
       setParamsErr((err as Error).message)
@@ -106,30 +109,36 @@ export function DataSourceBlockEditor({ slug, block }: Props) {
           className="rounded-md border border-dashed border-smsg-300 bg-white p-4 text-center dark:bg-gray-900"
         >
           <p className="text-sm text-gray-700 dark:text-gray-300">
-            이 블록은 <strong>실시간 위젯 데이터</strong>(표 / 차트 / KPI)를 보여줍니다.
+            {t('editor.dataSource.empty')}
           </p>
           <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row">
             <Button size="sm" type="button" onClick={onUseSample} disabled={!sampleEntry}>
-              {sampleEntry ? `샘플 데이터 사용 (${sampleEntry.name})` : '데이터 연결'}
+              {sampleEntry
+                ? t('editor.dataSource.useSample', { name: sampleEntry.name })
+                : t('editor.dataSource.connect')}
             </Button>
             <button
               type="button"
               className="text-xs text-link hover:underline"
               onClick={() => setHelpOpen(true)}
             >
-              도움말 보기
+              {t('common.helpMore')}
             </button>
           </div>
         </div>
       )}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Field label="위젯 레지스트리" hint={registry.isLoading ? '불러오는 중…' : undefined}>
+        <Field
+          label={t('editor.dataSource.registry')}
+          hint={registry.isLoading ? t('editor.dataSource.loading') : undefined}
+        >
           <Select
             value=""
             onChange={(e) => onPickRegistry(e.target.value)}
             disabled={registry.isLoading}
+            aria-label={t('editor.dataSource.registry')}
           >
-            <option value="">위젯 선택…</option>
+            <option value="">{t('editor.dataSource.pickWidget')}</option>
             {(registry.data ?? []).map((w) => (
               <option key={w.type} value={w.type}>
                 {w.name} ({w.type})
@@ -137,31 +146,33 @@ export function DataSourceBlockEditor({ slug, block }: Props) {
             ))}
           </Select>
         </Field>
-        <Field label="렌더 모드">
+        <Field label={t('editor.dataSource.renderMode')}>
           <Select
             value={local.render}
             onChange={(e) =>
               void push({ ...local, render: e.target.value as DataSourceBlock['render'] })
             }
+            aria-label={t('editor.dataSource.renderMode')}
           >
             {RENDER_OPTIONS.map((m) => (
               <option key={m} value={m}>
-                {RENDER_LABEL[m]}
+                {t(RENDER_LABEL_KEY[m])}
               </option>
             ))}
           </Select>
         </Field>
-        <Field label="Endpoint" className="md:col-span-2">
+        <Field label={t('editor.dataSource.endpoint')} className="md:col-span-2">
           <Input
             value={local.endpoint}
             onChange={(e) => setLocal({ ...local, endpoint: e.target.value })}
             onBlur={() => void push(local)}
             placeholder="/widgets/kpi/finance-daily"
+            aria-label={t('editor.dataSource.endpoint')}
           />
         </Field>
         <Field
-          label={`갱신 주기: ${local.refreshInterval ?? 60}s`}
-          hint="30초 ~ 3600초"
+          label={t('editor.dataSource.refreshLabel', { n: local.refreshInterval ?? 60 })}
+          hint={t('editor.dataSource.refreshHint')}
           className="md:col-span-2"
         >
           <input
@@ -178,22 +189,27 @@ export function DataSourceBlockEditor({ slug, block }: Props) {
             className="w-full"
           />
         </Field>
-        <Field label="파라미터 (JSON)" error={paramsErr ?? undefined} className="md:col-span-2">
+        <Field label={t('editor.dataSource.params')} error={paramsErr ?? undefined} className="md:col-span-2">
           <textarea
             value={paramsText}
             onChange={(e) => setParamsText(e.target.value)}
             onBlur={onParamsBlur}
             rows={3}
+            aria-label={t('editor.dataSource.params')}
             className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-xs"
           />
         </Field>
       </div>
 
-      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      {error && (
+        <p role="status" aria-live="polite" className="text-[11px] text-red-600">
+          {error}
+        </p>
+      )}
 
       <div className="rounded border border-gray-200 bg-white p-2">
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-          미리보기
+          {t('editor.dataSource.preview')}
         </p>
         <DataSourceBlockView block={local} />
       </div>

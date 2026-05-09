@@ -573,6 +573,30 @@ class WhiteboardElement(
     root: WhiteboardElement1 | WhiteboardElement2 | WhiteboardElement3
 
 
+class Kind1(Enum):
+    text = 'text'
+    long_text = 'long-text'
+    email = 'email'
+    number = 'number'
+    select = 'select'
+    multi_select = 'multi-select'
+    checkbox = 'checkbox'
+    rating_5 = 'rating-5'
+    date = 'date'
+
+
+class FormQuestion(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    kind: Kind1
+    label: str
+    required: bool | None = False
+    placeholder: str | None = None
+    options: list[str] | None = None
+
+
 class RelatedDoc(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -623,6 +647,21 @@ class WhiteboardBlock(BaseModel):
     title: str | None = None
     viewbox: Viewbox
     elements: list[WhiteboardElement]
+    meta: BlockMeta | None = None
+
+
+class FormBlock(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['form']
+    id: Ulid
+    title: str | None = None
+    description: str | None = None
+    questions: list[FormQuestion] = Field(..., min_length=1)
+    submit_label: str | None = '제출'
+    thanks_message: str | None = '응답해 주셔서 감사합니다.'
+    allow_multiple_responses: bool | None = False
     meta: BlockMeta | None = None
 
 
@@ -769,6 +808,7 @@ class Block(
         | DashboardEmbedBlock
         | CalculatorBlock
         | WhiteboardBlock
+        | FormBlock
     ]
 ):
     root: (
@@ -799,6 +839,7 @@ class Block(
         | DashboardEmbedBlock
         | CalculatorBlock
         | WhiteboardBlock
+        | FormBlock
     )
 
 

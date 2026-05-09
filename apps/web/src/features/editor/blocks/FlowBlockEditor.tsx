@@ -4,6 +4,7 @@ import { Field, Select } from '@/components/ui'
 import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { FlowBlockView } from '@/components/blocks/FlowBlock'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   slug: Slug
@@ -18,7 +19,8 @@ interface Props {
  */
 export interface FlowKind {
   id: string
-  label: string
+  /** i18n key for the visible label (e.g. `editor.flow.kind.flowchart`). */
+  labelKey: string
   /** Token that starts a Mermaid block of this kind (used to detect kind from source). */
   detect: string[]
   source: string
@@ -27,13 +29,13 @@ export interface FlowKind {
 export const FLOW_KINDS: ReadonlyArray<FlowKind> = [
   {
     id: 'flowchart',
-    label: '순서도',
+    labelKey: 'editor.flow.kind.flowchart',
     detect: ['flowchart', 'graph'],
     source: ['flowchart TD', '  A[시작] --> B{조건?}', '  B -- 예 --> C[처리]', '  B -- 아니오 --> D[종료]'].join('\n'),
   },
   {
     id: 'sequence',
-    label: '시퀀스',
+    labelKey: 'editor.flow.kind.sequence',
     detect: ['sequenceDiagram'],
     source: [
       'sequenceDiagram',
@@ -45,7 +47,7 @@ export const FLOW_KINDS: ReadonlyArray<FlowKind> = [
   },
   {
     id: 'class',
-    label: '클래스',
+    labelKey: 'editor.flow.kind.class',
     detect: ['classDiagram'],
     source: [
       'classDiagram',
@@ -61,7 +63,7 @@ export const FLOW_KINDS: ReadonlyArray<FlowKind> = [
   },
   {
     id: 'state',
-    label: '상태',
+    labelKey: 'editor.flow.kind.state',
     detect: ['stateDiagram', 'stateDiagram-v2'],
     source: [
       'stateDiagram-v2',
@@ -73,7 +75,7 @@ export const FLOW_KINDS: ReadonlyArray<FlowKind> = [
   },
   {
     id: 'gantt',
-    label: '간트',
+    labelKey: 'editor.flow.kind.gantt',
     detect: ['gantt'],
     source: [
       'gantt',
@@ -86,7 +88,7 @@ export const FLOW_KINDS: ReadonlyArray<FlowKind> = [
   },
   {
     id: 'mindmap',
-    label: '마인드맵',
+    labelKey: 'editor.flow.kind.mindmap',
     detect: ['mindmap'],
     source: [
       'mindmap',
@@ -100,7 +102,7 @@ export const FLOW_KINDS: ReadonlyArray<FlowKind> = [
   },
   {
     id: 'pie',
-    label: '파이',
+    labelKey: 'editor.flow.kind.pie',
     detect: ['pie'],
     source: [
       'pie title 분포',
@@ -111,7 +113,7 @@ export const FLOW_KINDS: ReadonlyArray<FlowKind> = [
   },
   {
     id: 'journey',
-    label: '여정',
+    labelKey: 'editor.flow.kind.journey',
     detect: ['journey'],
     source: [
       'journey',
@@ -129,21 +131,22 @@ export const FLOW_KINDS: ReadonlyArray<FlowKind> = [
  * purpose so the right column doesn't dwarf the editor.
  */
 export interface FlowExample {
-  label: string
+  /** i18n key for the visible label. */
+  labelKey: string
   source: string
 }
 
 export const FLOW_EXAMPLES: ReadonlyArray<FlowExample> = [
   {
-    label: '기본 순서도',
+    labelKey: 'editor.flow.example.basic',
     source: ['flowchart LR', '  A --> B --> C'].join('\n'),
   },
   {
-    label: '시퀀스 한 쌍',
+    labelKey: 'editor.flow.example.sequence',
     source: ['sequenceDiagram', '  A->>B: 안녕', '  B-->>A: 응'].join('\n'),
   },
   {
-    label: '간트 1줄',
+    labelKey: 'editor.flow.example.gantt',
     source: [
       'gantt',
       '  dateFormat YYYY-MM-DD',
@@ -174,6 +177,7 @@ const PERSIST_MS = 800
 const PREVIEW_MS = 300
 
 export function FlowBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const [source, setSource] = useState<string>(block.source)
@@ -212,13 +216,13 @@ export function FlowBlockEditor({ slug, block }: Props) {
         block.id,
         { ...block, engine: 'mermaid', source: next },
         etag,
-        '플로우 편집',
+        t('editor.flow.changeLog'),
       )
       apply(result.document, result.etag)
       setError(null)
       setSavedOnce(true)
     } catch (err) {
-      if (isPreconditionFailed(err)) setError('충돌 — 새로고침 필요')
+      if (isPreconditionFailed(err)) setError(t('editor.common.conflict'))
       else setError((err as Error).message)
     }
   }
@@ -273,15 +277,15 @@ export function FlowBlockEditor({ slug, block }: Props) {
       data-block-id={block.id}
     >
       <div className="flex flex-wrap items-end gap-2">
-        <Field label="다이어그램 종류">
+        <Field label={t('editor.flow.kindLabel')}>
           <Select
             value={activeKind}
             onChange={(e) => onPickKind(e.target.value)}
-            aria-label="flow kind"
+            aria-label={t('editor.flow.kindLabel')}
           >
-            <option value="">선택…</option>
+            <option value="">{t('editor.flow.kindPick')}</option>
             {FLOW_KINDS.map((k) => (
-              <option key={k.id} value={k.id}>{k.label}</option>
+              <option key={k.id} value={k.id}>{t(k.labelKey)}</option>
             ))}
           </Select>
         </Field>
@@ -290,13 +294,13 @@ export function FlowBlockEditor({ slug, block }: Props) {
           onClick={onClear}
           className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
         >
-          비우기
+          {t('editor.flow.clear')}
         </button>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
         <div className="space-y-3">
-          <Field label="Mermaid 소스">
+          <Field label={t('editor.flow.sourceLabel')}>
             <div className="flex overflow-hidden rounded-md border border-gray-300 bg-white font-mono text-xs">
               <div
                 ref={lineNumRef}
@@ -315,7 +319,7 @@ export function FlowBlockEditor({ slug, block }: Props) {
                 onChange={(e) => onSourceChange(e.target.value)}
                 onScroll={onScroll}
                 rows={Math.min(20, Math.max(8, lines.length + 1))}
-                aria-label="flow source"
+                aria-label={t('editor.flow.sourceLabel')}
                 spellCheck={false}
                 className="block w-full resize-y bg-white px-3 py-2 leading-6 text-gray-900 outline-none"
                 style={{ lineHeight: '1.5rem' }}
@@ -323,11 +327,15 @@ export function FlowBlockEditor({ slug, block }: Props) {
             </div>
           </Field>
 
-          {error && <p className="text-[11px] text-red-600">{error}</p>}
+          {error && (
+            <p role="status" aria-live="polite" className="text-[11px] text-red-600">
+              {error}
+            </p>
+          )}
 
           <div className="rounded border border-gray-200 bg-white p-2">
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-              미리보기
+              {t('editor.flow.preview')}
             </p>
             <FlowBlockView block={previewBlock} />
           </div>
@@ -335,28 +343,31 @@ export function FlowBlockEditor({ slug, block }: Props) {
 
         <aside
           className="rounded border border-gray-200 bg-white p-2 text-[11px]"
-          aria-label="cheat sheet"
+          aria-label={t('editor.flow.cheatSheet')}
         >
           <p className="mb-1 font-semibold uppercase tracking-wide text-gray-500">
-            이렇게 쓰세요
+            {t('editor.flow.cheatSheet')}
           </p>
           <ul className="space-y-2">
-            {FLOW_EXAMPLES.map((ex) => (
-              <li key={ex.label}>
-                <button
-                  type="button"
-                  onClick={() => onPickExample(ex)}
-                  className="block w-full rounded border border-gray-200 bg-gray-50 px-2 py-1 text-left hover:border-smsg-300 hover:bg-smsg-50"
-                  aria-label={`예제 채우기: ${ex.label}`}
-                  data-flow-example={ex.label}
-                >
-                  <span className="block font-semibold text-gray-700">{ex.label}</span>
-                  <pre className="mt-1 whitespace-pre-wrap font-mono text-[10px] text-gray-600">
-                    {ex.source}
-                  </pre>
-                </button>
-              </li>
-            ))}
+            {FLOW_EXAMPLES.map((ex) => {
+              const exLabel = t(ex.labelKey)
+              return (
+                <li key={ex.labelKey}>
+                  <button
+                    type="button"
+                    onClick={() => onPickExample(ex)}
+                    className="block w-full rounded border border-gray-200 bg-gray-50 px-2 py-1 text-left hover:border-smsg-300 hover:bg-smsg-50"
+                    aria-label={t('editor.flow.exampleFill', { label: exLabel })}
+                    data-flow-example={ex.labelKey}
+                  >
+                    <span className="block font-semibold text-gray-700">{exLabel}</span>
+                    <pre className="mt-1 whitespace-pre-wrap font-mono text-[10px] text-gray-600">
+                      {ex.source}
+                    </pre>
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         </aside>
       </div>
