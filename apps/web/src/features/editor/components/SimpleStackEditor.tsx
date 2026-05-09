@@ -24,6 +24,8 @@ import { useBulkSelectionStore } from '../bulkSelectionStore'
 import { BlockHoverInserter } from './BlockHoverInserter'
 import { BlockInsertPalette, type PaletteItem } from './BlockInsertPalette'
 import { InlineFormattingToolbar } from './InlineFormattingToolbar'
+import { LazyBlockSlot, LAZY_THRESHOLD } from './LazyBlockSlot'
+import { PerformanceBadge } from './PerformanceBadge'
 import { BlockRenderer } from '@/components/blocks/BlockRenderer'
 import { useSectionCollapseStore } from '../sectionCollapseStore'
 import { cloneBlockWithNewIds, looksLikeBlockArray } from './BulkActionsBar'
@@ -567,6 +569,7 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
                       onDelete={() => void onDelete(block.id)}
                       isSelected={selected.has(block.id)}
                       onSelectClick={(ev) => onBlockSelectClick(block.id, ev)}
+                      lazy={blocks.length > LAZY_THRESHOLD}
                     />
                   ))}
                 </div>
@@ -637,6 +640,10 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
           inside any [data-inline-text-editor] in this section. Renders a
           single instance regardless of how many text blocks are present. */}
       <InlineFormattingToolbar />
+
+      {/* Dev-only performance badge — only renders content when ?perf=1 is in
+          the URL. Cheap no-op otherwise so we leave it mounted unconditionally. */}
+      <PerformanceBadge />
     </section>
   )
 }
@@ -664,6 +671,8 @@ interface SortableBlockProps {
   onDelete: () => void
   isSelected: boolean
   onSelectClick: (ev: React.MouseEvent) => void
+  /** When true, wrap BlockRenderer in LazyBlockSlot for IO-driven hydration. */
+  lazy?: boolean
 }
 
 function SortableBlock({
@@ -674,6 +683,7 @@ function SortableBlock({
   onDelete,
   isSelected,
   onSelectClick,
+  lazy,
 }: SortableBlockProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
@@ -725,7 +735,13 @@ function SortableBlock({
         dragSetActivatorRef={setActivatorNodeRef}
         onRequestDelete={onDelete}
       >
-        <BlockRenderer block={block} />
+        {lazy ? (
+          <LazyBlockSlot block={block}>
+            <BlockRenderer block={block} />
+          </LazyBlockSlot>
+        ) : (
+          <BlockRenderer block={block} />
+        )}
       </BlockHoverInserter>
     </div>
   )

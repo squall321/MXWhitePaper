@@ -204,6 +204,21 @@ export function TopBar({
             )}
           </div>
 
+          {/* Cross-doc compare entry — minimal icon link to /compare. */}
+          <Link
+            to="/compare"
+            data-testid="topbar-compare"
+            aria-current={isActive('/compare') ? 'page' : undefined}
+            className={`hidden items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors sm:inline-flex ${
+              isActive('/compare')
+                ? 'bg-white/20 text-white'
+                : 'text-white/85 hover:bg-white/15 hover:text-white'
+            }`}
+          >
+            <span aria-hidden="true">📊</span>
+            <span>비교</span>
+          </Link>
+
           {/* Primary group: + 새 문서 (dropdown 으로 Word 가져오기 옵션 추가) */}
           {canWrite && (
             <NewDocMenu
@@ -539,6 +554,18 @@ function ProfileMenu({
               }}
               testId="profile-menu-help"
             />
+            <Link
+              to="/reviews"
+              role="menuitem"
+              onClick={close}
+              data-testid="profile-menu-reviews"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-smsg-50 hover:no-underline"
+            >
+              <span aria-hidden="true" className="w-4 text-center text-smsg-700">
+                ✓
+              </span>
+              내 리뷰 요청
+            </Link>
             <Link
               to="/snippets"
               role="menuitem"

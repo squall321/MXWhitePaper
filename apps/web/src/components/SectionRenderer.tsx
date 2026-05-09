@@ -6,6 +6,10 @@ import { Inline } from './wiki/Inline'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { SectionQuickEdit } from '@/features/editor/components/SectionQuickEdit'
 import { SimpleStackEditor } from '@/features/editor/components/SimpleStackEditor'
+import {
+  LazyBlockSlot,
+  LAZY_THRESHOLD,
+} from '@/features/editor/components/LazyBlockSlot'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
 
 /**
@@ -140,9 +144,19 @@ export function SectionRenderer({
 
       <CollapsiblePanel id={panelId} collapsed={collapsed}>
         <div className="mt-3 space-y-4">
-          {(section.blocks ?? []).map((block) => (
-            <BlockRenderer key={block.id} block={block} />
-          ))}
+          {(() => {
+            const directBlocks = section.blocks ?? []
+            const isLong = directBlocks.length > LAZY_THRESHOLD
+            return directBlocks.map((block) =>
+              isLong ? (
+                <LazyBlockSlot key={block.id} block={block}>
+                  <BlockRenderer block={block} />
+                </LazyBlockSlot>
+              ) : (
+                <BlockRenderer key={block.id} block={block} />
+              ),
+            )
+          })()}
         </div>
 
         {footnotes.length > 0 && <FootnoteList footnotes={footnotes} />}

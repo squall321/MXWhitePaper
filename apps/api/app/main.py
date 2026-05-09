@@ -18,6 +18,7 @@ from .core.errors import (
 from .routers.admin import router as admin_router
 from .routers.ai import router as ai_router
 from .routers.analytics import router as analytics_router
+from .routers.approvals import router as approvals_router
 from .routers.auth import router as auth_router
 from .routers.bookmarks import router as bookmarks_router
 from .routers.comments import router_doc as comments_doc_router
@@ -154,6 +155,15 @@ TAGS_METADATA: list[dict[str, str]] = [
         ),
     },
     {
+        "name": "approvals",
+        "description": (
+            "문서 승인 워크플로우 — draft → in_review → approved → published. "
+            "리뷰어 추가/제거, 결정 제출(승인/반려/수정요청), 상태 전이 및 "
+            "내 리뷰 요청 목록(/me/reviews). 리뷰어 추가 시 `review_request`, "
+            "결정 제출 시 `review_decision` 알림이 생성된다."
+        ),
+    },
+    {
         "name": "snippets",
         "description": (
             "재사용 가능한 블록 라이브러리 — 사용자가 N개 블록을 묶어 저장하고 "
@@ -244,6 +254,8 @@ def create_app() -> FastAPI:
     app.include_router(snippets_router)
     # 공개 공유 링크 — /share/{token} 은 인증 미적용
     app.include_router(sharing_router)
+    # 승인 워크플로우 — 리뷰어 + 상태 전이
+    app.include_router(approvals_router)
 
     return app
 

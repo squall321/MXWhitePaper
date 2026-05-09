@@ -53,6 +53,9 @@ const DocumentReaderPage = lazyLogged('DocumentReader', () =>
 const VersionDiffPage = lazyLogged('VersionDiff', () =>
   import('./pages/VersionDiff').then((m) => ({ default: m.VersionDiffPage })),
 )
+const CrossDocComparePage = lazyLogged('CrossDocCompare', () =>
+  import('./pages/CrossDocCompare').then((m) => ({ default: m.CrossDocComparePage })),
+)
 const DocumentNewPage = lazyLogged('DocumentNew', () =>
   import('./pages/DocumentNew').then((m) => ({ default: m.DocumentNewPage })),
 )
@@ -84,6 +87,9 @@ const RecentPage = lazyLogged('Recent', () =>
 )
 const ReadListPage = lazyLogged('ReadList', () =>
   import('./pages/ReadList').then((m) => ({ default: m.ReadListPage })),
+)
+const MyReviewsPage = lazyLogged('MyReviews', () =>
+  import('./pages/MyReviews').then((m) => ({ default: m.MyReviewsPage })),
 )
 const SettingsPage = lazyLogged('Settings', () =>
   import('./pages/Settings').then((m) => ({ default: m.SettingsPage })),
@@ -246,6 +252,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                   path="docs/:slug/versions/:from/diff/:to"
                   element={<Boundaried name="docs/:slug/diff"><VersionDiffPage /></Boundaried>}
                 />
+                <Route
+                  path="compare"
+                  element={<Boundaried name="compare"><CrossDocComparePage /></Boundaried>}
+                />
                 <Route path="orgs" element={<Boundaried name="orgs"><OrgsPage /></Boundaried>} />
                 <Route path="admin/orgs" element={<Boundaried name="admin/orgs"><AdminOrgsPage /></Boundaried>} />
                 <Route path="admin/dashboard" element={<Boundaried name="admin/dashboard"><AdminDashboardPage /></Boundaried>} />
@@ -253,6 +263,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
                 <Route path="reads" element={<Boundaried name="reads"><ReadListPage /></Boundaried>} />
+                <Route path="reviews" element={<Boundaried name="reviews"><MyReviewsPage /></Boundaried>} />
                 <Route path="settings" element={<Boundaried name="settings"><SettingsPage /></Boundaried>} />
                 <Route path="snippets" element={<Boundaried name="snippets"><SnippetManagerPage /></Boundaried>} />
                 <Route path="graph" element={<Boundaried name="graph"><GraphPage /></Boundaried>} />

@@ -14,6 +14,10 @@ import { estimateReadingTimeMinutes } from '@/lib/readingTime'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
 import { BulkActionsBar } from '@/features/editor/components/BulkActionsBar'
 import { SectionSwipe } from '@/features/mobile/SectionSwipe'
+import { ReviewersPanel } from '@/features/approvals/ReviewersPanel'
+import { WorkflowRibbon } from '@/features/approvals/WorkflowRibbon'
+import { useState } from 'react'
+import type { DocStatus } from '@/features/approvals/api'
 
 interface WikiArticleProps {
   document: DocumentJSONV10
@@ -53,6 +57,17 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
     .join(' / ')
   const updatedAt = row?.updated_at ?? meta?.updated_at
 
+  // Approval workflow: status comes from the document row (not the JSON
+  // body). We track it locally so the ribbon can update without a full
+  // doc refetch. `reviewerBump` invalidates the ribbon's reviewer cache
+  // when the panel mutates.
+  const initialStatus = (row?.status as DocStatus | undefined) ?? 'draft'
+  const [workflowStatus, setWorkflowStatus] =
+    useState<DocStatus>(initialStatus)
+  const [reviewerBump, setReviewerBump] = useState(0)
+  const showApprovals =
+    !!editableSlug && (row?.status ?? 'draft') !== 'archived'
+
   // "전체 펴기 / 접기" — operates on section-level collapse only.
   // Block-level meta.collapsed is intentionally NOT touched here: walking the
   // tree to flip every block's meta would mean N patchBlock calls (or a giant
@@ -64,6 +79,14 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
 
   return (
     <article className="space-y-6">
+      {showApprovals && editableSlug && (
+        <WorkflowRibbon
+          slug={editableSlug}
+          status={workflowStatus}
+          reloadKey={reviewerBump}
+          onTransitioned={(next) => setWorkflowStatus(next)}
+        />
+      )}
       <header className="space-y-3 border-b border-gray-200 pb-5">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded bg-smsg-50 px-2 py-0.5 font-mono text-[11px] text-smsg-700">
@@ -140,6 +163,12 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           </div>
         </SectionSwipe>
       </div>
+      {showApprovals && editableSlug && (
+        <ReviewersPanel
+          slug={editableSlug}
+          onChange={() => setReviewerBump((n) => n + 1)}
+        />
+      )}
       {/* Floating bulk-actions bar — renders only when the bulk-selection
           store has at least one block. Lives at the article level so its
           fixed-position pill doesn't multiply across nested sections. */}

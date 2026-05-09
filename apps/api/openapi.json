@@ -1,6 +1,20 @@
 {
   "components": {
     "schemas": {
+      "AddReviewersIn": {
+        "properties": {
+          "user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "User Ids",
+            "type": "array"
+          }
+        },
+        "title": "AddReviewersIn",
+        "type": "object"
+      },
       "Body_import_docx_api_v1_imports_docx_post": {
         "properties": {
           "file": {
@@ -247,6 +261,32 @@
           }
         },
         "title": "CreateShareIn",
+        "type": "object"
+      },
+      "DecisionIn": {
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "status": {
+            "description": "approved | rejected | changes_requested",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "DecisionIn",
         "type": "object"
       },
       "DivisionCreate": {
@@ -761,6 +801,19 @@
           "content"
         ],
         "title": "TitleBody",
+        "type": "object"
+      },
+      "TransitionIn": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "TransitionIn",
         "type": "object"
       },
       "TranslateBody": {
@@ -3349,6 +3402,209 @@
         ]
       }
     },
+    "/api/v1/documents/{slug}/reviewers": {
+      "get": {
+        "operationId": "list_reviewers_api_v1_documents__slug__reviewers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Reviewers Api V1 Documents  Slug  Reviewers Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "리뷰어 목록 (reader+)",
+        "tags": [
+          "approvals"
+        ]
+      },
+      "post": {
+        "operationId": "add_reviewers_api_v1_documents__slug__reviewers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddReviewersIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Reviewers Api V1 Documents  Slug  Reviewers Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 리뷰어 추가 (editor+)",
+        "tags": [
+          "approvals"
+        ]
+      }
+    },
+    "/api/v1/documents/{slug}/reviewers/{user_id}": {
+      "delete": {
+        "operationId": "remove_reviewer_api_v1_documents__slug__reviewers__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "리뷰어 제거 (editor+)",
+        "tags": [
+          "approvals"
+        ]
+      }
+    },
+    "/api/v1/documents/{slug}/reviewers/{user_id}/decision": {
+      "post": {
+        "operationId": "submit_decision_api_v1_documents__slug__reviewers__user_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Submit Decision Api V1 Documents  Slug  Reviewers  User Id  Decision Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "리뷰어 결정 제출 (본인만)",
+        "tags": [
+          "approvals"
+        ]
+      }
+    },
     "/api/v1/documents/{slug}/sections/reorder": {
       "post": {
         "description": "payload: `{outline: [{id, children?: [...]}]}` — 모든 기존 섹션 id 가 포함되어야 한다.",
@@ -3663,6 +3919,60 @@
         "summary": "공개 공유 링크 생성 (editor+)",
         "tags": [
           "sharing"
+        ]
+      }
+    },
+    "/api/v1/documents/{slug}/transition": {
+      "post": {
+        "operationId": "transition_status_api_v1_documents__slug__transition_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Transition Status Api V1 Documents  Slug  Transition Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 상태 전이 (editor+/admin)",
+        "tags": [
+          "approvals"
         ]
       }
     },
@@ -4876,6 +5186,29 @@
         "summary": "Me",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/me/reviews": {
+      "get": {
+        "operationId": "my_reviews_api_v1_me_reviews_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response My Reviews Api V1 Me Reviews Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "내가 리뷰어로 지정된 문서 (pending + changes_requested)",
+        "tags": [
+          "approvals"
         ]
       }
     },
@@ -6911,6 +7244,10 @@
     {
       "description": "공개 공유 링크 — `POST /documents/{slug}/share` 로 토큰을 생성하면 `/share/{token}` 가 인증 없이 문서를 읽도록 열린다. 만료일/비밀번호/revoke 지원.",
       "name": "sharing"
+    },
+    {
+      "description": "문서 승인 워크플로우 — draft → in_review → approved → published. 리뷰어 추가/제거, 결정 제출(승인/반려/수정요청), 상태 전이 및 내 리뷰 요청 목록(/me/reviews). 리뷰어 추가 시 `review_request`, 결정 제출 시 `review_decision` 알림이 생성된다.",
+      "name": "approvals"
     },
     {
       "description": "재사용 가능한 블록 라이브러리 — 사용자가 N개 블록을 묶어 저장하고 다른 문서에 붙여넣는다. scope=private|team|org 로 공유 범위 조절. 팀 스코프는 users.team_id 기준 — team_id 가 없으면 팀 스니펫이 보이지 않는다.",
