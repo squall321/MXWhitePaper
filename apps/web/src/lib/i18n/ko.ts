@@ -76,6 +76,8 @@ export const ko = {
   'palette.whiteboard': '화이트보드',
   'palette.form': '설문',
   'palette.pdf': 'PDF',
+  'palette.imageAnnotation': '이미지 주석',
+  'palette.quiz': '퀴즈',
   'palette.tooltip.slash': '슬래시 메뉴',
   'palette.tooltip.shortcutHint': '슬래시 메뉴 단축어: {slash}.',
 
@@ -529,6 +531,23 @@ export const ko = {
   'editor.wb.canvasLabel': '화이트보드 캔버스',
   'editor.wb.textInput': '텍스트 입력',
   'editor.wb.changeLog': '화이트보드 편집',
+
+  // Image-Annotation editor
+  'editor.ia.tool.select': '선택',
+  'editor.ia.tool.arrow': '화살표',
+  'editor.ia.tool.rect': '사각형',
+  'editor.ia.tool.callout': '콜아웃',
+  'editor.ia.colorGroup': '색상',
+  'editor.ia.colorLabel': '색상 {color}',
+  'editor.ia.undo': '되돌리기',
+  'editor.ia.redo': '다시실행',
+  'editor.ia.clear': '지우기',
+  'editor.ia.deleteAria': '선택한 주석 삭제',
+  'editor.ia.deleteTitle': '삭제 (Backspace)',
+  'editor.ia.replaceImage': '이미지 교체',
+  'editor.ia.canvasLabel': '이미지 주석 캔버스',
+  'editor.ia.calloutInput': '콜아웃 텍스트 입력',
+  'editor.ia.changeLog': '이미지 주석 편집',
 
   // Page — Recent
   'page.recent.title': '최근 본 문서',

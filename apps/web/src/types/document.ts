@@ -42,6 +42,8 @@ export type Block =
   | WhiteboardBlock
   | FormBlock
   | PdfBlock
+  | QuizBlock
+  | ImageAnnotationBlock
 export type WhiteboardElement =
   | {
       kind: 'stroke'
@@ -69,6 +71,43 @@ export type WhiteboardElement =
       y: number
       text: string
       fontSize: number
+      color: string
+    }
+export type AnnotationElement =
+  | {
+      kind: 'arrow'
+      id: string
+      from: {
+        x: number
+        y: number
+      }
+      to: {
+        x: number
+        y: number
+      }
+      color: string
+      label?: string
+    }
+  | {
+      kind: 'rect'
+      id: string
+      x: number
+      y: number
+      w: number
+      h: number
+      color: string
+      label?: string
+    }
+  | {
+      kind: 'callout'
+      id: string
+      x: number
+      y: number
+      anchor?: {
+        x: number
+        y: number
+      }
+      text: string
       color: string
     }
 
@@ -477,6 +516,41 @@ export interface PdfBlock {
   title?: string
   page?: number
   height_px?: number
+  meta?: BlockMeta
+}
+export interface QuizBlock {
+  type: 'quiz'
+  id: Ulid
+  title?: string
+  description?: string
+  /**
+   * @minItems 1
+   */
+  questions: [QuizQuestion, ...QuizQuestion[]]
+  passing_score?: number
+  shuffle?: boolean
+  max_attempts?: number
+  show_answers_after?: boolean
+  meta?: BlockMeta
+}
+export interface QuizQuestion {
+  id: string
+  kind: 'single-choice' | 'multi-choice' | 'true-false' | 'short-text'
+  label: string
+  options?: string[]
+  correct: string | string[] | boolean
+  explanation?: string
+  points?: number
+}
+export interface ImageAnnotationBlock {
+  type: 'image-annotation'
+  id: Ulid
+  /**
+   * FK to images table (mxwp-images)
+   */
+  image_id: string
+  caption?: string
+  annotations: AnnotationElement[]
   meta?: BlockMeta
 }
 export interface SectionLevel2 {

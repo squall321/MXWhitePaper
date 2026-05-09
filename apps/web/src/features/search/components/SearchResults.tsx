@@ -15,6 +15,8 @@ import type { DocSearchHit } from '../api'
 import { Highlight } from '@/components/Highlight'
 import { BulkDocCheckbox } from '@/features/admin/bulk-docs/BulkDocCheckbox'
 import { BulkDocActionsBar } from '@/features/admin/bulk-docs/BulkDocActionsBar'
+import { SaveViewButton } from '@/features/saved-views/SaveViewButton'
+import type { SavedViewFilters } from '@/features/saved-views/api'
 
 export interface SearchResultsProps {
   query: string
@@ -22,9 +24,11 @@ export interface SearchResultsProps {
   loading?: boolean
   total?: number
   queryTimeMs?: number
+  /** Cycle 0030 — current filter set, used to render the SaveViewButton. */
+  filters?: SavedViewFilters
 }
 
-export function SearchResults({ query, items, loading, total, queryTimeMs }: SearchResultsProps) {
+export function SearchResults({ query, items, loading, total, queryTimeMs, filters }: SearchResultsProps) {
   const groups = useMemo(() => groupByPart(items), [items])
   const partCount = groups.length
   const showGroups = partCount > 1
@@ -46,12 +50,15 @@ export function SearchResults({ query, items, loading, total, queryTimeMs }: Sea
 
   return (
     <div data-testid="search-results">
-      <p className="mb-3 px-1 text-xs text-gray-500">
-        총 <strong className="text-gray-800">{typeof total === 'number' ? total : items.length}</strong>건
-        {typeof queryTimeMs === 'number' && queryTimeMs > 0 && (
-          <span className="ml-1 text-gray-400">({queryTimeMs}ms)</span>
-        )}
-      </p>
+      <div className="mb-3 flex items-center justify-between gap-2 px-1">
+        <p className="text-xs text-gray-500">
+          총 <strong className="text-gray-800">{typeof total === 'number' ? total : items.length}</strong>건
+          {typeof queryTimeMs === 'number' && queryTimeMs > 0 && (
+            <span className="ml-1 text-gray-400">({queryTimeMs}ms)</span>
+          )}
+        </p>
+        {filters && <SaveViewButton filters={filters} />}
+      </div>
       {showGroups ? (
         <ul className="space-y-2">
           {groups.map((g) => (

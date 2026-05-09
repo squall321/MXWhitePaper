@@ -128,6 +128,9 @@ const MySubscriptionsPage = lazyLogged('MySubscriptions', () =>
 const MyRemindersPage = lazyLogged('MyReminders', () =>
   import('./pages/MyReminders').then((m) => ({ default: m.MyRemindersPage })),
 )
+const SavedViewPage = lazyLogged('SavedView', () =>
+  import('./pages/SavedView').then((m) => ({ default: m.SavedViewPage })),
+)
 const SettingsPage = lazyLogged('Settings', () =>
   import('./pages/Settings').then((m) => ({ default: m.SettingsPage })),
 )
@@ -363,6 +366,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="reviews" element={<Boundaried name="reviews"><MyReviewsPage /></Boundaried>} />
                 <Route path="subscriptions" element={<Boundaried name="subscriptions"><MySubscriptionsPage /></Boundaried>} />
                 <Route path="reminders" element={<Boundaried name="reminders"><MyRemindersPage /></Boundaried>} />
+                <Route path="views/:id" element={<Boundaried name="views/:id"><SavedViewPage /></Boundaried>} />
                 <Route path="settings" element={<Boundaried name="settings"><SettingsPage /></Boundaried>} />
                 <Route path="me/api-tokens" element={<Boundaried name="me/api-tokens"><ApiTokensPage /></Boundaried>} />
                 <Route path="snippets" element={<Boundaried name="snippets"><SnippetManagerPage /></Boundaried>} />

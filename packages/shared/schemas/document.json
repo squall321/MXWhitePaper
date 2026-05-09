@@ -195,7 +195,9 @@
         { "$ref": "#/$defs/CalculatorBlock" },
         { "$ref": "#/$defs/WhiteboardBlock" },
         { "$ref": "#/$defs/FormBlock" },
-        { "$ref": "#/$defs/PdfBlock" }
+        { "$ref": "#/$defs/PdfBlock" },
+        { "$ref": "#/$defs/QuizBlock" },
+        { "$ref": "#/$defs/ImageAnnotationBlock" }
       ]
     },
 
@@ -770,6 +772,126 @@
           "items": { "type": "string" }
         }
       }
+    },
+
+    "QuizBlock": {
+      "type": "object",
+      "required": ["type", "id", "questions"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "quiz" },
+        "id": { "$ref": "#/$defs/Ulid" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "questions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/QuizQuestion" },
+          "minItems": 1
+        },
+        "passing_score": { "type": "integer", "minimum": 0, "maximum": 100, "default": 70 },
+        "shuffle": { "type": "boolean", "default": false },
+        "max_attempts": { "type": "integer", "minimum": 0, "default": 0 },
+        "show_answers_after": { "type": "boolean", "default": true },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "QuizQuestion": {
+      "type": "object",
+      "required": ["id", "kind", "label", "correct"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "enum": ["single-choice", "multi-choice", "true-false", "short-text"] },
+        "label": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "correct": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } },
+            { "type": "boolean" }
+          ]
+        },
+        "explanation": { "type": "string" },
+        "points": { "type": "integer", "minimum": 0, "default": 1 }
+      }
+    },
+
+    "ImageAnnotationBlock": {
+      "type": "object",
+      "required": ["type", "id", "image_id", "annotations"],
+      "additionalProperties": false,
+      "properties": {
+        "type":         { "const": "image-annotation" },
+        "id":           { "$ref": "#/$defs/Ulid" },
+        "image_id":     { "type": "string", "description": "FK to images table (mxwp-images)" },
+        "caption":      { "type": "string" },
+        "annotations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/AnnotationElement" }
+        },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+    "AnnotationElement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "from", "to", "color"],
+          "properties": {
+            "kind":  { "const": "arrow" },
+            "id":    { "type": "string" },
+            "from":  {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["x", "y"],
+              "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+            },
+            "to": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["x", "y"],
+              "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+            },
+            "color": { "type": "string" },
+            "label": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "x", "y", "w", "h", "color"],
+          "properties": {
+            "kind":  { "const": "rect" },
+            "id":    { "type": "string" },
+            "x":     { "type": "number" },
+            "y":     { "type": "number" },
+            "w":     { "type": "number" },
+            "h":     { "type": "number" },
+            "color": { "type": "string" },
+            "label": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "x", "y", "text", "color"],
+          "properties": {
+            "kind":  { "const": "callout" },
+            "id":    { "type": "string" },
+            "x":     { "type": "number" },
+            "y":     { "type": "number" },
+            "anchor": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["x", "y"],
+              "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+            },
+            "text":  { "type": "string" },
+            "color": { "type": "string" }
+          }
+        }
+      ]
     },
 
     "RelatedDoc": {

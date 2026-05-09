@@ -21,6 +21,7 @@ import {
   patchAutomationRule,
   testAutomationRule,
 } from '@/features/automation/api'
+import { nextRun, parseCron, relativeTimeKo } from '@/features/automation/cron'
 
 const TRIGGER_LABELS: Record<AutomationTriggerKind, string> = {
   doc_published: '문서 공개',
@@ -29,7 +30,22 @@ const TRIGGER_LABELS: Record<AutomationTriggerKind, string> = {
   status_transition: '상태 전이',
   comment_added: '댓글 작성',
   tag_added: '태그 추가',
+  cron: '예약 (cron)',
 }
+
+interface CronPreset {
+  label: string
+  expr: string
+}
+
+const CRON_PRESETS: CronPreset[] = [
+  { label: '매분', expr: '* * * * *' },
+  { label: '매시간', expr: '0 * * * *' },
+  { label: '매일 자정', expr: '0 0 * * *' },
+  { label: '매일 오전 9시', expr: '0 9 * * *' },
+  { label: '매주 월요일 9시', expr: '0 9 * * 1' },
+  { label: '매월 1일 9시', expr: '0 9 1 * *' },
+]
 
 const ACTION_LABELS: Record<AutomationActionKind, string> = {
   webhook: '웹훅 호출',
@@ -213,11 +229,22 @@ function RuleRow({
                 필터 {Object.keys(rule.trigger_filter).length}개
               </span>
             )}
+            {rule.trigger_kind === 'cron' && rule.cron_expression && (
+              <span
+                className="rounded bg-blue-100 px-2 py-0.5 font-mono text-blue-800"
+                data-testid={`automation-row-cron-${rule.id}`}
+              >
+                {rule.cron_expression}
+              </span>
+            )}
           </div>
           <div className="mt-1 text-xs text-gray-500">
             발화 {rule.fire_count}회
             {rule.last_fired_at
               ? ` · 마지막 ${new Date(rule.last_fired_at).toLocaleString()}`
+              : ''}
+            {rule.trigger_kind === 'cron' && rule.next_cron_run_at
+              ? ` · 다음 ${new Date(rule.next_cron_run_at).toLocaleString()}`
               : ''}
           </div>
         </div>
@@ -283,6 +310,7 @@ function CreateRuleModal({
   const [actionPairs, setActionPairs] = useState<KvPair[]>([
     { k: 'url', v: '' },
   ])
+  const [cronExpr, setCronExpr] = useState('0 9 * * 1')
   const [submitting, setSubmitting] = useState(false)
 
   const reset = () => {
@@ -291,12 +319,21 @@ function CreateRuleModal({
     setFilterPairs([])
     setAction('webhook')
     setActionPairs([{ k: 'url', v: '' }])
+    setCronExpr('0 9 * * 1')
   }
 
   const onSubmit = async () => {
     if (!name.trim()) {
       toast.error('이름을 입력하세요')
       return
+    }
+    if (trigger === 'cron') {
+      try {
+        parseCron(cronExpr)
+      } catch (e) {
+        toast.error(`cron 식이 올바르지 않습니다: ${e instanceof Error ? e.message : ''}`)
+        return
+      }
     }
     setSubmitting(true)
     try {
@@ -307,6 +344,7 @@ function CreateRuleModal({
         action_kind: action,
         action_payload: pairsToObject(actionPairs),
         enabled: true,
+        ...(trigger === 'cron' ? { cron_expression: cronExpr.trim() } : {}),
       })
       toast.success('등록됨')
       reset()
@@ -367,12 +405,16 @@ function CreateRuleModal({
             ))}
           </Select>
         </div>
-        <KvEditor
-          label="트리거 필터 (선택, 키=값 동등 매칭)"
-          pairs={filterPairs}
-          setPairs={setFilterPairs}
-          testId="automation-filter"
-        />
+        {trigger === 'cron' ? (
+          <CronEditor expr={cronExpr} setExpr={setCronExpr} />
+        ) : (
+          <KvEditor
+            label="트리거 필터 (선택, 키=값 동등 매칭)"
+            pairs={filterPairs}
+            setPairs={setFilterPairs}
+            testId="automation-filter"
+          />
+        )}
         <div>
           <label className="block text-xs text-gray-600">액션</label>
           <Select
@@ -470,6 +512,68 @@ function KvEditor({
           + 항목 추가
         </Button>
       </div>
+    </div>
+  )
+}
+
+// ── Cron editor ─────────────────────────────────────────────────────────
+
+function CronEditor({
+  expr,
+  setExpr,
+}: {
+  expr: string
+  setExpr: (e: string) => void
+}) {
+  // Live-validate + compute next firing for the helper line.
+  const preview = useMemo(() => {
+    try {
+      const parsed = parseCron(expr)
+      const now = new Date()
+      const nxt = nextRun(parsed, now)
+      return {
+        ok: true as const,
+        when: nxt,
+        rel: relativeTimeKo(now, nxt),
+      }
+    } catch (e) {
+      return { ok: false as const, error: e instanceof Error ? e.message : '' }
+    }
+  }, [expr])
+
+  return (
+    <div data-testid="automation-cron-editor">
+      <label className="block text-xs text-gray-600">cron 표현식</label>
+      <Input
+        value={expr}
+        onChange={(e) => setExpr(e.target.value)}
+        placeholder="예: 0 9 * * 1 — 매주 월요일 오전 9시"
+        data-testid="automation-cron-input"
+      />
+      <div className="mt-1 flex flex-wrap gap-1">
+        {CRON_PRESETS.map((p) => (
+          <button
+            key={p.expr}
+            type="button"
+            onClick={() => setExpr(p.expr)}
+            className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50"
+            data-testid={`automation-cron-preset-${p.expr.replace(/\s+/g, '_')}`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <p
+        className={`mt-1 text-xs ${preview.ok ? 'text-gray-600' : 'text-red-600'}`}
+        data-testid="automation-cron-preview"
+      >
+        {preview.ok
+          ? `다음 실행: ${preview.when.toLocaleString()} (${preview.rel})`
+          : `오류: ${preview.error}`}
+      </p>
+      <p className="mt-1 text-[11px] text-gray-500">
+        형식: 분 시 일 월 요일 — 5칸. *, , (목록), - (범위), / (간격), ? 지원. UTC 기준.
+      </p>
     </div>
   )
 }

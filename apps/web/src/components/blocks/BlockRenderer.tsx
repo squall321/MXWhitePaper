@@ -30,6 +30,8 @@ import { OrgChartBlockView } from './OrgChartBlock'
 import { WhiteboardBlockView } from './WhiteboardBlock'
 import { FormBlockView } from './FormBlock'
 import { PdfBlockView } from './PdfBlock'
+import { QuizBlockView } from './QuizBlock'
+import { ImageAnnotationBlockView } from './ImageAnnotationBlock'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { InlineTextBlockEditor } from '@/features/editor/components/InlineTextBlockEditor'
 import { ListBlockEditor } from '@/features/editor/components/ListBlockEditor'
@@ -120,6 +122,14 @@ const KpiCardsBlockEditor = lazy(() =>
 )
 const PdfBlockEditor = lazy(() =>
   import('@/features/editor/blocks/PdfBlockEditor').then((m) => ({ default: m.PdfBlockEditor })),
+)
+const ImageAnnotationBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/ImageAnnotationBlockEditor').then((m) => ({
+    default: m.ImageAnnotationBlockEditor,
+  })),
+)
+const QuizBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/QuizBlockEditor').then((m) => ({ default: m.QuizBlockEditor })),
 )
 
 /** Tiny placeholder shown while a lazy block-editor chunk is fetched. */
@@ -360,6 +370,9 @@ function BlockRendererInner({ block }: { block: Block }) {
     if (block.type === 'form') {
       return lazyEditor(<FormBlockEditor slug={editorSlug} block={block} />)
     }
+    if (block.type === 'quiz') {
+      return lazyEditor(<QuizBlockEditor slug={editorSlug} block={block} />)
+    }
     if (block.type === 'flow') {
       return lazyEditor(<FlowBlockEditor slug={editorSlug} block={block} />)
     }
@@ -386,6 +399,9 @@ function BlockRendererInner({ block }: { block: Block }) {
     }
     if (block.type === 'pdf') {
       return lazyEditor(<PdfBlockEditor slug={editorSlug} block={block} />)
+    }
+    if (block.type === 'image-annotation') {
+      return lazyEditor(<ImageAnnotationBlockEditor slug={editorSlug} block={block} />)
     }
     if (block.type === 'doc-link-card') {
       return <DocLinkCardBlockEditor slug={editorSlug} block={block} />
@@ -463,6 +479,10 @@ function BlockRendererInner({ block }: { block: Block }) {
       return <FormBlockView block={block} />
     case 'pdf':
       return <PdfBlockView block={block} />
+    case 'quiz':
+      return <QuizBlockView block={block} />
+    case 'image-annotation':
+      return <ImageAnnotationBlockView block={block} />
     default:
       return (
         <PlaceholderBlockView

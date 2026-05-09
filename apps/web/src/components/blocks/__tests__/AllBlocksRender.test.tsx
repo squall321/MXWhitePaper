@@ -257,6 +257,57 @@ const BLOCKS: Record<string, Block> = {
     page: 3,
     height_px: 480,
   },
+  quiz: {
+    type: 'quiz',
+    id: ID(30),
+    title: '보안 퀴즈',
+    passing_score: 70,
+    max_attempts: 3,
+    questions: [
+      {
+        id: 'q1',
+        kind: 'single-choice',
+        label: '비밀번호 최소 길이',
+        options: ['6', '8', '10'],
+        correct: '10',
+        points: 1,
+      },
+      { id: 'q2', kind: 'true-false', label: 'MFA 의무?', correct: true, points: 1 },
+    ],
+  },
+  'image-annotation': {
+    type: 'image-annotation',
+    id: ID(31),
+    image_id: '01TESTIMAGE000000000000I31',
+    caption: '이미지 주석 샘플',
+    annotations: [
+      {
+        kind: 'arrow',
+        id: 'ann-a-1',
+        from: { x: 0.1, y: 0.1 },
+        to: { x: 0.4, y: 0.3 },
+        color: '#dc2626',
+        label: '카메라',
+      },
+      {
+        kind: 'rect',
+        id: 'ann-r-1',
+        x: 0.5,
+        y: 0.2,
+        w: 0.2,
+        h: 0.15,
+        color: '#2563eb',
+      },
+      {
+        kind: 'callout',
+        id: 'ann-c-1',
+        x: 0.6,
+        y: 0.7,
+        text: '확인',
+        color: '#16a34a',
+      },
+    ],
+  },
 }
 
 describe('<BlockRenderer /> read-mode coverage — every block type', () => {

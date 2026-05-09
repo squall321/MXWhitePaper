@@ -263,6 +263,48 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     slash: '/PDF',
     preview: '📕 PDF 미리보기',
   },
+  {
+    kind: 'image-annotation',
+    label: '이미지 주석',
+    labelKey: 'palette.imageAnnotation',
+    icon: '🖍',
+    build: () => ({
+      type: 'image-annotation',
+      id: ulid(),
+      image_id: '',
+      annotations: [],
+    }),
+    hint: '업로드한 이미지에 화살표/사각형/콜아웃을 얹어 강조.',
+    slash: '/주석',
+    preview: '🖍 image + arrows',
+  },
+  {
+    kind: 'quiz',
+    label: '퀴즈',
+    labelKey: 'palette.quiz',
+    icon: '📝',
+    build: () => ({
+      type: 'quiz',
+      id: ulid(),
+      title: '새 퀴즈',
+      passing_score: 70,
+      max_attempts: 0,
+      show_answers_after: true,
+      questions: [
+        {
+          id: ulid(),
+          kind: 'single-choice',
+          label: '문제 1',
+          options: ['옵션 1', '옵션 2'],
+          correct: '옵션 1',
+          points: 1,
+        },
+      ],
+    }),
+    hint: '정답/배점/통과 점수가 있는 퀴즈/평가 블록.',
+    slash: '/퀴즈',
+    preview: '📝 퀴즈 / 평가',
+  },
 ]
 
 interface Props {

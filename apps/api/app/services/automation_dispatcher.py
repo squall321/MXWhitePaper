@@ -54,6 +54,10 @@ VALID_TRIGGERS: set[str] = {
     "status_transition",
     "comment_added",
     "tag_added",
+    # Cycle 0029 — schedule-driven trigger fired by `automation_cron`. Event
+    # callers never use this kind directly; only the cron ticker dispatches
+    # via this trigger. Listed here so router validation accepts it on CRUD.
+    "cron",
 }
 
 VALID_ACTIONS: set[str] = {

@@ -4,6 +4,7 @@ import { Breadcrumb } from './Breadcrumb'
 import { useGChord } from './useGChord'
 import { MobileNavDrawer } from './MobileNavDrawer'
 import { OrgTree } from '@/features/org/components/OrgTree'
+import { SavedViewsList } from '@/features/saved-views/SavedViewsList'
 import { Drawer } from '@/components/ui/Drawer'
 import { Modal } from '@/components/ui/Modal'
 import { RailBoundary } from '@/components/blocks/BlockBoundary'
@@ -203,7 +204,8 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
   )
 }
 
-/** Default OrgTree block reused by HomePage and as the AppShell fallback. */
+/** Default OrgTree block reused by HomePage and as the AppShell fallback.
+ *  Cycle 0030 — saved views (smart folders) hang below the org tree. */
 function OrgTreeBlock() {
   const t = useT()
   return (
@@ -212,6 +214,7 @@ function OrgTreeBlock() {
         {t('shell.org')}
       </h2>
       <OrgTree />
+      <SavedViewsList />
     </>
   )
 }

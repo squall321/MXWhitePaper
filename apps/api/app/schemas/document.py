@@ -613,6 +613,95 @@ class FormQuestion(BaseModel):
     options: list[str] | None = None
 
 
+class Kind2(Enum):
+    single_choice = 'single-choice'
+    multi_choice = 'multi-choice'
+    true_false = 'true-false'
+    short_text = 'short-text'
+
+
+class QuizQuestion(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    kind: Kind2
+    label: str
+    options: list[str] | None = None
+    correct: str | list[str] | bool
+    explanation: str | None = None
+    points: int | None = Field(1, ge=0)
+
+
+class From(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    x: float
+    y: float
+
+
+class To(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    x: float
+    y: float
+
+
+class AnnotationElement1(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['arrow']
+    id: str
+    from_: From = Field(..., alias='from')
+    to: To
+    color: str
+    label: str | None = None
+
+
+class AnnotationElement2(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['rect']
+    id: str
+    x: float
+    y: float
+    w: float
+    h: float
+    color: str
+    label: str | None = None
+
+
+class Anchor(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    x: float
+    y: float
+
+
+class AnnotationElement3(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['callout']
+    id: str
+    x: float
+    y: float
+    anchor: Anchor | None = None
+    text: str
+    color: str
+
+
+class AnnotationElement(
+    RootModel[AnnotationElement1 | AnnotationElement2 | AnnotationElement3]
+):
+    root: AnnotationElement1 | AnnotationElement2 | AnnotationElement3
+
+
 class RelatedDoc(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -678,6 +767,37 @@ class FormBlock(BaseModel):
     submit_label: str | None = '제출'
     thanks_message: str | None = '응답해 주셔서 감사합니다.'
     allow_multiple_responses: bool | None = False
+    meta: BlockMeta | None = None
+
+
+class QuizBlock(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['quiz']
+    id: Ulid
+    title: str | None = None
+    description: str | None = None
+    questions: list[QuizQuestion] = Field(..., min_length=1)
+    passing_score: int | None = Field(70, ge=0, le=100)
+    shuffle: bool | None = False
+    max_attempts: int | None = Field(0, ge=0)
+    show_answers_after: bool | None = True
+    meta: BlockMeta | None = None
+
+
+class ImageAnnotationBlock(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['image-annotation']
+    id: Ulid
+    image_id: str
+    """
+    FK to images table (mxwp-images)
+    """
+    caption: str | None = None
+    annotations: list[AnnotationElement]
     meta: BlockMeta | None = None
 
 
@@ -826,6 +946,8 @@ class Block(
         | WhiteboardBlock
         | FormBlock
         | PdfBlock
+        | QuizBlock
+        | ImageAnnotationBlock
     ]
 ):
     root: (
@@ -858,6 +980,8 @@ class Block(
         | WhiteboardBlock
         | FormBlock
         | PdfBlock
+        | QuizBlock
+        | ImageAnnotationBlock
     )
 
 

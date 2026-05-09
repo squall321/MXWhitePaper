@@ -42,10 +42,12 @@ from .routers.notification_prefs import router as notification_prefs_router
 from .routers.notifications import router as notifications_router
 from .routers.orgs import router as orgs_router
 from .routers.presence import router as presence_router
+from .routers.quiz import router as quiz_router
 from .routers.reactions import router as reactions_router
 from .routers.read_receipts import router as read_receipts_router
 from .routers.reminders import router as reminders_router
 from .routers.retention import router as retention_router
+from .routers.saved_views import router as saved_views_router
 from .routers.search import router as search_router
 from .routers.series import router as series_router
 from .routers.sharing import router as sharing_router
@@ -288,11 +290,12 @@ TAGS_METADATA: list[dict[str, str]] = [
     {
         "name": "automation",
         "description": (
-            "워크플로우 자동화 규칙 (Cycle 0025) — 트리거(이벤트) × 액션(웹훅/알림/"
-            "태그/전이/이메일) 을 admin 이 조합해 등록한다. 디스패처는 doc_published / "
-            "doc_archived / review_decided / status_transition / comment_added / "
-            "tag_added 6종 이벤트를 watch 하며, trigger_filter 의 key=value 동등 "
-            "매칭으로 발화한다."
+            "워크플로우 자동화 규칙 (Cycle 0025 + 15 U4) — 트리거(이벤트 또는 cron) × "
+            "액션(웹훅/알림/태그/전이/이메일) 을 admin 이 조합해 등록한다. 이벤트 "
+            "디스패처는 doc_published / doc_archived / review_decided / "
+            "status_transition / comment_added / tag_added 6종을 watch 하고, "
+            "Cycle 15 U4 에 추가된 cron 트리거는 5필드 cron 표현식을 받아 "
+            "30초 ticker 가 next_cron_run_at <= NOW() 인 행을 발화한다."
         ),
     },
     {
@@ -314,6 +317,24 @@ TAGS_METADATA: list[dict[str, str]] = [
             "간격으로 due 인 행을 찾아 notifications(kind='reminder') 로 fan-out 한다."
         ),
     },
+    {
+        "name": "quiz",
+        "description": (
+            "임베디드 퀴즈/평가 블록 (Cycle 0029) — 정답 키 + 배점 + 통과 점수 + "
+            "최대 시도 횟수를 가진 quiz 블록. POST /quiz/{slug}/{block_id}/attempts 가 "
+            "서버에서 채점하고 quiz_attempts 에 저장하며, 리더보드(GET /leaderboard) 는 "
+            "유저당 최고 점수를 fastest-tie-break 로 정렬한다."
+        ),
+    },
+    {
+        "name": "saved-views",
+        "description": (
+            "저장된 검색(스마트 폴더) (Cycle 0030) — 검색 필터(부서/태그/작성자/"
+            "기간/상태/freeform 쿼리) 를 이름 + 아이콘과 함께 저장해 좌측 사이드바 "
+            "'📂 내 보기' 에 노출한다. 각 뷰는 GET /me/saved-views/{id}/results 로 "
+            "다시 documents 에 적용된다."
+        ),
+    },
 ]
 
 
@@ -330,6 +351,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     digest_task: _asyncio.Task[None] | None = None
     retention_task: _asyncio.Task[None] | None = None
     reminder_task: _asyncio.Task[None] | None = None
+    cron_task: _asyncio.Task[None] | None = None
     if settings.backup_enabled:
         from .services.backup_runner import backup_ticker
 
@@ -365,6 +387,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         reminder_task = _asyncio.create_task(
             reminder_ticker(), name="mxwp-reminder-ticker",
         )
+
+    # Cycle 0029 — automation cron ticker. Single-replica. 30s cadence.
+    if getattr(settings, "automation_cron_enabled", True):
+        from .services.automation_cron import cron_ticker
+
+        cron_task = _asyncio.create_task(
+            cron_ticker(), name="mxwp-automation-cron",
+        )
     try:
         yield
     finally:
@@ -374,6 +404,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             digest_task,
             retention_task,
             reminder_task,
+            cron_task,
         ):
             if t is None:
                 continue
@@ -496,6 +527,10 @@ def create_app() -> FastAPI:
     app.include_router(retention_router)
     # Cycle 0028 — time-based reminders (CRUD + asyncio runner).
     app.include_router(reminders_router)
+    # Cycle 0029 — embedded quiz block attempts + scoring + leaderboard.
+    app.include_router(quiz_router)
+    # Cycle 0030 — saved views / smart folders (per-user named filters).
+    app.include_router(saved_views_router)
 
     return app
 

@@ -91,6 +91,23 @@
         "title": "ArchiveBulkIn",
         "type": "object"
       },
+      "AttemptIn": {
+        "properties": {
+          "answers": {
+            "additionalProperties": true,
+            "title": "Answers",
+            "type": "object"
+          },
+          "duration_seconds": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Duration Seconds",
+            "type": "integer"
+          }
+        },
+        "title": "AttemptIn",
+        "type": "object"
+      },
       "Body_import_csv_api_v1_imports_csv_post": {
         "properties": {
           "file": {
@@ -417,6 +434,45 @@
           "remind_at"
         ],
         "title": "CreateReminderIn",
+        "type": "object"
+      },
+      "CreateSavedViewIn": {
+        "properties": {
+          "filters": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filters"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateSavedViewIn",
         "type": "object"
       },
       "CreateShareIn": {
@@ -810,6 +866,59 @@
         "title": "PatchReminderIn",
         "type": "object"
       },
+      "PatchSavedViewIn": {
+        "properties": {
+          "filters": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filters"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "ordering": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ordering"
+          }
+        },
+        "title": "PatchSavedViewIn",
+        "type": "object"
+      },
       "PatchSubscriptionIn": {
         "properties": {
           "digest_cadence": {
@@ -1124,6 +1233,17 @@
             "title": "Action Payload",
             "type": "object"
           },
+          "cron_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cron Expression"
+          },
           "enabled": {
             "default": true,
             "title": "Enabled",
@@ -1177,6 +1297,17 @@
               }
             ],
             "title": "Action Payload"
+          },
+          "cron_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cron Expression"
           },
           "enabled": {
             "anyOf": [
@@ -9910,6 +10041,232 @@
         ]
       }
     },
+    "/api/v1/me/saved-views": {
+      "get": {
+        "operationId": "list_saved_views_api_v1_me_saved_views_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Saved Views Api V1 Me Saved Views Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "내 저장된 뷰 목록 (reader+)",
+        "tags": [
+          "saved-views"
+        ]
+      },
+      "post": {
+        "operationId": "create_saved_view_api_v1_me_saved_views_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSavedViewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Saved View Api V1 Me Saved Views Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "저장된 뷰 생성 (reader+)",
+        "tags": [
+          "saved-views"
+        ]
+      }
+    },
+    "/api/v1/me/saved-views/{sv_id}": {
+      "delete": {
+        "operationId": "delete_saved_view_api_v1_me_saved_views__sv_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sv_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Sv Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "저장된 뷰 삭제 (본인)",
+        "tags": [
+          "saved-views"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_saved_view_api_v1_me_saved_views__sv_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sv_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Sv Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSavedViewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Saved View Api V1 Me Saved Views  Sv Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "저장된 뷰 수정 (본인)",
+        "tags": [
+          "saved-views"
+        ]
+      }
+    },
+    "/api/v1/me/saved-views/{sv_id}/results": {
+      "get": {
+        "operationId": "get_saved_view_results_api_v1_me_saved_views__sv_id__results_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sv_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Sv Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Saved View Results Api V1 Me Saved Views  Sv Id  Results Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "저장된 뷰 결과 — 필터를 documents 에 적용 (reader+)",
+        "tags": [
+          "saved-views"
+        ]
+      }
+    },
     "/api/v1/me/subscriptions": {
       "get": {
         "operationId": "list_my_subscriptions_api_v1_me_subscriptions_get",
@@ -10567,6 +10924,228 @@
         "summary": "presence SSE stream (reader+)",
         "tags": [
           "presence"
+        ]
+      }
+    },
+    "/api/v1/quiz/me/{slug}/{block_id}": {
+      "get": {
+        "operationId": "my_attempts_api_v1_quiz_me__slug___block_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "block_id",
+            "required": true,
+            "schema": {
+              "title": "Block Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response My Attempts Api V1 Quiz Me  Slug   Block Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "내 응시 기록 (reader+)",
+        "tags": [
+          "quiz"
+        ]
+      }
+    },
+    "/api/v1/quiz/{slug}/{block_id}/attempts": {
+      "get": {
+        "operationId": "list_attempts_api_v1_quiz__slug___block_id__attempts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "block_id",
+            "required": true,
+            "schema": {
+              "title": "Block Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Attempts Api V1 Quiz  Slug   Block Id  Attempts Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "퀴즈 응시 기록 (editor+)",
+        "tags": [
+          "quiz"
+        ]
+      },
+      "post": {
+        "operationId": "submit_attempt_api_v1_quiz__slug___block_id__attempts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "block_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Block Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttemptIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Submit Attempt Api V1 Quiz  Slug   Block Id  Attempts Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "퀴즈 응시 + 자동 채점 (reader+)",
+        "tags": [
+          "quiz"
+        ]
+      }
+    },
+    "/api/v1/quiz/{slug}/{block_id}/leaderboard": {
+      "get": {
+        "operationId": "leaderboard_api_v1_quiz__slug___block_id__leaderboard_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "block_id",
+            "required": true,
+            "schema": {
+              "title": "Block Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Leaderboard Api V1 Quiz  Slug   Block Id  Leaderboard Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "퀴즈 리더보드 (reader+, 상위 10)",
+        "tags": [
+          "quiz"
         ]
       }
     },
@@ -13147,7 +13726,7 @@
       "name": "api_tokens"
     },
     {
-      "description": "워크플로우 자동화 규칙 (Cycle 0025) — 트리거(이벤트) × 액션(웹훅/알림/태그/전이/이메일) 을 admin 이 조합해 등록한다. 디스패처는 doc_published / doc_archived / review_decided / status_transition / comment_added / tag_added 6종 이벤트를 watch 하며, trigger_filter 의 key=value 동등 매칭으로 발화한다.",
+      "description": "워크플로우 자동화 규칙 (Cycle 0025 + 15 U4) — 트리거(이벤트 또는 cron) × 액션(웹훅/알림/태그/전이/이메일) 을 admin 이 조합해 등록한다. 이벤트 디스패처는 doc_published / doc_archived / review_decided / status_transition / comment_added / tag_added 6종을 watch 하고, Cycle 15 U4 에 추가된 cron 트리거는 5필드 cron 표현식을 받아 30초 ticker 가 next_cron_run_at <= NOW() 인 행을 발화한다.",
       "name": "automation"
     },
     {
@@ -13157,6 +13736,14 @@
     {
       "description": "시간 기반 리마인더 (Cycle 0028) — 문서별로 'N분/일/주 뒤에 알려줘' 를 예약한다. POST /documents/{slug}/reminders 로 생성, GET /me/reminders 로 본인 목록, PATCH/DELETE 로 수정/삭제. asyncio in-process ticker 가 60초 간격으로 due 인 행을 찾아 notifications(kind='reminder') 로 fan-out 한다.",
       "name": "reminders"
+    },
+    {
+      "description": "임베디드 퀴즈/평가 블록 (Cycle 0029) — 정답 키 + 배점 + 통과 점수 + 최대 시도 횟수를 가진 quiz 블록. POST /quiz/{slug}/{block_id}/attempts 가 서버에서 채점하고 quiz_attempts 에 저장하며, 리더보드(GET /leaderboard) 는 유저당 최고 점수를 fastest-tie-break 로 정렬한다.",
+      "name": "quiz"
+    },
+    {
+      "description": "저장된 검색(스마트 폴더) (Cycle 0030) — 검색 필터(부서/태그/작성자/기간/상태/freeform 쿼리) 를 이름 + 아이콘과 함께 저장해 좌측 사이드바 '📂 내 보기' 에 노출한다. 각 뷰는 GET /me/saved-views/{id}/results 로 다시 documents 에 적용된다.",
+      "name": "saved-views"
     }
   ]
 }

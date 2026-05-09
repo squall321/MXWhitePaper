@@ -16,6 +16,7 @@ export type AutomationTriggerKind =
   | 'status_transition'
   | 'comment_added'
   | 'tag_added'
+  | 'cron'
 
 export const ALL_AUTOMATION_TRIGGERS: AutomationTriggerKind[] = [
   'doc_published',
@@ -24,6 +25,7 @@ export const ALL_AUTOMATION_TRIGGERS: AutomationTriggerKind[] = [
   'status_transition',
   'comment_added',
   'tag_added',
+  'cron',
 ]
 
 export type AutomationActionKind =
@@ -55,6 +57,9 @@ export interface AutomationRule {
   created_at: string | null
   last_fired_at: string | null
   fire_count: number
+  // Cycle 15 U4 — populated only when `trigger_kind === 'cron'`.
+  cron_expression: string | null
+  next_cron_run_at: string | null
 }
 
 export interface AutomationRunLog {
@@ -72,6 +77,7 @@ export interface CreateAutomationRuleIn {
   action_kind: AutomationActionKind
   action_payload?: Record<string, unknown>
   enabled?: boolean
+  cron_expression?: string
 }
 
 export interface PatchAutomationRuleIn {
@@ -81,6 +87,7 @@ export interface PatchAutomationRuleIn {
   action_kind?: AutomationActionKind
   action_payload?: Record<string, unknown>
   enabled?: boolean
+  cron_expression?: string
 }
 
 export interface TestAutomationRuleResult {

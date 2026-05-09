@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     # 라우터는 항상 켜둔다 — 이 플래그는 ticker 만 게이트한다.
     reminder_runner_enabled: bool = Field(default=True)
 
+    # 0029 — Automation cron ticker (asyncio in-process, every 30s). 사라
+    # 지면 시간 기반 자동화 규칙이 발화하지 않는다 — 이벤트 기반 규칙은 영향 없음.
+    automation_cron_enabled: bool = Field(default=True)
+
     # ── SMTP / Email (cycle: email integration) ──────────────────────
     # When `email_enabled=False` the email service logs to stdout under a
     # "[EMAIL CONSOLE FALLBACK]" prefix so dev never depends on a real MTA.

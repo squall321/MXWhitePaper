@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0",
+  "id": "01J9X1Y2Z3A4B5C6D7E8F9G0AN",
+  "slug": "image-annotation-sample",
+  "title": "이미지 주석 샘플",
+  "summary": "업로드한 이미지 위에 화살표/사각형/콜아웃을 얹어 핵심 부위를 강조하는 image-annotation 블록 예제. 좌표는 정규화([0..1])라 이미지 크기가 바뀌어도 주석 위치가 유지됩니다.",
+  "metadata": {
+    "division": "MX",
+    "owners": ["u-anyone"],
+    "tags": ["annotation", "image", "diagram", "예제"],
+    "confidentiality": "internal"
+  },
+  "sections": [
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9GAN1",
+      "number": "1",
+      "level": 1,
+      "title": "이미지 주석 — 화살표 + 사각형 + 콜아웃",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9GAN2",
+          "text": "사진 위에 임의의 도형을 얹어 핵심 부위에 시선을 모을 수 있어요. 좌표는 정규화 [0..1] — 원본 이미지가 어떤 크기로 렌더되어도 주석은 같은 위치를 가리킵니다."
+        },
+        {
+          "type": "image-annotation",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9GAN3",
+          "image_id": "01J9X1Y2Z3A4B5C6D7E8F9GIMG",
+          "caption": "신제품 후면 — 카메라 모듈/지문센서 위치",
+          "annotations": [
+            {
+              "kind": "arrow",
+              "id": "ann-arrow-1",
+              "from": { "x": 0.10, "y": 0.10 },
+              "to":   { "x": 0.32, "y": 0.28 },
+              "color": "#dc2626",
+              "label": "메인 카메라"
+            },
+            {
+              "kind": "rect",
+              "id": "ann-rect-1",
+              "x": 0.55,
+              "y": 0.15,
+              "w": 0.20,
+              "h": 0.18,
+              "color": "#2563eb",
+              "label": "지문센서 영역"
+            },
+            {
+              "kind": "callout",
+              "id": "ann-call-1",
+              "x": 0.65,
+              "y": 0.70,
+              "anchor": { "x": 0.45, "y": 0.55 },
+              "text": "여기 마감 처리 확인",
+              "color": "#16a34a"
+            }
+          ]
+        }
+      ],
+      "subsections": []
+    }
+  ]
+}

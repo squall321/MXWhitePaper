@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "id": "01J9X1Y2Z3A4B5C6D7E8F9G0QZ",
+  "slug": "quiz-sample",
+  "title": "퀴즈 샘플",
+  "summary": "정답/배점/통과 점수가 포함된 quiz 블록 예제.",
+  "metadata": {
+    "division": "MX",
+    "owners": ["u-anyone"],
+    "tags": ["quiz", "예제"],
+    "confidentiality": "internal"
+  },
+  "sections": [
+    {
+      "id": "01J9X1Y2Z3A4B5C6D7E8F9GZS1",
+      "number": "1",
+      "level": 1,
+      "title": "기본 보안 퀴즈",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9GZP1",
+          "text": "사내 보안 정책 이해도를 빠르게 점검하기 위한 짧은 퀴즈입니다."
+        },
+        {
+          "type": "quiz",
+          "id": "01J9X1Y2Z3A4B5C6D7E8F9GZQ1",
+          "title": "사내 보안 기본 퀴즈",
+          "description": "4문제. 통과 점수 70점.",
+          "passing_score": 70,
+          "shuffle": false,
+          "max_attempts": 3,
+          "show_answers_after": true,
+          "questions": [
+            {
+              "id": "q1",
+              "kind": "single-choice",
+              "label": "비밀번호 최소 길이는 몇 자입니까?",
+              "options": ["6", "8", "10", "12"],
+              "correct": "10",
+              "explanation": "사내 정책상 최소 10자 이상이며, 특수문자/숫자/대소문자 조합을 권장합니다.",
+              "points": 1
+            },
+            {
+              "id": "q2",
+              "kind": "multi-choice",
+              "label": "다음 중 사내 정책상 허용되는 행위를 모두 고르세요.",
+              "options": [
+                "외부 USB로 자료 반출",
+                "사내 클라우드에 보관",
+                "공유 링크 만료일 지정",
+                "비밀번호를 메모지에 적기"
+              ],
+              "correct": ["사내 클라우드에 보관", "공유 링크 만료일 지정"],
+              "explanation": "외부 매체 반출과 평문 메모는 모두 정책 위반입니다.",
+              "points": 2
+            },
+            {
+              "id": "q3",
+              "kind": "true-false",
+              "label": "MFA(다중 인증) 는 모든 임직원에게 의무 적용된다.",
+              "correct": true,
+              "explanation": "전사 적용으로 예외 없음.",
+              "points": 1
+            },
+            {
+              "id": "q4",
+              "kind": "short-text",
+              "label": "보안 사고 신고 핫라인의 단축번호는?",
+              "correct": "9119",
+              "explanation": "내부 단축번호 9119.",
+              "points": 1
+            }
+          ]
+        }
+      ],
+      "subsections": []
+    }
+  ]
+}

@@ -46,6 +46,8 @@ import { VideoBlockEditor } from '../VideoBlockEditor'
 import { CalculatorBlockEditor } from '../CalculatorBlockEditor'
 import { WhiteboardBlockEditor } from '../WhiteboardBlockEditor'
 import { PdfBlockEditor } from '../PdfBlockEditor'
+import { ImageAnnotationBlockEditor } from '../ImageAnnotationBlockEditor'
+import { QuizBlockEditor } from '../QuizBlockEditor'
 
 import type {
   AccordionBlock,
@@ -71,6 +73,8 @@ import type {
   VideoBlock,
   WhiteboardBlock,
   PdfBlock,
+  ImageAnnotationBlock,
+  QuizBlock,
 } from '@/types/document'
 
 function harness(node: React.ReactNode) {
@@ -395,6 +399,43 @@ const CASES: Array<{
       height_px: 600,
     } satisfies PdfBlock,
     expect: ['시작 페이지', 'application/pdf', 'SOP v3.2'],
+  },
+  {
+    type: 'image-annotation',
+    label: 'ImageAnnotationBlockEditor',
+    Editor: ImageAnnotationBlockEditor,
+    block: {
+      type: 'image-annotation',
+      id: ID(24),
+      image_id: '01TESTIMAGE000000000000I24',
+      caption: '주석 샘플',
+      annotations: [],
+    } satisfies ImageAnnotationBlock,
+    expect: ['data-image-annotation-canvas', '화살표', '사각형', '콜아웃'],
+  },
+  {
+    type: 'quiz',
+    label: 'QuizBlockEditor',
+    Editor: QuizBlockEditor,
+    block: {
+      type: 'quiz',
+      id: ID(25),
+      title: '샘플 퀴즈',
+      passing_score: 70,
+      max_attempts: 0,
+      show_answers_after: true,
+      questions: [
+        {
+          id: 'q1',
+          kind: 'single-choice',
+          label: '문제 1',
+          options: ['A', 'B'],
+          correct: 'A',
+          points: 1,
+        },
+      ],
+    } satisfies QuizBlock,
+    expect: ['응시 기록 보기', '통과 점수', '문제 추가'],
   },
 ]
 

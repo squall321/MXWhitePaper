@@ -27,12 +27,15 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from datetime import datetime, timezone
+
 from app.core.auth import require_admin
 from app.core.db import get_db
 from app.core.errors import NotFound, ValidationFailed, envelope
 from app.repos import document_repo
 from app.services import automation_dispatcher
 from app.services.automation_dispatcher import VALID_ACTIONS, VALID_TRIGGERS
+from app.services.cron_parser import next_run, parse_cron
 
 router = APIRouter(prefix="/api/v1", tags=["automation"])
 
@@ -47,6 +50,10 @@ class RuleCreate(BaseModel):
     action_kind: str
     action_payload: dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
+    # Cycle 0029 — required when ``trigger_kind == 'cron'``. Standard 5-field
+    # cron expression (minute hour dom month dow). Validated server-side via
+    # ``cron_parser.parse_cron``.
+    cron_expression: str | None = None
 
 
 class RulePatch(BaseModel):
@@ -56,6 +63,7 @@ class RulePatch(BaseModel):
     action_kind: str | None = None
     action_payload: dict[str, Any] | None = None
     enabled: bool | None = None
+    cron_expression: str | None = None
 
 
 class TestRuleIn(BaseModel):
@@ -69,7 +77,8 @@ class TestRuleIn(BaseModel):
 _SELECT_COLS = """
     SELECT id, name, trigger_kind, trigger_filter,
            action_kind, action_payload, enabled,
-           created_by, created_at, last_fired_at, fire_count
+           created_by, created_at, last_fired_at, fire_count,
+           cron_expression, next_cron_run_at
     FROM automation_rules
 """
 
@@ -98,7 +107,30 @@ def _row_to_dict(r: Any) -> dict[str, Any]:
         "created_at": r[8].isoformat() if r[8] else None,
         "last_fired_at": r[9].isoformat() if r[9] else None,
         "fire_count": int(r[10] or 0),
+        "cron_expression": r[11],
+        "next_cron_run_at": r[12].isoformat() if r[12] else None,
     }
+
+
+def _validate_and_compute_cron(expr: str | None) -> tuple[str, datetime]:
+    """Validate a cron expression and return ``(expr, next_run_at)``.
+
+    Raises ``ValidationFailed`` on a bad expression so the router emits a
+    standard 422.
+    """
+    if not isinstance(expr, str) or not expr.strip():
+        raise ValidationFailed(
+            "cron_expression is required when trigger_kind='cron'",
+        )
+    try:
+        parsed = parse_cron(expr)
+    except ValueError as e:
+        raise ValidationFailed(
+            f"invalid cron_expression: {e}",
+            details={"cron_expression": expr},
+        ) from e
+    nxt = next_run(parsed, datetime.now(timezone.utc))
+    return expr.strip(), nxt
 
 
 async def _fetch_one(s: AsyncSession, rid: str) -> dict[str, Any] | None:
@@ -142,15 +174,21 @@ async def create_rule(
 ) -> dict[str, Any]:
     _validate_trigger(body.trigger_kind)
     _validate_action(body.action_kind)
+    cron_expr: str | None = None
+    next_at: datetime | None = None
+    if body.trigger_kind == "cron":
+        cron_expr, next_at = _validate_and_compute_cron(body.cron_expression)
     row = (await s.execute(
         text(
             """
             INSERT INTO automation_rules
               (name, trigger_kind, trigger_filter,
-               action_kind, action_payload, enabled, created_by)
+               action_kind, action_payload, enabled, created_by,
+               cron_expression, next_cron_run_at)
             VALUES
               (:n, :tk, CAST(:tf AS jsonb),
-               :ak, CAST(:ap AS jsonb), :en, CAST(:cb AS uuid))
+               :ak, CAST(:ap AS jsonb), :en, CAST(:cb AS uuid),
+               :ce, :na)
             RETURNING id
             """
         ),
@@ -162,6 +200,8 @@ async def create_rule(
             "ap": json.dumps(body.action_payload),
             "en": bool(body.enabled),
             "cb": user["id"],
+            "ce": cron_expr,
+            "na": next_at,
         },
     )).first()
     rid = str(row[0])
@@ -243,6 +283,27 @@ async def patch_rule(
     if body.enabled is not None:
         sets.append("enabled = :en")
         params["en"] = bool(body.enabled)
+    # Cron — accept both the explicit field and a kind switch into 'cron'.
+    # When the new effective trigger_kind is 'cron' we require a valid
+    # expression; when the rule is moved away from 'cron' we clear both
+    # cron columns to avoid a stale schedule.
+    effective_kind = body.trigger_kind or rule["trigger_kind"]
+    if effective_kind == "cron":
+        # Either the patch carries an expression, or the row already has one.
+        new_expr = (
+            body.cron_expression
+            if body.cron_expression is not None
+            else rule.get("cron_expression")
+        )
+        expr, nxt = _validate_and_compute_cron(new_expr)
+        sets.append("cron_expression = :ce")
+        params["ce"] = expr
+        sets.append("next_cron_run_at = :na")
+        params["na"] = nxt
+    elif body.trigger_kind is not None and body.trigger_kind != "cron":
+        # Switched off cron — wipe the schedule columns.
+        sets.append("cron_expression = NULL")
+        sets.append("next_cron_run_at = NULL")
     if not sets:
         raise ValidationFailed("nothing to update")
 
