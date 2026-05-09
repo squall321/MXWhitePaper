@@ -14,6 +14,7 @@ import { AuditLogPage } from './AuditLog'
 import { AutomationRulesPage } from './AutomationRules'
 import { BackupAdminPage } from './BackupAdmin'
 import { BulkDocImportPage } from './BulkDocImport'
+import { RetentionPoliciesPage } from './RetentionPolicies'
 import { TagManagerPage } from './TagManager'
 import { TemplateManagerPage } from './TemplateManager'
 import { WebhooksSettingsPage } from './WebhooksSettings'
@@ -37,6 +38,7 @@ type TabKey =
   | 'templates'
   | 'webhooks'
   | 'automation'
+  | 'retention'
   | 'backups'
   | 'import-csv'
   | 'archive'
@@ -52,6 +54,7 @@ const TABS: Array<{ key: TabKey; labelKey: string }> = [
   { key: 'templates', labelKey: 'page.adminDashboard.tab.templates' },
   { key: 'webhooks', labelKey: 'page.adminDashboard.tab.webhooks' },
   { key: 'automation', labelKey: 'page.adminDashboard.tab.automation' },
+  { key: 'retention', labelKey: 'page.adminDashboard.tab.retention' },
   { key: 'backups', labelKey: 'page.adminDashboard.tab.backups' },
   { key: 'import-csv', labelKey: 'page.adminDashboard.tab.importCsv' },
   { key: 'archive', labelKey: 'page.adminDashboard.tab.archive' },
@@ -150,6 +153,11 @@ export function AdminDashboardPage() {
       {tab === 'automation' && (
         <div data-testid="admin-tab-automation-content">
           <AutomationRulesPage />
+        </div>
+      )}
+      {tab === 'retention' && (
+        <div data-testid="admin-tab-retention-content">
+          <RetentionPoliciesPage />
         </div>
       )}
       {tab === 'backups' && (

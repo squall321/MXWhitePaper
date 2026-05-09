@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui'
 import { FavoriteStar } from '@/features/favorites/components/FavoriteStar'
 import { BookmarkButton } from '@/features/bookmarks/components/BookmarkButton'
 import { FollowButton } from '@/features/subscriptions/FollowButton'
+import { ReminderButton } from '@/features/reminders/ReminderButton'
 import { estimateReadingTimeMinutes } from '@/lib/readingTime'
 import { Suspense, lazy } from 'react'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
@@ -187,6 +188,16 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
         />
       )}
       <SeriesNav slug={document.slug} placement="top" />
+      <div className="flex justify-end">
+        <a
+          href={`/dep-graph?root=${encodeURIComponent(document.slug)}`}
+          data-testid="open-dep-graph"
+          className="text-xs text-smsg-700 hover:underline"
+          title="이 문서를 중심으로 의존성 그래프 열기"
+        >
+          <span aria-hidden="true">🕸 </span>그래프 보기
+        </a>
+      </div>
       <header className="space-y-3 border-b border-gray-200 pb-5">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded bg-smsg-50 px-2 py-0.5 font-mono text-[11px] text-smsg-700">
@@ -252,6 +263,7 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           <FavoriteStar slug={document.slug} title={document.title} />
           <BookmarkButton slug={document.slug} title={document.title} />
           <FollowButton slug={document.slug} />
+          <ReminderButton slug={document.slug} />
         </div>
         <ReadingTimePill document={document} />
         {document.summary && (

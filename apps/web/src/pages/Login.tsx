@@ -154,13 +154,13 @@ export function LoginPage() {
                 />
                 {t('login.remember')}
               </label>
-              <a
-                href="#"
-                onClick={(e) => e.preventDefault()}
+              <Link
+                to="/auth/forgot"
+                data-testid="login-forgot"
                 className="text-xs text-link hover:underline"
               >
                 {t('login.forgot')}
-              </a>
+              </Link>
             </div>
 
             {submitError && (

@@ -393,6 +393,32 @@
         "title": "ContinueBody",
         "type": "object"
       },
+      "CreateReminderIn": {
+        "properties": {
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "remind_at": {
+            "description": "ISO8601 timestamp (UTC if no offset)",
+            "title": "Remind At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "remind_at"
+        ],
+        "title": "CreateReminderIn",
+        "type": "object"
+      },
       "CreateShareIn": {
         "description": "Body for POST /documents/{slug}/share.",
         "properties": {
@@ -524,6 +550,21 @@
           }
         },
         "title": "DivisionUpdate",
+        "type": "object"
+      },
+      "ForgotPasswordIn": {
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "ForgotPasswordIn",
         "type": "object"
       },
       "GroupCreate": {
@@ -741,6 +782,34 @@
         "title": "PartUpdate",
         "type": "object"
       },
+      "PatchReminderIn": {
+        "properties": {
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "remind_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remind At"
+          }
+        },
+        "title": "PatchReminderIn",
+        "type": "object"
+      },
       "PatchSubscriptionIn": {
         "properties": {
           "digest_cadence": {
@@ -770,6 +839,142 @@
           }
         },
         "title": "PatchSubscriptionIn",
+        "type": "object"
+      },
+      "PolicyCreate": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "action_payload": {
+            "additionalProperties": true,
+            "title": "Action Payload",
+            "type": "object"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "scope_filter": {
+            "additionalProperties": true,
+            "title": "Scope Filter",
+            "type": "object"
+          },
+          "trigger_age_days": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 10000.0,
+            "title": "Trigger Age Days",
+            "type": "integer"
+          },
+          "trigger_field": {
+            "title": "Trigger Field",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "action",
+          "trigger_age_days",
+          "trigger_field"
+        ],
+        "title": "PolicyCreate",
+        "type": "object"
+      },
+      "PolicyPatch": {
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "action_payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Payload"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "scope_filter": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Filter"
+          },
+          "trigger_age_days": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 10000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Age Days"
+          },
+          "trigger_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Field"
+          }
+        },
+        "title": "PolicyPatch",
         "type": "object"
       },
       "PolishBody": {
@@ -862,6 +1067,28 @@
           "user_id"
         ],
         "title": "RemindIn",
+        "type": "object"
+      },
+      "ResetPasswordIn": {
+        "properties": {
+          "new_password": {
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "New Password",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 512,
+            "minLength": 8,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "title": "ResetPasswordIn",
         "type": "object"
       },
       "ResolveIn": {
@@ -1893,6 +2120,21 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "VerifyEmailIn": {
+        "properties": {
+          "token": {
+            "maxLength": 512,
+            "minLength": 8,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "VerifyEmailIn",
+        "type": "object"
+      },
       "WebhookCreate": {
         "properties": {
           "events": {
@@ -2555,6 +2797,349 @@
         "summary": "유지보수 일괄 실행",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/retention-policies": {
+      "get": {
+        "operationId": "list_policies_api_v1_admin_retention_policies_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Policies Api V1 Admin Retention Policies Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "보존 정책 목록 (admin)",
+        "tags": [
+          "retention"
+        ]
+      },
+      "post": {
+        "operationId": "create_policy_api_v1_admin_retention_policies_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Policy Api V1 Admin Retention Policies Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "보존 정책 생성 (admin)",
+        "tags": [
+          "retention"
+        ]
+      }
+    },
+    "/api/v1/admin/retention-policies/{policy_id}": {
+      "delete": {
+        "operationId": "delete_policy_api_v1_admin_retention_policies__policy_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Policy Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "보존 정책 삭제 (admin)",
+        "tags": [
+          "retention"
+        ]
+      },
+      "get": {
+        "operationId": "get_policy_api_v1_admin_retention_policies__policy_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Policy Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Policy Api V1 Admin Retention Policies  Policy Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "보존 정책 단건 (admin)",
+        "tags": [
+          "retention"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_policy_api_v1_admin_retention_policies__policy_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Policy Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Policy Api V1 Admin Retention Policies  Policy Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "보존 정책 수정 (admin)",
+        "tags": [
+          "retention"
+        ]
+      }
+    },
+    "/api/v1/admin/retention-policies/{policy_id}/dry-run": {
+      "post": {
+        "operationId": "dry_run_policy_api_v1_admin_retention_policies__policy_id__dry_run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Policy Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Dry Run Policy Api V1 Admin Retention Policies  Policy Id  Dry Run Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "드라이런 — 매칭되는 slug 만 회신, 액션 미실행",
+        "tags": [
+          "retention"
+        ]
+      }
+    },
+    "/api/v1/admin/retention-policies/{policy_id}/run": {
+      "post": {
+        "operationId": "run_policy_now_api_v1_admin_retention_policies__policy_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Policy Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Policy Now Api V1 Admin Retention Policies  Policy Id  Run Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "즉시 실행 — 매칭 문서에 액션 적용 + 로그 기록",
+        "tags": [
+          "retention"
+        ]
+      }
+    },
+    "/api/v1/admin/retention-policies/{policy_id}/runs": {
+      "get": {
+        "operationId": "list_runs_api_v1_admin_retention_policies__policy_id__runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Policy Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Runs Api V1 Admin Retention Policies  Policy Id  Runs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "정책 실행 로그 (admin, 최근순)",
+        "tags": [
+          "retention"
         ]
       }
     },
@@ -3581,6 +4166,73 @@
         ]
       }
     },
+    "/api/v1/auth/email/send-verification": {
+      "post": {
+        "description": "Mint a fresh email-verify token + send the link to the caller's address.\n\nIdempotent — a user with multiple unverified clicks just gets a new\ntoken; old ones quietly expire.",
+        "operationId": "send_verification_api_v1_auth_email_send_verification_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Send Verification Api V1 Auth Email Send Verification Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Send Verification",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/email/verify": {
+      "post": {
+        "operationId": "verify_email_api_v1_auth_email_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Verify Email Api V1 Auth Email Verify Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Email",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login_api_v1_auth_login_post",
@@ -3633,6 +4285,93 @@
           }
         },
         "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/password/forgot": {
+      "post": {
+        "description": "Always returns 200 to avoid leaking whether ``email`` exists.\n\nBehaviour:\n  - email matches an active user → mint reset token + send email.\n  - email unknown / inactive → no-op, but the same response shape is\n    returned so attackers can't enumerate the user table.",
+        "operationId": "forgot_password_api_v1_auth_password_forgot_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Forgot Password Api V1 Auth Password Forgot Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Forgot Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/password/reset": {
+      "post": {
+        "operationId": "reset_password_api_v1_auth_password_reset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reset Password Api V1 Auth Password Reset Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Password",
         "tags": [
           "auth"
         ]
@@ -4616,6 +5355,89 @@
         "summary": "스레드 resolve 토글 (어느 댓글 id 든 root 로 올라가 status 갱신)",
         "tags": [
           "comments"
+        ]
+      }
+    },
+    "/api/v1/dep-graph": {
+      "get": {
+        "description": "root_slug 에서 양방향(나가는/들어오는) BFS 로 depth 만큼 확장. 본문(content_json) 의 [[slug]] 위키 링크를 권위 소스로 사용한다. 결과는 5분 in-process 캐시 — 본문 수정 직후에는 반영이 지연될 수 있다.",
+        "operationId": "get_dep_graph_api_v1_dep_graph_get",
+        "parameters": [
+          {
+            "description": "중심 문서 슬러그",
+            "in": "query",
+            "name": "root_slug",
+            "required": true,
+            "schema": {
+              "description": "중심 문서 슬러그",
+              "title": "Root Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "depth",
+            "required": false,
+            "schema": {
+              "default": 2,
+              "maximum": 4,
+              "minimum": 1,
+              "title": "Depth",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Dep Graph Api V1 Dep Graph Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 의존성 그래프 (BFS)",
+        "tags": [
+          "dep-graph"
+        ]
+      }
+    },
+    "/api/v1/dep-graph/orphans": {
+      "get": {
+        "description": "어떤 문서도 [[slug]] 로 참조하지 않는 문서들을 모은다. 정리 / 보강 후보를 찾을 때 admin 이 사용한다.",
+        "operationId": "get_orphans_api_v1_dep_graph_orphans_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Orphans Api V1 Dep Graph Orphans Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "고아 문서 (incoming wiki link 0건)",
+        "tags": [
+          "dep-graph"
         ]
       }
     },
@@ -6483,6 +7305,61 @@
         "summary": "특정 사용자에게 읽음 확인 리마인더 알림 (editor+)",
         "tags": [
           "read-receipts"
+        ]
+      }
+    },
+    "/api/v1/documents/{slug}/reminders": {
+      "post": {
+        "operationId": "create_reminder_api_v1_documents__slug__reminders_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReminderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Reminder Api V1 Documents  Slug  Reminders Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 리마인더 예약 (reader+)",
+        "tags": [
+          "reminders"
         ]
       }
     },
@@ -8965,6 +9842,51 @@
         ]
       }
     },
+    "/api/v1/me/reminders": {
+      "get": {
+        "operationId": "list_my_reminders_api_v1_me_reminders_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_fired",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Fired",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List My Reminders Api V1 Me Reminders Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "내 리마인더 목록 (reader+)",
+        "tags": [
+          "reminders"
+        ]
+      }
+    },
     "/api/v1/me/reviews": {
       "get": {
         "operationId": "my_reviews_api_v1_me_reviews_get",
@@ -9822,6 +10744,100 @@
         "summary": "최근 열람 문서 (reader+)",
         "tags": [
           "bookmarks"
+        ]
+      }
+    },
+    "/api/v1/reminders/{rid}": {
+      "delete": {
+        "operationId": "delete_reminder_api_v1_reminders__rid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "리마인더 삭제 (본인)",
+        "tags": [
+          "reminders"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_reminder_api_v1_reminders__rid__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchReminderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Reminder Api V1 Reminders  Rid  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "리마인더 수정 (본인)",
+        "tags": [
+          "reminders"
         ]
       }
     },
@@ -12063,6 +13079,10 @@
       "name": "links"
     },
     {
+      "description": "문서 의존성 그래프 — content_json 본문의 [[slug]] 위키 링크를 정규식으로 추출해 BFS 양방향 확장. depth 1~4. /orphans 는 incoming 링크 0건인 문서를 모아 admin 에게 정리 후보로 노출.",
+      "name": "dep-graph"
+    },
+    {
       "description": "문서 내보내기 — Markdown(GFM) / PDF(WeasyPrint). HTML 은 /api/v1/documents/{slug}/export.html 에서 직접 다운로드.",
       "name": "exports"
     },
@@ -12129,6 +13149,14 @@
     {
       "description": "워크플로우 자동화 규칙 (Cycle 0025) — 트리거(이벤트) × 액션(웹훅/알림/태그/전이/이메일) 을 admin 이 조합해 등록한다. 디스패처는 doc_published / doc_archived / review_decided / status_transition / comment_added / tag_added 6종 이벤트를 watch 하며, trigger_filter 의 key=value 동등 매칭으로 발화한다.",
       "name": "automation"
+    },
+    {
+      "description": "문서 보존 정책 (Cycle 0027) — 시간 기반 자동 정리. scope_filter(part/tag/status/owner) 와 trigger_age_days × trigger_field (updated_at/last_read_at/created_at) 으로 매칭되는 문서에 archive / notify_owner / transition 액션을 적용한다. in-process ticker 가 1시간 간격으로 due 정책을 실행한다 — single-replica.",
+      "name": "retention"
+    },
+    {
+      "description": "시간 기반 리마인더 (Cycle 0028) — 문서별로 'N분/일/주 뒤에 알려줘' 를 예약한다. POST /documents/{slug}/reminders 로 생성, GET /me/reminders 로 본인 목록, PATCH/DELETE 로 수정/삭제. asyncio in-process ticker 가 60초 간격으로 due 인 행을 찾아 notifications(kind='reminder') 로 fan-out 한다.",
+      "name": "reminders"
     }
   ]
 }

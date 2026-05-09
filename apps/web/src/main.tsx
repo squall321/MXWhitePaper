@@ -125,6 +125,9 @@ const MySubscriptionsPage = lazyLogged('MySubscriptions', () =>
     default: m.MySubscriptionsPage,
   })),
 )
+const MyRemindersPage = lazyLogged('MyReminders', () =>
+  import('./pages/MyReminders').then((m) => ({ default: m.MyRemindersPage })),
+)
 const SettingsPage = lazyLogged('Settings', () =>
   import('./pages/Settings').then((m) => ({ default: m.SettingsPage })),
 )
@@ -150,6 +153,11 @@ const AutomationRulesPage = lazyLogged('AutomationRules', () =>
     default: m.AutomationRulesPage,
   })),
 )
+const RetentionPoliciesPage = lazyLogged('RetentionPolicies', () =>
+  import('./pages/RetentionPolicies').then((m) => ({
+    default: m.RetentionPoliciesPage,
+  })),
+)
 // `TagPage` accepts a `mode` prop, which doesn't fit `lazyLogged`'s
 // component-with-no-props generic. Use `React.lazy` directly + manual log.
 const TagPage = lazy(() =>
@@ -163,6 +171,15 @@ const TagPage = lazy(() =>
 )
 const LoginPage = lazyLogged('Login', () =>
   import('./pages/Login').then((m) => ({ default: m.LoginPage })),
+)
+const EmailVerifyPage = lazyLogged('EmailVerify', () =>
+  import('./pages/EmailVerify').then((m) => ({ default: m.EmailVerifyPage })),
+)
+const ForgotPasswordPage = lazyLogged('ForgotPassword', () =>
+  import('./pages/ForgotPassword').then((m) => ({ default: m.ForgotPasswordPage })),
+)
+const ResetPasswordPage = lazyLogged('ResetPassword', () =>
+  import('./pages/ResetPassword').then((m) => ({ default: m.ResetPasswordPage })),
 )
 const NotFoundPage = lazyLogged('NotFound', () =>
   import('./pages/NotFound').then((m) => ({ default: m.NotFoundPage })),
@@ -180,6 +197,9 @@ const PresenterViewPage = lazyLogged('PresenterView', () =>
 )
 const GraphPage = lazyLogged('Graph', () =>
   import('./pages/Graph').then((m) => ({ default: m.GraphPage })),
+)
+const DepGraphPage = lazyLogged('DepGraph', () =>
+  import('./pages/DepGraph').then((m) => ({ default: m.DepGraphPage })),
 )
 const DiagPage = lazyLogged('Diag', () =>
   import('./pages/Diag').then((m) => ({ default: m.DiagPage })),
@@ -263,6 +283,21 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 path="/login"
                 element={<Boundaried name="login"><LoginPage /></Boundaried>}
               />
+              {/* Cycle 0026 — auth flows: email verify + password reset.
+                  These live outside AuthGuard so unauthenticated users
+                  arriving from email links can complete the flow. */}
+              <Route
+                path="/auth/verify"
+                element={<Boundaried name="auth/verify"><EmailVerifyPage /></Boundaried>}
+              />
+              <Route
+                path="/auth/forgot"
+                element={<Boundaried name="auth/forgot"><ForgotPasswordPage /></Boundaried>}
+              />
+              <Route
+                path="/auth/reset"
+                element={<Boundaried name="auth/reset"><ResetPasswordPage /></Boundaried>}
+              />
               <Route
                 path="/diag"
                 element={<Boundaried name="diag"><DiagPage /></Boundaried>}
@@ -320,12 +355,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="admin/templates" element={<Boundaried name="admin/templates"><TemplateManagerPage /></Boundaried>} />
                 <Route path="admin/webhooks" element={<Boundaried name="admin/webhooks"><WebhooksSettingsPage /></Boundaried>} />
                 <Route path="admin/automation" element={<Boundaried name="admin/automation"><AutomationRulesPage /></Boundaried>} />
+                <Route path="admin/retention" element={<Boundaried name="admin/retention"><RetentionPoliciesPage /></Boundaried>} />
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
                 <Route path="activity" element={<Boundaried name="activity"><ActivityFeedPage /></Boundaried>} />
                 <Route path="reads" element={<Boundaried name="reads"><ReadListPage /></Boundaried>} />
                 <Route path="reviews" element={<Boundaried name="reviews"><MyReviewsPage /></Boundaried>} />
                 <Route path="subscriptions" element={<Boundaried name="subscriptions"><MySubscriptionsPage /></Boundaried>} />
+                <Route path="reminders" element={<Boundaried name="reminders"><MyRemindersPage /></Boundaried>} />
                 <Route path="settings" element={<Boundaried name="settings"><SettingsPage /></Boundaried>} />
                 <Route path="me/api-tokens" element={<Boundaried name="me/api-tokens"><ApiTokensPage /></Boundaried>} />
                 <Route path="snippets" element={<Boundaried name="snippets"><SnippetManagerPage /></Boundaried>} />
@@ -333,6 +370,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="series/:slug" element={<Boundaried name="series/:slug"><SeriesDetailPage /></Boundaried>} />
                 <Route path="graph" element={<Boundaried name="graph"><GraphPage /></Boundaried>} />
                 <Route path="graph/:slug" element={<Boundaried name="graph/:slug"><GraphPage /></Boundaried>} />
+                <Route path="dep-graph" element={<Boundaried name="dep-graph"><DepGraphPage /></Boundaried>} />
                 <Route path="tags/:tag" element={<Boundaried name="tags"><TagPage mode="tag" /></Boundaried>} />
                 <Route path="category/:cat" element={<Boundaried name="category"><TagPage mode="category" /></Boundaried>} />
                 <Route path="*" element={<Boundaried name="not-found"><NotFoundPage /></Boundaried>} />

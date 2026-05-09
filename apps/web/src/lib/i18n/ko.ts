@@ -554,6 +554,7 @@ export const ko = {
   'page.adminDashboard.tab.templates': '템플릿',
   'page.adminDashboard.tab.webhooks': '웹훅',
   'page.adminDashboard.tab.automation': '자동화',
+  'page.adminDashboard.tab.retention': '보존 정책',
   'page.adminDashboard.tab.backups': '백업',
   'page.adminDashboard.tab.importCsv': 'CSV 가져오기',
   'page.adminDashboard.tab.archive': '보관 문서',

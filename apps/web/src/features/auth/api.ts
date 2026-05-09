@@ -112,6 +112,45 @@ export async function me(): Promise<AuthUser | null> {
   }
 }
 
+// ── Cycle 0026: email verification + password reset ─────────────────────
+
+/** POST /auth/email/send-verification — auth required; mints + sends a 24h link. */
+export async function sendVerificationEmail(): Promise<{ sent: boolean }> {
+  const res = await apiClient.post<ApiEnvelope<{ sent: boolean }>>(
+    '/auth/email/send-verification',
+    {},
+  )
+  return res.data?.data ?? { sent: false }
+}
+
+/** POST /auth/email/verify — anonymous; consumes the token. */
+export async function verifyEmailToken(token: string): Promise<{ verified: true }> {
+  const res = await apiClient.post<ApiEnvelope<{ verified: true }>>('/auth/email/verify', {
+    token,
+  })
+  return res.data?.data ?? { verified: true }
+}
+
+/** POST /auth/password/forgot — always 200. */
+export async function forgotPassword(email: string): Promise<{ sent: true }> {
+  const res = await apiClient.post<ApiEnvelope<{ sent: true }>>('/auth/password/forgot', {
+    email,
+  })
+  return res.data?.data ?? { sent: true }
+}
+
+/** POST /auth/password/reset — anonymous; new_password ≥ 8 chars. */
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+): Promise<{ reset: true }> {
+  const res = await apiClient.post<ApiEnvelope<{ reset: true }>>('/auth/password/reset', {
+    token,
+    new_password: newPassword,
+  })
+  return res.data?.data ?? { reset: true }
+}
+
 export interface UserSearchHit {
   id: string
   name?: string

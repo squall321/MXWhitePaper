@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # dispatcher 는 항상 동작 — 이 플래그는 runner ticker 만 게이트한다.
     subscription_digest_enabled: bool = Field(default=True)
 
+    # 0028 — Reminder runner (asyncio in-process ticker, every 60s). CRUD
+    # 라우터는 항상 켜둔다 — 이 플래그는 ticker 만 게이트한다.
+    reminder_runner_enabled: bool = Field(default=True)
+
     # ── SMTP / Email (cycle: email integration) ──────────────────────
     # When `email_enabled=False` the email service logs to stdout under a
     # "[EMAIL CONSOLE FALLBACK]" prefix so dev never depends on a real MTA.
@@ -69,6 +73,10 @@ class Settings(BaseSettings):
     smtp_password: str | None = Field(default=None)
     smtp_from: str = Field(default="noreply@mxwhitepaper.local")
     email_enabled: bool = Field(default=False)
+
+    # 0026 — Public base URL used to build email-verify / password-reset
+    # links sent in email bodies. Defaults to the dev web container.
+    web_base_url: str = Field(default="http://localhost:5173")
 
     @property
     def cors_origin_list(self) -> list[str]:

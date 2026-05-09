@@ -168,6 +168,36 @@ def review_request_email(
     return subject, body
 
 
+def verify_email_template(user_name: str, verify_url: str) -> tuple[str, str]:
+    """Email verification link. Returns (subject, body_text)."""
+    subject = "이메일 주소 확인"
+    body = (
+        f"{user_name or ''}님,\n\n".strip()
+        + "\n\n"
+        + "MX 백서 계정의 이메일 주소를 확인해주세요.\n"
+        + "아래 링크를 24시간 이내에 클릭하시면 인증이 완료됩니다.\n\n"
+        + f"  {verify_url}\n\n"
+        + "본인이 요청하지 않았다면 이 메일을 무시해도 안전합니다.\n\n"
+        + "— MX 백서"
+    )
+    return subject, body
+
+
+def password_reset_template(user_name: str, reset_url: str) -> tuple[str, str]:
+    """Password reset request. Returns (subject, body_text)."""
+    subject = "비밀번호 재설정 요청"
+    body = (
+        f"{user_name or ''}님,\n\n".strip()
+        + "\n\n"
+        + "MX 백서 계정의 비밀번호 재설정 요청을 받았습니다.\n"
+        + "아래 링크는 15분 동안 유효합니다.\n\n"
+        + f"  {reset_url}\n\n"
+        + "본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다 — 비밀번호는 변경되지 않습니다.\n\n"
+        + "— MX 백서"
+    )
+    return subject, body
+
+
 # Convenience: send a digest email built from notification payload + user row.
 async def send_digest_email(
     *, user_email: str, user_name: str, items: Iterable[dict[str, Any]]

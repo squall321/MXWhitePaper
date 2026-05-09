@@ -10,6 +10,8 @@ export interface AuthUser {
   name?: string
   role: 'admin' | 'editor' | 'viewer' | string
   avatar_url?: string | null
+  /** ISO timestamp once the user has clicked the verification link (cycle 0026). Null while still pending. */
+  email_verified_at?: string | null
 }
 
 export interface AuthSnapshot {

@@ -579,6 +579,18 @@ function ProfileMenu({
               내 팔로잉
             </Link>
             <Link
+              to="/reminders"
+              role="menuitem"
+              onClick={close}
+              data-testid="profile-menu-reminders"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-smsg-50 hover:no-underline"
+            >
+              <span aria-hidden="true" className="w-4 text-center text-smsg-700">
+                ⏰
+              </span>
+              내 리마인더
+            </Link>
+            <Link
               to="/snippets"
               role="menuitem"
               onClick={close}

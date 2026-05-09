@@ -23,11 +23,13 @@ from .routers.api_tokens import router as api_tokens_router
 from .routers.approvals import router as approvals_router
 from .routers.audit import router as audit_router
 from .routers.auth import router as auth_router
+from .routers.auth_flows import router as auth_flows_router
 from .routers.automation import router as automation_router
 from .routers.backups import router as backups_router
 from .routers.bookmarks import router as bookmarks_router
 from .routers.comments import router_doc as comments_doc_router
 from .routers.comments import router_one as comments_one_router
+from .routers.dep_graph import router as dep_graph_router
 from .routers.doc_templates import router as doc_templates_router
 from .routers.documents import router as documents_router
 from .routers.exports import router as exports_router
@@ -42,6 +44,8 @@ from .routers.orgs import router as orgs_router
 from .routers.presence import router as presence_router
 from .routers.reactions import router as reactions_router
 from .routers.read_receipts import router as read_receipts_router
+from .routers.reminders import router as reminders_router
+from .routers.retention import router as retention_router
 from .routers.search import router as search_router
 from .routers.series import router as series_router
 from .routers.sharing import router as sharing_router
@@ -147,6 +151,14 @@ TAGS_METADATA: list[dict[str, str]] = [
     {
         "name": "links",
         "description": "위키 링크 그래프 — BFS 그래프 / 전역 그래프.",
+    },
+    {
+        "name": "dep-graph",
+        "description": (
+            "문서 의존성 그래프 — content_json 본문의 [[slug]] 위키 링크를 "
+            "정규식으로 추출해 BFS 양방향 확장. depth 1~4. /orphans 는 "
+            "incoming 링크 0건인 문서를 모아 admin 에게 정리 후보로 노출."
+        ),
     },
     {
         "name": "exports",
@@ -283,6 +295,25 @@ TAGS_METADATA: list[dict[str, str]] = [
             "매칭으로 발화한다."
         ),
     },
+    {
+        "name": "retention",
+        "description": (
+            "문서 보존 정책 (Cycle 0027) — 시간 기반 자동 정리. "
+            "scope_filter(part/tag/status/owner) 와 trigger_age_days × trigger_field "
+            "(updated_at/last_read_at/created_at) 으로 매칭되는 문서에 "
+            "archive / notify_owner / transition 액션을 적용한다. "
+            "in-process ticker 가 1시간 간격으로 due 정책을 실행한다 — single-replica."
+        ),
+    },
+    {
+        "name": "reminders",
+        "description": (
+            "시간 기반 리마인더 (Cycle 0028) — 문서별로 'N분/일/주 뒤에 알려줘' 를 "
+            "예약한다. POST /documents/{slug}/reminders 로 생성, GET /me/reminders 로 "
+            "본인 목록, PATCH/DELETE 로 수정/삭제. asyncio in-process ticker 가 60초 "
+            "간격으로 due 인 행을 찾아 notifications(kind='reminder') 로 fan-out 한다."
+        ),
+    },
 ]
 
 
@@ -297,6 +328,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     task: _asyncio.Task[None] | None = None
     pruner_task: _asyncio.Task[None] | None = None
     digest_task: _asyncio.Task[None] | None = None
+    retention_task: _asyncio.Task[None] | None = None
+    reminder_task: _asyncio.Task[None] | None = None
     if settings.backup_enabled:
         from .services.backup_runner import backup_ticker
 
@@ -317,10 +350,31 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         digest_task = _asyncio.create_task(
             digest_ticker(), name="mxwp-digest-ticker",
         )
+
+    # Cycle 0027 — retention policy ticker. Single-replica. 1-hour cadence.
+    from .services.retention_runner import retention_ticker
+
+    retention_task = _asyncio.create_task(
+        retention_ticker(), name="mxwp-retention-ticker",
+    )
+
+    # Cycle 0028 — time-based reminder runner. Single-replica.
+    if getattr(settings, "reminder_runner_enabled", True):
+        from .services.reminder_runner import reminder_ticker
+
+        reminder_task = _asyncio.create_task(
+            reminder_ticker(), name="mxwp-reminder-ticker",
+        )
     try:
         yield
     finally:
-        for t in (task, pruner_task, digest_task):
+        for t in (
+            task,
+            pruner_task,
+            digest_task,
+            retention_task,
+            reminder_task,
+        ):
             if t is None:
                 continue
             t.cancel()
@@ -378,6 +432,8 @@ def create_app() -> FastAPI:
     app.include_router(imports_router)
     # Sprint 6 — auth, search, glossary, widgets
     app.include_router(auth_router)
+    # Cycle 0026 — email verification + password reset flows.
+    app.include_router(auth_flows_router)
     app.include_router(search_router)
     app.include_router(glossary_router)
     app.include_router(widgets_router)
@@ -392,6 +448,8 @@ def create_app() -> FastAPI:
     app.include_router(comments_doc_router)
     app.include_router(comments_one_router)
     app.include_router(links_graph_router)
+    # Cycle 7 — dep-graph (content_json 본문 기반 의존성 그래프 + orphans).
+    app.include_router(dep_graph_router)
     # 멘션 등 BE 푸시 알림
     app.include_router(notifications_router)
     # Cycle 0019 — per-event-per-channel notification preferences.
@@ -434,6 +492,10 @@ def create_app() -> FastAPI:
     app.include_router(api_tokens_router)
     # Cycle 0025 — workflow automation rules (admin-only CRUD + dispatch).
     app.include_router(automation_router)
+    # Cycle 0027 — time-based retention policies (admin-only CRUD + ticker).
+    app.include_router(retention_router)
+    # Cycle 0028 — time-based reminders (CRUD + asyncio runner).
+    app.include_router(reminders_router)
 
     return app
 

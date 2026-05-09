@@ -39,7 +39,7 @@ _API_TOKEN_PREFIX_LEN = 8
 async def _fetch_user_by_id(s: AsyncSession, uid: str) -> dict[str, Any] | None:
     row = (await s.execute(
         text("""
-            SELECT id, email, name, role, team_id, is_active
+            SELECT id, email, name, role, team_id, is_active, email_verified_at
             FROM users WHERE id = CAST(:id AS uuid)
         """),
         {"id": uid},
@@ -53,12 +53,13 @@ async def _fetch_user_by_id(s: AsyncSession, uid: str) -> dict[str, Any] | None:
         "role": row[3],
         "team_id": str(row[4]) if row[4] else None,
         "is_active": bool(row[5]),
+        "email_verified_at": row[6].isoformat() if row[6] else None,
     }
 
 
 async def _fetch_admin(s: AsyncSession) -> dict[str, Any] | None:
     row = (await s.execute(text("""
-        SELECT id, email, name, role, team_id, is_active
+        SELECT id, email, name, role, team_id, is_active, email_verified_at
         FROM users WHERE role = 'admin' AND is_active = TRUE
         ORDER BY created_at LIMIT 1
     """))).first()
@@ -71,6 +72,7 @@ async def _fetch_admin(s: AsyncSession) -> dict[str, Any] | None:
         "role": row[3],
         "team_id": str(row[4]) if row[4] else None,
         "is_active": bool(row[5]),
+        "email_verified_at": row[6].isoformat() if row[6] else None,
     }
 
 

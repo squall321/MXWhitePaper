@@ -7,6 +7,7 @@ import { OrgTree } from '@/features/org/components/OrgTree'
 import { Drawer } from '@/components/ui/Drawer'
 import { Modal } from '@/components/ui/Modal'
 import { RailBoundary } from '@/components/blocks/BlockBoundary'
+import { EmailVerifyBanner } from '@/components/EmailVerifyBanner'
 import { useFavoritesStore } from '@/features/favorites/store'
 import { useRecentStore } from '@/features/recent/store'
 import { useSettingsStore } from '@/features/settings/store'
@@ -121,7 +122,10 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
           tabIndex={-1}
           className="min-w-0 px-4 py-4 sm:px-6 sm:py-6 lg:px-8 isolate"
         >
-          <div className="mx-auto w-full max-w-readable lg:max-w-prose">{children}</div>
+          <div className="mx-auto w-full max-w-readable lg:max-w-prose">
+            <EmailVerifyBanner />
+            {children}
+          </div>
         </main>
 
         {/* Right rail — visible lg+ only. md hides; mobile uses Drawer. */}

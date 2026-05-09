@@ -12,9 +12,11 @@ from app.core.config import get_settings
 from app.services import email as email_mod
 from app.services.email import (
     digest_email,
+    password_reset_template,
     review_request_email,
     send_email,
     share_link_email,
+    verify_email_template,
 )
 
 
@@ -65,6 +67,26 @@ def test_review_request_email_renders() -> None:
     assert "강감찬" in body
     assert "장보고" in body
     assert "/docs/cost" in body
+
+
+def test_verify_email_template_renders() -> None:
+    subject, body = verify_email_template(
+        user_name="홍길동", verify_url="https://wp.example.com/auth/verify?token=abc"
+    )
+    assert subject == "이메일 주소 확인"
+    assert "홍길동" in body
+    assert "https://wp.example.com/auth/verify?token=abc" in body
+    assert "24시간" in body
+
+
+def test_password_reset_template_renders() -> None:
+    subject, body = password_reset_template(
+        user_name="이순신", reset_url="https://wp.example.com/auth/reset?token=xyz"
+    )
+    assert subject == "비밀번호 재설정 요청"
+    assert "이순신" in body
+    assert "https://wp.example.com/auth/reset?token=xyz" in body
+    assert "15분" in body
 
 
 # ── Console fallback ──────────────────────────────────────────────────────
