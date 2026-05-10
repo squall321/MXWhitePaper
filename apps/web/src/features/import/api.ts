@@ -94,3 +94,59 @@ export async function importBulkCsv(file: File): Promise<BulkImportResult> {
   }
   return data
 }
+
+// ── PowerPoint (.pptx) import ──────────────────────────────────────────
+export interface ImportPptxSummary {
+  slides: number
+  sections: number
+  paragraphs: number
+  tables: number
+  images: number
+  speaker_notes: number
+  warnings: string[]
+}
+
+export interface ImportPptxResult {
+  document: DocumentJSONV10
+  summary: ImportPptxSummary
+}
+
+export interface ImportPptxOptions {
+  slug?: string
+  title?: string
+  onProgress?: (fraction: number) => void
+}
+
+/**
+ * Upload a `.pptx` file. Slides are converted into Sections — each slide
+ * becomes one section, with `Section.layout` heuristically derived from
+ * the slide-master name. Returns the same `{document, summary}` envelope
+ * as `importDocx` so the FE can preview before persisting.
+ */
+export async function importPptx(
+  file: File,
+  opts: ImportPptxOptions = {},
+): Promise<ImportPptxResult> {
+  const form = new FormData()
+  form.append('file', file)
+  if (opts.slug) form.append('slug', opts.slug)
+  if (opts.title) form.append('title', opts.title)
+
+  const res = await apiClient.post<ApiEnvelope<ImportPptxResult>>(
+    `/imports/pptx`,
+    form,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e: { loaded: number; total?: number }) => {
+        if (!opts.onProgress) return
+        const total = e.total ?? 0
+        if (total > 0) opts.onProgress(Math.min(1, e.loaded / total))
+      },
+    },
+  )
+  const data = res.data?.data
+  if (!data || !data.document || !data.summary) {
+    throw new Error('서버 응답이 비어 있습니다.')
+  }
+  return data
+}

@@ -95,9 +95,9 @@ describe('uploadImage', () => {
 
     expect(result.image_id).toBe('img-from-blob')
     // Filename was synthesized from opts.filename and forwarded to /init.
-    const initBody = post.mock.calls[0]?.[1] as { filename?: string; mime?: string }
+    const initBody = post.mock.calls[0]?.[1] as { filename?: string; mime_type?: string }
     expect(initBody?.filename).toBe('crop-1.png')
-    expect(initBody?.mime).toBe('image/png')
+    expect(initBody?.mime_type).toBe('image/png')
   })
 
   it('runs init → PUT → finalize on a normal upload', async () => {

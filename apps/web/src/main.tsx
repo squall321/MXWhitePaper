@@ -25,7 +25,7 @@ function lazyLogged<T extends React.ComponentType<never>>(
 ): T {
   const wrapped = lazy(() =>
     factory().catch((err: unknown) => {
-      // eslint-disable-next-line no-console
+       
       console.error(`[mxwp] lazy chunk failed: ${name}`, err)
       throw err
     }) as unknown as Promise<{ default: React.ComponentType<unknown> }>,
@@ -97,7 +97,7 @@ const AuditLogPage = lazy(() =>
   import('./pages/AuditLog')
     .then((m) => ({ default: m.AuditLogPage }))
     .catch((err: unknown) => {
-      // eslint-disable-next-line no-console
+       
       console.error('[mxwp] lazy chunk failed: AuditLog', err)
       throw err
     }),
@@ -107,7 +107,7 @@ const AuditRetentionPage = lazy(() =>
   import('./pages/AuditRetention')
     .then((m) => ({ default: m.AuditRetentionPage }))
     .catch((err: unknown) => {
-      // eslint-disable-next-line no-console
+       
       console.error('[mxwp] lazy chunk failed: AuditRetention', err)
       throw err
     }),
@@ -195,7 +195,7 @@ const TagPage = lazy(() =>
   import('./pages/TagPage')
     .then((m) => ({ default: m.TagPage }))
     .catch((err: unknown) => {
-      // eslint-disable-next-line no-console
+       
       console.error('[mxwp] lazy chunk failed: TagPage', err)
       throw err
     }),
@@ -278,7 +278,7 @@ if (!maybeResetAndRedirect()) {
     // 마운트 자체가 실패하면 React 가 아직 안 깔린 상태이므로 평범한
     // HTML 로 진단 메시지를 박아 사용자에게 흰 화면이 아닌 "원인 + /diag
     // 링크" 를 보여 준다.
-    // eslint-disable-next-line no-console
+     
     console.error('[mxwp] mount failed', err)
     const root = document.getElementById('root')
     const e = err as Error

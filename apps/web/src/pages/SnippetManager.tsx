@@ -307,7 +307,7 @@ export function SnippetManagerPage() {
               스니펫 삭제
             </h3>
             <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">
-              "{deleting.name}" 을(를) 삭제할까요? 이 작업은 되돌릴 수 없어요.
+              &ldquo;{deleting.name}&rdquo; 을(를) 삭제할까요? 이 작업은 되돌릴 수 없어요.
             </p>
             <div className="mt-3 flex justify-end gap-2">
               <button

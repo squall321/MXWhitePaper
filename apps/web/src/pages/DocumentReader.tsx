@@ -156,6 +156,8 @@ export function DocumentReaderPage() {
   // Shortcuts.
   useEditorShortcuts(slug, {
     onSave: () => void saveNow(),
+    onUndo: () => void useEditorStore.getState().undo(),
+    onRedo: () => void useEditorStore.getState().redo(),
   })
 
   // Push correct right-rail.
@@ -282,12 +284,7 @@ export function DocumentReaderPage() {
       />
 
       {isFullEditing && (
-        <div className="rounded border border-smsg-100 bg-white p-3">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            아웃라인
-          </h3>
-          <OutlinePanel slug={slug} document={live} />
-        </div>
+        <CollapsibleOutline slug={slug} document={live} />
       )}
 
       {isFullEditing ? (
@@ -354,4 +351,89 @@ export function DocumentReaderPage() {
       </Drawer>
     </div>
   )
+}
+
+/**
+ * Collapsible 아웃라인 wrapper used inside fullEdit.
+ *
+ * Why: when the document has many sections the OutlinePanel grows to
+ * hundreds of pixels tall and pushes the float-right Infobox far down the
+ * page, making it look like the outline is "covering" the Infobox area.
+ * Defaulting to collapsed (and remembering the user's choice in
+ * localStorage per slug) keeps the editing surface compact while still
+ * giving one-click access to the structural editor.
+ */
+function CollapsibleOutline({
+  slug,
+  document,
+}: {
+  slug: string
+  document: import('@/types/document').DocumentJSONV10
+}) {
+  const storageKey = `outline-open:${slug}`
+  const [open, setOpen] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(storageKey) === '1'
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(storageKey, open ? '1' : '0')
+    } catch {
+      /* private mode / no storage — silently OK */
+    }
+  }, [open, storageKey])
+
+  // Count top-level + nested sections so the collapsed header can
+  // surface "(N개 섹션)" as a useful hint without expanding.
+  const sectionCount = countSectionsDeep(document.sections ?? [])
+
+  return (
+    <div className="rounded border border-smsg-100 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600 hover:bg-gray-50"
+        data-testid="outline-toggle"
+      >
+        <span className="flex items-center gap-2">
+          <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+          <span>아웃라인</span>
+          {sectionCount > 0 && (
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-normal normal-case text-gray-500">
+              {sectionCount}개 섹션
+            </span>
+          )}
+        </span>
+        <span className="text-[10px] font-normal normal-case text-gray-400">
+          {open ? '접기' : '펴서 편집'}
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-smsg-100 p-3">
+          <OutlinePanel slug={slug} document={document} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function countSectionsDeep(
+  sections: readonly { subsections?: readonly unknown[] }[],
+): number {
+  let n = 0
+  const walk = (list: readonly { subsections?: readonly unknown[] }[]) => {
+    for (const s of list) {
+      n += 1
+      const sub = s.subsections as
+        | readonly { subsections?: readonly unknown[] }[]
+        | undefined
+      if (sub && sub.length > 0) walk(sub)
+    }
+  }
+  walk(sections)
+  return n
 }

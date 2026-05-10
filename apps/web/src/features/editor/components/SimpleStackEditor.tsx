@@ -19,6 +19,8 @@ import { CSS } from '@dnd-kit/utilities'
 import type { Block, Slug, Ulid } from '@/types/document'
 import type { AnySection } from '../api'
 import { patchSection, isPreconditionFailed, deleteBlock, insertBlock } from '../api'
+import { SectionLayoutPicker } from './SectionLayoutPicker'
+import type { Section } from '@/types/document'
 import { useEditorStore } from '../state'
 import { useBulkSelectionStore } from '../bulkSelectionStore'
 import { BlockHoverInserter } from './BlockHoverInserter'
@@ -37,6 +39,11 @@ import { ulid } from '../ulid'
 import { toast } from '@/components/ui/Toast'
 import { SnippetPicker } from '@/features/block-library/SnippetPicker'
 import { SmartFileDropZone } from '@/features/upload/SmartFileDropZone'
+import {
+  nextNoteOrdinal,
+  noteMarker,
+  noteTag,
+} from '../footnoteShortcut'
 
 /**
  * SimpleStackEditor — Notion-style block stack with drag-to-reorder and
@@ -112,6 +119,32 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
     }
   }, [etag, slug, section.id, title, titleDirty, apply, setConflict])
 
+  /**
+   * Persist a layout change immediately (no debounce — layout choices are
+   * intentional, low-frequency, and the visual snap is the user's reward).
+   * `'stack'` is sent as `null` so the BE drops the field rather than
+   * persisting the implicit default — keeps the JSON tidy.
+   */
+  const persistLayout = useCallback(
+    async (next: NonNullable<Section['layout']>) => {
+      if (!etag) return
+      try {
+        const layoutPayload = next === 'stack' ? null : next
+        const result = await patchSection(
+          slug,
+          section.id,
+          { layout: layoutPayload } as never,
+          etag,
+          '섹션 레이아웃 변경',
+        )
+        apply(result.document, result.etag)
+      } catch (err) {
+        if (isPreconditionFailed(err)) setConflict(null)
+      }
+    },
+    [etag, slug, section.id, apply, setConflict],
+  )
+
   const onPickTail = useCallback(
     async (it: PaletteItem) => {
       if (it.kind === 'image') {
@@ -158,6 +191,49 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
       }
     },
     [etag, slug, apply, setConflict],
+  )
+
+  /**
+   * Wrap a section-level block into a new ColumnsBlock so the user can put a
+   * sibling on its left or right. Triggered by the side `+` rails. The new
+   * sibling is an empty paragraph the user can immediately type into.
+   *
+   * Why patchSection instead of insertBlock: the operation replaces the slot
+   * occupied by `block` with a single `ColumnsBlock` that contains the
+   * original block + a new paragraph — `insertBlock` only inserts, it can't
+   * replace, and we don't want a stale copy of `block` sitting in the section.
+   */
+  const onWrapSideBySide = useCallback(
+    async (blockId: Ulid, side: 'left' | 'right') => {
+      if (!etag) return
+      const idx = blocks.findIndex((b) => b.id === blockId)
+      if (idx < 0) return
+      const original = blocks[idx]
+      if (!original) return
+      const newPara: Block = { type: 'paragraph', id: ulid(), text: '' }
+      const columnsBlock: Block = {
+        type: 'columns',
+        id: ulid(),
+        columns:
+          side === 'left'
+            ? [[newPara], [original]]
+            : [[original], [newPara]],
+      } as Block
+      const nextBlocks = blocks.map((b, i) => (i === idx ? columnsBlock : b))
+      try {
+        const result = await patchSection(
+          slug,
+          section.id,
+          { blocks: nextBlocks },
+          etag,
+          side === 'left' ? '왼쪽에 단 추가' : '오른쪽에 단 추가',
+        )
+        apply(result.document, result.etag)
+      } catch (err) {
+        if (isPreconditionFailed(err)) setConflict(null)
+      }
+    },
+    [etag, blocks, slug, section.id, apply, setConflict],
   )
 
   const sensors = useSensors(
@@ -337,6 +413,104 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [blocks, slug, section.id, apply, setConflict, clearSel, setManySel])
+
+  // ── Footnote / endnote shortcut ──────────────────────────────────────
+  // Ctrl+Alt+F → 각주, Ctrl+Alt+E → 미주. Fires from any contentEditable
+  // descendant of THIS section so multi-section docs route the action to
+  // the section that owns the focus. The handler:
+  //   1. computes the next ordinal across the whole doc (so numbering
+  //      stays sequential even when the user adds notes out of order)
+  //   2. inserts `[^N]` at the caret via execCommand (cheap + works in
+  //      every contentEditable, including the simple-stack inline editor)
+  //   3. appends a `[^N]: ` definition paragraph to this section
+  //   4. moves focus to the new paragraph so the user starts typing the
+  //      note content immediately, no extra clicks required
+  const sectionRootRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    function onKey(ev: KeyboardEvent) {
+      if (!ev.altKey || !(ev.metaKey || ev.ctrlKey)) return
+      const k = ev.key.toLowerCase()
+      const kind: 'footnote' | 'endnote' | null =
+        k === 'f' ? 'footnote' : k === 'e' ? 'endnote' : null
+      if (!kind) return
+      // Only fire when the active editable lives inside THIS section —
+      // otherwise sibling sections would all race to add the marker.
+      const root = sectionRootRef.current
+      const target = ev.target as HTMLElement | null
+      if (!root || !target || !root.contains(target)) return
+      const editable = target.closest('[contenteditable="true"]') as HTMLElement | null
+      if (!editable) return
+      ev.preventDefault()
+      void addNoteAtCaret(kind, editable)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, section.id, blocks])
+
+  /**
+   * Insert `[^N]` (or `[^en-N]`) at the caret in `editable`, then append
+   * a `[^TAG]: ` definition paragraph to this section and move focus to
+   * the new paragraph. Best-effort — selection APIs aren't available in
+   * jsdom, so this is purely browser-side code; tests skip it.
+   */
+  async function addNoteAtCaret(
+    kind: 'footnote' | 'endnote',
+    editable: HTMLElement,
+  ) {
+    if (!etag) return
+    const draft = useEditorStore.getState().draft
+    const ordinal = nextNoteOrdinal(draft, kind)
+    const marker = noteMarker(kind, ordinal)
+    const tag = noteTag(kind, ordinal)
+    // Step 1 — drop the marker text where the caret sits. execCommand is
+    // deprecated but remains the most reliable way to insert text into
+    // a contentEditable while keeping the editor's MutationObserver in
+    // sync (the inline editor watches innerHTML).
+    editable.focus()
+    try {
+      document.execCommand('insertText', false, marker)
+    } catch {
+      // Fallback path for browsers without execCommand: append at the end.
+      editable.textContent = (editable.textContent ?? '') + marker
+    }
+    // Step 2 — append a definition paragraph. The new block has a stable
+    // ULID and will live at the end of this section.
+    const defBlockId = ulid()
+    const defBlock: Block = {
+      type: 'paragraph',
+      id: defBlockId,
+      text: `[^${tag}]: `,
+    }
+    try {
+      const result = await insertBlock(
+        slug,
+        { section_id: section.id, block: defBlock },
+        useEditorStore.getState().etag ?? etag,
+        kind === 'endnote' ? '미주 추가' : '각주 추가',
+      )
+      apply(result.document, result.etag)
+      toast.info(kind === 'endnote' ? `미주 [${ordinal}] 추가` : `각주 [${ordinal}] 추가`)
+      // Step 3 — focus the new paragraph after the next paint so the
+      // editor has had time to mount it. Place the caret at the end so
+      // the user starts typing right after `[^N]: `.
+      requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>(
+          `[data-block-id="${defBlockId}"] [contenteditable="true"]`,
+        )
+        if (!el) return
+        el.focus()
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        range.collapse(false)
+        const sel = window.getSelection()
+        sel?.removeAllRanges()
+        sel?.addRange(range)
+      })
+    } catch (err) {
+      if (isPreconditionFailed(err)) setConflict(null)
+    }
+  }
 
   /**
    * Sequentially insert a list of blocks at the end of the section. Returns
@@ -542,6 +716,9 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
 
   return (
     <section
+      ref={(el) => {
+        sectionRootRef.current = el
+      }}
       data-simple-stack-editor
       data-section-id={section.id}
       data-section-level={section.level}
@@ -594,6 +771,12 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
           }}
           aria-label="섹션 제목"
         />
+        <SectionLayoutPicker
+          value={section.layout}
+          onChange={(next) => {
+            void persistLayout(next)
+          }}
+        />
       </div>
 
       {!collapsed && (
@@ -623,6 +806,8 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
                         index={idx}
                         block={block}
                         onDelete={() => void onDelete(block.id)}
+                        onAddLeft={() => void onWrapSideBySide(block.id, 'left')}
+                        onAddRight={() => void onWrapSideBySide(block.id, 'right')}
                         isSelected={selected.has(block.id)}
                         onSelectClick={(ev) => onBlockSelectClick(block.id, ev)}
                         lazy={blocks.length > LAZY_THRESHOLD}
@@ -726,6 +911,8 @@ interface SortableBlockProps {
   index: number
   block: Block
   onDelete: () => void
+  onAddLeft?: () => void
+  onAddRight?: () => void
   isSelected: boolean
   onSelectClick: (ev: React.MouseEvent) => void
   /** When true, wrap BlockRenderer in LazyBlockSlot for IO-driven hydration. */
@@ -738,6 +925,8 @@ function SortableBlock({
   index,
   block,
   onDelete,
+  onAddLeft,
+  onAddRight,
   isSelected,
   onSelectClick,
   lazy,
@@ -791,6 +980,8 @@ function SortableBlock({
         dragListeners={listeners as Record<string, unknown>}
         dragSetActivatorRef={setActivatorNodeRef}
         onRequestDelete={onDelete}
+        onAddLeft={onAddLeft}
+        onAddRight={onAddRight}
       >
         {lazy ? (
           <LazyBlockSlot block={block}>

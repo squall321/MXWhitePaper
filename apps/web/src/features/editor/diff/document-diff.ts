@@ -58,7 +58,7 @@ export interface BlockDiff {
 export interface SectionDiff {
   id: Ulid
   status: DiffStatus
-  level?: 1 | 2 | 3
+  level?: number
   baseTitle?: string
   newTitle?: string
   titleChanged: boolean
@@ -912,7 +912,7 @@ function applyConflictValue(
     // reject if invalid, surfacing a clean error.
     const sid = c.path.split('/')[1] ?? ''
     const idx = indexSections(doc.sections as AnySection[]).get(sid)
-    if (idx) (idx as { level: 1 | 2 | 3 }).level = value as 1 | 2 | 3
+    if (idx) (idx as { level: number }).level = value as number
     return
   }
   if (c.scope === 'section.presence') {
@@ -983,7 +983,7 @@ function removeSection(secs: AnySection[], id: Ulid): boolean {
 
 export interface OutlineNode {
   id: Ulid
-  level: 1 | 2 | 3
+  level: number
   title: string
   status: DiffStatus
   children: OutlineNode[]

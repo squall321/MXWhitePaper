@@ -218,7 +218,7 @@ function scrollToAnchor(domId: string, numericAnchor: string) {
   requestAnimationFrame(() => {
     const el = document.getElementById(domId)
     if (!el) {
-      // eslint-disable-next-line no-console
+       
       console.warn(`[WikiLink] scroll target #${domId} not found`)
       return
     }

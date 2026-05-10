@@ -9,7 +9,7 @@
  * to `unknown` via the placeholder file. CI invokes:
  *   pnpm schema:gen && pnpm --filter @mx/web typecheck
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 import type * as DocumentTypes from './document'
 
 export type _Check = typeof DocumentTypes

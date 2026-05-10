@@ -520,6 +520,9 @@ async def run_maintenance(
 # ── Archived documents (cycle 8) ─────────────────────────────────────────
 class ArchiveBulkIn(BaseModel):
     slugs: list[str] = Field(default_factory=list, max_length=500)
+    # When true, an admin may purge documents that were archived less than
+    # 7 days ago. The default keeps the safety net for accidental clicks.
+    force: bool = False
 
 
 @router.get("/archived-docs", summary="보관 문서 목록")
@@ -640,7 +643,12 @@ async def purge_archived_docs(
     s: AsyncSession = Depends(get_db),
     user: dict[str, Any] = Depends(require_admin),
 ) -> dict[str, Any]:
-    """Hard-delete archived docs. Refuses if any doc was archived <7 days ago."""
+    """Hard-delete archived docs.
+
+    By default refuses if any doc was archived <7 days ago — the 7-day grace
+    window catches accidental archives. Admins can pass `force=true` to bypass
+    the grace check and purge immediately (audit log records the bypass).
+    """
     purged: list[str] = []
     skipped: list[dict[str, str]] = []
     too_recent: list[str] = []
@@ -657,17 +665,19 @@ async def purge_archived_docs(
         if row[1] != "archived":
             skipped.append({"slug": slug, "reason": "not_archived"})
             continue
-        # 7-day safety: refuse purge if archived less than 7 days ago.
-        chk = (await s.execute(
-            text(
-                "SELECT (NOW() - updated_at) >= INTERVAL '7 days' "
-                "FROM documents WHERE id = CAST(:id AS uuid)"
-            ),
-            {"id": str(row[0])},
-        )).first()
-        if not chk or not bool(chk[0]):
-            too_recent.append(slug)
-            continue
+        # 7-day safety: refuse purge if archived less than 7 days ago,
+        # unless the admin explicitly opts in via force=true.
+        if not body.force:
+            chk = (await s.execute(
+                text(
+                    "SELECT (NOW() - updated_at) >= INTERVAL '7 days' "
+                    "FROM documents WHERE id = CAST(:id AS uuid)"
+                ),
+                {"id": str(row[0])},
+            )).first()
+            if not chk or not bool(chk[0]):
+                too_recent.append(slug)
+                continue
         await s.execute(
             text("DELETE FROM documents WHERE id = CAST(:id AS uuid)"),
             {"id": str(row[0])},
@@ -677,7 +687,7 @@ async def purge_archived_docs(
             user_id=user.get("id"),
             action="admin.archive.purge",
             target=f"document:{slug}",
-            payload={"slug": slug},
+            payload={"slug": slug, "force": body.force},
         )
         purged.append(slug)
 

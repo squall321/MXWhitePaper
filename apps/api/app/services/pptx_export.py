@@ -190,8 +190,25 @@ def _render_section(ctx: _Ctx, section: dict[str, Any]) -> None:
     heading = f"{number} {title}".strip()
     blocks = section.get("blocks") or []
     subsections = section.get("subsections") or []
+    layout = _str(section.get("layout")) or "stack"
 
     slide = _new_content_slide(ctx, heading)
+
+    # `title-only` is the cover-style layout — schema convention says the
+    # body should be hidden. Skip rendering blocks but still emit the
+    # slide so navigation order is preserved.
+    if layout == "title-only":
+        # Speaker notes (if any) still go through so the presenter view
+        # picks them up; nothing else.
+        for block in blocks:
+            meta = block.get("meta") or {}
+            note = _str(meta.get("note") if isinstance(meta, dict) else "")
+            if note.startswith("speaker:"):
+                speaker_text = note[len("speaker:") :].strip() or _str(block.get("text"))
+                if speaker_text:
+                    _append_speaker_note(slide, speaker_text)
+        return
+
     body_frame = _body_text_frame(slide)
 
     # Render top-level blocks of this section.

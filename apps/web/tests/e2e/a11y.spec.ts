@@ -112,7 +112,7 @@ test.describe('a11y (axe-core)', () => {
         }
 
         if (moderate.length > 0 || minor.length > 0) {
-          // eslint-disable-next-line no-console
+           
           console.warn(
             `[a11y] ${spec.name} @ ${vp.label}: moderate=${moderate.length} minor=${minor.length}`,
             moderate.concat(minor).map((v) => `${v.impact}:${v.id}`).join(', '),

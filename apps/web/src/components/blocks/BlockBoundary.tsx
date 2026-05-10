@@ -28,7 +28,7 @@ export class BlockBoundary extends Component<BlockBoundaryProps, BlockBoundarySt
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
-    // eslint-disable-next-line no-console
+     
     console.error(`[BlockBoundary] type=${this.props.blockType ?? 'unknown'}`, error, info)
   }
 
@@ -72,7 +72,7 @@ export class RailBoundary extends Component<RailBoundaryProps, RailBoundaryState
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
-    // eslint-disable-next-line no-console
+     
     console.error(`[RailBoundary] name=${this.props.name}`, error, info)
   }
 

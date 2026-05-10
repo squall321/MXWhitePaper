@@ -127,7 +127,7 @@ export function SaveViewButton({ filters, className }: SaveViewButtonProps) {
             </div>
           </div>
           <p className="mb-3 text-[11px] text-gray-500">
-            저장된 뷰는 좌측 사이드바 "📂 내 보기" 에 나타납니다.
+            저장된 뷰는 좌측 사이드바 &ldquo;📂 내 보기&rdquo; 에 나타납니다.
           </p>
           <div className="flex justify-end gap-2">
             <button

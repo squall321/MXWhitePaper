@@ -59,6 +59,8 @@ export function EditorToolbar({
   const applySnapshot = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
   const setPendingCaptionFocus = useEditorStore((s) => s.setPendingCaptionFocus)
+  const canUndo = useEditorStore((s) => s.undoStack.length > 0)
+  const canRedo = useEditorStore((s) => s.redoStack.length > 0)
   const dropzoneRef = useRef<ImageDropzoneHandle>(null)
 
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -213,7 +215,7 @@ export function EditorToolbar({
       <div
         data-editor-toolbar
         data-testid="editor-toolbar"
-        className="sticky top-[var(--header-h)] z-sticky -mx-4 flex flex-wrap items-center gap-1.5 border-b border-gray-200 bg-white px-4 py-2 text-sm shadow-sm sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 dark:border-gray-800 dark:bg-gray-900"
+        className="sticky top-[calc(var(--header-h)+2rem)] z-10 -mx-4 flex flex-wrap items-center gap-1.5 border-b border-gray-200 bg-white px-4 py-2 text-sm shadow-sm sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 dark:border-gray-800 dark:bg-gray-900"
       >
         <button
           type="button"
@@ -224,21 +226,61 @@ export function EditorToolbar({
           {isEditing ? t('toolbar.preview') : t('toolbar.edit')}
         </button>
 
+        {/* Save action — reflects autoSaveStatus so the button never looks
+            "broken" when the doc is already saved. Always clickable: a
+            click forces an immediate PUT (Ctrl+S equivalent) which is
+            useful when the user wants to confirm a save before navigating
+            away. The label morphs through the live state so the user
+            always knows what's happening. */}
         <button
           type="button"
           onClick={handleManualSave}
-          disabled={!dirty}
-          className="inline-flex h-8 items-center rounded-md bg-smsg-700 px-3 text-xs font-semibold text-white transition-all duration-base hover:-translate-y-px hover:bg-smsg-900 hover:shadow-md disabled:cursor-not-allowed disabled:bg-smsg-700/40 disabled:hover:translate-y-0 disabled:hover:shadow-none focus-visible:outline-none focus-visible:shadow-focus"
-          title={t('toolbar.save.title')}
+          className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-all duration-base hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:shadow-focus ${
+            status === 'saving' || dirty
+              ? 'bg-smsg-700 text-white hover:bg-smsg-900'
+              : status === 'conflict' || status === 'error'
+                ? 'bg-amber-500 text-white hover:bg-amber-600'
+                : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100'
+          }`}
+          title={
+            dirty
+              ? t('toolbar.save.title')
+              : status === 'saving'
+                ? '저장 중…'
+                : status === 'conflict'
+                  ? '동기화 충돌 — 새로고침 필요'
+                  : status === 'error'
+                    ? '저장 실패 — 클릭으로 재시도'
+                    : '모든 변경 저장됨 — 클릭하면 강제 저장'
+          }
         >
-          {t('toolbar.save')}
+          <span aria-hidden="true">
+            {status === 'saving' ? '⟳' : dirty ? '●' : status === 'conflict' || status === 'error' ? '⚠' : '✓'}
+          </span>
+          <span>
+            {status === 'saving'
+              ? '저장 중'
+              : dirty
+                ? t('toolbar.save')
+                : status === 'conflict'
+                  ? '충돌'
+                  : status === 'error'
+                    ? '재시도'
+                    : '저장됨'}
+          </span>
         </button>
 
+        {/* Undo / Redo: route through the editor store so we walk the
+            *patch* history (blocks added/deleted/moved/columns resized,
+            etc.), not just contentEditable text edits. The button gets
+            disabled when the corresponding stack is empty so users
+            can tell at a glance whether anything is left to undo. */}
         <button
           type="button"
-          onClick={() => document.execCommand('undo')}
-          className="inline-grid h-8 w-8 place-items-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus"
-          title={t('toolbar.undo.title')}
+          onClick={() => void useEditorStore.getState().undo()}
+          disabled={!canUndo}
+          className="inline-grid h-8 w-8 place-items-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+          title={canUndo ? t('toolbar.undo.title') : t('toolbar.undo.empty')}
           aria-label={t('toolbar.undo')}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -248,9 +290,10 @@ export function EditorToolbar({
         </button>
         <button
           type="button"
-          onClick={() => document.execCommand('redo')}
-          className="inline-grid h-8 w-8 place-items-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus"
-          title={t('toolbar.redo.title')}
+          onClick={() => void useEditorStore.getState().redo()}
+          disabled={!canRedo}
+          className="inline-grid h-8 w-8 place-items-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+          title={canRedo ? t('toolbar.redo.title') : t('toolbar.redo.empty')}
           aria-label={t('toolbar.redo')}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -330,7 +373,7 @@ export function EditorToolbar({
           <a
             href={`/present/${encodeURIComponent(slug)}`}
             target="_blank"
-            rel="noopener"
+            rel="noopener noreferrer"
             className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus"
             title={t('toolbar.present.title')}
             data-testid="present-link"
@@ -369,8 +412,26 @@ export function EditorToolbar({
           <button
             type="button"
             onClick={onToggleVersions}
-            className="inline-flex h-8 items-center rounded-md border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus"
+            title="모든 변경이 자동 기록됨 — 어느 시점이든 복원 가능"
+            data-testid="toolbar-versions"
+            className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus"
           >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M8 4v4l2.5 1.5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M14 8a6 6 0 11-1.76-4.24M14 3v3h-3"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
             {t('toolbar.versions')}
           </button>
           {isEditing && (

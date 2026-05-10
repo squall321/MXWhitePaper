@@ -34,7 +34,7 @@ from app.core.auth import require_admin, require_editor
 from app.core.db import get_db
 from app.core.errors import APIError, Conflict, ValidationFailed, envelope
 from app.repos import document_repo
-from app.services import docx_import, document_service, upload_service
+from app.services import docx_import, document_service, pptx_import, upload_service
 
 router = APIRouter(prefix="/api/v1/imports", tags=["imports"])
 
@@ -200,6 +200,111 @@ async def import_docx(
         "lists": summary.lists,
         "code_blocks": summary.code_blocks,
         "footnotes": summary.footnotes,
+        "warnings": list(summary.warnings),
+    }
+
+    return envelope(
+        data={"document": document, "summary": summary_dict},
+        meta={"slug": final_slug},
+    )
+
+
+# ── PowerPoint (.pptx) import ────────────────────────────────────────
+MAX_PPTX_BYTES = 50 * 1024 * 1024  # PPT decks are typically larger than docx
+
+
+@router.post("/pptx")
+async def import_pptx(
+    file: UploadFile = File(...),
+    slug: str | None = Form(default=None),
+    title: str | None = Form(default=None),
+    x_mxwp_user: str | None = Header(default=None, alias="X-MXWP-User"),
+    s: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_editor),
+) -> dict[str, Any]:
+    """Import a PowerPoint deck and convert it to DocumentJSON.
+
+    Each slide becomes one section. Slide layout names are best-effort
+    mapped to our `Section.layout` enum (`title-only` / `two-col` /
+    `image-left` / `stack`). Speaker notes are preserved as paragraphs
+    with `meta.note: speaker:N`.
+
+    Same rate-limit (5/min/user) and `actor` resolution as docx import.
+    Returns `{document, summary}` so the FE can preview before committing
+    via `POST /documents`.
+    """
+    actor = await _resolve_actor(s, x_mxwp_user, user)
+    if not _check_rate_limit(actor):
+        raise _RateLimited()
+
+    fname = (file.filename or "").lower()
+    if not fname.endswith(".pptx"):
+        raise ValidationFailed(
+            "filename must end with .pptx",
+            details={"got": file.filename},
+        )
+
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(64 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_PPTX_BYTES:
+            raise ValidationFailed(
+                f"file exceeds max size ({MAX_PPTX_BYTES} bytes)",
+                details={"limit": MAX_PPTX_BYTES},
+            )
+        chunks.append(chunk)
+    buf = b"".join(chunks)
+
+    if not pptx_import.is_pptx_zip_magic(buf):
+        raise ValidationFailed("file is not a valid zip (.pptx must be PK zip)")
+    if not pptx_import.is_pptx_content(buf):
+        raise ValidationFailed("zip does not contain ppt/presentation.xml")
+
+    final_slug = slug or _derive_slug(file.filename or "imported.pptx")
+    image_uploader = _build_image_uploader(s, actor)
+
+    try:
+        result = pptx_import.pptx_to_document(
+            buf,
+            slug=final_slug,
+            title=title or "",
+            owner_user_id=actor,
+            image_uploader=image_uploader,
+        )
+    except ValueError as e:
+        raise ValidationFailed(str(e)) from e
+
+    document = result["document"]
+    summary = result["summary"]
+
+    try:
+        await document_repo.insert_audit(
+            s, user_id=actor, action="pptx.import",
+            target=f"slug:{final_slug}",
+            payload={
+                "title": document.get("title"),
+                "slides": summary.slides,
+                "sections": summary.sections,
+                "tables": summary.tables,
+                "images": summary.images,
+                "speaker_notes": summary.speaker_notes,
+            },
+        )
+        await s.commit()
+    except Exception:
+        await s.rollback()
+
+    summary_dict: dict[str, Any] = {
+        "slides": summary.slides,
+        "sections": summary.sections,
+        "paragraphs": summary.paragraphs,
+        "tables": summary.tables,
+        "images": summary.images,
+        "speaker_notes": summary.speaker_notes,
         "warnings": list(summary.warnings),
     }
 

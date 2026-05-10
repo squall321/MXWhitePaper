@@ -56,7 +56,7 @@ export async function uploadImage(
   const init = await initImageUpload({
     sha256,
     size: file.size,
-    mime: file.type || 'application/octet-stream',
+    mime_type: file.type || 'application/octet-stream',
     filename: file.name,
   })
 

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { Button, Card, Field, Input } from '@/components/ui'
-import { importDocx, type ImportSummary } from '@/features/import/api'
+import {
+  importDocx,
+  importPptx,
+  type ImportSummary,
+  type ImportPptxSummary,
+} from '@/features/import/api'
 import { postDocument } from '@/features/editor/api'
 import { useAuthStore } from '@/features/auth/store'
 import type { DocumentJSONV10 } from '@/types/document'
@@ -40,30 +45,48 @@ export function DocumentImportPage() {
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<{
     document: DocumentJSONV10
-    summary: ImportSummary
+    summary: ImportSummary | ImportPptxSummary
+    /** Format detected from the uploaded file. Drives the summary card layout. */
+    format: 'docx' | 'pptx'
   } | null>(null)
   const [persisting, setPersisting] = useState(false)
+
+  // Auto-detect Word vs PowerPoint from filename so we route to the right
+  // import endpoint without forcing the user to pick a tab. Both file
+  // formats land in the same DocumentJSON envelope, but the BE handlers
+  // (and per-format size caps) differ.
+  const fmt: 'docx' | 'pptx' | null = useMemo(() => {
+    if (!file) return null
+    const lower = file.name.toLowerCase()
+    if (lower.endsWith('.docx')) return 'docx'
+    if (lower.endsWith('.pptx')) return 'pptx'
+    return null
+  }, [file])
 
   // slug 자동 도출 (파일명 기반, override 안 됐을 때만)
   const derivedSlug = useMemo(() => {
     if (!file) return ''
-    const base = file.name.replace(/\.docx$/i, '').toLowerCase()
-    const cleaned = base.replace(/[^a-z0-9가-힣\-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    const base = file.name.replace(/\.(docx|pptx)$/i, '').toLowerCase()
+    const cleaned = base.replace(/[^a-z0-9가-힣-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
     return cleaned.slice(0, 100)
   }, [file])
 
   useEffect(() => {
     if (file && !slug) setSlug(derivedSlug)
-    if (file && !title) setTitle(file.name.replace(/\.docx$/i, ''))
+    if (file && !title) setTitle(file.name.replace(/\.(docx|pptx)$/i, ''))
   }, [file, derivedSlug, slug, title])
 
   const onPickFile = useCallback((picked: File) => {
-    if (!picked.name.toLowerCase().endsWith('.docx')) {
-      setError('.docx 파일만 가져올 수 있습니다.')
+    const lower = picked.name.toLowerCase()
+    const isDocx = lower.endsWith('.docx')
+    const isPptx = lower.endsWith('.pptx')
+    if (!isDocx && !isPptx) {
+      setError('.docx 또는 .pptx 파일만 가져올 수 있습니다.')
       return
     }
-    if (picked.size > 30 * 1024 * 1024) {
-      setError('파일이 너무 큽니다 (최대 30 MB).')
+    const cap = isPptx ? 50 * 1024 * 1024 : 30 * 1024 * 1024
+    if (picked.size > cap) {
+      setError(`파일이 너무 큽니다 (최대 ${Math.round(cap / 1024 / 1024)} MB).`)
       return
     }
     setError(null)
@@ -81,7 +104,7 @@ export function DocumentImportPage() {
   const slugIsValid = /^[a-z0-9가-힣][a-z0-9가-힣-]{0,99}$/.test(slug)
 
   const runImport = async () => {
-    if (!file) return
+    if (!file || !fmt) return
     if (!slugIsValid) {
       setError('slug 형식이 올바르지 않습니다.')
       return
@@ -90,12 +113,16 @@ export function DocumentImportPage() {
     setError(null)
     setProgress(0)
     try {
-      const r = await importDocx(file, {
+      const opts = {
         slug: slug.trim() || undefined,
         title: title.trim() || undefined,
-        onProgress: (p) => setProgress(p),
-      })
-      setPreview(r)
+        onProgress: (p: number) => setProgress(p),
+      }
+      const r =
+        fmt === 'pptx'
+          ? await importPptx(file, opts)
+          : await importDocx(file, opts)
+      setPreview({ ...r, format: fmt })
     } catch (err) {
       const status = (err as { response?: { status?: number } })?.response?.status
       const msg = (err as { response?: { data?: { error?: { message?: string } } } })
@@ -143,7 +170,7 @@ export function DocumentImportPage() {
       <div className="mx-auto max-w-2xl py-8">
         <Card padded="lg">
           <p className="text-sm text-gray-700">
-            Word 가져오기는 editor 이상 권한이 필요합니다.
+            문서 가져오기는 editor 이상 권한이 필요합니다.
           </p>
         </Card>
       </div>
@@ -154,10 +181,11 @@ export function DocumentImportPage() {
     <div className="mx-auto max-w-2xl space-y-6 py-6 sm:py-10">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-smsg-900 sm:text-3xl">
-          📄 Word 가져오기
+          📄 Word / 📊 PowerPoint 가져오기
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          .docx 파일을 업로드하면 자동으로 본문/표/이미지/수식이 변환됩니다.
+          .docx 또는 .pptx 파일을 업로드하면 자동으로 본문/표/이미지/슬라이드가 변환됩니다.
+          PowerPoint는 슬라이드 한 장이 섹션 한 개로, 슬라이드 마스터에 따라 자동으로 섹션 레이아웃이 적용됩니다.
         </p>
       </header>
 
@@ -204,7 +232,7 @@ export function DocumentImportPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept=".docx,.pptx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
             className="hidden"
             data-testid="docx-file-input"
             onChange={(e) => {
@@ -265,7 +293,10 @@ export function DocumentImportPage() {
         )}
 
         {preview && !busy && (
-          <ImportSummaryCard summary={preview.summary} />
+          <ImportSummaryCard
+            summary={preview.summary}
+            format={preview.format}
+          />
         )}
 
         <div className="flex flex-col-reverse items-stretch justify-end gap-2 pt-2 sm:flex-row sm:items-center">
@@ -299,19 +330,41 @@ export function DocumentImportPage() {
   )
 }
 
-function ImportSummaryCard({ summary }: { summary: ImportSummary }) {
-  const items: Array<[string, number]> = [
-    ['단락', summary.paragraphs],
-    ['제목', summary.headings],
-    ['표', summary.tables],
-    ['이미지', summary.images],
-    ['수식', summary.equations],
-    ['리스트', summary.lists],
-    ['각주', summary.footnotes],
-  ]
+function ImportSummaryCard({
+  summary,
+  format,
+}: {
+  summary: ImportSummary | ImportPptxSummary
+  format: 'docx' | 'pptx'
+}) {
+  // Two summary shapes share most fields but differ at the edges
+  // (docx has equations/headings/lists/code_blocks/footnotes; pptx has
+  // slides/sections/speaker_notes). Render whichever applies so the
+  // card stays useful for both formats without duplicating UI code.
+  const items: Array<[string, number]> =
+    format === 'pptx'
+      ? [
+          ['슬라이드', (summary as ImportPptxSummary).slides],
+          ['섹션', (summary as ImportPptxSummary).sections],
+          ['단락', summary.paragraphs],
+          ['표', summary.tables],
+          ['이미지', summary.images],
+          ['발표자 노트', (summary as ImportPptxSummary).speaker_notes],
+        ]
+      : [
+          ['단락', summary.paragraphs],
+          ['제목', (summary as ImportSummary).headings],
+          ['표', summary.tables],
+          ['이미지', summary.images],
+          ['수식', (summary as ImportSummary).equations],
+          ['리스트', (summary as ImportSummary).lists],
+          ['각주', (summary as ImportSummary).footnotes],
+        ]
   return (
     <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-      <p className="text-sm font-semibold text-emerald-900">변환 결과 미리보기</p>
+      <p className="text-sm font-semibold text-emerald-900">
+        변환 결과 미리보기 ({format === 'pptx' ? 'PowerPoint' : 'Word'})
+      </p>
       <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-emerald-800 sm:grid-cols-3">
         {items.map(([label, count]) => (
           <li key={label}>

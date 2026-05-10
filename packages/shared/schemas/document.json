@@ -16,8 +16,8 @@
     "infobox": { "$ref": "#/$defs/Infobox" },
     "sections": {
       "type": "array",
-      "items": { "$ref": "#/$defs/SectionLevel1" },
-      "description": "최상위 섹션은 반드시 level=1"
+      "items": { "$ref": "#/$defs/Section" },
+      "description": "최상위 섹션은 반드시 level=1 (BE 가 검증). 자식 섹션은 부모 level+1."
     },
     "related_documents": {
       "type": "array",
@@ -85,59 +85,55 @@
       "additionalProperties": {
         "oneOf": [
           { "type": "string" },
-          { "type": "array", "items": { "type": "string" } }
+          { "type": "array", "items": { "type": "string" } },
+          { "$ref": "#/$defs/InfoboxRich" },
+          { "type": "array", "items": { "$ref": "#/$defs/InfoboxRich" } }
         ]
       },
-      "description": "우상단 정보 박스. 키=라벨, 값=문자열 또는 문자열 배열"
+      "description": "우상단 정보 박스. 키=라벨, 값=문자열, 문자열 배열, 또는 풍부한 표현(링크/뱃지/아이콘)을 위한 InfoboxRich 객체. 기존 문자열 형태는 그대로 호환."
     },
 
-    "SectionLevel1": {
+    "InfoboxRich": {
       "type": "object",
-      "required": ["id", "level", "title", "blocks", "subsections"],
+      "required": ["text"],
       "additionalProperties": false,
+      "description": "Richer Infobox value — wraps a label with optional link / badge / icon / color hints. Used wherever a plain string isn't enough (예: 상태 뱃지, 담당자 메일 링크).",
       "properties": {
-        "id":     { "$ref": "#/$defs/Ulid" },
-        "number": { "type": "string", "pattern": "^\\d+$" },
-        "level":  { "const": 1 },
-        "title":  { "type": "string", "minLength": 1, "maxLength": 200 },
-        "blocks": { "type": "array", "items": { "$ref": "#/$defs/Block" } },
-        "subsections": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/SectionLevel2" }
-        }
+        "text":  { "type": "string", "description": "표시 텍스트." },
+        "href":  { "type": "string", "description": "링크 URL — 있으면 텍스트가 클릭 가능한 a 태그로 렌더링." },
+        "icon":  { "type": "string", "description": "선두 이모지 아이콘 (예: 📞 ✉️ 👤)." },
+        "badge": { "enum": ["success", "info", "warn", "danger", "neutral"], "description": "배경/텍스트 컬러로 강조하는 뱃지 종류. neutral=회색." },
+        "color": { "type": "string", "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", "description": "텍스트 색 직접 지정 (badge와 함께 쓰면 badge가 우선)." }
       }
     },
-    "SectionLevel2": {
-      "type": "object",
-      "required": ["id", "level", "title", "blocks", "subsections"],
-      "additionalProperties": false,
-      "properties": {
-        "id":     { "$ref": "#/$defs/Ulid" },
-        "number": { "type": "string", "pattern": "^\\d+\\.\\d+$" },
-        "level":  { "const": 2 },
-        "title":  { "type": "string", "minLength": 1, "maxLength": 200 },
-        "blocks": { "type": "array", "items": { "$ref": "#/$defs/Block" } },
-        "subsections": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/SectionLevel3" }
-        }
-      }
-    },
-    "SectionLevel3": {
+
+    "Section": {
       "type": "object",
       "required": ["id", "level", "title", "blocks"],
       "additionalProperties": false,
+      "description": "Document outline node. Recursive — `subsections` is another Section[]. Top-level entries MUST have level=1; child level = parent.level + 1 (enforced by the BE renumber/validate pass). The visual rendering caps at HTML <h6> (level 5+ all render as h6) but schema-wise depth is unbounded.",
       "properties": {
         "id":     { "$ref": "#/$defs/Ulid" },
-        "number": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
-        "level":  { "const": 3 },
+        "number": {
+          "description": "1.2.3.4… dotted ordinal recomputed by the BE on every save.",
+          "type": "string",
+          "pattern": "^\\d+(?:\\.\\d+)*$"
+        },
+        "level":  {
+          "description": "1-based depth. BE rejects values that don't match the tree position.",
+          "type": "integer",
+          "minimum": 1
+        },
         "title":  { "type": "string", "minLength": 1, "maxLength": 200 },
+        "layout": {
+          "description": "Visual layout for this section's blocks. Drives both the wiki view (block arrangement inside the section) and presentation view (slide template). Defaults to 'stack' (existing behaviour: blocks render top-to-bottom). 'two-col' splits blocks alternately into two columns. 'image-left'/'image-right' put the first ImageBlock on one side and remaining blocks on the other. 'title-only' renders just the section heading (PPT cover style). 'full-bleed' uses the first ImageBlock as a full-width background with subsequent blocks overlaid.",
+          "enum": ["stack", "two-col", "image-left", "image-right", "title-only", "full-bleed"]
+        },
         "blocks": { "type": "array", "items": { "$ref": "#/$defs/Block" } },
         "subsections": {
           "type": "array",
-          "maxItems": 0,
           "default": [],
-          "description": "level 3은 더 깊은 섹션 불가 (heading-4 Block으로 표현)"
+          "items": { "$ref": "#/$defs/Section" }
         }
       }
     },
@@ -203,7 +199,8 @@
         { "$ref": "#/$defs/PdfBlock" },
         { "$ref": "#/$defs/QuizBlock" },
         { "$ref": "#/$defs/ImageAnnotationBlock" },
-        { "$ref": "#/$defs/SpreadsheetBlock" }
+        { "$ref": "#/$defs/SpreadsheetBlock" },
+        { "$ref": "#/$defs/BibliographyBlock" }
       ]
     },
 
@@ -225,7 +222,11 @@
       "properties": {
         "type":  { "const": "heading-4" },
         "id":    { "$ref": "#/$defs/Ulid" },
-        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "title": { "type": "string", "maxLength": 200 },
+        "level": {
+          "description": "Visual heading level. Optional — defaults to 4 (smallest). Sub-section heading; the document outline still uses Section nodes for the canonical hierarchy.",
+          "enum": [2, 3, 4]
+        },
         "meta":  { "$ref": "#/$defs/BlockMeta" }
       }
     },
@@ -296,17 +297,72 @@
       "type": "object",
       "required": ["type", "id", "headers", "rows"],
       "additionalProperties": false,
+      "description": "Table block. Two layout modes: flat (`headers` + `rows`, the common case) and sparse (`cells`, used whenever cells are merged or styled per-cell). The renderer prefers `cells` when present. Optional `columns` carries per-column metadata (width / align / dtype / format) that applies to BOTH modes — column index is well-defined in either layout.",
       "properties": {
         "type":    { "const": "table" },
         "id":      { "$ref": "#/$defs/Ulid" },
         "headers": { "type": "array", "items": { "type": "string" } },
         "rows":    { "type": "array", "items": { "type": "array", "items": { "type": "string" } } },
+        "cells": {
+          "description": "Optional sparse cell list for tables with merged or styled cells (DOCX gridSpan/vMerge round-trip + per-cell style overrides). When present, the renderer ignores headers/rows and lays out from this list. Each cell occupies (r..r+rowSpan-1) × (c..c+colSpan-1); covered slots have no entry. r/c are 0-indexed; the first row of a header-mode table is the header row.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["r", "c", "text"],
+            "properties": {
+              "r":       { "type": "integer", "minimum": 0 },
+              "c":       { "type": "integer", "minimum": 0 },
+              "rowSpan": { "type": "integer", "minimum": 1 },
+              "colSpan": { "type": "integer", "minimum": 1 },
+              "text":    { "type": "string" },
+              "header":  { "type": "boolean", "description": "True for header-row cells (rendered as <th>)." },
+              "align":   { "enum": ["left", "center", "right"], "description": "Per-cell horizontal alignment override (wins over column default)." },
+              "bg":      { "type": "string", "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", "description": "Cell background color (CSS hex)." },
+              "bold":    { "type": "boolean", "description": "Bold text in this cell." },
+              "color":   { "type": "string", "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", "description": "Cell text color (CSS hex)." }
+            }
+          }
+        },
+        "columns": {
+          "description": "Optional per-column metadata. Index matches column index in both flat and sparse layouts. Missing entries fall back to defaults (left-align, text dtype, auto width).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "width":  { "type": "string", "description": "CSS width — '120px' or '15%' or 'auto'." },
+              "align":  { "enum": ["left", "center", "right"], "description": "Default cell alignment for this column. dtype=number|percent|currency auto-defaults to right when align is unset." },
+              "dtype":  { "enum": ["text", "number", "percent", "currency", "date"], "description": "Column data type. Drives auto-formatting and default alignment." },
+              "format": { "type": "string", "description": "Format hint. number/percent: decimal places like '2'. currency: ISO code or symbol like 'KRW' / '$'. date: pattern like 'YYYY-MM-DD'." }
+            }
+          }
+        },
+        "footer": {
+          "description": "Optional footer row showing per-column aggregates. Computed at render time from `rows` (flat mode) — sparse mode is skipped because merged-cell semantics make column-wise sums ambiguous.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "show":       { "type": "boolean" },
+            "label":      { "type": "string", "description": "Label shown in the first column when no aggregate is set there." },
+            "aggregates": {
+              "type": "array",
+              "description": "Per-column aggregate. '' (empty) skips that column.",
+              "items": { "enum": ["", "sum", "avg", "count", "min", "max"] }
+            }
+          }
+        },
         "options": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "sortable":   { "type": "boolean" },
-            "searchable": { "type": "boolean" }
+            "sortable":       { "type": "boolean", "description": "Header click sorts asc/desc by that column (flat mode only)." },
+            "searchable":     { "type": "boolean", "description": "Show a search box above the table that filters rows (flat mode only)." },
+            "density":        { "enum": ["compact", "normal", "comfortable"], "description": "Row padding density. Default 'normal'." },
+            "stickyFirstCol": { "type": "boolean", "description": "Pin the first column when the table scrolls horizontally." },
+            "rowNumbers":     { "type": "boolean", "description": "Show 1-based row numbers in a leading column." },
+            "stripe":         { "type": "boolean", "description": "Zebra-striped rows. Default true; set false to disable." },
+            "borderStyle":    { "enum": ["none", "horizontal", "all"], "description": "Cell border style. Default 'horizontal'." }
           }
         },
         "meta": { "$ref": "#/$defs/BlockMeta" }
@@ -340,10 +396,15 @@
       "type": "object",
       "required": ["type", "id", "chartType", "data"],
       "additionalProperties": false,
+      "description": "Chart block — `engine` selects the renderer. 'recharts' (default) uses our existing simple chart UI; 'echarts' unlocks rich interaction (zoom, brush, hover slope, markPoint annotations, markArea regions). With 'echarts' the data fields below still drive the dataset, but `options` accepts any ECharts EChartsOption fragment that gets merged on top.",
       "properties": {
         "type":      { "const": "chart" },
         "id":        { "$ref": "#/$defs/Ulid" },
         "chartType": { "enum": ["line", "bar", "pie", "area", "radar", "scatter"] },
+        "engine":    {
+          "description": "Chart renderer. Default 'recharts' for back-compat; choose 'echarts' for rich interactivity (markPoint / markArea / brush / dataZoom).",
+          "enum": ["recharts", "echarts"]
+        },
         "title":     { "type": "string" },
         "data": {
           "type": "object",
@@ -363,7 +424,46 @@
             }
           }
         },
-        "options": { "type": "object" },
+        "interactions": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Friendly knobs for ECharts interactivity that map onto markPoint / markArea / dataZoom without requiring users to write raw EChartsOption.",
+          "properties": {
+            "keyPoints": {
+              "type": "array",
+              "description": "Highlighted points on the curve (label, x-index, optional color).",
+              "items": {
+                "type": "object",
+                "required": ["label", "xIndex"],
+                "properties": {
+                  "label":  { "type": "string" },
+                  "xIndex": { "type": "integer", "minimum": 0 },
+                  "color":  { "type": "string" }
+                }
+              }
+            },
+            "regions": {
+              "type": "array",
+              "description": "Coloured x-range bands (e.g. Elastic / Plastic). xFromIndex / xToIndex are inclusive label indexes.",
+              "items": {
+                "type": "object",
+                "required": ["label", "xFromIndex", "xToIndex"],
+                "properties": {
+                  "label":      { "type": "string" },
+                  "xFromIndex": { "type": "integer", "minimum": 0 },
+                  "xToIndex":   { "type": "integer", "minimum": 0 },
+                  "color":      { "type": "string" }
+                }
+              }
+            },
+            "showZoom":      { "type": "boolean", "description": "Inline dataZoom slider under the chart." },
+            "showCrosshair": { "type": "boolean", "description": "Crosshair guides + axis pointers." }
+          }
+        },
+        "options": {
+          "type": "object",
+          "description": "Raw ECharts EChartsOption fragment, merged after `interactions` so power users can override anything."
+        },
         "meta":    { "$ref": "#/$defs/BlockMeta" }
       }
     },
@@ -428,12 +528,22 @@
 
     "IframeBlock": {
       "type": "object",
-      "required": ["type", "id", "src"],
+      "required": ["type", "id"],
       "additionalProperties": false,
+      "description": "Embed an external page (`src`) OR an inline self-contained HTML document (`html`). Exactly one MUST be set. The renderer wraps the iframe in a sandbox boundary so the embed can't reach the parent DOM, cookies, or storage; only `allow-scripts` is granted so interactive embeds (charts, calculators) still work.",
       "properties": {
         "type":   { "const": "iframe" },
         "id":     { "$ref": "#/$defs/Ulid" },
-        "src":    { "type": "string", "format": "uri", "description": "사내 화이트리스트 도메인만" },
+        "src":    {
+          "type": "string",
+          "format": "uri",
+          "description": "사내 화이트리스트 도메인만. `html` 와 동시 사용 금지."
+        },
+        "html":   {
+          "type": "string",
+          "maxLength": 500000,
+          "description": "Self-contained HTML document. Rendered via iframe srcdoc + sandbox. Use this for ad-hoc interactive embeds (e.g. canvas-based charts) that don't need a hosting URL. `src` 와 동시 사용 금지."
+        },
         "title":  { "type": "string" },
         "height": { "type": "integer", "minimum": 100, "maximum": 2000 },
         "meta":   { "$ref": "#/$defs/BlockMeta" }
@@ -559,6 +669,13 @@
           "minItems": 2,
           "maxItems": 4,
           "items": { "type": "array", "items": { "$ref": "#/$defs/Block" } }
+        },
+        "widths": {
+          "description": "Optional per-column widths as percentages of the row. Length MUST equal columns.length when present, each value 5..95, and the sum SHOULD equal 100 (server normalises). Omit for equal split.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": { "type": "number", "minimum": 5, "maximum": 95 }
         },
         "meta": { "$ref": "#/$defs/BlockMeta" }
       }
@@ -915,6 +1032,55 @@
           "type": "object",
           "additionalProperties": { "type": "string" },
           "description": "Sparse map of cell-ref → raw cell input (e.g. {'A1':'42', 'B2':'=SUM(A1:A10)'})"
+        },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "BibliographyBlock": {
+      "type": "object",
+      "required": ["type", "id", "entries"],
+      "additionalProperties": false,
+      "description": "Reference list (참고문헌). Citations elsewhere in the document use the [[cite:KEY]] inline syntax to anchor-link into entries here. Most often produced by the DOCX importer when it sees a 'References' / '참고문헌' / 'Bibliography' heading.",
+      "properties": {
+        "type":   { "const": "bibliography" },
+        "id":     { "$ref": "#/$defs/Ulid" },
+        "title":  {
+          "description": "Optional override for the block heading. Defaults to '참고문헌' in the FE renderer.",
+          "type": "string",
+          "maxLength": 200
+        },
+        "style": {
+          "description": "Citation style label (numeric / alphabetic / author-year). Currently informational — the FE renders ordered list either way.",
+          "enum": ["numeric", "alphabetic", "author-year"]
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["text"],
+            "properties": {
+              "key": {
+                "description": "Optional citation key used by [[cite:KEY]] inline references. Alphanumeric / hyphen / underscore.",
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "maxLength": 60
+              },
+              "text": {
+                "description": "Formatted reference body — e.g. 'Smith, J. (2020). Foo bar. Journal of X, 3(2), 14-22.'",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "url": {
+                "description": "Optional canonical URL (DOI, journal page).",
+                "type": "string",
+                "maxLength": 1000
+              }
+            }
+          }
         },
         "meta": { "$ref": "#/$defs/BlockMeta" }
       }

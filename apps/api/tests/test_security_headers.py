@@ -82,3 +82,24 @@ async def test_hsts_set_on_https_scheme() -> None:
         r.headers.get("Strict-Transport-Security")
         == "max-age=31536000; includeSubDomains"
     )
+
+
+# ── CSP env-aware unsafe-eval gating ────────────────────────────────────
+def test_csp_includes_unsafe_eval_in_development() -> None:
+    """Dev env keeps `'unsafe-eval'` so Vite's HMR runtime works."""
+    from app.middleware.security import _csp_value
+
+    csp = _csp_value("https://minio.local:9000", app_env="development")
+    assert "'unsafe-eval'" in csp
+    assert "script-src 'self' 'unsafe-inline' 'unsafe-eval'" in csp
+
+
+def test_csp_drops_unsafe_eval_in_production() -> None:
+    """Production drops `'unsafe-eval'` to harden against XSS escalation."""
+    from app.middleware.security import _csp_value
+
+    for env in ("production", "prod", "live", "anything-else"):
+        csp = _csp_value("https://minio.local:9000", app_env=env)
+        assert "'unsafe-eval'" not in csp, f"unsafe-eval leaked in env={env!r}"
+        # Inline still allowed (Tailwind / bootstrap snippet) — by design.
+        assert "script-src 'self' 'unsafe-inline'" in csp

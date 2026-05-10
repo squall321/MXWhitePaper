@@ -8,6 +8,7 @@ import {
   type ImageDropzoneHandle,
 } from '@/features/upload/components/ImageDropzone'
 import type { ImageRecord } from '@/features/upload/api'
+import { TABLE_PRESETS } from '../blocks/tablePresets'
 
 export interface SlashMenuItem {
   type: Block['type']
@@ -43,19 +44,30 @@ export const SLASH_ITEMS: SlashMenuItem[] = [
     emoji: '🎤',
     build: () => ({ type: 'paragraph', id: ulid(), text: '', meta: { note: `speaker:${nextSpeakerSerial()}` } }),
   },
-  { type: 'heading-4', label: '소제목 (H4)', emoji: 'H', build: () => ({ type: 'heading-4', id: ulid(), title: '' }) },
+  { type: 'heading-4', label: '큰 제목 (H2)', emoji: 'H₂', build: () => ({ type: 'heading-4', id: ulid(), title: '', level: 2 }) },
+  { type: 'heading-4', label: '중간 제목 (H3)', emoji: 'H₃', build: () => ({ type: 'heading-4', id: ulid(), title: '', level: 3 }) },
+  { type: 'heading-4', label: '작은 제목 (H4)', emoji: 'H₄', build: () => ({ type: 'heading-4', id: ulid(), title: '', level: 4 }) },
   { type: 'list', label: '목록', emoji: '•', build: () => ({ type: 'list', id: ulid(), style: 'bullet', items: [''] }) },
   { type: 'quote', label: '인용', emoji: '❝', build: () => ({ type: 'quote', id: ulid(), text: '' }) },
   { type: 'callout', label: '강조 박스', emoji: '!', build: () => ({ type: 'callout', id: ulid(), variant: 'info', text: '' }) },
   { type: 'code', label: '코드', emoji: '<>', build: () => ({ type: 'code', id: ulid(), language: 'text', code: '' }) },
   { type: 'math', label: '수식', emoji: '∑', build: () => ({ type: 'math', id: ulid(), expression: '' }) },
-  { type: 'table', label: '표', emoji: '⊞', build: () => ({ type: 'table', id: ulid(), headers: ['열1', '열2'], rows: [['', '']] }) },
+  // Table presets — 빈 표 + 4종 (비교/일정/예산/체크리스트). Each entry
+  // forwards to the centralized `tablePresets.ts` builder so the slash
+  // menu and the insert palette stay in sync.
+  ...TABLE_PRESETS.map((p) => ({
+    type: 'table' as const,
+    label: p.label,
+    emoji: p.emoji,
+    build: p.build,
+  })),
   { type: 'kpi-cards', label: 'KPI 카드', emoji: '★', build: () => ({ type: 'kpi-cards', id: ulid(), items: [{ label: '', value: 0 }] }) },
   { type: 'chart', label: '차트', emoji: '📊', build: () => ({ type: 'chart', id: ulid(), chartType: 'line', data: { labels: [], series: [] } }) },
   { type: 'gantt', label: '간트', emoji: '📅', build: () => ({ type: 'gantt', id: ulid(), tasks: [] }) },
   { type: 'flow', label: '플로우', emoji: '🔀', build: () => ({ type: 'flow', id: ulid(), engine: 'mermaid', source: '' }) },
   { type: 'org-chart', label: '조직도', emoji: '🏢', build: () => ({ type: 'org-chart', id: ulid(), root: { id: ulid(), label: '' } }) },
-  { type: 'iframe', label: '임베드', emoji: '⌗', build: () => ({ type: 'iframe', id: ulid(), src: '' }) },
+  { type: 'iframe', label: '임베드 (외부 URL)', emoji: '🌐', build: () => ({ type: 'iframe', id: ulid(), src: '' }) },
+  { type: 'iframe', label: 'HTML 임베드 (인라인)', emoji: '⟨/⟩', build: () => ({ type: 'iframe', id: ulid(), html: '<!DOCTYPE html>\n<html>\n<head><meta charset="UTF-8"></head>\n<body>\n<!-- HTML을 작성하거나 파일을 업로드하세요 -->\n</body>\n</html>' }) },
   { type: 'video', label: '비디오', emoji: '▶', build: () => ({ type: 'video', id: ulid(), url: '' }) },
   { type: 'image', label: '이미지', emoji: '🖼', build: () => ({ type: 'image', id: ulid(), imageId: '' }) },
   { type: 'gallery', label: '갤러리', emoji: '🖼🖼', build: () => ({ type: 'gallery', id: ulid(), layout: 'grid', items: [{ imageId: '' }] }) },
@@ -63,6 +75,7 @@ export const SLASH_ITEMS: SlashMenuItem[] = [
   { type: 'doc-link-card', label: '문서 링크 카드', emoji: '🔗', build: () => ({ type: 'doc-link-card', id: ulid(), slug: '' }) },
   { type: 'glossary-ref', label: '용어 참조', emoji: '📖', build: () => ({ type: 'glossary-ref', id: ulid(), term: '' }) },
   { type: 'columns', label: '단(Columns)', emoji: '⫴', build: () => ({ type: 'columns', id: ulid(), columns: [[], []] }) },
+  { type: 'bibliography', label: '참고문헌', emoji: '📚', build: () => ({ type: 'bibliography', id: ulid(), entries: [{ text: '' }] }) },
   { type: 'tabs', label: '탭', emoji: '⬒', build: () => ({ type: 'tabs', id: ulid(), tabs: [{ label: '탭', blocks: [] }] }) },
   { type: 'accordion', label: '아코디언', emoji: '▾', build: () => ({ type: 'accordion', id: ulid(), items: [{ label: '항목', blocks: [] }] }) },
   { type: 'data-source', label: '데이터 소스', emoji: '🛢', build: () => ({ type: 'data-source', id: ulid(), endpoint: '', render: 'table' }) },

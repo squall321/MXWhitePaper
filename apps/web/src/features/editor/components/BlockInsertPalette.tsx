@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import type { Block } from '@/types/document'
 import { ulid } from '../ulid'
 import { useLocale } from '@/lib/i18n'
+import { getTablePreset, type TablePresetKind } from '../blocks/tablePresets'
+
+/** Wrapper that asserts the kind exists at module load — keeps `build()` callsites tidy. */
+function getTablePresetSafe(kind: TablePresetKind) {
+  return getTablePreset(kind)
+}
 
 /**
  * BlockInsertPalette — small inline popover with the 16 most-used block
@@ -50,14 +56,14 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     preview: '본문 한 줄을 자유롭게 작성해요.',
   },
   // Heading levels 2 / 3 / 4 — schema stores them all as heading-4 blocks
-  // with `meta.level` distinguishing the visual size. The renderer picks
-  // the right CSS based on level (text-2xl / text-xl / text-lg).
+  // with the dedicated `level` field distinguishing the visual size. The
+  // renderer picks the right CSS based on level (text-2xl / text-xl / text-lg).
   {
     kind: 'heading-2',
     label: '큰 제목',
     labelKey: 'palette.heading2',
     icon: 'H₂',
-    build: () => ({ type: 'heading-4', id: ulid(), title: '', meta: { level: 2 } }),
+    build: () => ({ type: 'heading-4', id: ulid(), title: '', level: 2 }),
     hint: 'level 2 큰 제목. 섹션 분기점에 사용하세요.',
     slash: '/H2',
     preview: 'H₂ 큰 제목',
@@ -67,7 +73,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     label: '중간 제목',
     labelKey: 'palette.heading3',
     icon: 'H₃',
-    build: () => ({ type: 'heading-4', id: ulid(), title: '', meta: { level: 3 } }),
+    build: () => ({ type: 'heading-4', id: ulid(), title: '', level: 3 }),
     hint: 'level 3 중간 제목. 큰 제목의 하위 분류.',
     slash: '/H3',
     preview: 'H₃ 중간 제목',
@@ -77,7 +83,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     label: '작은 제목',
     labelKey: 'palette.heading4',
     icon: 'H₄',
-    build: () => ({ type: 'heading-4', id: ulid(), title: '', meta: { level: 4 } }),
+    build: () => ({ type: 'heading-4', id: ulid(), title: '', level: 4 }),
     hint: 'level 4 작은 제목. 가장 가벼운 강조.',
     slash: '/H4',
     preview: 'H₄ 작은 제목',
@@ -154,6 +160,42 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     preview: '┌─┬─┐\n├─┼─┤',
   },
   {
+    kind: 'table-comparison',
+    label: '비교표',
+    icon: '⚖',
+    build: () => getTablePresetSafe('comparison').build(),
+    hint: '두 옵션을 항목별로 비교 (가격/기능/장단점).',
+    slash: '/비교표',
+    preview: '항목 │ A │ B',
+  },
+  {
+    kind: 'table-schedule',
+    label: '일정표',
+    icon: '📅',
+    build: () => getTablePresetSafe('schedule').build(),
+    hint: '날짜·담당·작업·상태 4열 일정 표 (정렬·검색 ON).',
+    slash: '/일정표',
+    preview: '05-12 │ 진행중',
+  },
+  {
+    kind: 'table-budget',
+    label: '예산표',
+    icon: '💰',
+    build: () => getTablePresetSafe('budget').build(),
+    hint: 'Q1~Q4 통화 셀 + 합계 행 (KRW 자동 포맷).',
+    slash: '/예산표',
+    preview: '항목 │ Q1 │ ... │ 합계',
+  },
+  {
+    kind: 'table-checklist',
+    label: '체크리스트 표',
+    icon: '☑',
+    build: () => getTablePresetSafe('checklist').build(),
+    hint: '☐ 체크박스 + 작업·담당·마감.',
+    slash: '/체크리스트표',
+    preview: '☐ 작업 / 담당',
+  },
+  {
     kind: 'chart',
     label: '차트',
     labelKey: 'palette.chart',
@@ -192,6 +234,30 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     hint: '사내/유튜브/비메오 영상 임베드.',
     slash: '/영상',
     preview: '▶ video',
+  },
+  {
+    kind: 'iframe-url',
+    label: '임베드 (외부 URL)',
+    labelKey: 'palette.iframeUrl',
+    icon: '🌐',
+    build: () => ({ type: 'iframe', id: ulid(), src: '' }),
+    hint: '사내 화이트리스트 도메인의 외부 페이지를 임베드합니다.',
+    slash: '/임베드',
+    preview: '🌐 https://…',
+  },
+  {
+    kind: 'iframe-html',
+    label: 'HTML 임베드 (인라인)',
+    labelKey: 'palette.iframeHtml',
+    icon: '⟨/⟩',
+    build: () => ({
+      type: 'iframe',
+      id: ulid(),
+      html: '<!DOCTYPE html>\n<html>\n<head><meta charset="UTF-8"></head>\n<body>\n<!-- HTML을 작성하거나 .html 파일을 업로드하세요 -->\n</body>\n</html>',
+    }),
+    hint: '자기완결형 HTML을 sandbox iframe으로 임베드 (인터랙티브 그래프 등). .html 파일 업로드 가능.',
+    slash: '/HTML',
+    preview: '⟨/⟩ inline html',
   },
   {
     kind: 'file',
@@ -320,6 +386,20 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     hint: '셀 기반 표 + 간단한 수식 (=SUM/AVG/IF 등). 풀 엑셀이 아니라 가벼운 계산용.',
     slash: '/스프레드시트',
     preview: '🧮 A1+B1=…',
+  },
+  {
+    kind: 'bibliography',
+    label: '참고문헌',
+    labelKey: 'palette.bibliography',
+    icon: '📚',
+    build: () => ({
+      type: 'bibliography',
+      id: ulid(),
+      entries: [{ text: '' }],
+    }),
+    hint: '참고문헌 목록. 각 항목에 key를 부여하면 본문 [[cite:KEY]] 가 그 항목으로 연결됩니다.',
+    slash: '/참고문헌',
+    preview: '📚 [1] Smith, J. (2020) …',
   },
 ]
 

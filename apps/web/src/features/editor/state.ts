@@ -48,6 +48,18 @@ export interface EditorStateSnapshot {
    * whose caption input should auto-focus. Cleared after one render cycle.
    */
   pendingCaptionFocusBlockId: Ulid | null
+  /**
+   * Patch-level undo / redo history. Each entry is a server document
+   * version we can restore back to. The lists are populated automatically
+   * by `applyServerSnapshot`: every successful mutation pushes the
+   * previous version into `undoStack` and clears `redoStack`. Internal
+   * navigations (from `undo()` / `redo()` themselves) bypass this so the
+   * stacks behave like a real undo history rather than a chronological
+   * log.
+   */
+  currentVersion: number | null
+  undoStack: number[]
+  redoStack: number[]
 }
 
 export interface EditorActions {
@@ -62,8 +74,19 @@ export interface EditorActions {
 
   /** Local-only patch — used by BlockNote on each keystroke. Sets dirty=true. */
   setDraft(doc: DocumentJSONV10): void
-  /** Server-confirmed snapshot (after a successful save). */
-  applyServerSnapshot(doc: DocumentJSONV10, etag: string): void
+  /** Server-confirmed snapshot (after a successful save).
+   *  `opts.internalNavigation` is set by `undo()`/`redo()` so they don't
+   *  pollute the history stacks they're navigating. */
+  applyServerSnapshot(
+    doc: DocumentJSONV10,
+    etag: string,
+    opts?: { internalNavigation?: boolean },
+  ): void
+  /** Pop the undo stack, restore that version on the server, push the
+   *  current version onto the redo stack. No-op when nothing to undo. */
+  undo(): Promise<void>
+  /** Mirror of `undo` — pop redo stack, push current onto undo stack. */
+  redo(): Promise<void>
 
   setAutoSaveEnabled(on: boolean): void
   setAutoSaveStatus(status: AutoSaveStatus): void
@@ -91,6 +114,22 @@ const initialSnapshot: EditorStateSnapshot = {
   baseContent: null,
   baseEtag: null,
   pendingCaptionFocusBlockId: null,
+  currentVersion: null,
+  undoStack: [],
+  redoStack: [],
+}
+
+/**
+ * Parse the server's weak ETag (`W/"<id>-<version>"`) into the trailing
+ * version integer. Returns null when the header is missing or in an
+ * unexpected shape — callers fall back to keeping the previous version.
+ */
+function parseEtagVersion(etag: string | null | undefined): number | null {
+  if (!etag) return null
+  const m = etag.match(/-(\d+)"$/)
+  if (!m) return null
+  const n = Number(m[1])
+  return Number.isFinite(n) ? n : null
 }
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
@@ -109,6 +148,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // Snapshot the freshly-fetched document as the 3-way merge base.
       baseContent: doc,
       baseEtag: etag,
+      // Reset undo/redo history when binding to a new doc.
+      currentVersion: parseEtagVersion(etag),
+      undoStack: [],
+      redoStack: [],
     }),
 
   reset: () => set({ ...initialSnapshot }),
@@ -125,8 +168,23 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setDraft: (doc) => set({ draft: doc, dirty: true }),
 
-  applyServerSnapshot: (doc, etag) =>
+  applyServerSnapshot: (doc, etag, opts) =>
     set((s) => {
+      // Track undo history. Every external mutation (anything that isn't
+      // an undo/redo navigation) pushes the previous version onto the
+      // undo stack and invalidates the redo stack — same semantics as a
+      // word processor.
+      const newVersion = parseEtagVersion(etag) ?? s.currentVersion
+      const isInternal = Boolean(opts?.internalNavigation)
+      const versionChanged =
+        s.currentVersion != null &&
+        newVersion != null &&
+        newVersion !== s.currentVersion
+      const undoStack =
+        !isInternal && versionChanged
+          ? [...s.undoStack, s.currentVersion!]
+          : s.undoStack
+      const redoStack = !isInternal && versionChanged ? [] : s.redoStack
       // 일부 BE mutation 엔드포인트(/blocks POST, PATCH, /sections PATCH,
       // /sections/reorder 등)는 전체 DocumentJSON 이 아니라 `{slug, version,
       // ...}` 또는 `{slug, version, sections}` 같은 부분 응답만 돌려준다.
@@ -152,6 +210,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           conflictRemoteEtag: null,
           baseContent: s.draft ?? s.baseContent,
           baseEtag: etag,
+          currentVersion: newVersion,
+          undoStack,
+          redoStack,
         }
       }
       return {
@@ -166,8 +227,56 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         // subsequent edits.
         baseContent: doc,
         baseEtag: etag,
+        currentVersion: newVersion,
+        undoStack,
+        redoStack,
       }
     }),
+
+  undo: async () => {
+    const { undoStack, currentVersion, slug, etag, applyServerSnapshot } = get()
+    if (undoStack.length === 0 || !slug || !etag || currentVersion == null) return
+    const target = undoStack[undoStack.length - 1]
+    if (target == null) return
+    // Optimistically split the stacks; we'll roll back if the BE call
+    // fails. The new redoStack entry is the version we're about to leave.
+    set((s) => ({
+      undoStack: s.undoStack.slice(0, -1),
+      redoStack: [...s.redoStack, currentVersion],
+    }))
+    const { restoreVersion } = await import('./api')
+    try {
+      const result = await restoreVersion(slug, target, etag, '실행 취소')
+      applyServerSnapshot(result.document, result.etag, { internalNavigation: true })
+    } catch {
+      // Roll back the optimistic split on failure (412 / network).
+      set((s) => ({
+        undoStack: [...s.undoStack, target],
+        redoStack: s.redoStack.slice(0, -1),
+      }))
+    }
+  },
+
+  redo: async () => {
+    const { redoStack, currentVersion, slug, etag, applyServerSnapshot } = get()
+    if (redoStack.length === 0 || !slug || !etag || currentVersion == null) return
+    const target = redoStack[redoStack.length - 1]
+    if (target == null) return
+    set((s) => ({
+      redoStack: s.redoStack.slice(0, -1),
+      undoStack: [...s.undoStack, currentVersion],
+    }))
+    const { restoreVersion } = await import('./api')
+    try {
+      const result = await restoreVersion(slug, target, etag, '다시 실행')
+      applyServerSnapshot(result.document, result.etag, { internalNavigation: true })
+    } catch {
+      set((s) => ({
+        redoStack: [...s.redoStack, target],
+        undoStack: s.undoStack.slice(0, -1),
+      }))
+    }
+  },
 
   setAutoSaveEnabled: (on) => set({ autoSaveEnabled: on }),
   setAutoSaveStatus: (status) => set({ autoSaveStatus: status }),

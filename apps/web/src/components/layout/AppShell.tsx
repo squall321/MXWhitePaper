@@ -103,7 +103,7 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
         <Breadcrumb />
       </div>
 
-      <div className={`grid min-h-[calc(100vh-var(--header-h))] pt-[calc(var(--header-h)+2rem)] ${gridCls}`}>
+      <div className={`relative z-content grid min-h-[calc(100vh-var(--header-h))] pt-[calc(var(--header-h)+2rem)] ${gridCls}`}>
         {/* Left tree — visible md+ only when the page provides a left slot. */}
         {hasLeft && (
           <aside
@@ -123,7 +123,7 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
           tabIndex={-1}
           className="min-w-0 px-4 py-4 sm:px-6 sm:py-6 lg:px-8 isolate"
         >
-          <div className="mx-auto w-full max-w-readable lg:max-w-prose">
+          <div className="w-full">
             <EmailVerifyBanner />
             {children}
           </div>

@@ -45,6 +45,16 @@ interface Props {
   dragSetActivatorRef?: (el: HTMLElement | null) => void
   /** Optional: when present, palette also offers a "delete" action via this callback. */
   onRequestDelete?: () => void
+  /**
+   * Optional left/right add hooks. When provided, the wrapper renders side
+   * rails with a `+` glyph that, on click, asks the parent to add a sibling
+   * block to the left or right of this one. Parents decide whether that
+   * means "wrap into a new ColumnsBlock" (section-level) or "insert a new
+   * column into the existing ColumnsBlock" (already inside columns) — this
+   * component just fires the callback.
+   */
+  onAddLeft?: () => void | Promise<void>
+  onAddRight?: () => void | Promise<void>
 }
 
 export function BlockHoverInserter({
@@ -57,6 +67,8 @@ export function BlockHoverInserter({
   dragListeners,
   dragSetActivatorRef,
   onRequestDelete,
+  onAddLeft,
+  onAddRight,
 }: Props) {
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
@@ -260,9 +272,53 @@ export function BlockHoverInserter({
         </button>
       )}
 
+      {/* Left + rail. Adds a sibling block to the LEFT — parent decides
+          whether that wraps the block into a new ColumnsBlock (section-level)
+          or inserts a new column into the existing ColumnsBlock (already
+          nested). The rail sits outside the drag handle so it doesn't fight
+          for space; on narrow viewports the parent hides it via prop. */}
+      {onAddLeft && (
+        <button
+          type="button"
+          aria-label="이 블록 왼쪽에 추가"
+          title="왼쪽에 새 블록을 추가합니다"
+          data-rail="left"
+          onClick={() => void onAddLeft()}
+          className="absolute -left-3 top-0 bottom-0 z-10 hidden w-3 items-center justify-center opacity-0 transition-opacity group-hover/block:opacity-100 group-focus-within/block:opacity-100 focus-visible:opacity-100 sm:flex"
+        >
+          <span className="pointer-events-none flex h-full w-3 flex-col items-center">
+            <span className="w-px flex-1 bg-smsg-300" />
+            <span className="my-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-smsg-500 bg-white text-xs font-bold text-smsg-700 shadow-sm dark:bg-gray-900">
+              +
+            </span>
+            <span className="w-px flex-1 bg-smsg-300" />
+          </span>
+        </button>
+      )}
+
       <BlockResizeWrapper slug={slug} block={block} active>
         {children}
       </BlockResizeWrapper>
+
+      {/* Right + rail. Mirror of the left rail. */}
+      {onAddRight && (
+        <button
+          type="button"
+          aria-label="이 블록 오른쪽에 추가"
+          title="오른쪽에 새 블록을 추가합니다"
+          data-rail="right"
+          onClick={() => void onAddRight()}
+          className="absolute -right-3 top-0 bottom-0 z-10 hidden w-3 items-center justify-center opacity-0 transition-opacity group-hover/block:opacity-100 group-focus-within/block:opacity-100 focus-visible:opacity-100 sm:flex"
+        >
+          <span className="pointer-events-none flex h-full w-3 flex-col items-center">
+            <span className="w-px flex-1 bg-smsg-300" />
+            <span className="my-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-smsg-500 bg-white text-xs font-bold text-smsg-700 shadow-sm dark:bg-gray-900">
+              +
+            </span>
+            <span className="w-px flex-1 bg-smsg-300" />
+          </span>
+        </button>
+      )}
 
       {/* Bottom + rail. */}
       <button

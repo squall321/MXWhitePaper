@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Literal
+from typing import Any, Literal, Annotated
 
 from pydantic import AnyUrl, BaseModel, ConfigDict, Field, RootModel
 
@@ -46,12 +46,59 @@ class DocumentMeta(BaseModel):
     confidentiality: Confidentiality
 
 
-class Infobox(RootModel[dict[str, str | list[str]]]):
+class Badge(Enum):
     """
-    우상단 정보 박스. 키=라벨, 값=문자열 또는 문자열 배열
+    배경/텍스트 컬러로 강조하는 뱃지 종류. neutral=회색.
     """
 
-    root: dict[str, str | list[str]]
+    success = 'success'
+    info = 'info'
+    warn = 'warn'
+    danger = 'danger'
+    neutral = 'neutral'
+
+
+class InfoboxRich(BaseModel):
+    """
+    Richer Infobox value — wraps a label with optional link / badge / icon / color hints. Used wherever a plain string isn't enough (예: 상태 뱃지, 담당자 메일 링크).
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    text: str
+    """
+    표시 텍스트.
+    """
+    href: str | None = None
+    """
+    링크 URL — 있으면 텍스트가 클릭 가능한 a 태그로 렌더링.
+    """
+    icon: str | None = None
+    """
+    선두 이모지 아이콘 (예: 📞 ✉️ 👤).
+    """
+    badge: Badge | None = None
+    """
+    배경/텍스트 컬러로 강조하는 뱃지 종류. neutral=회색.
+    """
+    color: str | None = Field(None, pattern='^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+    """
+    텍스트 색 직접 지정 (badge와 함께 쓰면 badge가 우선).
+    """
+
+
+class Layout(Enum):
+    """
+    Visual layout for this section's blocks. Drives both the wiki view (block arrangement inside the section) and presentation view (slide template). Defaults to 'stack' (existing behaviour: blocks render top-to-bottom). 'two-col' splits blocks alternately into two columns. 'image-left'/'image-right' put the first ImageBlock on one side and remaining blocks on the other. 'title-only' renders just the section heading (PPT cover style). 'full-bleed' uses the first ImageBlock as a full-width background with subsequent blocks overlaid.
+    """
+
+    stack = 'stack'
+    two_col = 'two-col'
+    image_left = 'image-left'
+    image_right = 'image-right'
+    title_only = 'title-only'
+    full_bleed = 'full-bleed'
 
 
 class Align(Enum):
@@ -110,13 +157,27 @@ class ParagraphBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
+class Level1(Enum):
+    """
+    Visual heading level. Optional — defaults to 4 (smallest). Sub-section heading; the document outline still uses Section nodes for the canonical hierarchy.
+    """
+
+    int_2 = 2
+    int_3 = 3
+    int_4 = 4
+
+
 class Heading4Block(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
     type: Literal['heading-4']
     id: Ulid
-    title: str = Field(..., max_length=200, min_length=1)
+    title: str = Field(..., max_length=200)
+    level: Level1 | None = None
+    """
+    Visual heading level. Optional — defaults to 4 (smallest). Sub-section heading; the document outline still uses Section nodes for the canonical hierarchy.
+    """
     meta: BlockMeta | None = None
 
 
@@ -194,8 +255,141 @@ class MathBlock(BaseModel):
     """
     LaTeX (KaTeX 호환)
     """
-    display: Display | None = 'block'
+    display: Display | None = Display.block
     meta: BlockMeta | None = None
+
+
+class Align1(Enum):
+    """
+    Per-cell horizontal alignment override (wins over column default).
+    """
+
+    left = 'left'
+    center = 'center'
+    right = 'right'
+
+
+class Cell(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    r: int = Field(..., ge=0)
+    c: int = Field(..., ge=0)
+    row_span: int | None = Field(None, alias='rowSpan', ge=1)
+    col_span: int | None = Field(None, alias='colSpan', ge=1)
+    text: str
+    header: bool | None = None
+    """
+    True for header-row cells (rendered as <th>).
+    """
+    align: Align1 | None = None
+    """
+    Per-cell horizontal alignment override (wins over column default).
+    """
+    bg: str | None = Field(None, pattern='^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+    """
+    Cell background color (CSS hex).
+    """
+    bold: bool | None = None
+    """
+    Bold text in this cell.
+    """
+    color: str | None = Field(None, pattern='^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+    """
+    Cell text color (CSS hex).
+    """
+
+
+class Align2(Enum):
+    """
+    Default cell alignment for this column. dtype=number|percent|currency auto-defaults to right when align is unset.
+    """
+
+    left = 'left'
+    center = 'center'
+    right = 'right'
+
+
+class Dtype(Enum):
+    """
+    Column data type. Drives auto-formatting and default alignment.
+    """
+
+    text = 'text'
+    number = 'number'
+    percent = 'percent'
+    currency = 'currency'
+    date = 'date'
+
+
+class Column(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    width: str | None = None
+    """
+    CSS width — '120px' or '15%' or 'auto'.
+    """
+    align: Align2 | None = None
+    """
+    Default cell alignment for this column. dtype=number|percent|currency auto-defaults to right when align is unset.
+    """
+    dtype: Dtype | None = None
+    """
+    Column data type. Drives auto-formatting and default alignment.
+    """
+    format: str | None = None
+    """
+    Format hint. number/percent: decimal places like '2'. currency: ISO code or symbol like 'KRW' / '$'. date: pattern like 'YYYY-MM-DD'.
+    """
+
+
+class Aggregate(Enum):
+    field_ = ''
+    sum = 'sum'
+    avg = 'avg'
+    count = 'count'
+    min = 'min'
+    max = 'max'
+
+
+class Footer(BaseModel):
+    """
+    Optional footer row showing per-column aggregates. Computed at render time from `rows` (flat mode) — sparse mode is skipped because merged-cell semantics make column-wise sums ambiguous.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    show: bool | None = None
+    label: str | None = None
+    """
+    Label shown in the first column when no aggregate is set there.
+    """
+    aggregates: list[Aggregate] | None = None
+    """
+    Per-column aggregate. '' (empty) skips that column.
+    """
+
+
+class Density(Enum):
+    """
+    Row padding density. Default 'normal'.
+    """
+
+    compact = 'compact'
+    normal = 'normal'
+    comfortable = 'comfortable'
+
+
+class BorderStyle(Enum):
+    """
+    Cell border style. Default 'horizontal'.
+    """
+
+    none = 'none'
+    horizontal = 'horizontal'
+    all = 'all'
 
 
 class Options(BaseModel):
@@ -203,10 +397,40 @@ class Options(BaseModel):
         extra='forbid',
     )
     sortable: bool | None = None
+    """
+    Header click sorts asc/desc by that column (flat mode only).
+    """
     searchable: bool | None = None
+    """
+    Show a search box above the table that filters rows (flat mode only).
+    """
+    density: Density | None = None
+    """
+    Row padding density. Default 'normal'.
+    """
+    sticky_first_col: bool | None = Field(None, alias='stickyFirstCol')
+    """
+    Pin the first column when the table scrolls horizontally.
+    """
+    row_numbers: bool | None = Field(None, alias='rowNumbers')
+    """
+    Show 1-based row numbers in a leading column.
+    """
+    stripe: bool | None = None
+    """
+    Zebra-striped rows. Default true; set false to disable.
+    """
+    border_style: BorderStyle | None = Field(None, alias='borderStyle')
+    """
+    Cell border style. Default 'horizontal'.
+    """
 
 
 class TableBlock(BaseModel):
+    """
+    Table block. Two layout modes: flat (`headers` + `rows`, the common case) and sparse (`cells`, used whenever cells are merged or styled per-cell). The renderer prefers `cells` when present. Optional `columns` carries per-column metadata (width / align / dtype / format) that applies to BOTH modes — column index is well-defined in either layout.
+    """
+
     model_config = ConfigDict(
         extra='forbid',
     )
@@ -214,6 +438,18 @@ class TableBlock(BaseModel):
     id: Ulid
     headers: list[str]
     rows: list[list[str]]
+    cells: list[Cell] | None = None
+    """
+    Optional sparse cell list for tables with merged or styled cells (DOCX gridSpan/vMerge round-trip + per-cell style overrides). When present, the renderer ignores headers/rows and lays out from this list. Each cell occupies (r..r+rowSpan-1) × (c..c+colSpan-1); covered slots have no entry. r/c are 0-indexed; the first row of a header-mode table is the header row.
+    """
+    columns: list[Column] | None = None
+    """
+    Optional per-column metadata. Index matches column index in both flat and sparse layouts. Missing entries fall back to defaults (left-align, text dtype, auto width).
+    """
+    footer: Footer | None = None
+    """
+    Optional footer row showing per-column aggregates. Computed at render time from `rows` (flat mode) — sparse mode is skipped because merged-cell semantics make column-wise sums ambiguous.
+    """
     options: Options | None = None
     meta: BlockMeta | None = None
 
@@ -250,6 +486,15 @@ class ChartType(Enum):
     scatter = 'scatter'
 
 
+class Engine(Enum):
+    """
+    Chart renderer. Default 'recharts' for back-compat; choose 'echarts' for rich interactivity (markPoint / markArea / brush / dataZoom).
+    """
+
+    recharts = 'recharts'
+    echarts = 'echarts'
+
+
 class Series(BaseModel):
     name: str
     values: list[float]
@@ -260,16 +505,70 @@ class Data(BaseModel):
     series: list[Series]
 
 
+class KeyPoint(BaseModel):
+    label: str
+    x_index: int = Field(..., alias='xIndex', ge=0)
+    color: str | None = None
+
+
+class Region(BaseModel):
+    label: str
+    x_from_index: int = Field(..., alias='xFromIndex', ge=0)
+    x_to_index: int = Field(..., alias='xToIndex', ge=0)
+    color: str | None = None
+
+
+class Interactions(BaseModel):
+    """
+    Friendly knobs for ECharts interactivity that map onto markPoint / markArea / dataZoom without requiring users to write raw EChartsOption.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    key_points: list[KeyPoint] | None = Field(None, alias='keyPoints')
+    """
+    Highlighted points on the curve (label, x-index, optional color).
+    """
+    regions: list[Region] | None = None
+    """
+    Coloured x-range bands (e.g. Elastic / Plastic). xFromIndex / xToIndex are inclusive label indexes.
+    """
+    show_zoom: bool | None = Field(None, alias='showZoom')
+    """
+    Inline dataZoom slider under the chart.
+    """
+    show_crosshair: bool | None = Field(None, alias='showCrosshair')
+    """
+    Crosshair guides + axis pointers.
+    """
+
+
 class ChartBlock(BaseModel):
+    """
+    Chart block — `engine` selects the renderer. 'recharts' (default) uses our existing simple chart UI; 'echarts' unlocks rich interaction (zoom, brush, hover slope, markPoint annotations, markArea regions). With 'echarts' the data fields below still drive the dataset, but `options` accepts any ECharts EChartsOption fragment that gets merged on top.
+    """
+
     model_config = ConfigDict(
         extra='forbid',
     )
     type: Literal['chart']
     id: Ulid
     chart_type: ChartType = Field(..., alias='chartType')
+    engine: Engine | None = None
+    """
+    Chart renderer. Default 'recharts' for back-compat; choose 'echarts' for rich interactivity (markPoint / markArea / brush / dataZoom).
+    """
     title: str | None = None
     data: Data
+    interactions: Interactions | None = None
+    """
+    Friendly knobs for ECharts interactivity that map onto markPoint / markArea / dataZoom without requiring users to write raw EChartsOption.
+    """
     options: dict[str, Any] | None = None
+    """
+    Raw ECharts EChartsOption fragment, merged after `interactions` so power users can override anything.
+    """
     meta: BlockMeta | None = None
 
 
@@ -290,7 +589,7 @@ class GanttBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
-class Engine(Enum):
+class Engine1(Enum):
     mermaid = 'mermaid'
     excalidraw = 'excalidraw'
 
@@ -301,7 +600,7 @@ class FlowBlock(BaseModel):
     )
     type: Literal['flow']
     id: Ulid
-    engine: Engine
+    engine: Engine1
     source: str
     """
     Mermaid DSL 또는 excalidraw JSON
@@ -309,7 +608,7 @@ class FlowBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
-class Layout(Enum):
+class Layout1(Enum):
     tree = 'tree'
     horizontal = 'horizontal'
 
@@ -325,14 +624,22 @@ class OrgChartNode(BaseModel):
 
 
 class IframeBlock(BaseModel):
+    """
+    Embed an external page (`src`) OR an inline self-contained HTML document (`html`). Exactly one MUST be set. The renderer wraps the iframe in a sandbox boundary so the embed can't reach the parent DOM, cookies, or storage; only `allow-scripts` is granted so interactive embeds (charts, calculators) still work.
+    """
+
     model_config = ConfigDict(
         extra='forbid',
     )
     type: Literal['iframe']
     id: Ulid
-    src: AnyUrl
+    src: AnyUrl | None = None
     """
-    사내 화이트리스트 도메인만
+    사내 화이트리스트 도메인만. `html` 와 동시 사용 금지.
+    """
+    html: str | None = Field(None, max_length=500000)
+    """
+    Self-contained HTML document. Rendered via iframe srcdoc + sandbox. Use this for ad-hoc interactive embeds (e.g. canvas-based charts) that don't need a hosting URL. `src` 와 동시 사용 금지.
     """
     title: str | None = None
     height: int | None = Field(None, ge=100, le=2000)
@@ -353,7 +660,7 @@ class VideoBlock(BaseModel):
     id: Ulid
     url: AnyUrl
     title: str | None = None
-    provider: Provider | None = 'intra'
+    provider: Provider | None = Provider.intra
     meta: BlockMeta | None = None
 
 
@@ -376,7 +683,7 @@ class ImageBlock(BaseModel):
     """
     caption: str | None = Field(None, max_length=500)
     alt: str | None = Field(None, max_length=200)
-    width: Width | None = 'md'
+    width: Width | None = Width.md
     link: str | None = None
     """
     외부 URL 또는 위키 slug
@@ -384,7 +691,7 @@ class ImageBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
-class Layout1(Enum):
+class Layout2(Enum):
     grid = 'grid'
     carousel = 'carousel'
 
@@ -404,7 +711,7 @@ class GalleryBlock(BaseModel):
     )
     type: Literal['gallery']
     id: Ulid
-    layout: Layout1 | None = 'grid'
+    layout: Layout2 | None = Layout2.grid
     items: list[Item1] = Field(..., min_length=1)
     meta: BlockMeta | None = None
 
@@ -459,6 +766,10 @@ class GlossaryRefBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
+class Width1(RootModel[float]):
+    root: float = Field(..., ge=5.0, le=95.0)
+
+
 class Render(Enum):
     table = 'table'
     chart = 'chart'
@@ -506,7 +817,7 @@ class Input(BaseModel):
     name: str
     label: str
     default: str | float | bool | None = None
-    kind: Kind | None = 'number'
+    kind: Kind | None = Kind.number
 
 
 class CalculatorBlock(BaseModel):
@@ -719,6 +1030,56 @@ class SpreadsheetBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
+class Style1(Enum):
+    """
+    Citation style label (numeric / alphabetic / author-year). Currently informational — the FE renders ordered list either way.
+    """
+
+    numeric = 'numeric'
+    alphabetic = 'alphabetic'
+    author_year = 'author-year'
+
+
+class Entry(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    key: str | None = Field(None, max_length=60, pattern='^[A-Za-z0-9_-]+$')
+    """
+    Optional citation key used by [[cite:KEY]] inline references. Alphanumeric / hyphen / underscore.
+    """
+    text: str = Field(..., max_length=2000, min_length=1)
+    """
+    Formatted reference body — e.g. 'Smith, J. (2020). Foo bar. Journal of X, 3(2), 14-22.'
+    """
+    url: str | None = Field(None, max_length=1000)
+    """
+    Optional canonical URL (DOI, journal page).
+    """
+
+
+class BibliographyBlock(BaseModel):
+    """
+    Reference list (참고문헌). Citations elsewhere in the document use the [[cite:KEY]] inline syntax to anchor-link into entries here. Most often produced by the DOCX importer when it sees a 'References' / '참고문헌' / 'Bibliography' heading.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['bibliography']
+    id: Ulid
+    title: str | None = Field(None, max_length=200)
+    """
+    Optional override for the block heading. Defaults to '참고문헌' in the FE renderer.
+    """
+    style: Style1 | None = None
+    """
+    Citation style label (numeric / alphabetic / author-year). Currently informational — the FE renders ordered list either way.
+    """
+    entries: list[Entry] = Field(..., min_length=1)
+    meta: BlockMeta | None = None
+
+
 class RelatedDoc(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -749,6 +1110,14 @@ class Reference(BaseModel):
     url: AnyUrl | None = None
 
 
+class Infobox(RootModel[dict[str, str | list[str] | InfoboxRich | list[InfoboxRich]]]):
+    """
+    우상단 정보 박스. 키=라벨, 값=문자열, 문자열 배열, 또는 풍부한 표현(링크/뱃지/아이콘)을 위한 InfoboxRich 객체. 기존 문자열 형태는 그대로 호환.
+    """
+
+    root: dict[str, str | list[str] | InfoboxRich | list[InfoboxRich]]
+
+
 class OrgChartBlock(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -756,7 +1125,7 @@ class OrgChartBlock(BaseModel):
     type: Literal['org-chart']
     id: Ulid
     root: OrgChartNode
-    layout: Layout | None = 'tree'
+    layout: Layout1 | None = Layout1.tree
     meta: BlockMeta | None = None
 
 
@@ -833,9 +1202,9 @@ class DocumentjsonV10(BaseModel):
     summary: str | None = Field(None, max_length=500)
     metadata: DocumentMeta
     infobox: Infobox | None = None
-    sections: list[SectionLevel1]
+    sections: list[Section]
     """
-    최상위 섹션은 반드시 level=1
+    최상위 섹션은 반드시 level=1 (BE 가 검증). 자식 섹션은 부모 level+1.
     """
     related_documents: list[RelatedDoc] | None = Field([], validate_default=True)
     glossary: list[GlossaryItem] | None = Field([], validate_default=True)
@@ -851,43 +1220,30 @@ class DocumentjsonV10(BaseModel):
     """
 
 
-class SectionLevel1(BaseModel):
-    model_config = ConfigDict(
-        extra='forbid',
-    )
-    id: Ulid
-    number: str | None = Field(None, pattern='^\\d+$')
-    level: Literal[1]
-    title: str = Field(..., max_length=200, min_length=1)
-    blocks: list[Block]
-    subsections: list[SectionLevel2]
-
-
-class SectionLevel2(BaseModel):
-    model_config = ConfigDict(
-        extra='forbid',
-    )
-    id: Ulid
-    number: str | None = Field(None, pattern='^\\d+\\.\\d+$')
-    level: Literal[2]
-    title: str = Field(..., max_length=200, min_length=1)
-    blocks: list[Block]
-    subsections: list[SectionLevel3]
-
-
-class SectionLevel3(BaseModel):
-    model_config = ConfigDict(
-        extra='forbid',
-    )
-    id: Ulid
-    number: str | None = Field(None, pattern='^\\d+\\.\\d+\\.\\d+$')
-    level: Literal[3]
-    title: str = Field(..., max_length=200, min_length=1)
-    blocks: list[Block]
-    subsections: list[Any] | None = Field([], max_length=0)
+class Section(BaseModel):
     """
-    level 3은 더 깊은 섹션 불가 (heading-4 Block으로 표현)
+    Document outline node. Recursive — `subsections` is another Section[]. Top-level entries MUST have level=1; child level = parent.level + 1 (enforced by the BE renumber/validate pass). The visual rendering caps at HTML <h6> (level 5+ all render as h6) but schema-wise depth is unbounded.
     """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: Ulid
+    number: str | None = Field(None, pattern='^\\d+(?:\\.\\d+)*$')
+    """
+    1.2.3.4… dotted ordinal recomputed by the BE on every save.
+    """
+    level: int = Field(..., ge=1)
+    """
+    1-based depth. BE rejects values that don't match the tree position.
+    """
+    title: str = Field(..., max_length=200, min_length=1)
+    layout: Layout | None = None
+    """
+    Visual layout for this section's blocks. Drives both the wiki view (block arrangement inside the section) and presentation view (slide template). Defaults to 'stack' (existing behaviour: blocks render top-to-bottom). 'two-col' splits blocks alternately into two columns. 'image-left'/'image-right' put the first ImageBlock on one side and remaining blocks on the other. 'title-only' renders just the section heading (PPT cover style). 'full-bleed' uses the first ImageBlock as a full-width background with subsequent blocks overlaid.
+    """
+    blocks: list[Block]
+    subsections: list[Section] | None = Field([], validate_default=True)
 
 
 class ColumnsBlock(BaseModel):
@@ -897,6 +1253,10 @@ class ColumnsBlock(BaseModel):
     type: Literal['columns']
     id: Ulid
     columns: list[list[Block]] = Field(..., max_length=4, min_length=2)
+    widths: list[Width1] | None = Field(None, max_length=4, min_length=2)
+    """
+    Optional per-column widths as percentages of the row. Length MUST equal columns.length when present, each value 5..95, and the sum SHOULD equal 100 (server normalises). Omit for equal split.
+    """
     meta: BlockMeta | None = None
 
 
@@ -938,6 +1298,7 @@ class AccordionBlock(BaseModel):
 
 class Block(
     RootModel[
+        Annotated[
         ParagraphBlock
         | Heading4Block
         | ListBlock
@@ -970,9 +1331,13 @@ class Block(
         | QuizBlock
         | ImageAnnotationBlock
         | SpreadsheetBlock
+        | BibliographyBlock
+        ,
+        Field(discriminator='type'),
+    ]
     ]
 ):
-    root: (
+    root: Annotated[
         ParagraphBlock
         | Heading4Block
         | ListBlock
@@ -1005,14 +1370,15 @@ class Block(
         | QuizBlock
         | ImageAnnotationBlock
         | SpreadsheetBlock
-    )
+        | BibliographyBlock
+        ,
+        Field(discriminator='type'),
+    ]
 
 
 OrgChartNode.model_rebuild()
 DocumentjsonV10.model_rebuild()
-SectionLevel1.model_rebuild()
-SectionLevel2.model_rebuild()
-SectionLevel3.model_rebuild()
+Section.model_rebuild()
 ColumnsBlock.model_rebuild()
 Tab.model_rebuild()
 Item2.model_rebuild()

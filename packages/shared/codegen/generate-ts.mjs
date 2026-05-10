@@ -29,5 +29,22 @@ const ts = await compile(schema, 'Document', {
 })
 
 mkdirSync(dirname(OUT), { recursive: true })
-writeFileSync(OUT, ts)
+
+// Compatibility aliases: the schema unified the SectionLevel1/2/3 trio into
+// a single recursive `Section` type, but plenty of FE code still imports
+// the legacy names (`SectionLevel1` / `SectionLevel2` / `SectionLevel3`).
+// Emit backwards-compatible aliases so the rename can land without touching
+// dozens of call sites.
+const compatFooter = [
+  '',
+  '// ── Backwards-compatibility aliases ──────────────────────────────────',
+  '// The schema collapsed the explicit level-1/2/3 Section interfaces into a',
+  '// single recursive `Section`. These aliases keep older imports compiling.',
+  'export type SectionLevel1 = Section',
+  'export type SectionLevel2 = Section',
+  'export type SectionLevel3 = Section',
+  '',
+].join('\n')
+
+writeFileSync(OUT, ts + compatFooter)
 console.log(`✓ TS types generated → ${OUT}`)

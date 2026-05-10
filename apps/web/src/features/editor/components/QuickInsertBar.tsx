@@ -36,6 +36,18 @@ const ITEMS: QuickInsertItem[] = [
     build: () => ({ type: 'paragraph', id: ulid(), text: '' }),
   },
   {
+    kind: 'columns',
+    label: '좌우 단',
+    icon: '⫴',
+    build: () => ({
+      type: 'columns',
+      id: ulid(),
+      // Schema requires 2..4 columns. Start with two empty columns; users
+      // populate each column via the slot palette inside ColumnsBlockEditor.
+      columns: [[], []],
+    }),
+  },
+  {
     kind: 'table',
     label: '표',
     icon: '▦',

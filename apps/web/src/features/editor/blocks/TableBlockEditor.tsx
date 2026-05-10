@@ -1,8 +1,54 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type { TableBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { useT } from '@/lib/i18n'
+import {
+  cellsToFlat,
+  csOf,
+  findNeighbor,
+  flatToCells,
+  isAllUnitCells,
+  mergeWith,
+  rsOf,
+  splitMerge,
+  type SparseCell,
+} from './tableCells'
+import { TableOptionsPanel } from './TableOptionsPanel'
+import { ColumnHeaderMenu } from './ColumnHeaderMenu'
+import { CellStyleToolbar } from './CellStyleToolbar'
+import { ColumnResizer } from './ColumnResizer'
+import {
+  applyTabularPasteToFlat,
+  looksLikeTabular,
+  parseTabular,
+} from './tsvPaste'
+
+type ColumnEntry = NonNullable<TableBlock['columns']>[number]
+
+/**
+ * Patch a single column entry into `block.columns`, padding the array out
+ * to `colCount` so column-N edits don't accidentally shift later columns.
+ */
+function patchColumn(
+  block: TableBlock,
+  colCount: number,
+  c: number,
+  next: ColumnEntry,
+): TableBlock {
+  const cur = block.columns ?? []
+  const out: ColumnEntry[] = []
+  for (let i = 0; i < colCount; i++) out.push(cur[i] ?? {})
+  out[c] = next
+  // Drop trailing empty entries to keep the JSON tidy.
+  while (out.length > 0 && isEmptyColumn(out[out.length - 1])) out.pop()
+  return { ...block, columns: out.length > 0 ? out : undefined }
+}
+
+function isEmptyColumn(e: ColumnEntry | undefined): boolean {
+  if (!e) return true
+  return !e.width && !e.align && !e.dtype && !e.format
+}
 
 interface Props {
   slug: Slug
@@ -55,10 +101,28 @@ export function TableBlockEditor({ slug, block }: Props) {
   const persist = async (next: TableBlock) => {
     if (!etag) return
     try {
+      // Send cells when present so the BE keeps the merge layout, otherwise
+      // legacy headers/rows. Sending `cells: null` explicitly clears the
+      // field — used by the "표 평탄화" action.
+      const patchBody: Record<string, unknown> = {
+        headers: next.headers,
+        rows: next.rows,
+      }
+      if (next.cells) patchBody.cells = next.cells
+      else if (block.cells) patchBody.cells = null
+      // Send the new structured fields whenever they're present OR when the
+      // user has just cleared one (we need to send `null` so the BE drops the
+      // field rather than keeping the stale value).
+      if (next.columns) patchBody.columns = next.columns
+      else if (block.columns) patchBody.columns = null
+      if (next.footer) patchBody.footer = next.footer
+      else if (block.footer) patchBody.footer = null
+      if (next.options) patchBody.options = next.options
+      else if (block.options) patchBody.options = null
       const result = await patchBlock(
         slug,
         block.id,
-        { headers: next.headers, rows: next.rows },
+        patchBody as Partial<TableBlock>,
         etag,
         t('editor.table.changeLog'),
       )
@@ -124,6 +188,247 @@ export function TableBlockEditor({ slug, block }: Props) {
     schedule({ ...local, headers, rows })
   }
 
+  /**
+   * Resize the flat table to exactly `nRows × nCols`. Existing data inside
+   * the new bounds is preserved; cells outside are dropped (truncate); new
+   * cells are filled with empty strings (pad). Headers receive auto-named
+   * placeholders ("열 N") for columns added beyond the current header count.
+   */
+  const resizeFlat = (nRows: number, nCols: number) => {
+    const cols = Math.max(1, Math.min(50, Math.floor(nCols)))
+    const rows = Math.max(0, Math.min(500, Math.floor(nRows)))
+    const headers: string[] = []
+    for (let c = 0; c < cols; c++) {
+      headers.push(
+        local.headers[c] ?? t('editor.table.newColumnName', { n: c + 1 }),
+      )
+    }
+    const nextRows: string[][] = []
+    for (let r = 0; r < rows; r++) {
+      const src = local.rows[r] ?? []
+      const row: string[] = []
+      for (let c = 0; c < cols; c++) row.push(src[c] ?? '')
+      nextRows.push(row)
+    }
+    schedule({ ...local, headers, rows: nextRows })
+  }
+
+  // ── Cells (merged) mode ──────────────────────────────────────────────
+  // Tables imported from DOCX with merged cells, or any flat table the
+  // user has already merged into, land here. The editor renders the
+  // sparse layout faithfully, lets the user edit each cell's text in
+  // place, and exposes a small hover menu on every cell with merge /
+  // split / split-into-grid actions powered by `tableCells.ts`.
+  if (local.cells && local.cells.length > 0) {
+    const cells = local.cells
+    // Compute the column count for the sparse table — needed by the column
+    // header menu and the options panel's footer-aggregate row.
+    const sparseColCount = cells.reduce(
+      (max, c) => Math.max(max, c.c + csOf(c)),
+      0,
+    )
+    const setCellText = (idx: number, value: string) => {
+      const next = cells.map((cell, i) => (i === idx ? { ...cell, text: value } : cell))
+      schedule({ ...local, cells: next })
+    }
+    const setCellStyle = (idx: number, patch: Partial<SparseCell>) => {
+      const next = cells.map((cell, i) => {
+        if (i !== idx) return cell
+        const merged = { ...cell, ...patch }
+        // Drop falsy style fields so the JSON stays minimal — the schema
+        // expects either a real value or no key at all.
+        if (merged.bg === undefined) delete merged.bg
+        if (merged.color === undefined) delete merged.color
+        if (merged.bold === undefined) delete merged.bold
+        if (merged.align === undefined) delete merged.align
+        return merged
+      })
+      schedule({ ...local, cells: next })
+    }
+    const onMerge = (anchor: SparseCell, side: 'left' | 'right' | 'up' | 'down') => {
+      const next = mergeWith(cells, anchor, side)
+      if (!next) return // no neighbour available
+      schedule({ ...local, cells: next })
+    }
+    const onSplit = (anchor: SparseCell) => {
+      const next = splitMerge(cells, anchor)
+      // If every cell is back to 1×1, drop to the simpler flat representation
+      // so the user gets the row/col add/remove toolbar back. Otherwise
+      // stay in cells mode.
+      if (isAllUnitCells(next)) {
+        const { headers, rows } = cellsToFlat(next)
+        schedule({ ...local, headers, rows, cells: undefined })
+      } else {
+        schedule({ ...local, cells: next })
+      }
+    }
+    const flatten = () => {
+      const { headers, rows } = cellsToFlat(cells)
+      schedule({ ...local, headers, rows, cells: undefined })
+    }
+
+    // Group cells by row for ordered rendering.
+    const cellsByRow = new Map<number, { cell: SparseCell; idx: number }[]>()
+    cells.forEach((cell, idx) => {
+      const list = cellsByRow.get(cell.r) ?? []
+      list.push({ cell, idx })
+      cellsByRow.set(cell.r, list)
+    })
+    for (const list of cellsByRow.values()) list.sort((a, b) => a.cell.c - b.cell.c)
+    const rowKeys = [...cellsByRow.keys()].sort((a, b) => a - b)
+    const isHeaderRow = (r: number) => {
+      const list = cellsByRow.get(r) ?? []
+      return list.length > 0 && list.every((entry) => entry.cell.header === true)
+    }
+
+    return (
+      <div data-table-block-editor data-block-id={block.id} className="my-3 space-y-2">
+        <div className="overflow-x-auto rounded border border-smsg-100 bg-white shadow-sm">
+          <table className="w-full min-w-[480px] border-collapse text-left text-sm">
+            <tbody>
+              {rowKeys.map((r) => {
+                const rowEntries = cellsByRow.get(r) ?? []
+                const Tag = isHeaderRow(r) ? 'th' : 'td'
+                const rowCls = isHeaderRow(r)
+                  ? 'bg-smsg-50 text-smsg-900'
+                  : 'odd:bg-white even:bg-gray-50'
+                return (
+                  <Fragment key={r}>
+                    <tr className={rowCls}>
+                      {rowEntries.map(({ cell, idx }) => (
+                        <Tag
+                          key={idx}
+                          colSpan={cell.colSpan}
+                          rowSpan={cell.rowSpan}
+                          className={`group/cell relative border-b border-gray-100 px-1 py-0.5 align-top ${
+                            isHeaderRow(r) ? 'font-semibold border-smsg-100' : ''
+                          }`}
+                          scope={isHeaderRow(r) ? 'col' : undefined}
+                        >
+                          <input
+                            type="text"
+                            value={cell.text}
+                            onChange={(e) => setCellText(idx, e.target.value)}
+                            aria-label={t('editor.table.cellLabel', { r: cell.r + 1, c: cell.c + 1 })}
+                            className={`w-full rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none ${
+                              isHeaderRow(r) ? 'font-semibold text-smsg-900' : ''
+                            }`}
+                          />
+                          {(csOf(cell) > 1 || rsOf(cell) > 1) && (
+                            <span
+                              aria-hidden="true"
+                              className="ml-1 text-[10px] text-gray-400"
+                              title={t('editor.table.mergedHint', {
+                                rs: rsOf(cell),
+                                cs: csOf(cell),
+                              })}
+                            >
+                              ⛶
+                            </span>
+                          )}
+                          <CellActions
+                            cell={cell}
+                            cells={cells}
+                            onMerge={onMerge}
+                            onSplit={onSplit}
+                            onStyle={(patch) => setCellStyle(idx, patch)}
+                            t={t}
+                          />
+                        </Tag>
+                      ))}
+                    </tr>
+                  </Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded bg-amber-50 px-2 py-1 text-amber-800">
+            {t('editor.table.mergedNotice')}
+          </span>
+          <button
+            type="button"
+            onClick={flatten}
+            data-action="flatten-table"
+            className="rounded border border-dashed border-amber-300 px-2 py-1 text-amber-800 hover:bg-amber-100"
+          >
+            {t('editor.table.flatten')}
+          </button>
+          {error && <span role="status" aria-live="polite" className="text-red-600">{error}</span>}
+        </div>
+
+        {/* Per-column metadata + table-level options also apply to sparse mode.
+            Footer aggregates are rendered only in flat mode (the renderer
+            skips them for sparse layouts), but the rest is fair game. */}
+        {sparseColCount > 0 && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-gray-500">열 옵션:</span>
+            {Array.from({ length: sparseColCount }).map((_, c) => (
+              <span key={c} className="inline-flex items-center gap-1 rounded border border-gray-200 px-1">
+                <span className="text-[11px] text-gray-500">{c + 1}열</span>
+                <ColumnHeaderMenu
+                  column={local.columns?.[c]}
+                  onChange={(next) => schedule(patchColumn(local, sparseColCount, c, next))}
+                />
+              </span>
+            ))}
+          </div>
+        )}
+        <TableOptionsPanel
+          block={local}
+          colCount={sparseColCount}
+          onChange={(patch) => schedule({ ...local, ...patch })}
+        />
+      </div>
+    )
+  }
+
+  // Helper used by the flat-mode hover menu — converts the current legacy
+  // shape to cells and applies the merge in one step.
+  const beginMergeFromFlat = (
+    fromR: number,
+    fromC: number,
+    side: 'left' | 'right' | 'up' | 'down',
+  ) => {
+    const cells = flatToCells(local.headers, local.rows)
+    const anchor = cells.find((c) => c.r === fromR && c.c === fromC)
+    if (!anchor) return
+    const next = mergeWith(cells, anchor, side)
+    if (!next) return
+    schedule({ ...local, cells: next })
+  }
+
+  /**
+   * Apply a cell-style override (align/bg/bold/color) to a flat-mode cell.
+   * Cell-level styling is only representable in sparse mode (the schema
+   * keeps `headers` + `rows` as plain strings), so the first paint
+   * promotes the entire table to `cells`. Subsequent edits stay in sparse
+   * mode; the user can collapse back via "표 평탄화" later.
+   *
+   * `(fromR, fromC)` uses cells-mode coords: row 0 is the header row,
+   * row 1+ are body rows. So callers pass `r + 1` for body cells.
+   */
+  const applyCellStyleFromFlat = (
+    fromR: number,
+    fromC: number,
+    patch: Partial<SparseCell>,
+  ) => {
+    const cells = flatToCells(local.headers, local.rows)
+    const idx = cells.findIndex((c) => c.r === fromR && c.c === fromC)
+    if (idx < 0) return
+    const target = cells[idx]
+    if (!target) return
+    const merged: SparseCell = { ...target, ...patch }
+    if (merged.bg === undefined) delete merged.bg
+    if (merged.color === undefined) delete merged.color
+    if (merged.bold === undefined) delete merged.bold
+    if (merged.align === undefined) delete merged.align
+    const next = cells.map((c, i) => (i === idx ? merged : c))
+    schedule({ ...local, cells: next })
+  }
+
   return (
     <div data-table-block-editor data-block-id={block.id} className="my-3 space-y-2">
       <div className="overflow-x-auto rounded border border-smsg-100 bg-white shadow-sm">
@@ -132,28 +437,28 @@ export function TableBlockEditor({ slug, block }: Props) {
             <tr>
               <th className="w-8 border-b border-smsg-100" aria-hidden />
               {local.headers.map((h, c) => (
-                <th
+                <ResizableHeaderCell
                   key={c}
-                  className="group/col relative border-b border-smsg-100 px-2 py-1 font-semibold"
-                  scope="col"
-                >
-                  <input
-                    type="text"
-                    value={h}
-                    onChange={(e) => setHeader(c, e.target.value)}
-                    aria-label={t('editor.table.headerLabel', { n: c + 1 })}
-                    className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 font-semibold text-smsg-900 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    aria-label={t('editor.table.removeColumn', { n: c + 1 })}
-                    onClick={() => removeColumn(c)}
-                    disabled={local.headers.length <= 1}
-                    className="absolute right-0 top-0 hidden rounded px-1 text-[10px] text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 group-hover/col:block"
-                  >
-                    <span aria-hidden="true">✕</span>
-                  </button>
-                </th>
+                  index={c}
+                  header={h}
+                  width={local.columns?.[c]?.width}
+                  totalCols={local.headers.length}
+                  setHeader={setHeader}
+                  setColumn={(next) =>
+                    schedule(patchColumn(local, local.headers.length, c, next))
+                  }
+                  removeColumn={removeColumn}
+                  setWidthPx={(px) =>
+                    schedule(
+                      patchColumn(local, local.headers.length, c, {
+                        ...(local.columns?.[c] ?? {}),
+                        width: `${Math.round(px)}px`,
+                      }),
+                    )
+                  }
+                  column={local.columns?.[c]}
+                  t={t}
+                />
               ))}
             </tr>
           </thead>
@@ -193,14 +498,36 @@ export function TableBlockEditor({ slug, block }: Props) {
                 {row.map((cell, c) => (
                   <td
                     key={c}
-                    className="border-b border-gray-100 px-1 py-0.5 align-top"
+                    className="group/cell relative border-b border-gray-100 px-1 py-0.5 align-top"
                   >
                     <input
                       type="text"
                       value={cell}
                       onChange={(e) => setCell(r, c, e.target.value)}
+                      onPaste={(e) => {
+                        const text = e.clipboardData.getData('text/plain')
+                        if (!looksLikeTabular(text)) return
+                        e.preventDefault()
+                        const parsed = parseTabular(text)
+                        const { headers, rows } = applyTabularPasteToFlat(
+                          local,
+                          r,
+                          c,
+                          parsed,
+                        )
+                        schedule({ ...local, headers, rows })
+                      }}
                       aria-label={t('editor.table.cellLabel', { r: r + 1, c: c + 1 })}
                       className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none"
+                    />
+                    <FlatCellActions
+                      r={r + 1}
+                      c={c}
+                      maxR={local.rows.length}
+                      maxC={local.headers.length}
+                      onMerge={(side) => beginMergeFromFlat(r + 1, c, side)}
+                      onStyle={(patch) => applyCellStyleFromFlat(r + 1, c, patch)}
+                      t={t}
                     />
                   </td>
                 ))}
@@ -225,8 +552,314 @@ export function TableBlockEditor({ slug, block }: Props) {
         >
           {t('editor.table.addColumn')}
         </button>
+        <SizeInput
+          rows={local.rows.length}
+          cols={local.headers.length}
+          onApply={resizeFlat}
+        />
         {error && <span role="status" aria-live="polite" className="text-red-600">{error}</span>}
       </div>
+
+      <TableOptionsPanel
+        block={local}
+        colCount={local.headers.length}
+        onChange={(patch) => schedule({ ...local, ...patch })}
+      />
     </div>
+  )
+}
+
+/**
+ * Hover menu rendered inside each cell of a *cells-mode* table. Surfaces
+ * four merge directions and a split action; each action gets disabled
+ * automatically when it doesn't make sense (no neighbour / cell already
+ * 1×1). The menu sits absolutely-positioned in the cell's top-right
+ * corner and only fades in while the cell is hovered/focused so it
+ * doesn't compete with the cell's text input.
+ */
+function CellActions({
+  cell,
+  cells,
+  onMerge,
+  onSplit,
+  onStyle,
+  t,
+}: {
+  cell: SparseCell
+  cells: readonly SparseCell[]
+  onMerge: (cell: SparseCell, side: 'left' | 'right' | 'up' | 'down') => void
+  onSplit: (cell: SparseCell) => void
+  onStyle: (patch: Partial<SparseCell>) => void
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  const canLeft = !!findNeighbor(cells, cell, 'left')
+  const canRight = !!findNeighbor(cells, cell, 'right')
+  const canUp = !!findNeighbor(cells, cell, 'up')
+  const canDown = !!findNeighbor(cells, cell, 'down')
+  const canSplit = csOf(cell) > 1 || rsOf(cell) > 1
+  return (
+    <div
+      data-cell-actions
+      className="pointer-events-none absolute right-0 top-0 z-20 hidden gap-0.5 rounded border border-gray-200 bg-white/95 p-0.5 shadow-sm group-hover/cell:flex group-focus-within/cell:flex"
+    >
+      <ArrowBtn
+        label={t('editor.table.mergeLeft')}
+        glyph="◀"
+        disabled={!canLeft}
+        onClick={() => onMerge(cell, 'left')}
+      />
+      <ArrowBtn
+        label={t('editor.table.mergeRight')}
+        glyph="▶"
+        disabled={!canRight}
+        onClick={() => onMerge(cell, 'right')}
+      />
+      <ArrowBtn
+        label={t('editor.table.mergeUp')}
+        glyph="▲"
+        disabled={!canUp}
+        onClick={() => onMerge(cell, 'up')}
+      />
+      <ArrowBtn
+        label={t('editor.table.mergeDown')}
+        glyph="▼"
+        disabled={!canDown}
+        onClick={() => onMerge(cell, 'down')}
+      />
+      <ArrowBtn
+        label={t('editor.table.split')}
+        glyph="⊟"
+        disabled={!canSplit}
+        onClick={() => onSplit(cell)}
+      />
+      <CellStyleToolbar cell={cell} onChange={onStyle} />
+    </div>
+  )
+}
+
+/**
+ * Hover menu for *flat-mode* cells. Behaviour is identical to
+ * `CellActions` but adjacency is computed from the simple `(r, c)` grid:
+ * a cell can merge left if `c > 0`, right if `c < maxC - 1`, etc. The
+ * first merge converts the table into cells mode under the hood.
+ */
+function FlatCellActions({
+  r,
+  c,
+  maxR,
+  maxC,
+  onMerge,
+  onStyle,
+  t,
+}: {
+  r: number
+  c: number
+  maxR: number
+  maxC: number
+  onMerge: (side: 'left' | 'right' | 'up' | 'down') => void
+  /** Apply a per-cell style — promotes the table to sparse mode on first use. */
+  onStyle: (patch: Partial<SparseCell>) => void
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  return (
+    <div
+      data-cell-actions
+      className="pointer-events-none absolute right-0 top-0 z-20 hidden gap-0.5 rounded border border-gray-200 bg-white/95 p-0.5 shadow-sm group-hover/cell:flex group-focus-within/cell:flex"
+    >
+      <ArrowBtn
+        label={t('editor.table.mergeLeft')}
+        glyph="◀"
+        disabled={c === 0}
+        onClick={() => onMerge('left')}
+      />
+      <ArrowBtn
+        label={t('editor.table.mergeRight')}
+        glyph="▶"
+        disabled={c >= maxC - 1}
+        onClick={() => onMerge('right')}
+      />
+      <ArrowBtn
+        label={t('editor.table.mergeUp')}
+        glyph="▲"
+        disabled={r === 0}
+        onClick={() => onMerge('up')}
+      />
+      <ArrowBtn
+        label={t('editor.table.mergeDown')}
+        glyph="▼"
+        disabled={r >= maxR}
+        onClick={() => onMerge('down')}
+      />
+      {/* Cell-level style. The first style action auto-promotes the
+          table to sparse mode under the hood (see applyCellStyleFromFlat). */}
+      <CellStyleToolbar
+        cell={{ r: 0, c: 0, text: '' }}
+        onChange={onStyle}
+      />
+    </div>
+  )
+}
+
+/**
+ * One column header cell with: title input + ⋮ column-options menu +
+ * remove button + drag-resize grip on the right edge. Lives in its own
+ * component so the resize handle can read `getBoundingClientRect` off the
+ * cell ref without leaking refs to the editor's main render path.
+ */
+function ResizableHeaderCell({
+  index,
+  header,
+  width,
+  totalCols,
+  column,
+  setHeader,
+  setColumn,
+  removeColumn,
+  setWidthPx,
+  t,
+}: {
+  index: number
+  header: string
+  width: string | undefined
+  totalCols: number
+  column: NonNullable<TableBlock['columns']>[number] | undefined
+  setHeader: (col: number, value: string) => void
+  setColumn: (next: NonNullable<TableBlock['columns']>[number]) => void
+  removeColumn: (col: number) => void
+  setWidthPx: (px: number) => void
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  const thRef = useRef<HTMLTableCellElement | null>(null)
+  return (
+    <th
+      ref={thRef}
+      className="group/col relative border-b border-smsg-100 px-2 py-1 font-semibold"
+      scope="col"
+      style={width ? { width } : undefined}
+    >
+      <div className="flex items-center gap-1">
+        <input
+          type="text"
+          value={header}
+          onChange={(e) => setHeader(index, e.target.value)}
+          aria-label={t('editor.table.headerLabel', { n: index + 1 })}
+          className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 font-semibold text-smsg-900 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none"
+        />
+        <ColumnHeaderMenu column={column} onChange={setColumn} />
+      </div>
+      <button
+        type="button"
+        aria-label={t('editor.table.removeColumn', { n: index + 1 })}
+        onClick={() => removeColumn(index)}
+        disabled={totalCols <= 1}
+        className="absolute right-2 top-0 hidden rounded px-1 text-[10px] text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 group-hover/col:block"
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+      <ColumnResizer
+        col={index}
+        getCurrentWidth={() => thRef.current?.getBoundingClientRect().width ?? 100}
+        onResize={setWidthPx}
+      />
+    </th>
+  )
+}
+
+/**
+ * Compact "행 × 열" input shown in the table editor toolbar. Applies a
+ * resize on Enter or button click; the inputs accept any positive integer
+ * up to a sane cap (rows ≤ 500, cols ≤ 50). Empty / invalid input is
+ * silently ignored so the user can mid-type without losing focus.
+ */
+function SizeInput({
+  rows,
+  cols,
+  onApply,
+}: {
+  rows: number
+  cols: number
+  onApply: (rows: number, cols: number) => void
+}) {
+  const [r, setR] = useState(String(rows))
+  const [c, setC] = useState(String(cols))
+  // Re-sync when the parent table grows/shrinks via other actions.
+  useEffect(() => {
+    setR(String(rows))
+  }, [rows])
+  useEffect(() => {
+    setC(String(cols))
+  }, [cols])
+
+  const apply = () => {
+    const nr = Number(r)
+    const nc = Number(c)
+    if (!Number.isFinite(nr) || !Number.isFinite(nc) || nr < 1 || nc < 1) return
+    if (nr === rows && nc === cols) return
+    onApply(nr, nc)
+  }
+  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      apply()
+    }
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded border border-gray-200 px-1.5 py-0.5">
+      <span className="text-gray-500">크기</span>
+      <input
+        type="number"
+        min={1}
+        max={500}
+        value={r}
+        onChange={(e) => setR(e.target.value)}
+        onKeyDown={onKey}
+        aria-label="행 수"
+        className="w-12 rounded border border-gray-200 px-1 text-center focus:border-smsg-500 focus:outline-none"
+      />
+      <span aria-hidden="true">×</span>
+      <input
+        type="number"
+        min={1}
+        max={50}
+        value={c}
+        onChange={(e) => setC(e.target.value)}
+        onKeyDown={onKey}
+        aria-label="열 수"
+        className="w-10 rounded border border-gray-200 px-1 text-center focus:border-smsg-500 focus:outline-none"
+      />
+      <button
+        type="button"
+        onClick={apply}
+        disabled={Number(r) === rows && Number(c) === cols}
+        className="rounded bg-smsg-700 px-1.5 text-white hover:bg-smsg-900 disabled:opacity-40"
+      >
+        적용
+      </button>
+    </span>
+  )
+}
+
+function ArrowBtn({
+  label,
+  glyph,
+  disabled,
+  onClick,
+}: {
+  label: string
+  glyph: string
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="pointer-events-auto rounded px-1 text-[11px] text-gray-600 hover:bg-smsg-100 hover:text-smsg-700 disabled:cursor-not-allowed disabled:opacity-30"
+    >
+      <span aria-hidden="true">{glyph}</span>
+    </button>
   )
 }

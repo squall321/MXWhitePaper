@@ -3,6 +3,7 @@ import { unwrapListMaybe, type ApiEnvelope } from '@/lib/api/envelope'
 import type {
   Block,
   DocumentJSONV10,
+  InfoboxRich,
   SectionLevel1,
   SectionLevel2,
   SectionLevel3,
@@ -99,7 +100,7 @@ export interface SectionPatch {
 /** Light tree shape we send back to /sections/reorder. */
 export interface SectionOutlineNode {
   id: Ulid
-  level: 1 | 2 | 3
+  level: number
   title: string
   children: SectionOutlineNode[]
 }
@@ -329,6 +330,30 @@ export async function patchVariables(
   const res = await apiClient.patch<ApiEnvelope<DocumentJSONV10>>(
     `/documents/${encodeURIComponent(slug)}/variables`,
     { variables },
+    { headers: buildHeaders(etag, changeLog) },
+  )
+  return withFullDocFallback(slug, unwrap(res as never))
+}
+
+/**
+ * PATCH /documents/:slug/infobox — set the document's "주요 정보" map.
+ * Values may be string or string[]; the BE strips empty entries before
+ * persisting. Same If-Match etag handshake as the other patch endpoints.
+ */
+export async function patchInfobox(
+  slug: Slug,
+  // Values can be plain string, string[], or the richer InfoboxRich /
+  // InfoboxRich[] forms. `null` clears a row.
+  infobox: Record<
+    string,
+    string | string[] | InfoboxRich | InfoboxRich[] | null
+  >,
+  etag: string,
+  changeLog?: string,
+): Promise<EditorMutationResult> {
+  const res = await apiClient.patch<ApiEnvelope<DocumentJSONV10>>(
+    `/documents/${encodeURIComponent(slug)}/infobox`,
+    { infobox },
     { headers: buildHeaders(etag, changeLog) },
   )
   return withFullDocFallback(slug, unwrap(res as never))

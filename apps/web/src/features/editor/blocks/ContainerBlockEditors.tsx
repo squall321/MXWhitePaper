@@ -1,4 +1,11 @@
-import { useState, type CSSProperties } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import type {
   AccordionBlock,
   Block,
@@ -8,7 +15,7 @@ import type {
 } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
-import { BlockRenderer } from '@/components/blocks/BlockRenderer'
+import { NestedBlockControls } from './NestedBlockControls'
 import {
   BlockInsertPalette,
   PALETTE_ITEMS,
@@ -147,7 +154,7 @@ export function TabsBlockEditor({ slug, block }: TabsProps) {
       </div>
       <div className="space-y-3 p-3">
         {(tab?.blocks ?? []).map((b) => (
-          <BlockRenderer key={b.id} block={b} />
+          <NestedBlockControls key={b.id} slug={slug} block={b} />
         ))}
         <SlotAddButton
           slotKey={`tab-${active}`}
@@ -250,7 +257,7 @@ export function AccordionBlockEditor({ slug, block }: AccordionProps) {
           </summary>
           <div className="space-y-3 border-t border-gray-100 p-3">
             {(it.blocks ?? []).map((b) => (
-              <BlockRenderer key={b.id} block={b} />
+              <NestedBlockControls key={b.id} slug={slug} block={b} />
             ))}
             <SlotAddButton
               slotKey={`item-${i}`}
@@ -310,10 +317,25 @@ export function ColumnsBlockEditor({ slug, block }: ColumnsProps) {
   const setColumns = (next: Block[][]) => {
     // Schema constraint: 2..4 columns. We just clamp to keep the BE happy.
     const clamped = next.length < 2 ? next.concat([[]]) : next.slice(0, 4)
-    void persist({
+    const targetLen = clamped.length
+    const persisted = block.widths as number[] | undefined
+    const keepWidths =
+      Array.isArray(persisted) && persisted.length === targetLen
+    // If the column count changed, drop the existing widths array so the row
+    // falls back to an equal split. Sending `null` over the partial-PATCH
+    // pipeline removes the field cleanly (BE accepts list | None).
+    const patch: Record<string, unknown> = {
       columns: clamped as unknown as ColumnsBlock['columns'],
-    })
+    }
+    if (!keepWidths) patch.widths = null
+    void persist(patch as Partial<ColumnsBlock>)
   }
+
+  const setWidthsOnly = (next: number[]) => {
+    if (next.length !== cols.length) return
+    void persist({ widths: next as unknown as ColumnsBlock['widths'] })
+  }
+
   const insertBlockInCol = (colIdx: number, kid: Block) => {
     const next = cols.map((c, i) => (i === colIdx ? [...c, kid] : c))
     setColumns(next)
@@ -322,23 +344,124 @@ export function ColumnsBlockEditor({ slug, block }: ColumnsProps) {
     if (cols.length >= 4) return
     setColumns([...cols, []])
   }
+  /**
+   * Insert an empty column at `at` (0..cols.length). Used by the side `+`
+   * rails on each column so the user can grow the grid horizontally without
+   * scrolling down to the "단 추가" button. Capped at 4 columns by the
+   * schema; we silently no-op when full.
+   */
+  const insertColumnAt = (at: number) => {
+    if (cols.length >= 4) return
+    const next = cols.slice()
+    next.splice(Math.max(0, Math.min(at, cols.length)), 0, [])
+    setColumns(next)
+  }
   const removeColumn = (idx: number) => {
     if (cols.length <= 2) return
     setColumns(cols.filter((_, i) => i !== idx))
   }
 
+  // ── Column-width splitter ──────────────────────────────────────────────
+  // `widths` is optional and only present when the user has dragged a
+  // splitter at least once. Otherwise the grid uses an equal split. While a
+  // drag is in flight we keep the candidate values in `draftWidths` so the
+  // UI updates pixel-by-pixel without blasting the BE on every move.
+  const baseWidths = useMemo<number[]>(() => {
+    const w = block.widths as number[] | undefined
+    if (Array.isArray(w) && w.length === cols.length) return w
+    const eq = Math.round((100 / cols.length) * 100) / 100
+    return Array(cols.length).fill(eq)
+  }, [block.widths, cols.length])
+
+  const [draftWidths, setDraftWidths] = useState<number[] | null>(null)
+  const draftRef = useRef<number[] | null>(null)
+  useEffect(() => {
+    draftRef.current = draftWidths
+  }, [draftWidths])
+  // If the column count changes server-side, drop any in-flight draft so we
+  // don't render a stale shape.
+  useEffect(() => {
+    setDraftWidths(null)
+  }, [cols.length])
+
+  const effectiveWidths = draftWidths ?? baseWidths
+
+  const gridRef = useRef<HTMLDivElement | null>(null)
+
+  const onSplitterPointerDown =
+    (idx: number) => (e: ReactPointerEvent<HTMLButtonElement>) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const startX = e.clientX
+      const startWidths = effectiveWidths.slice()
+      const totalPx = gridRef.current?.getBoundingClientRect().width ?? 0
+      if (totalPx <= 0) return
+      const onMove = (ev: PointerEvent) => {
+        const dx = ev.clientX - startX
+        const dpct = (dx / totalPx) * 100
+        const a = startWidths[idx] ?? 0
+        const b = startWidths[idx + 1] ?? 0
+        let leftW = a + dpct
+        let rightW = b - dpct
+        const MIN = 5 // matches schema minimum so the BE accepts the persisted shape
+        if (leftW < MIN) {
+          const adj = MIN - leftW
+          leftW = MIN
+          rightW -= adj
+        }
+        if (rightW < MIN) {
+          const adj = MIN - rightW
+          rightW = MIN
+          leftW -= adj
+        }
+        const next = startWidths.slice()
+        next[idx] = Math.round(leftW * 100) / 100
+        next[idx + 1] = Math.round(rightW * 100) / 100
+        setDraftWidths(next)
+      }
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+        const final = draftRef.current
+        setDraftWidths(null)
+        if (final && final.length === cols.length) setWidthsOnly(final)
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
+    }
+
   const gridStyle: CSSProperties = {
-    gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))`,
+    gridTemplateColumns: effectiveWidths.map((w) => `${w}fr`).join(' '),
   }
 
   return (
     <div data-columns-block-editor data-block-id={block.id} className="my-3 space-y-2">
-      <div className="grid gap-3" style={gridStyle}>
+      <div ref={gridRef} className="relative grid gap-3" style={gridStyle}>
         {cols.map((col, i) => (
           <div
             key={i}
-            className="space-y-3 rounded border border-dashed border-gray-200 bg-white p-2"
+            className="group/col relative min-w-0 space-y-3 rounded border border-dashed border-gray-200 bg-white p-2"
           >
+            {/* Left rail — adds a new column to the LEFT of this one. */}
+            <button
+              type="button"
+              onClick={() => insertColumnAt(i)}
+              disabled={cols.length >= 4}
+              aria-label={t('editor.columns.insertLeft', { n: i + 1 })}
+              title={t('editor.columns.insertLeft', { n: i + 1 })}
+              className="absolute -left-3 top-0 bottom-0 z-10 hidden w-3 items-center justify-center opacity-0 transition-opacity group-hover/col:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-0 sm:flex"
+            >
+              <span className="pointer-events-none flex h-full w-3 flex-col items-center">
+                <span className="w-px flex-1 bg-smsg-300" />
+                <span className="my-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-smsg-500 bg-white text-xs font-bold text-smsg-700 shadow-sm dark:bg-gray-900">
+                  +
+                </span>
+                <span className="w-px flex-1 bg-smsg-300" />
+              </span>
+            </button>
+
             <div className="flex items-center justify-between text-[11px] text-gray-500">
               <span>{t('editor.columns.label', { n: i + 1 })}</span>
               <button
@@ -352,14 +475,67 @@ export function ColumnsBlockEditor({ slug, block }: ColumnsProps) {
               </button>
             </div>
             {col.map((b) => (
-              <BlockRenderer key={b.id} block={b} />
+              <NestedBlockControls key={b.id} slug={slug} block={b} />
             ))}
             <SlotAddButton
               slotKey={`col-${i}`}
               onOpen={(p) => setPalette({ ...p, colIdx: i })}
             />
+
+            {/* Right rail — adds a new column to the RIGHT of this one. */}
+            <button
+              type="button"
+              onClick={() => insertColumnAt(i + 1)}
+              disabled={cols.length >= 4}
+              aria-label={t('editor.columns.insertRight', { n: i + 1 })}
+              title={t('editor.columns.insertRight', { n: i + 1 })}
+              className="absolute -right-3 top-0 bottom-0 z-10 hidden w-3 items-center justify-center opacity-0 transition-opacity group-hover/col:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-0 sm:flex"
+            >
+              <span className="pointer-events-none flex h-full w-3 flex-col items-center">
+                <span className="w-px flex-1 bg-smsg-300" />
+                <span className="my-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-smsg-500 bg-white text-xs font-bold text-smsg-700 shadow-sm dark:bg-gray-900">
+                  +
+                </span>
+                <span className="w-px flex-1 bg-smsg-300" />
+              </span>
+            </button>
+
+            {/* Splitter handle — sits in the grid `gap` between this column
+                and the next. Drag horizontally to redistribute the two
+                column widths while keeping the others fixed. The handle is
+                kept narrow (4px hit area visualised by an 8-px-tall pill) and
+                only fades in on hover so it doesn't compete with the +
+                rails. Mirrored at `-right-2` (half of the 12-px gap). */}
+            {i < cols.length - 1 && (
+              <button
+                type="button"
+                aria-label={t('editor.columns.splitter', { n: i + 1 })}
+                title={t('editor.columns.splitter', { n: i + 1 })}
+                tabIndex={-1}
+                onPointerDown={onSplitterPointerDown(i)}
+                className={`absolute top-2 bottom-2 z-20 -right-2 w-1 cursor-ew-resize touch-none select-none transition-opacity ${
+                  draftWidths ? 'opacity-100' : 'opacity-0 group-hover/col:opacity-60 hover:opacity-100'
+                }`}
+                data-splitter-index={i}
+              >
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-12 w-1 rounded-full bg-smsg-500/80 shadow-sm"
+                />
+              </button>
+            )}
           </div>
         ))}
+        {/* Live size readout while dragging — sits above the grid so the user
+            sees the current ratio (e.g. "32% / 68%") without trial-and-error. */}
+        {draftWidths && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-6 right-0 z-20 rounded bg-smsg-700 px-1.5 py-0.5 text-[10px] font-mono text-white shadow"
+          >
+            {draftWidths.map((w) => `${Math.round(w)}%`).join(' / ')}
+          </span>
+        )}
       </div>
       <button
         type="button"

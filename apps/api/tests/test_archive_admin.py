@@ -258,6 +258,29 @@ async def test_purge_refuses_when_archived_too_recently() -> None:
 
 
 @pytest.mark.asyncio
+async def test_purge_force_bypasses_grace_window() -> None:
+    """Admin opt-in: `force=true` purges docs archived <7 days ago."""
+    slug = await _make_archived_doc(age_days=1)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        token = await _login_admin(ac)
+        r = await ac.request(
+            "DELETE",
+            "/api/v1/admin/archived-docs/purge",
+            json={"slugs": [slug], "force": True},
+            headers=_bearer(token),
+        )
+    assert r.status_code == 200, r.text
+    assert slug in r.json()["data"]["purged"]
+    async with session_scope() as s:
+        row = (await s.execute(
+            text("SELECT 1 FROM documents WHERE slug = :s"),
+            {"s": slug},
+        )).first()
+        assert row is None
+
+
+@pytest.mark.asyncio
 async def test_purge_hard_deletes_old_archived_doc() -> None:
     slug = await _make_archived_doc(age_days=14)
     transport = ASGITransport(app=app)

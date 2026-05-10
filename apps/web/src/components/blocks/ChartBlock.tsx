@@ -24,6 +24,7 @@ import {
   ZAxis,
 } from 'recharts'
 import type { ChartBlock } from '@/types/document'
+import { EChartsView } from './EChartsView'
 
 const PALETTE = [
   '#1428A0',
@@ -66,6 +67,12 @@ function scatterPoints(series: ChartBlock['data']['series'][number]) {
 }
 
 export function ChartBlockView({ block }: { block: ChartBlock }) {
+  // engine === 'echarts' uses the richer ECharts renderer (zoom, brush,
+  // markPoint, markArea). Default 'recharts' keeps the original simple
+  // surface for back-compat.
+  if (block.engine === 'echarts') {
+    return <EChartsView block={block} />
+  }
   const data = rowData(block)
   return (
     <figure className="rounded border border-gray-200 bg-white p-3">

@@ -20,11 +20,17 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      // Apptainer host network: api는 호스트의 8800 포트에 직접 listen.
-      // 'api:8000'(docker DNS)은 더 이상 유효하지 않다. 환경변수 API_PORT 따름.
+      // Apptainer host network: BE listens on the host's loopback port 8800.
+      // We hard-code the target — earlier versions allowed
+      // `process.env.VITE_PROXY_TARGET` to override but stale env values
+      // from previous instance starts (or DNS oddities in the host network
+      // namespace) caused vite to dial random external IPs and time out.
+      // Loopback is always the right answer in this deployment; if a
+      // different port is ever needed, change it here directly.
       '/api': {
-        target: process.env.VITE_PROXY_TARGET || 'http://127.0.0.1:8800',
+        target: 'http://127.0.0.1:8800',
         changeOrigin: true,
+        secure: false,
       },
     },
   },

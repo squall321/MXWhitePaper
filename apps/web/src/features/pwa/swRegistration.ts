@@ -44,7 +44,7 @@ export function registerServiceWorker(opts: SwRegisterOptions = {}): boolean {
     nav.serviceWorker!
       .register(url)
       .catch((err: unknown) => {
-        // eslint-disable-next-line no-console
+         
         console.warn('[mxwp] SW register failed', err)
       })
   })

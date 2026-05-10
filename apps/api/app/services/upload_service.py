@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import ulid
-from PIL import Image
+from PIL import Image, ImageStat
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -344,14 +344,13 @@ def _process_image_bytes(raw: bytes) -> dict[str, Any]:
     view_bytes = _to_webp(_resize(base, VIEW_MAX_WIDTH))
     orig_bytes = _to_webp(base)
 
-    # Dominant color: 50x50 thumbnail → 평균 RGB
+    # Dominant color: 50×50 thumbnail → per-channel mean RGB.
+    # ImageStat.Stat runs in C — faster than Python iteration over getdata()
+    # and side-steps the Pillow 14 deprecation of Image.Image.getdata().
     color_img = base.convert("RGB").copy()
     color_img.thumbnail((50, 50), Image.LANCZOS)
-    px = list(color_img.getdata())
-    n = max(len(px), 1)
-    r = sum(p[0] for p in px) // n
-    g = sum(p[1] for p in px) // n
-    b = sum(p[2] for p in px) // n
+    mean = ImageStat.Stat(color_img).mean  # [r, g, b] floats in [0, 255]
+    r, g, b = int(mean[0]), int(mean[1]), int(mean[2])
     dominant_color = f"#{r:02x}{g:02x}{b:02x}"
 
     return {

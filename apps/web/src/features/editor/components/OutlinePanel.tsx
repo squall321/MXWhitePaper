@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -20,7 +20,12 @@ import type {
   Slug,
   Ulid,
 } from '@/types/document'
-import { reorderSections, isPreconditionFailed, type SectionOutlineNode } from '../api'
+import {
+  patchSection,
+  reorderSections,
+  isPreconditionFailed,
+  type SectionOutlineNode,
+} from '../api'
 import { useEditorStore } from '../state'
 import { ulid } from '../ulid'
 
@@ -31,62 +36,79 @@ interface OutlinePanelProps {
 
 interface FlatRow {
   id: Ulid
-  level: 1 | 2 | 3
+  level: number
   title: string
   parentId: Ulid | null
 }
 
 /**
- * Flatten the section tree into rows for dnd. Order is preserved.
+ * Flatten the section tree into rows for dnd. Recurses to arbitrary
+ * depth — schema no longer caps section nesting.
  */
 function flatten(doc: DocumentJSONV10): FlatRow[] {
   const out: FlatRow[] = []
-  for (const s1 of doc.sections) {
-    out.push({ id: s1.id, level: 1, title: s1.title, parentId: null })
-    for (const s2 of s1.subsections) {
-      out.push({ id: s2.id, level: 2, title: s2.title, parentId: s1.id })
-      for (const s3 of s2.subsections ?? []) {
-        out.push({ id: s3.id, level: 3, title: s3.title, parentId: s2.id })
-      }
+  type Section = DocumentJSONV10['sections'][number]
+  const walk = (sec: Section, level: number, parentId: Ulid | null) => {
+    out.push({ id: sec.id, level, title: sec.title, parentId })
+    for (const sub of sec.subsections ?? []) {
+      walk(sub as Section, level + 1, sec.id)
     }
   }
+  for (const s1 of doc.sections) walk(s1, 1, null)
   return out
 }
 
-/** Convert flat rows back into the nested outline payload the BE expects. */
+/** Stable string signature of the section tree — used as a dependency
+ *  guard so we only re-sync `rows` when the actual outline changes (id /
+ *  level / title), not on every parent re-render. */
+function signature(doc: DocumentJSONV10): string {
+  const rows = flatten(doc)
+  return rows.map((r) => `${r.id}|${r.level}|${r.title}`).join('//')
+}
+
+function sameRows(a: FlatRow[], b: FlatRow[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]!
+    const y = b[i]!
+    if (x.id !== y.id || x.level !== y.level || x.title !== y.title) return false
+  }
+  return true
+}
+
+/** Convert flat rows back into the nested outline payload the BE expects.
+ *  Uses a stack indexed by depth so an arbitrary level mix (1, 2, 4, 1, 3)
+ *  still produces a well-formed tree. */
 function rowsToOutline(
   rows: FlatRow[],
   doc: DocumentJSONV10,
 ): SectionOutlineNode[] {
-  // Build a quick lookup of original section objects so we don't lose blocks.
   const titleById = new Map<Ulid, string>()
-  for (const s of doc.sections) {
-    titleById.set(s.id, s.title)
-    for (const s2 of s.subsections) {
-      titleById.set(s2.id, s2.title)
-      for (const s3 of s2.subsections ?? []) titleById.set(s3.id, s3.title)
-    }
+  type Section = DocumentJSONV10['sections'][number]
+  const collect = (sec: Section) => {
+    titleById.set(sec.id, sec.title)
+    for (const sub of sec.subsections ?? []) collect(sub as Section)
   }
+  for (const s of doc.sections) collect(s)
+
   const out: SectionOutlineNode[] = []
-  let cur1: SectionOutlineNode | null = null
-  let cur2: SectionOutlineNode | null = null
+  // Stack of currently-open parents, ordered by depth.
+  const stack: SectionOutlineNode[] = []
   for (const r of rows) {
+    // Pop until the top of the stack is one level above this row.
+    while (stack.length > 0 && (stack[stack.length - 1]?.level ?? 0) >= r.level) {
+      stack.pop()
+    }
     const node: SectionOutlineNode = {
       id: r.id,
       level: r.level,
       title: r.title || titleById.get(r.id) || '',
       children: [],
     }
-    if (r.level === 1) {
-      out.push(node)
-      cur1 = node
-      cur2 = null
-    } else if (r.level === 2) {
-      if (cur1) cur1.children.push(node)
-      cur2 = node
-    } else {
-      if (cur2) cur2.children.push(node)
-    }
+    const parent = stack[stack.length - 1]
+    if (parent) parent.children.push(node)
+    else out.push(node)
+    stack.push(node)
   }
   return out
 }
@@ -106,8 +128,23 @@ export function OutlinePanel({ slug, document }: OutlinePanelProps) {
   const [busy, setBusy] = useState(false)
   const [selectedId, setSelectedId] = useState<Ulid | null>(rows[0]?.id ?? null)
 
-  // Re-sync when the document prop changes (after a save).
-  useMemo(() => setRows(flatten(document)), [document])
+  // Track whether any title input inside this panel is focused. While the
+  // user is typing we MUST NOT clobber `rows` from the server snapshot —
+  // doing so eats their keystrokes mid-flight (the previous `useMemo`
+  // pattern had this exact bug).
+  const isTypingRef = useRef(false)
+
+  // Re-sync when the document's section tree actually changes. We compare
+  // a stable signature (id + level + title per row) instead of the prop
+  // reference because the parent re-renders the doc on every keystroke
+  // somewhere else in the editor and a reference-only check would still
+  // wipe rows.
+  useEffect(() => {
+    if (isTypingRef.current) return
+    const next = flatten(document)
+    setRows((prev) => (sameRows(prev, next) ? prev : next))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature(document)])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
@@ -134,6 +171,46 @@ export function OutlinePanel({ slug, document }: OutlinePanelProps) {
     [slug, etag, document, applySnapshot, setConflict],
   )
 
+  /**
+   * Commit a *rename* — title-only update. Goes through `patchSection`
+   * (cheap PATCH on a single section) instead of the much heavier
+   * `reorderSections` (which rebuilds the whole tree). This was the root
+   * cause of the "이름 입력해도 잘 안된다" complaint: every keystroke
+   * triggered a full tree rebuild on the server, the response wiped local
+   * `rows`, and subsequent keystrokes fought the round-trip.
+   */
+  const commitRename = useCallback(
+    async (sectionId: Ulid, newTitle: string) => {
+      if (!etag) return
+      const trimmed = newTitle.trim()
+      if (!trimmed) {
+        // Schema requires non-empty title — surface a clear error and
+        // refuse the patch instead of letting the BE 422 through.
+        setError('섹션 제목은 비울 수 없어요')
+        return
+      }
+      setError(null)
+      try {
+        const result = await patchSection(
+          slug,
+          sectionId,
+          { title: trimmed },
+          etag,
+          '섹션 이름 수정',
+        )
+        applySnapshot(result.document, result.etag)
+      } catch (err) {
+        if (isPreconditionFailed(err)) {
+          setConflict(null)
+          setError('충돌 발생 — 새로고침이 필요합니다')
+        } else {
+          setError((err as Error).message)
+        }
+      }
+    },
+    [slug, etag, applySnapshot, setConflict],
+  )
+
   const handleDragEnd = useCallback(
     (ev: DragEndEvent) => {
       const { active, over } = ev
@@ -154,9 +231,11 @@ export function OutlinePanel({ slug, document }: OutlinePanelProps) {
       if (idx <= 0) return
       const cur = rows[idx]
       if (!cur) return
-      if (cur.level >= 3) return
+      // Cap at the BE's MAX_DEPTH safety net so we never produce a tree
+      // the validator will refuse.
+      if (cur.level >= 16) return
       const next = [...rows]
-      next[idx] = { ...cur, level: (cur.level + 1) as 2 | 3 }
+      next[idx] = { ...cur, level: cur.level + 1 }
       setRows(next)
       void commit(next)
     },
@@ -170,7 +249,7 @@ export function OutlinePanel({ slug, document }: OutlinePanelProps) {
       const cur = rows[idx]
       if (!cur || cur.level <= 1) return
       const next = [...rows]
-      next[idx] = { ...cur, level: (cur.level - 1) as 1 | 2 }
+      next[idx] = { ...cur, level: cur.level - 1 }
       setRows(next)
       void commit(next)
     },
@@ -211,15 +290,22 @@ export function OutlinePanel({ slug, document }: OutlinePanelProps) {
     const idx = rows.findIndex((r) => r.id === selectedId)
     if (idx < 0) return
     const parent = rows[idx]
-    if (!parent || parent.level >= 3) return
+    if (!parent) return
+    if (parent.level >= 16) return
+    const newId = ulid()
     const newRow: FlatRow = {
-      id: ulid(),
-      level: (parent.level + 1) as 2 | 3,
+      id: newId,
+      level: parent.level + 1,
       title: '새 하위 섹션',
       parentId: parent.id,
     }
     const next = [...rows.slice(0, idx + 1), newRow, ...rows.slice(idx + 1)]
     setRows(next)
+    setSelectedId(newId)
+    // commit() goes through reorderSections which now accepts unknown
+    // ids and creates the section server-side. No local draft surgery
+    // needed — the optimistic `setRows` above is enough until the
+    // round-trip lands.
     void commit(next)
   }, [rows, selectedId, commit])
 
@@ -269,11 +355,17 @@ export function OutlinePanel({ slug, document }: OutlinePanelProps) {
                 onSelect={() => setSelectedId(r.id)}
                 onIndent={() => indent(r.id)}
                 onOutdent={() => outdent(r.id)}
-                onRename={(t) => {
-                  const next = rows.map((x) => (x.id === r.id ? { ...x, title: t } : x))
-                  setRows(next)
+                onFocusChange={(focused) => {
+                  isTypingRef.current = focused
                 }}
-                onCommitRename={() => commit(rows)}
+                onCommitRename={(t) => {
+                  // Local state immediately so the input stays in sync,
+                  // then fire a single PATCH for the title only.
+                  setRows((prev) =>
+                    prev.map((x) => (x.id === r.id ? { ...x, title: t } : x)),
+                  )
+                  void commitRename(r.id, t)
+                }}
               />
             ))}
           </ul>
@@ -292,8 +384,10 @@ interface OutlineRowProps {
   onSelect: () => void
   onIndent: () => void
   onOutdent: () => void
-  onRename: (title: string) => void
-  onCommitRename: () => void
+  /** Fires once per keystroke so the panel can lock its sync-from-prop. */
+  onFocusChange: (focused: boolean) => void
+  /** Called once per blur / Enter — not on every keystroke. */
+  onCommitRename: (title: string) => void
 }
 
 function OutlineRow({
@@ -302,9 +396,20 @@ function OutlineRow({
   onSelect,
   onIndent,
   onOutdent,
-  onRename,
+  onFocusChange,
   onCommitRename,
 }: OutlineRowProps) {
+  // Local draft so the input is uncontrolled while focused. Sync from
+  // props only when the row.title changes externally AND we don't
+  // currently own the focus.
+  const [draft, setDraft] = useState(row.title)
+  const focusedRef = useRef(false)
+  useEffect(() => {
+    if (!focusedRef.current && draft !== row.title) {
+      setDraft(row.title)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.title])
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.id,
   })
@@ -320,6 +425,17 @@ function OutlineRow({
       e.preventDefault()
       if (e.shiftKey) onOutdent()
       else onIndent()
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      ;(e.currentTarget as HTMLInputElement).blur()
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setDraft(row.title)
+      ;(e.currentTarget as HTMLInputElement).blur()
     }
   }
 
@@ -355,10 +471,19 @@ function OutlineRow({
       </span>
       <input
         className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:text-smsg-900"
-        value={row.title}
-        onChange={(e) => onRename(e.target.value)}
-        onBlur={onCommitRename}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={() => {
+          focusedRef.current = true
+          onFocusChange(true)
+        }}
+        onBlur={() => {
+          focusedRef.current = false
+          onFocusChange(false)
+          if (draft !== row.title) onCommitRename(draft)
+        }}
         onKeyDown={onKey}
+        placeholder="섹션 제목"
         aria-label={`level ${row.level} 섹션 제목`}
       />
     </li>

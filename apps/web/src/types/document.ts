@@ -45,6 +45,7 @@ export type Block =
   | QuizBlock
   | ImageAnnotationBlock
   | SpreadsheetBlock
+  | BibliographyBlock
 export type WhiteboardElement =
   | {
       kind: 'stroke'
@@ -124,9 +125,9 @@ export interface DocumentJSONV10 {
   metadata: DocumentMeta
   infobox?: Infobox
   /**
-   * 최상위 섹션은 반드시 level=1
+   * 최상위 섹션은 반드시 level=1 (BE 가 검증). 자식 섹션은 부모 level+1.
    */
-  sections: SectionLevel1[]
+  sections: Section[]
   related_documents?: RelatedDoc[]
   glossary?: GlossaryItem[]
   references?: Reference[]
@@ -157,18 +158,56 @@ export interface DocumentMeta {
   confidentiality: 'public' | 'internal' | 'restricted'
 }
 /**
- * 우상단 정보 박스. 키=라벨, 값=문자열 또는 문자열 배열
+ * 우상단 정보 박스. 키=라벨, 값=문자열, 문자열 배열, 또는 풍부한 표현(링크/뱃지/아이콘)을 위한 InfoboxRich 객체. 기존 문자열 형태는 그대로 호환.
  */
 export interface Infobox {
-  [k: string]: (string | string[]) | undefined
+  [k: string]: (string | string[] | InfoboxRich | InfoboxRich[]) | undefined
 }
-export interface SectionLevel1 {
+/**
+ * Richer Infobox value — wraps a label with optional link / badge / icon / color hints. Used wherever a plain string isn't enough (예: 상태 뱃지, 담당자 메일 링크).
+ */
+export interface InfoboxRich {
+  /**
+   * 표시 텍스트.
+   */
+  text: string
+  /**
+   * 링크 URL — 있으면 텍스트가 클릭 가능한 a 태그로 렌더링.
+   */
+  href?: string
+  /**
+   * 선두 이모지 아이콘 (예: 📞 ✉️ 👤).
+   */
+  icon?: string
+  /**
+   * 배경/텍스트 컬러로 강조하는 뱃지 종류. neutral=회색.
+   */
+  badge?: 'success' | 'info' | 'warn' | 'danger' | 'neutral'
+  /**
+   * 텍스트 색 직접 지정 (badge와 함께 쓰면 badge가 우선).
+   */
+  color?: string
+}
+/**
+ * Document outline node. Recursive — `subsections` is another Section[]. Top-level entries MUST have level=1; child level = parent.level + 1 (enforced by the BE renumber/validate pass). The visual rendering caps at HTML <h6> (level 5+ all render as h6) but schema-wise depth is unbounded.
+ */
+export interface Section {
   id: Ulid
+  /**
+   * 1.2.3.4… dotted ordinal recomputed by the BE on every save.
+   */
   number?: string
-  level: 1
+  /**
+   * 1-based depth. BE rejects values that don't match the tree position.
+   */
+  level: number
   title: string
+  /**
+   * Visual layout for this section's blocks. Drives both the wiki view (block arrangement inside the section) and presentation view (slide template). Defaults to 'stack' (existing behaviour: blocks render top-to-bottom). 'two-col' splits blocks alternately into two columns. 'image-left'/'image-right' put the first ImageBlock on one side and remaining blocks on the other. 'title-only' renders just the section heading (PPT cover style). 'full-bleed' uses the first ImageBlock as a full-width background with subsequent blocks overlaid.
+   */
+  layout?: 'stack' | 'two-col' | 'image-left' | 'image-right' | 'title-only' | 'full-bleed'
   blocks: Block[]
-  subsections: SectionLevel2[]
+  subsections?: Section[]
 }
 export interface ParagraphBlock {
   type: 'paragraph'
@@ -199,6 +238,10 @@ export interface Heading4Block {
   type: 'heading-4'
   id: Ulid
   title: string
+  /**
+   * Visual heading level. Optional — defaults to 4 (smallest). Sub-section heading; the document outline still uses Section nodes for the canonical hierarchy.
+   */
+  level?: 2 | 3 | 4
   meta?: BlockMeta
 }
 export interface ListBlock {
@@ -241,14 +284,108 @@ export interface MathBlock {
   display?: 'block' | 'inline'
   meta?: BlockMeta
 }
+/**
+ * Table block. Two layout modes: flat (`headers` + `rows`, the common case) and sparse (`cells`, used whenever cells are merged or styled per-cell). The renderer prefers `cells` when present. Optional `columns` carries per-column metadata (width / align / dtype / format) that applies to BOTH modes — column index is well-defined in either layout.
+ */
 export interface TableBlock {
   type: 'table'
   id: Ulid
   headers: string[]
   rows: string[][]
+  /**
+   * Optional sparse cell list for tables with merged or styled cells (DOCX gridSpan/vMerge round-trip + per-cell style overrides). When present, the renderer ignores headers/rows and lays out from this list. Each cell occupies (r..r+rowSpan-1) × (c..c+colSpan-1); covered slots have no entry. r/c are 0-indexed; the first row of a header-mode table is the header row.
+   */
+  cells?: {
+    r: number
+    c: number
+    rowSpan?: number
+    colSpan?: number
+    text: string
+    /**
+     * True for header-row cells (rendered as <th>).
+     */
+    header?: boolean
+    /**
+     * Per-cell horizontal alignment override (wins over column default).
+     */
+    align?: 'left' | 'center' | 'right'
+    /**
+     * Cell background color (CSS hex).
+     */
+    bg?: string
+    /**
+     * Bold text in this cell.
+     */
+    bold?: boolean
+    /**
+     * Cell text color (CSS hex).
+     */
+    color?: string
+  }[]
+  /**
+   * Optional per-column metadata. Index matches column index in both flat and sparse layouts. Missing entries fall back to defaults (left-align, text dtype, auto width).
+   */
+  columns?: {
+    /**
+     * CSS width — '120px' or '15%' or 'auto'.
+     */
+    width?: string
+    /**
+     * Default cell alignment for this column. dtype=number|percent|currency auto-defaults to right when align is unset.
+     */
+    align?: 'left' | 'center' | 'right'
+    /**
+     * Column data type. Drives auto-formatting and default alignment.
+     */
+    dtype?: 'text' | 'number' | 'percent' | 'currency' | 'date'
+    /**
+     * Format hint. number/percent: decimal places like '2'. currency: ISO code or symbol like 'KRW' / '$'. date: pattern like 'YYYY-MM-DD'.
+     */
+    format?: string
+  }[]
+  /**
+   * Optional footer row showing per-column aggregates. Computed at render time from `rows` (flat mode) — sparse mode is skipped because merged-cell semantics make column-wise sums ambiguous.
+   */
+  footer?: {
+    show?: boolean
+    /**
+     * Label shown in the first column when no aggregate is set there.
+     */
+    label?: string
+    /**
+     * Per-column aggregate. '' (empty) skips that column.
+     */
+    aggregates?: ('' | 'sum' | 'avg' | 'count' | 'min' | 'max')[]
+  }
   options?: {
+    /**
+     * Header click sorts asc/desc by that column (flat mode only).
+     */
     sortable?: boolean
+    /**
+     * Show a search box above the table that filters rows (flat mode only).
+     */
     searchable?: boolean
+    /**
+     * Row padding density. Default 'normal'.
+     */
+    density?: 'compact' | 'normal' | 'comfortable'
+    /**
+     * Pin the first column when the table scrolls horizontally.
+     */
+    stickyFirstCol?: boolean
+    /**
+     * Show 1-based row numbers in a leading column.
+     */
+    rowNumbers?: boolean
+    /**
+     * Zebra-striped rows. Default true; set false to disable.
+     */
+    stripe?: boolean
+    /**
+     * Cell border style. Default 'horizontal'.
+     */
+    borderStyle?: 'none' | 'horizontal' | 'all'
   }
   meta?: BlockMeta
 }
@@ -263,10 +400,17 @@ export interface KpiCardsBlock {
   }[]
   meta?: BlockMeta
 }
+/**
+ * Chart block — `engine` selects the renderer. 'recharts' (default) uses our existing simple chart UI; 'echarts' unlocks rich interaction (zoom, brush, hover slope, markPoint annotations, markArea regions). With 'echarts' the data fields below still drive the dataset, but `options` accepts any ECharts EChartsOption fragment that gets merged on top.
+ */
 export interface ChartBlock {
   type: 'chart'
   id: Ulid
   chartType: 'line' | 'bar' | 'pie' | 'area' | 'radar' | 'scatter'
+  /**
+   * Chart renderer. Default 'recharts' for back-compat; choose 'echarts' for rich interactivity (markPoint / markArea / brush / dataZoom).
+   */
+  engine?: 'recharts' | 'echarts'
   title?: string
   data: {
     labels: string[]
@@ -275,6 +419,39 @@ export interface ChartBlock {
       values: number[]
     }[]
   }
+  /**
+   * Friendly knobs for ECharts interactivity that map onto markPoint / markArea / dataZoom without requiring users to write raw EChartsOption.
+   */
+  interactions?: {
+    /**
+     * Highlighted points on the curve (label, x-index, optional color).
+     */
+    keyPoints?: {
+      label: string
+      xIndex: number
+      color?: string
+    }[]
+    /**
+     * Coloured x-range bands (e.g. Elastic / Plastic). xFromIndex / xToIndex are inclusive label indexes.
+     */
+    regions?: {
+      label: string
+      xFromIndex: number
+      xToIndex: number
+      color?: string
+    }[]
+    /**
+     * Inline dataZoom slider under the chart.
+     */
+    showZoom?: boolean
+    /**
+     * Crosshair guides + axis pointers.
+     */
+    showCrosshair?: boolean
+  }
+  /**
+   * Raw ECharts EChartsOption fragment, merged after `interactions` so power users can override anything.
+   */
   options?: {}
   meta?: BlockMeta
 }
@@ -312,13 +489,20 @@ export interface OrgChartNode {
   role?: string
   children?: OrgChartNode[]
 }
+/**
+ * Embed an external page (`src`) OR an inline self-contained HTML document (`html`). Exactly one MUST be set. The renderer wraps the iframe in a sandbox boundary so the embed can't reach the parent DOM, cookies, or storage; only `allow-scripts` is granted so interactive embeds (charts, calculators) still work.
+ */
 export interface IframeBlock {
   type: 'iframe'
   id: Ulid
   /**
-   * 사내 화이트리스트 도메인만
+   * 사내 화이트리스트 도메인만. `html` 와 동시 사용 금지.
    */
-  src: string
+  src?: string
+  /**
+   * Self-contained HTML document. Rendered via iframe srcdoc + sandbox. Use this for ad-hoc interactive embeds (e.g. canvas-based charts) that don't need a hosting URL. `src` 와 동시 사용 금지.
+   */
+  html?: string
   title?: string
   height?: number
   meta?: BlockMeta
@@ -398,6 +582,13 @@ export interface ColumnsBlock {
    * @maxItems 4
    */
   columns: [Block[], Block[]] | [Block[], Block[], Block[]] | [Block[], Block[], Block[], Block[]]
+  /**
+   * Optional per-column widths as percentages of the row. Length MUST equal columns.length when present, each value 5..95, and the sum SHOULD equal 100 (server normalises). Omit for equal split.
+   *
+   * @minItems 2
+   * @maxItems 4
+   */
+  widths?: [number, number] | [number, number, number] | [number, number, number, number]
   meta?: BlockMeta
 }
 export interface TabsBlock {
@@ -573,26 +764,54 @@ export interface SpreadsheetBlock {
   }
   meta?: BlockMeta
 }
-export interface SectionLevel2 {
+/**
+ * Reference list (참고문헌). Citations elsewhere in the document use the [[cite:KEY]] inline syntax to anchor-link into entries here. Most often produced by the DOCX importer when it sees a 'References' / '참고문헌' / 'Bibliography' heading.
+ */
+export interface BibliographyBlock {
+  type: 'bibliography'
   id: Ulid
-  number?: string
-  level: 2
-  title: string
-  blocks: Block[]
-  subsections: SectionLevel3[]
-}
-export interface SectionLevel3 {
-  id: Ulid
-  number?: string
-  level: 3
-  title: string
-  blocks: Block[]
   /**
-   * level 3은 더 깊은 섹션 불가 (heading-4 Block으로 표현)
-   *
-   * @maxItems 0
+   * Optional override for the block heading. Defaults to '참고문헌' in the FE renderer.
    */
-  subsections?: []
+  title?: string
+  /**
+   * Citation style label (numeric / alphabetic / author-year). Currently informational — the FE renders ordered list either way.
+   */
+  style?: 'numeric' | 'alphabetic' | 'author-year'
+  /**
+   * @minItems 1
+   */
+  entries: [
+    {
+      /**
+       * Optional citation key used by [[cite:KEY]] inline references. Alphanumeric / hyphen / underscore.
+       */
+      key?: string
+      /**
+       * Formatted reference body — e.g. 'Smith, J. (2020). Foo bar. Journal of X, 3(2), 14-22.'
+       */
+      text: string
+      /**
+       * Optional canonical URL (DOI, journal page).
+       */
+      url?: string
+    },
+    ...{
+      /**
+       * Optional citation key used by [[cite:KEY]] inline references. Alphanumeric / hyphen / underscore.
+       */
+      key?: string
+      /**
+       * Formatted reference body — e.g. 'Smith, J. (2020). Foo bar. Journal of X, 3(2), 14-22.'
+       */
+      text: string
+      /**
+       * Optional canonical URL (DOI, journal page).
+       */
+      url?: string
+    }[]
+  ]
+  meta?: BlockMeta
 }
 export interface RelatedDoc {
   slug: Slug
@@ -607,3 +826,10 @@ export interface Reference {
   label: string
   url?: string
 }
+
+// ── Backwards-compatibility aliases ──────────────────────────────────
+// The schema collapsed the explicit level-1/2/3 Section interfaces into a
+// single recursive `Section`. These aliases keep older imports compiling.
+export type SectionLevel1 = Section
+export type SectionLevel2 = Section
+export type SectionLevel3 = Section

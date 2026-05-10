@@ -31,7 +31,7 @@ interface SectionLinkPickerProps {
 interface FlatItem {
   number: string
   title: string
-  level: 1 | 2 | 3
+  level: number
 }
 
 /**

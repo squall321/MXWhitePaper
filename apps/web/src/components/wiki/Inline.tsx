@@ -1,8 +1,33 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, type ReactNode } from 'react'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 import { parseInline } from '@/lib/wiki-link'
 import { WikiLink } from './WikiLink'
 import { GlossaryTooltip } from '../GlossaryTooltip'
 import { useEditorStore } from '@/features/editor/state'
+
+/**
+ * Render a slice of LaTeX as KaTeX inline math. Used by `$…$` markers in
+ * paragraph text. Errors are swallowed (the raw expression is shown
+ * instead) so a single bad formula doesn't blank the surrounding line.
+ */
+function InlineMath({ expr }: { expr: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    try {
+      katex.render(expr, el, {
+        displayMode: false,
+        throwOnError: false,
+        strict: 'ignore',
+      })
+    } catch {
+      el.textContent = expr
+    }
+  }, [expr])
+  return <span ref={ref} aria-label={`수식 ${expr}`} className="mx-0.5" />
+}
 
 interface InlineProps {
   text: string
@@ -65,6 +90,22 @@ export function Inline({ text, glossary = true, variables }: InlineProps) {
               anchor={n.anchor}
               display={n.display}
             />
+          )
+        }
+        if (n.kind === 'cite') {
+          // Citation references jump to a `BibliographyBlock` entry whose
+          // anchor lives at `id="cite-KEY"`. The display label defaults to
+          // the key so `[[cite:Smith2020]]` reads naturally inline.
+          return (
+            <a
+              key={i}
+              href={`#cite-${n.key}`}
+              className="text-link no-underline hover:underline"
+              aria-label={`인용 ${n.key}`}
+              data-cite-ref={n.key}
+            >
+              [{n.display ?? n.key}]
+            </a>
           )
         }
         const md = renderMarkdownLite(n.value, glossary, vars)
@@ -183,10 +224,47 @@ function renderMarkdownLite(
         continue
       }
     }
-    // Footnote reference `[^X]` — alphanumeric / hyphen tag. Renders as a
-    // clickable superscript that jumps to the matching `#fn-X` definition.
-    // The reference itself carries `id="fnref-X"` so the definition's `↩`
-    // back-link can return the reader to the inline citation.
+    // Inline LaTeX math `$…$`. KaTeX in inline mode (no display centering).
+    // We require non-whitespace right after the opening `$` so prose like
+    // "₩50" or "$5 USD and $10 CAD" doesn't accidentally get parsed as
+    // math. The DOCX importer emits this exact form for `<m:oMath>`.
+    // `$$…$$` is reserved for display-mode math (handled below).
+    if (text[i] === '$' && text[i + 1] === '$') {
+      const close = text.indexOf('$$', i + 2)
+      if (close > i + 2) {
+        flush()
+        out.push(<InlineMath key={`m${key++}`} expr={text.slice(i + 2, close)} />)
+        i = close + 2
+        continue
+      }
+    }
+    if (text[i] === '$' && text[i + 1] !== '$' && text[i + 1] !== ' ') {
+      // Find the next single `$` that isn't escaped.
+      let close = -1
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === '$' && text[j - 1] !== '\\') {
+          close = j
+          break
+        }
+      }
+      if (close > i + 1) {
+        const expr = text.slice(i + 1, close)
+        // Sanity: don't render currency-looking spans like "$5".
+        // Math expressions almost always include a letter/operator.
+        if (/[\\^_{}\\\\=()A-Za-z]/.test(expr)) {
+          flush()
+          out.push(<InlineMath key={`m${key++}`} expr={expr} />)
+          i = close + 1
+          continue
+        }
+      }
+    }
+    // Footnote / endnote reference `[^X]` — alphanumeric / hyphen tag.
+    // Footnote: `[^1]`        → href=#fn-1,    display "[1]"
+    // Endnote:  `[^en-1]`     → href=#fn-en-1, display "[1]" (en- stripped)
+    // We always emit href under the `fn-` prefix so a single CSS rule
+    // covers both anchor targets. The reference carries `id="fnref-X"`
+    // so the definition's `↩` back-link can return the reader inline.
     // Note: code spans short-circuit before this branch (they consume the
     // whole `…` blob), so `[^N]` inside `\`code\`` stays literal.
     if (text[i] === '[' && text[i + 1] === '^') {
@@ -195,6 +273,8 @@ function renderMarkdownLite(
         const tag = text.slice(i + 2, close)
         if (/^[A-Za-z0-9-]+$/.test(tag)) {
           flush()
+          const isEndnote = tag.startsWith('en-')
+          const display = isEndnote ? tag.slice(3) : tag
           out.push(
             <sup
               key={`fn${key++}`}
@@ -204,9 +284,9 @@ function renderMarkdownLite(
               <a
                 href={`#fn-${tag}`}
                 className="text-link no-underline hover:underline"
-                aria-label={`각주 ${tag}`}
+                aria-label={isEndnote ? `미주 ${display}` : `각주 ${display}`}
               >
-                [{tag}]
+                [{display}]
               </a>
             </sup>,
           )

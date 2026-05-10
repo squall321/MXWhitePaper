@@ -38,6 +38,9 @@ export function ArchivedDocsPage() {
   const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [confirmPurge, setConfirmPurge] = useState(false)
+  // Admin opt-in to bypass the 7-day grace window. Reset whenever the
+  // confirm dialog opens so the dangerous default is always "off".
+  const [forcePurge, setForcePurge] = useState(false)
 
   const params: ArchivedDocsListParams = useMemo(
     () => ({
@@ -95,22 +98,29 @@ export function ArchivedDocsPage() {
   )
 
   const onPurge = useCallback(
-    async (slugs: string[]) => {
+    async (slugs: string[], force = false) => {
       if (slugs.length === 0) return
       try {
-        const res = await purgeArchivedDocs(slugs)
+        const res = await purgeArchivedDocs(slugs, force)
         toast.success(`${res.purged.length}건 영구 삭제 완료`)
         setSelected(new Set())
         setConfirmPurge(false)
+        setForcePurge(false)
         await qc.invalidateQueries({ queryKey: ['admin', 'archived-docs'] })
       } catch (err) {
         const msg = err instanceof Error ? err.message : '영구 삭제 실패'
         toast.error(msg)
         setConfirmPurge(false)
+        setForcePurge(false)
       }
     },
     [qc],
   )
+
+  const openConfirmPurge = useCallback(() => {
+    setForcePurge(false)
+    setConfirmPurge(true)
+  }, [])
 
   if (!user) return null
   if (role !== 'admin') return <Navigate to="/" replace />
@@ -123,7 +133,7 @@ export function ArchivedDocsPage() {
       <header className="mb-6">
         <h1 className="text-2xl font-bold text-smsg-900">보관 문서 관리</h1>
         <p className="mt-1 text-sm text-gray-600">
-          보관 처리된 문서를 검색하고, 복원하거나 영구 삭제합니다. 영구 삭제는 보관된 지 7일이 지난 문서만 가능합니다.
+          보관 처리된 문서를 검색하고, 복원하거나 영구 삭제합니다. 기본적으로 보관 후 7일이 지난 문서만 영구 삭제할 수 있으며, 필요한 경우 다이얼로그에서 즉시 삭제 옵션을 켜서 7일 제한을 우회할 수 있습니다.
         </p>
       </header>
 
@@ -222,7 +232,7 @@ export function ArchivedDocsPage() {
             <Button
               size="sm"
               variant="danger"
-              onClick={() => setConfirmPurge(true)}
+              onClick={openConfirmPurge}
               data-testid="archived-bulk-purge"
             >
               일괄 영구 삭제
@@ -287,7 +297,7 @@ export function ArchivedDocsPage() {
                     onRestore={() => void onRestore([it.slug])}
                     onPurge={() => {
                       setSelected(new Set([it.slug]))
-                      setConfirmPurge(true)
+                      openConfirmPurge()
                     }}
                   />
                 ))}
@@ -340,7 +350,10 @@ export function ArchivedDocsPage() {
 
       <Modal
         open={confirmPurge}
-        onClose={() => setConfirmPurge(false)}
+        onClose={() => {
+          setConfirmPurge(false)
+          setForcePurge(false)
+        }}
         title="영구 삭제 확인"
         size="md"
         footer={
@@ -348,7 +361,10 @@ export function ArchivedDocsPage() {
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => setConfirmPurge(false)}
+              onClick={() => {
+                setConfirmPurge(false)
+                setForcePurge(false)
+              }}
               data-testid="archived-purge-cancel"
             >
               취소
@@ -356,7 +372,7 @@ export function ArchivedDocsPage() {
             <Button
               size="sm"
               variant="danger"
-              onClick={() => void onPurge(Array.from(selected))}
+              onClick={() => void onPurge(Array.from(selected), forcePurge)}
               data-testid="archived-purge-confirm"
             >
               영구 삭제
@@ -369,8 +385,28 @@ export function ArchivedDocsPage() {
             ⚠️ 이 작업은 되돌릴 수 없습니다.
           </p>
           <p className="mt-2 text-gray-700">
-            선택한 {selected.size}건의 문서가 데이터베이스에서 영구 삭제됩니다. 보관된 지 7일이 지나지 않은 문서는 자동으로 거부됩니다.
+            선택한 {selected.size}건의 문서가 데이터베이스에서 영구 삭제됩니다.
+            기본적으로 보관된 지 7일이 지나지 않은 문서는 자동으로 거부됩니다.
           </p>
+          <label
+            className="mt-3 flex items-start gap-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-red-800"
+            data-testid="archived-purge-force-label"
+          >
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={forcePurge}
+              onChange={(e) => setForcePurge(e.target.checked)}
+              data-testid="archived-purge-force"
+              aria-label="7일 제한 우회 (즉시 삭제)"
+            />
+            <span>
+              <span className="font-medium">7일 제한 우회 (즉시 삭제)</span>
+              <span className="ml-1 text-xs text-red-700">
+                — 방금 보관한 문서까지 곧바로 영구 삭제합니다. 신중히 선택하세요.
+              </span>
+            </span>
+          </label>
         </div>
       </Modal>
     </div>

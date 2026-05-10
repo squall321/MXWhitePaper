@@ -542,6 +542,49 @@ async def restore_document_version(
 
 
 @router.patch(
+    "/{slug}/infobox",
+    summary="문서 infobox(주요 정보 박스) 갱신",
+    description=(
+        "DocumentJSON 의 `infobox` 객체를 통째로 교체한다. `If-Match` 헤더로 "
+        "낙관적 동시성 보장. 빈 문자열 / 빈 배열 / null 은 자동 제거된다. "
+        "payload: `{infobox: {라벨: 값 | [값1, 값2, ...]}}`"
+    ),
+)
+async def patch_infobox(
+    slug: str,
+    payload: dict[str, Any],
+    response: Response,
+    if_match: str | None = Header(default=None, alias="If-Match"),
+    x_mxwp_user: str | None = Header(default=None, alias="X-MXWP-User"),
+    x_change_log: str | None = Header(default=None, alias="X-MXWP-Change-Log"),
+    s: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_editor),
+) -> dict[str, Any]:
+    actor = await _resolve_actor(s, x_mxwp_user, user)
+    infobox = payload.get("infobox") if isinstance(payload, dict) else None
+    if infobox is None:
+        infobox = {}
+    doc = await document_service.patch_infobox(
+        s,
+        slug=slug,
+        infobox=infobox,
+        if_match=if_match,
+        actor_id=actor,
+        change_log=x_change_log,
+    )
+    etag = document_service.make_etag(doc["id"], doc["version"])
+    response.headers["ETag"] = etag
+    return envelope(
+        data={
+            "slug": doc["slug"],
+            "version": doc["version"],
+            "infobox": (doc.get("content_json") or {}).get("infobox") or {},
+        },
+        meta={"etag": etag},
+    )
+
+
+@router.patch(
     "/{slug}/variables",
     summary="문서 변수(mail-merge) 맵 갱신",
     description=(
@@ -730,6 +773,7 @@ async def insert_block(
     section_id = payload.get("section_id")
     block = payload.get("block")
     after = payload.get("after_block_id")
+    index_hint = payload.get("index")
     if not section_id or not isinstance(block, dict):
         from app.core.errors import ValidationFailed
         raise ValidationFailed("section_id and block required")
@@ -738,6 +782,7 @@ async def insert_block(
         slug=slug,
         section_id=section_id,
         after_block_id=after,
+        index=index_hint if isinstance(index_hint, int) else None,
         new_block=block,
         if_match=if_match,
         actor_id=actor,
@@ -800,8 +845,15 @@ async def move_block(
     user: dict = Depends(require_editor),
 ) -> dict[str, Any]:
     actor = await _resolve_actor(s, x_mxwp_user, user)
-    target_section_id = payload.get("target_section_id")
+    # Accept both the documented `target_section_id` and the FE alias
+    # `to_section_id` (BlockToolbar ↑/↓, BulkActionsBar). Same for the
+    # within-section position: `after_block_id` (canonical) or `to_index`
+    # (FE).
+    target_section_id = (
+        payload.get("target_section_id") or payload.get("to_section_id")
+    )
     after = payload.get("after_block_id")
+    to_index_raw = payload.get("to_index")
     if not target_section_id:
         from app.core.errors import ValidationFailed
         raise ValidationFailed("target_section_id required")
@@ -811,6 +863,7 @@ async def move_block(
         block_id=block_id,
         target_section_id=target_section_id,
         after_block_id=after,
+        to_index=to_index_raw if isinstance(to_index_raw, int) else None,
         if_match=if_match,
         actor_id=actor,
         change_log=x_change_log,

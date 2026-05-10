@@ -39,7 +39,7 @@ export function Highlight({ html, text, terms, className, fallback = '' }: Highl
   return (
     <span
       className={className}
-      // eslint-disable-next-line react/no-danger
+       
       dangerouslySetInnerHTML={{ __html: safeHtml }}
     />
   )

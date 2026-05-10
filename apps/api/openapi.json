@@ -79,6 +79,11 @@
       },
       "ArchiveBulkIn": {
         "properties": {
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
           "slugs": {
             "items": {
               "type": "string"
@@ -186,6 +191,42 @@
           "file"
         ],
         "title": "Body_import_docx_api_v1_imports_docx_post",
+        "type": "object"
+      },
+      "Body_import_pptx_api_v1_imports_pptx_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_pptx_api_v1_imports_pptx_post",
         "type": "object"
       },
       "BookmarkIn": {
@@ -3317,7 +3358,7 @@
     },
     "/api/v1/admin/archived-docs/purge": {
       "delete": {
-        "description": "Hard-delete archived docs. Refuses if any doc was archived <7 days ago.",
+        "description": "Hard-delete archived docs.\n\nBy default refuses if any doc was archived <7 days ago — the 7-day grace\nwindow catches accidental archives. Admins can pass `force=true` to bypass\nthe grace check and purge immediately (audit log records the bypass).",
         "operationId": "purge_archived_docs_api_v1_admin_archived_docs_purge_delete",
         "requestBody": {
           "content": {
@@ -8602,6 +8643,111 @@
         ]
       }
     },
+    "/api/v1/documents/{slug}/infobox": {
+      "patch": {
+        "description": "DocumentJSON 의 `infobox` 객체를 통째로 교체한다. `If-Match` 헤더로 낙관적 동시성 보장. 빈 문자열 / 빈 배열 / null 은 자동 제거된다. payload: `{infobox: {라벨: 값 | [값1, 값2, ...]}}`",
+        "operationId": "patch_infobox_api_v1_documents__slug__infobox_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-MXWP-Change-Log",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-Change-Log"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Infobox Api V1 Documents  Slug  Infobox Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 infobox(주요 정보 박스) 갱신",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/documents/{slug}/reactions": {
       "get": {
         "operationId": "aggregate_reactions_api_v1_documents__slug__reactions_get",
@@ -11096,6 +11242,68 @@
           }
         },
         "summary": "Import Docx",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/imports/pptx": {
+      "post": {
+        "description": "Import a PowerPoint deck and convert it to DocumentJSON.\n\nEach slide becomes one section. Slide layout names are best-effort\nmapped to our `Section.layout` enum (`title-only` / `two-col` /\n`image-left` / `stack`). Speaker notes are preserved as paragraphs\nwith `meta.note: speaker:N`.\n\nSame rate-limit (5/min/user) and `actor` resolution as docx import.\nReturns `{document, summary}` so the FE can preview before committing\nvia `POST /documents`.",
+        "operationId": "import_pptx_api_v1_imports_pptx_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_pptx_api_v1_imports_pptx_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Import Pptx Api V1 Imports Pptx Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Pptx",
         "tags": [
           "imports"
         ]

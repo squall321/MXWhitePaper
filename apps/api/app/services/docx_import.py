@@ -78,6 +78,8 @@ class ImportSummary:
     lists: int = 0
     code_blocks: int = 0
     footnotes: int = 0
+    endnotes: int = 0
+    bibliography_entries: int = 0
     warnings: list[str] = field(default_factory=list)
 
 
@@ -89,6 +91,14 @@ class _ImportContext:
     image_uploader: Any  # callable(bytes, filename) -> dict | None
     summary: ImportSummary
     footnotes_xml: bytes | None = None
+    endnotes_xml: bytes | None = None
+    # Maps DOCX footnote/endnote id (str) → 1-based ordinal as displayed in
+    # the body. Populated when we walk the body and see <w:footnoteReference>
+    # / <w:endnoteReference>. The "각주" / "미주" sections then emit anchor
+    # ids `fn-<ordinal>` / `en-<ordinal>` so the body's [N] marks can scroll
+    # to them.
+    footnote_order: dict[str, int] = field(default_factory=dict)
+    endnote_order: dict[str, int] = field(default_factory=dict)
 
 
 # ── docx zip 핸들링 ──────────────────────────────────────────────────
@@ -192,18 +202,72 @@ def _run_text(run: ET.Element) -> str:
     return "".join(parts)
 
 
-def _format_run(run: ET.Element) -> str:
+def _format_run(run: ET.Element, ctx: _ImportContext | None = None) -> str:
+    """Render a `<w:r>` to wiki-flavoured markdown.
+
+    Pure-text runs go through ``_run_text``. When the run carries a
+    ``<w:footnoteReference>`` or ``<w:endnoteReference>``, we also append
+    a ``[N]`` marker so the body keeps the same ordinal the reader sees,
+    and (when ``ctx`` is provided) we cache the docx note id → ordinal
+    mapping for the notes-section builder. The FE inline parser turns
+    bare ``[N]`` tokens into anchor links.
+    """
     text = _run_text(run)
-    if not text:
+    fn_ref = run.find(_q("w", "footnoteReference"))
+    en_ref = run.find(_q("w", "endnoteReference"))
+    note_marker = ""
+    if fn_ref is not None:
+        docx_id = fn_ref.get(_q("w", "id"))
+        ordinal = _note_ordinal(ctx, "footnote", docx_id)
+        if ordinal:
+            # `[^N]` is the FE's pandoc-style footnote marker — the inline
+            # parser turns it into a clickable superscript that scrolls to
+            # the `#fn-N` anchor in the "각주" section.
+            note_marker += f"[^{ordinal}]"
+    if en_ref is not None:
+        docx_id = en_ref.get(_q("w", "id"))
+        ordinal = _note_ordinal(ctx, "endnote", docx_id)
+        if ordinal:
+            # `[^en-N]` keeps endnote markers in their own anchor namespace
+            # so footnote/endnote ordinals can both be `1` without colliding.
+            # The inline parser strips the `en-` prefix when rendering the
+            # display label, but routes the `href` to `#fn-en-N`.
+            note_marker += f"[^en-{ordinal}]"
+    if not text and not note_marker:
         return ""
     props = _run_props(run)
-    return _wrap_format(
+    formatted = _wrap_format(
         text,
         bold=props.get("bold", False),
         italic=props.get("italic", False),
         strike=props.get("strike", False),
         underline=props.get("underline", False),
+    ) if text else ""
+    return formatted + note_marker
+
+
+def _note_ordinal(
+    ctx: _ImportContext | None, kind: str, docx_id: str | None
+) -> int | None:
+    """Resolve a footnote/endnote docx-id to its 1-based display ordinal.
+
+    The order map is populated by ``_build_notes_section``; if the body
+    walk runs first we still need *some* ordinal so the marker renders.
+    Use the docx id itself as a fallback ordinal — most word documents
+    keep ids contiguous so this matches in 99% of cases. The mapping is
+    persisted on ``ctx`` so the next reference for the same id stays
+    consistent.
+    """
+    if ctx is None or docx_id is None:
+        return None
+    order_map = (
+        ctx.footnote_order if kind == "footnote" else ctx.endnote_order
     )
+    if docx_id in order_map:
+        return order_map[docx_id]
+    next_ord = (max(order_map.values()) if order_map else 0) + 1
+    order_map[docx_id] = next_ord
+    return next_ord
 
 
 # ── OMML → LaTeX (간단 변환) ─────────────────────────────────────────
@@ -388,7 +452,7 @@ def _paragraph_text(
             # hyperlink 자체를 처리 — 자식 run 들의 결합 텍스트 + r:id → URL
             label_runs: list[str] = []
             for run in child.findall(_q("w", "r")):
-                label_runs.append(_format_run(run))
+                label_runs.append(_format_run(run, ctx))
             label = "".join(label_runs)
             rid = child.get(_q("r", "id"))
             url = ctx.relationships.get(rid or "")
@@ -426,7 +490,7 @@ def _paragraph_text(
                 inner_parts: list[str] = []
                 # hyperlink 는 자식이 run 만 있다고 가정하고 직접 _format_run
                 for run in ch.findall(_q("w", "r")):
-                    inner_parts.append(_format_run(run))
+                    inner_parts.append(_format_run(run, ctx))
                 # drawing 도 hyperlink 안에 들어올 수 있음 — 별도 등록
                 for d in ch.iter(_q("w", "drawing")):
                     drawings.append(d)
@@ -437,7 +501,7 @@ def _paragraph_text(
                     parts.append(label)
             elif ctag == _q("w", "r"):
                 # 직계 run
-                parts.append(_format_run(ch))
+                parts.append(_format_run(ch, ctx))
                 for d in ch.findall(_q("w", "drawing")):
                     drawings.append(d)
                 # OMML 이 run 내부 nested 인 경우는 거의 없음. 보수적으로 검사.
@@ -540,6 +604,7 @@ def docx_to_document(
     relationships = _parse_relationships(zf)
     media = _collect_media(zf)
     footnotes_xml = _read_zip_member(zf, "word/footnotes.xml")
+    endnotes_xml = _read_zip_member(zf, "word/endnotes.xml")
 
     summary = ImportSummary()
     ctx = _ImportContext(
@@ -548,6 +613,7 @@ def docx_to_document(
         image_uploader=image_uploader,
         summary=summary,
         footnotes_xml=footnotes_xml,
+        endnotes_xml=endnotes_xml,
     )
 
     try:
@@ -567,6 +633,17 @@ def docx_to_document(
         fn_section = _build_footnotes_section(footnotes_xml, ctx)
         if fn_section:
             sections.append(fn_section)
+
+    # 2b) 미주 섹션 (있을 때만) — 각주와 동일한 패턴.
+    if endnotes_xml:
+        en_section = _build_endnotes_section(endnotes_xml, ctx)
+        if en_section:
+            sections.append(en_section)
+
+    # 2c) References / 참고문헌 / Bibliography 섹션을 식별해서 그 안의
+    #     plain paragraphs 를 BibliographyBlock 으로 모은다. heuristics 는
+    #     보수적 — 매칭되는 헤더만 변환하고 본문 그대로 유지.
+    _convert_references_sections(sections, ctx)
 
     # 3) 섹션이 비어 있으면 default level-1 wrapper 1개 생성 (DocumentJSON
     #    스키마는 sections 가 비어 있으면 안 되는 건 아니지만, 빈 문서는
@@ -885,41 +962,329 @@ def _build_sections(
 
 
 def _build_table_block(tbl: ET.Element, ctx: _ImportContext) -> dict[str, Any]:
-    """w:tbl → TableBlock dict."""
-    rows_raw: list[list[str]] = []
-    for tr in tbl.findall(_q("w", "tr")):
-        row = [_table_cell_text(tc, ctx) for tc in tr.findall(_q("w", "tc"))]
-        rows_raw.append(row)
-    if not rows_raw:
+    """w:tbl → TableBlock dict.
+
+    Honours cell merges:
+        <w:gridSpan w:val="N">      — horizontal span (colSpan)
+        <w:vMerge w:val="restart">  — vertical merge anchor (rowSpan starts here)
+        <w:vMerge/>                 — continuation cell (covered by the anchor above)
+
+    If any cell carries a merge attribute, we emit a sparse ``cells`` list
+    that the FE renderer turns into a real ``<td colspan rowspan>`` grid.
+    Plain tables (no merges anywhere) keep the simpler ``headers/rows``
+    representation so existing fixtures and editors don't have to think
+    about cell sparsity.
+    """
+    tr_list = tbl.findall(_q("w", "tr"))
+    if not tr_list:
         return {
             "type": "table",
             "id": _new_id(),
             "headers": [],
             "rows": [],
         }
-    headers = rows_raw[0]
-    rows = rows_raw[1:]
+
+    # First pass: pull text + per-tc merge attributes for every row.
+    raw_rows: list[list[dict[str, Any]]] = []
+    has_merge = False
+    for tr in tr_list:
+        row_cells: list[dict[str, Any]] = []
+        for tc in tr.findall(_q("w", "tc")):
+            tc_pr = tc.find(_q("w", "tcPr"))
+            grid_span = 1
+            v_merge: str | None = None  # None | "restart" | "continue"
+            if tc_pr is not None:
+                gs = tc_pr.find(_q("w", "gridSpan"))
+                if gs is not None:
+                    try:
+                        grid_span = max(1, int(gs.get(_q("w", "val")) or "1"))
+                    except ValueError:
+                        grid_span = 1
+                vm = tc_pr.find(_q("w", "vMerge"))
+                if vm is not None:
+                    raw_v = vm.get(_q("w", "val"))
+                    v_merge = "restart" if raw_v == "restart" else "continue"
+            if grid_span > 1 or v_merge is not None:
+                has_merge = True
+            row_cells.append({
+                "text": _table_cell_text(tc, ctx),
+                "gridSpan": grid_span,
+                "vMerge": v_merge,
+            })
+        raw_rows.append(row_cells)
+
+    if not has_merge:
+        # Fast path — emit the legacy headers/rows shape.
+        flat_rows = [[c["text"] for c in row] for row in raw_rows]
+        return {
+            "type": "table",
+            "id": _new_id(),
+            "headers": flat_rows[0],
+            "rows": flat_rows[1:],
+        }
+
+    # Second pass: lay the cells out on a virtual grid honouring spans.
+    # We track which (r, c) slots are already occupied by an earlier anchor
+    # so we can find the next free column when emitting a new cell, and we
+    # extend an anchor's rowSpan when its row carries a `vMerge="continue"`
+    # cell at the same column range.
+    occupied: set[tuple[int, int]] = set()
+    # anchors keyed by (start_row, start_col). Mutated to extend rowSpan.
+    anchors: dict[tuple[int, int], dict[str, Any]] = {}
+    # Map (current_row, col) → the anchor key that "owns" this slot via a
+    # continuing vMerge so we can extend its rowSpan when we walk the next row.
+    open_v_merges: dict[int, tuple[int, int]] = {}
+
+    cells_out: list[dict[str, Any]] = []
+    max_cols = 0
+
+    for r_idx, row in enumerate(raw_rows):
+        col = 0
+        # Skip past any columns already occupied by a multi-row anchor.
+        while (r_idx, col) in occupied:
+            col += 1
+        consumed_v: set[int] = set()
+        for cell in row:
+            # Skip occupied slots.
+            while (r_idx, col) in occupied:
+                col += 1
+            grid_span = int(cell["gridSpan"])
+            v_merge = cell["vMerge"]
+            text = cell["text"]
+            if v_merge == "continue":
+                # Find the anchor whose colSpan covers this column range.
+                anchor_key = open_v_merges.get(col)
+                if anchor_key is not None:
+                    anchor = anchors.get(anchor_key)
+                    if anchor is not None:
+                        anchor["rowSpan"] = anchor.get("rowSpan", 1) + 1
+                # Mark the slots this continuation occupies so subsequent
+                # cells in this row skip them, and the anchor extends below.
+                for cc in range(col, col + grid_span):
+                    occupied.add((r_idx, cc))
+                    consumed_v.add(cc)
+                col += grid_span
+                continue
+
+            anchor_key = (r_idx, col)
+            entry: dict[str, Any] = {
+                "r": r_idx,
+                "c": col,
+                "text": text,
+            }
+            if grid_span > 1:
+                entry["colSpan"] = grid_span
+            anchors[anchor_key] = entry
+            cells_out.append(entry)
+            for cc in range(col, col + grid_span):
+                occupied.add((r_idx, cc))
+            if v_merge == "restart":
+                # This cell will gain rowSpan as continuations show up below.
+                for cc in range(col, col + grid_span):
+                    open_v_merges[cc] = anchor_key
+                    consumed_v.add(cc)
+            col += grid_span
+        # Any column whose vMerge wasn't continued in this row closes its merge.
+        for c_open in list(open_v_merges.keys()):
+            if c_open not in consumed_v:
+                open_v_merges.pop(c_open, None)
+        max_cols = max(max_cols, col)
+
+    # First-row cells become headers — mark them so the renderer uses <th>.
+    for entry in cells_out:
+        if entry["r"] == 0:
+            entry["header"] = True
+
+    # rowSpan == 1 entries don't need to carry the field (default).
+    for entry in cells_out:
+        if entry.get("rowSpan") == 1:
+            del entry["rowSpan"]
+        if entry.get("colSpan") == 1:
+            del entry["colSpan"]
+
+    # We still emit the legacy headers/rows arrays for back-compat clients
+    # (and so the search index keeps the textual content in a flat shape).
+    # The FE prefers `cells` when present.
+    flat_rows = [[c["text"] for c in row] for row in raw_rows]
+    headers = flat_rows[0] if flat_rows else []
+    rows = flat_rows[1:]
+
     return {
         "type": "table",
         "id": _new_id(),
         "headers": headers,
         "rows": rows,
+        "cells": cells_out,
     }
+
+
+# ── References → BibliographyBlock heuristic ─────────────────────────
+_REFERENCES_TITLE_RE = re.compile(
+    r"^\s*(references|bibliography|works cited|literature cited|"
+    r"참고\s*문헌|참고자료|인용\s*문헌)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _convert_references_sections(
+    sections: list[dict[str, Any]],
+    ctx: _ImportContext,
+) -> None:
+    """Walk every section + subsection. When a heading title matches one of
+    the well-known reference list labels, replace the section's plain
+    paragraph blocks with a single ``BibliographyBlock`` whose entries
+    mirror the original paragraph text. Mutates ``sections`` in place.
+
+    Each entry's ``key`` is auto-generated from the leading citation
+    marker if one is present (e.g. ``[Smith2020]`` / ``[3]`` / ``Smith,
+    J. 2020``). When the importer can't extract a key, the entry simply
+    has no key and inline ``[[cite:KEY]]`` references won't anchor — the
+    user can fix that up in the editor.
+    """
+
+    def _walk(secs: list[dict[str, Any]]) -> None:
+        for sec in secs:
+            title = (sec.get("title") or "").strip()
+            if title and _REFERENCES_TITLE_RE.match(title):
+                _materialise_bibliography(sec, ctx)
+            children = sec.get("subsections") or []
+            if isinstance(children, list):
+                _walk(children)
+
+    _walk(sections)
+
+
+def _materialise_bibliography(
+    section: dict[str, Any],
+    ctx: _ImportContext,
+) -> None:
+    """Replace a section's paragraph blocks with a single
+    ``BibliographyBlock`` whose entries mirror the original text. Keeps
+    non-paragraph blocks (tables, images embedded in references) as-is —
+    only collapses the *list* of references."""
+    blocks = section.get("blocks") or []
+    if not isinstance(blocks, list) or not blocks:
+        return
+    para_texts: list[str] = []
+    keepers: list[dict[str, Any]] = []
+    for blk in blocks:
+        if isinstance(blk, dict) and blk.get("type") == "paragraph":
+            text = (blk.get("text") or "").strip()
+            if text:
+                para_texts.append(text)
+        elif isinstance(blk, dict):
+            keepers.append(blk)
+    if not para_texts:
+        return
+    entries: list[dict[str, Any]] = []
+    for text in para_texts:
+        entry: dict[str, Any] = {"text": text}
+        key = _guess_citation_key(text)
+        if key:
+            entry["key"] = key
+        url = _extract_first_url(text)
+        if url:
+            entry["url"] = url
+        entries.append(entry)
+        ctx.summary.bibliography_entries += 1
+    biblio: dict[str, Any] = {
+        "type": "bibliography",
+        "id": _new_id(),
+        "entries": entries,
+    }
+    section["blocks"] = keepers + [biblio]
+
+
+_CITE_KEY_BRACKET_RE = re.compile(r"^\[([A-Za-z][A-Za-z0-9_-]{2,40})\]")
+_CITE_KEY_NUMBER_RE = re.compile(r"^\[(\d{1,4})\]")
+_CITE_AUTHOR_YEAR_RE = re.compile(
+    r"^([A-Z][A-Za-z'-]+)(?:[ ,]+(?:[A-Z]\.\s*)+)?[ ,]+\(?(\d{4})\)?",
+)
+_URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+
+
+def _guess_citation_key(text: str) -> str | None:
+    """Derive a citation key from a reference paragraph.
+
+    Examples that map to a key:
+      - "[Smith2020] J. Smith ..."  → "Smith2020"
+      - "[3] J. Smith ..."           → no alphabetic key, return None (the
+                                        FE displays the index either way)
+      - "Smith, J. (2020). ..."      → "Smith2020"
+
+    The goal is best-effort: missing key just means inline
+    ``[[cite:KEY]]`` won't anchor. Users can fill it in the editor.
+    """
+    m = _CITE_KEY_BRACKET_RE.match(text)
+    if m:
+        return m.group(1)
+    n = _CITE_AUTHOR_YEAR_RE.match(text)
+    if n:
+        return f"{n.group(1)}{n.group(2)}"
+    return None
+
+
+def _extract_first_url(text: str) -> str | None:
+    m = _URL_RE.search(text)
+    if not m:
+        return None
+    url = m.group(0)
+    # Trim trailing punctuation that often glues to a URL in prose.
+    while url and url[-1] in ".,;:)":
+        url = url[:-1]
+    return url or None
 
 
 def _build_footnotes_section(
     footnotes_xml: bytes, ctx: _ImportContext
 ) -> dict[str, Any] | None:
-    """word/footnotes.xml → 각주 level-1 section. 없거나 빈 footnote 만 있으면 None."""
+    """word/footnotes.xml → "각주" level-1 section.
+
+    Each rendered entry is a paragraph that begins with `[N]` so the
+    body's footnote markers (also `[N]`) read naturally. The paragraph's
+    block id encodes the ordinal (`fn-N`) when possible — the FE inline
+    parser uses that to turn body `[N]` marks into clickable anchor links
+    that scroll to the entry.
+    """
+    return _build_notes_section(
+        footnotes_xml, ctx, kind="footnote", title="각주",
+    )
+
+
+def _build_endnotes_section(
+    endnotes_xml: bytes, ctx: _ImportContext
+) -> dict[str, Any] | None:
+    """word/endnotes.xml → "미주" level-1 section. Same shape as footnotes."""
+    return _build_notes_section(
+        endnotes_xml, ctx, kind="endnote", title="미주",
+    )
+
+
+def _build_notes_section(
+    raw: bytes,
+    ctx: _ImportContext,
+    *,
+    kind: str,
+    title: str,
+) -> dict[str, Any] | None:
+    """Shared implementation for footnote/endnote walk.
+
+    DOCX serialises both with the same shape (`<w:footnote>` /
+    `<w:endnote>` element wrapping `<w:p>` paragraphs); only the element
+    name differs. `kind` selects the right element name + drives the
+    summary counter and the anchor ULID prefix used by the FE link parser.
+    """
     try:
-        root = ET.fromstring(footnotes_xml)
+        root = ET.fromstring(raw)
     except ET.ParseError:
         return None
+    el_name = "footnote" if kind == "footnote" else "endnote"
+    order_map = ctx.footnote_order if kind == "footnote" else ctx.endnote_order
     blocks: list[dict[str, Any]] = []
     idx = 0
-    for fn in root.findall(_q("w", "footnote")):
+    for fn in root.findall(_q("w", el_name)):
         fn_type = fn.get(_q("w", "type"))
-        # separator/continuationSeparator/continuationNotice 제외
+        # separator/continuationSeparator/continuationNotice 는 본문 노트가 아님.
         if fn_type in ("separator", "continuationSeparator", "continuationNotice"):
             continue
         idx += 1
@@ -932,18 +1297,34 @@ def _build_footnotes_section(
         if not chunks:
             continue
         joined = "\n".join(chunks)
+        # Stable ULID — also remember the docx side's id → ordinal mapping
+        # so that the body walker can compute the same `[N]` ordinals when
+        # it encounters <w:footnoteReference>.
+        block_id = _new_id()
+        docx_id = fn.get(_q("w", "id"))
+        if docx_id is not None:
+            order_map[str(docx_id)] = idx
+        # Pandoc-style footnote/endnote definition: the FE's
+        # `parseFootnoteDefinition` matches `[^TAG]: …`, hides the literal
+        # paragraph from the read view, and emits a `<li id="fn-TAG">` in
+        # the section-bottom note list. Body markers (`[^N]` / `[^en-N]`)
+        # use the same TAG and therefore land at the right anchor.
+        tag = f"en-{idx}" if kind == "endnote" else str(idx)
         blocks.append({
             "type": "paragraph",
-            "id": _new_id(),
-            "text": f"[{idx}] {joined}",
+            "id": block_id,
+            "text": f"[^{tag}]: {joined}",
         })
-        ctx.summary.footnotes += 1
+        if kind == "footnote":
+            ctx.summary.footnotes += 1
+        else:
+            ctx.summary.endnotes += 1
     if not blocks:
         return None
     return {
         "id": _new_id(),
         "level": 1,
-        "title": "각주",
+        "title": title,
         "blocks": blocks,
         "subsections": [],
     }

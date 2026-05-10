@@ -64,28 +64,42 @@ export function ConflictMergeModal({ slug }: ConflictMergeModalProps) {
     try {
       return threeWayDiff(effectiveBase!, mineDoc!, remote!)
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error('[ConflictMergeModal] threeWayDiff threw', err)
       return null
     }
   }, [closed, effectiveBase, mineDoc, remote])
 
-  const conflicts = tw?.conflicts ?? []
-  const autoMergeable = tw?.autoMergeableConflictIds ?? []
+  // Wrap the fallback `[]` in useMemo so identity is stable when `tw` is
+  // null — otherwise every render produces a new array, which makes any
+  // hook that depends on `conflicts` re-run on every parent re-render.
+  const conflicts = useMemo(() => tw?.conflicts ?? [], [tw])
+  const autoMergeable = useMemo(
+    () => tw?.autoMergeableConflictIds ?? [],
+    [tw],
+  )
 
-  // Keyboard
+  // Keyboard. We cannot put `close` and `applyAndSave` directly in the
+  // deps array — they're function literals defined later in the component
+  // body, recreated every render, and adding them would re-register the
+  // window listener on every keystroke. Instead we route through refs that
+  // we keep pointed at the LATEST callbacks (see effect just below). This
+  // guarantees Enter / Escape always run against the current state — most
+  // importantly the `manualText` value the user just finished typing.
+  const closeRef = useRef<() => void>(() => {})
+  const applyAndSaveRef = useRef<() => Promise<void>>(async () => {})
   useEffect(() => {
     if (closed) return
     const onKey = (e: KeyboardEvent) => {
       if (busy) return
       if (e.key === 'Escape') {
         e.preventDefault()
-        close()
+        closeRef.current()
         return
       }
       if (e.key === 'Enter') {
         e.preventDefault()
-        void applyAndSave()
+        void applyAndSaveRef.current()
         return
       }
       if (conflicts.length === 0) return
@@ -114,6 +128,53 @@ export function ConflictMergeModal({ slug }: ConflictMergeModalProps) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [closed, busy, conflicts, activeIdx])
+
+  // Build per-pane outlines (with diff statuses). These hooks MUST run on
+  // every render — including the early-return paths below — to satisfy the
+  // rules-of-hooks invariant. Inside we tolerate null tw / mineDoc /
+  // effectiveBase / remote and return an empty outline; the early returns
+  // that follow simply prevent the JSX consumers from rendering.
+  const minePatch = tw?.minePatch ?? null
+  const theirsPatch = tw?.theirsPatch ?? null
+  const mineOutline = useMemo(
+    () => (mineDoc ? buildOutline(mineDoc, minePatch, conflicts, 'mine') : []),
+    [mineDoc, minePatch, conflicts],
+  )
+  const baseOutline = useMemo(
+    () => (effectiveBase ? buildOutline(effectiveBase, null, conflicts, 'base') : []),
+    [effectiveBase, conflicts],
+  )
+  const theirsOutline = useMemo(
+    () => (remote ? buildOutline(remote, theirsPatch, conflicts, 'theirs') : []),
+    [remote, theirsPatch, conflicts],
+  )
+
+  // Synchronised scroll across the three panes — hooks hoisted alongside
+  // the outlines so the rule-of-hooks order is identical every render.
+  const mineRef = useRef<HTMLDivElement>(null)
+  const baseRef = useRef<HTMLDivElement>(null)
+  const theirsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (closed) return
+    const refs = [mineRef.current, baseRef.current, theirsRef.current]
+    if (refs.some((r) => !r)) return
+    let syncing = false
+    const handler = (src: HTMLDivElement) => () => {
+      if (syncing) return
+      syncing = true
+      for (const r of refs) {
+        if (r && r !== src) r.scrollTop = src.scrollTop
+      }
+      requestAnimationFrame(() => {
+        syncing = false
+      })
+    }
+    const handlers = refs.map((r) => (r ? handler(r) : null))
+    refs.forEach((r, i) => r?.addEventListener('scroll', handlers[i] as EventListener))
+    return () => {
+      refs.forEach((r, i) => r?.removeEventListener('scroll', handlers[i] as EventListener))
+    }
+  }, [closed])
 
   if (closed) return null
   if (!tw) {
@@ -225,6 +286,13 @@ export function ConflictMergeModal({ slug }: ConflictMergeModalProps) {
     }
   }
 
+  // Refresh the keyboard-handler refs every render so Enter / Escape
+  // always invoke the LATEST closure (capturing the user's most recent
+  // manualText / choices / etc). Pairing with the long-lived listener
+  // installed in the keyboard useEffect above.
+  closeRef.current = close
+  applyAndSaveRef.current = applyAndSave
+
   const setChoice = (conflictId: string, kind: 'mine' | 'theirs' | 'manual'): void => {
     if (kind === 'manual') {
       setChoices((c) => ({ ...c, [conflictId]: { kind: 'manual', value: undefined } }))
@@ -239,38 +307,6 @@ export function ConflictMergeModal({ slug }: ConflictMergeModalProps) {
       setChoices((c) => ({ ...c, [conflictId]: { kind } }))
     }
   }
-
-  // Build per-pane outlines (with diff statuses)
-  const minePatch = tw?.minePatch ?? null
-  const theirsPatch = tw?.theirsPatch ?? null
-  const mineOutline = useMemo(() => buildOutline(mineDoc!, minePatch, conflicts, 'mine'), [mineDoc, minePatch, conflicts])
-  const baseOutline = useMemo(() => buildOutline(effectiveBase!, null, conflicts, 'base'), [effectiveBase, conflicts])
-  const theirsOutline = useMemo(() => buildOutline(remote!, theirsPatch, conflicts, 'theirs'), [remote, theirsPatch, conflicts])
-
-  // Sticky synchronized scrolling between panes
-  const mineRef = useRef<HTMLDivElement>(null)
-  const baseRef = useRef<HTMLDivElement>(null)
-  const theirsRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const refs = [mineRef.current, baseRef.current, theirsRef.current]
-    if (refs.some((r) => !r)) return
-    let syncing = false
-    const handler = (src: HTMLDivElement) => () => {
-      if (syncing) return
-      syncing = true
-      for (const r of refs) {
-        if (r && r !== src) r.scrollTop = src.scrollTop
-      }
-      requestAnimationFrame(() => {
-        syncing = false
-      })
-    }
-    const handlers = refs.map((r) => (r ? handler(r) : null))
-    refs.forEach((r, i) => r?.addEventListener('scroll', handlers[i] as EventListener))
-    return () => {
-      refs.forEach((r, i) => r?.removeEventListener('scroll', handlers[i] as EventListener))
-    }
-  }, [closed])
 
   const totalThierChanges = (theirsPatch?.metadata.length ?? 0) +
     (theirsPatch?.infobox.length ?? 0) +

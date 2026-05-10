@@ -6,6 +6,9 @@ import type {
 } from '@/types/document'
 import type { DocumentMetaEnvelope, DocumentRow } from '@/features/document/api'
 import { Infobox } from './Infobox'
+import { TableOfContents } from './TableOfContents'
+import { InfoboxEditor } from '@/features/editor/components/InfoboxEditor'
+import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { SectionRenderer } from './SectionRenderer'
 import { Badge } from '@/components/ui'
 import { FavoriteStar } from '@/features/favorites/components/FavoriteStar'
@@ -74,6 +77,7 @@ function collectSectionIds(sections: readonly AnySection[]): string[] {
 }
 
 export function WikiArticle({ document, row, meta, editableSlug }: WikiArticleProps) {
+  const isFullEditing = useEditorStore(editorSelectors.isFullEditing)
   // Defensive: insertBlock 등 부분 응답이 metadata 를 빠뜨려도 (또는 신규 문서가
   // empty metadata 인 경우) 페이지 전체가 흰 화면이 되지 않게 한다.
   const md = document.metadata ?? {}
@@ -212,10 +216,10 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
             <Badge key={t} tone="muted" size="sm">#{t}</Badge>
           ))}
         </div>
-        <div className="flex items-start gap-2">
-          <h1 className="flex-1 text-3xl font-semibold tracking-tight text-smsg-900 sm:text-4xl">
-            {document.title}
-          </h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-smsg-900 sm:text-4xl">
+          {document.title}
+        </h1>
+        <div className="flex flex-wrap items-center gap-2">
           <PresenceAvatars slug={document.slug} />
           {row?.id && (
             <AddToSeriesButton slug={document.slug} documentId={row.id} />
@@ -230,7 +234,7 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
               title="문서 통계"
             >
               <span aria-hidden="true">📊</span>
-              <span className="ml-1 hidden sm:inline">통계</span>
+              <span className="ml-1">통계</span>
             </button>
           )}
           {canSaveTemplate && (
@@ -243,20 +247,20 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
               title="템플릿으로 저장"
             >
               <span aria-hidden="true">📋</span>
-              <span className="ml-1 hidden sm:inline">템플릿으로 저장</span>
+              <span className="ml-1">템플릿으로 저장</span>
             </button>
           )}
           {canArchive && (
             <button
               type="button"
               onClick={() => setArchiveConfirmOpen(true)}
-              className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 hover:text-smsg-700"
+              className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
               data-testid="open-archive-doc"
-              aria-label="보관"
-              title="보관"
+              aria-label="삭제 (보관함으로)"
+              title="삭제 — 보관함으로 이동, 이후 영구 삭제 가능"
             >
-              <span aria-hidden="true">📦</span>
-              <span className="ml-1 hidden sm:inline">보관</span>
+              <span aria-hidden="true">🗑</span>
+              <span className="ml-1">삭제</span>
             </button>
           )}
           <AckReadButton slug={document.slug} docStatus={workflowStatus} />
@@ -300,26 +304,49 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
         </div>
       )}
 
-      <div className="clearfix">
-        {document.infobox && <Infobox data={document.infobox} />}
-        <SectionSwipe
-          sectionIds={(document.sections ?? []).map((s) =>
-            s.number ? `section-${s.number}` : s.id,
-          )}
+      {/* Metadata strip — 2-column row that sits between the collapse
+          controls and the body. Left half: TOC (navigation). Right half:
+          Infobox (key facts / editor). Body below uses the full width as
+          a single column so paragraphs / tables / charts don't get
+          squeezed into a narrow center channel. On <md screens the strip
+          stacks (Infobox first, then TOC, then body) so smartphone users
+          see the most important block first. */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <aside
+          aria-label="목차"
+          className="order-2 rounded border border-gray-200 bg-white py-2 md:order-1"
         >
-          <div className="space-y-6">
-            {(document.sections ?? []).map((section, idx) => (
-              <SectionRenderer
-                key={section.id}
-                section={section}
-                editableSlug={editableSlug}
-                autoFocusInline={idx === 0}
-                collapseSlug={slug}
-              />
-            ))}
-          </div>
-        </SectionSwipe>
+          <TableOfContents document={document} />
+        </aside>
+        <aside
+          aria-label="주요 정보"
+          className="order-1 md:order-2"
+        >
+          {isFullEditing && editableSlug ? (
+            <InfoboxEditor slug={editableSlug} data={document.infobox ?? {}} />
+          ) : (
+            document.infobox && <Infobox data={document.infobox} />
+          )}
+        </aside>
       </div>
+
+      <SectionSwipe
+        sectionIds={(document.sections ?? []).map((s) =>
+          s.number ? `section-${s.number}` : s.id,
+        )}
+      >
+        <div className="space-y-6">
+          {(document.sections ?? []).map((section, idx) => (
+            <SectionRenderer
+              key={section.id}
+              section={section}
+              editableSlug={editableSlug}
+              autoFocusInline={idx === 0}
+              collapseSlug={slug}
+            />
+          ))}
+        </div>
+      </SectionSwipe>
       {/* Cycle 0021 — doc-level emoji reactions. Lives at article bottom so
           readers see it after digesting the body. */}
       <div className="flex flex-col items-start gap-2 border-t border-gray-200 pt-4">
@@ -368,7 +395,7 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
       <Modal
         open={archiveConfirmOpen}
         onClose={() => setArchiveConfirmOpen(false)}
-        title="문서 보관 확인"
+        title="문서 삭제 확인"
         size="md"
         footer={
           <div className="flex justify-end gap-2">
@@ -382,18 +409,35 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
             </Button>
             <Button
               size="sm"
-              variant="primary"
+              variant="danger"
               disabled={archiveBusy}
               onClick={() => void onArchive()}
               data-testid="archive-doc-confirm"
             >
-              보관
+              삭제 (보관함으로)
             </Button>
           </div>
         }
       >
-        <div className="px-5 py-4 text-sm text-gray-700">
-          <p>이 문서를 보관 처리합니다. 일반 사용자에게는 더 이상 노출되지 않으며, 관리자가 보관 문서 페이지에서 복원할 수 있습니다.</p>
+        <div className="space-y-2 px-5 py-4 text-sm text-gray-700">
+          <p>
+            이 문서를 <strong>보관함</strong>으로 옮깁니다. 일반 사용자에게는 더 이상 노출되지 않으며, 검색 결과에서도 제외됩니다.
+          </p>
+          <p className="text-gray-600">
+            보관 후에는 관리자가 보관함 페이지에서 <strong>복원</strong>하거나 <strong>영구 삭제</strong>할 수 있습니다.
+            (영구 삭제는 기본적으로 보관 7일 후부터 가능하며, 관리자가 즉시 삭제 옵션으로 우회 가능합니다.)
+          </p>
+          {isAdmin && (
+            <p className="pt-1 text-xs">
+              <a
+                href="/admin/archived"
+                className="text-smsg-700 underline hover:text-smsg-900"
+                data-testid="archive-doc-link-archived-page"
+              >
+                보관함 페이지 열기 →
+              </a>
+            </p>
+          )}
         </div>
       </Modal>
     </article>

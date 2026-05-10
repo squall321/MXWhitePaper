@@ -2,14 +2,21 @@ import { apiClient } from '@/lib/api/client'
 import { unwrap, type ApiEnvelope } from '@/lib/api/envelope'
 import type { Ulid } from '@/types/document'
 
-/** Body sent to `/uploads/image/init`. */
+/** Body sent to `/uploads/image/init`.
+ *
+ * BE contract uses `mime_type` (snake_case) — see
+ * apps/api/app/services/upload_service.py:_validate_init_body. Sending
+ * `mime` here returns 422 and the upload silently fails before the PUT
+ * step, which manifests as "image picker accepted the file but the block
+ * never updated."
+ */
 export interface InitImageInput {
   /** Lowercase 64-char hex digest of the file content. */
   sha256: string
   /** Total content length in bytes. */
   size: number
   /** MIME type as reported by the browser (e.g. `image/png`). */
-  mime: string
+  mime_type: string
   /** Original filename (UTF-8). */
   filename?: string
 }

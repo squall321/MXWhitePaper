@@ -231,7 +231,7 @@ export function SectionEditor({
       data-blocknote-surface
       className="wp-editor-surface relative rounded-md border border-smsg-100 bg-white"
     >
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      { }
       <BlockNoteView
         editor={editor as any}
         editable={!readOnly}

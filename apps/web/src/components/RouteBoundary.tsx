@@ -30,7 +30,7 @@ export class RouteBoundary extends Component<Props, State> {
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
-    // eslint-disable-next-line no-console
+     
     console.error('[RouteBoundary]', this.props.routeName ?? '(unknown)', error, info)
   }
 

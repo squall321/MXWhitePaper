@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case 1 — Engineering Stress-Strain Curve (Interactive)</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --text: #212529;
+    --subtext: #6c757d;
+    --border: #dee2e6;
+    --accent: #0d6efd;
+    --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117; --surface: #161b22; --text: #e6edf3;
+      --subtext: #8b949e; --border: #30363d; --accent: #58a6ff;
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+  }
+
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 2rem 1rem; gap: 1.25rem;
+  }
+
+  header { text-align: center; }
+  header h1 { font-size: 1.35rem; font-weight: 700; color: var(--accent); }
+  header p  { font-size: 0.82rem; color: var(--subtext); margin-top: 0.25rem; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.25rem 1.5rem;
+    box-shadow: var(--shadow); width: 100%; max-width: 900px;
+  }
+
+  .chart-wrap { position: relative; width: 100%; aspect-ratio: 16/9; cursor: crosshair; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  /* ── HUD overlay (slope panel) ── */
+  #hud {
+    position: absolute; top: 10px; right: 10px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; min-width: 180px;
+    box-shadow: var(--shadow); font-size: 0.78rem;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  }
+  #hud.visible { opacity: 1; }
+  #hud .hud-title {
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--subtext); margin-bottom: 6px;
+  }
+  #hud .hud-row { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 3px; }
+  #hud .hud-label { color: var(--subtext); }
+  #hud .hud-val { font-weight: 700; font-family: monospace; }
+  #hud .hud-slope-bar {
+    height: 4px; border-radius: 2px; margin-top: 8px; width: 100%;
+    background: var(--border); overflow: hidden;
+  }
+  #hud .hud-slope-fill { height: 100%; border-radius: 2px; transition: width 0.1s, background 0.1s; }
+  #hud .hud-region {
+    margin-top: 8px; padding: 3px 7px; border-radius: 4px;
+    font-size: 0.7rem; font-weight: 600; text-align: center;
+  }
+
+  /* ── Keypoint popup ── */
+  #kp-popup {
+    position: absolute; pointer-events: none;
+    background: var(--surface); border: 1.5px solid var(--accent);
+    border-radius: 10px; padding: 10px 14px; min-width: 200px;
+    box-shadow: var(--shadow); font-size: 0.78rem;
+    opacity: 0; transition: opacity 0.2s; z-index: 10;
+  }
+  #kp-popup.visible { opacity: 1; }
+  #kp-popup .kp-name { font-weight: 700; margin-bottom: 4px; }
+  #kp-popup .kp-row  { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 2px; color: var(--subtext); }
+  #kp-popup .kp-row span:last-child { font-weight: 600; color: var(--text); font-family: monospace; }
+  #kp-popup .kp-desc { margin-top: 6px; font-size: 0.7rem; color: var(--subtext); line-height: 1.4; border-top: 1px solid var(--border); padding-top: 5px; }
+
+  /* ── tooltip (σ,ε readout) ── */
+  #tooltip {
+    position: fixed; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 9px; font-size: 0.76rem;
+    pointer-events: none; opacity: 0; transition: opacity 0.15s;
+    box-shadow: var(--shadow); z-index: 100; white-space: nowrap; color: var(--text);
+  }
+
+  /* ── legend ── */
+  .legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-top: 0.9rem; font-size: 0.76rem; color: var(--subtext); }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-box  { width: 13px; height: 13px; border-radius: 3px; flex-shrink: 0; }
+
+  /* ── props table ── */
+  .props { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin-top: 0.6rem; }
+  .props th, .props td { padding: 5px 10px; border: 1px solid var(--border); text-align: left; }
+  .props th { background: var(--bg); font-weight: 600; color: var(--subtext); }
+  .props td code { font-family: monospace; color: var(--accent); }
+  .section-title { font-size: 0.82rem; font-weight: 600; color: var(--subtext); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.45rem; }
+
+  .hint { font-size: 0.75rem; color: var(--subtext); margin-top: 0.5rem; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Engineering Stress-Strain Curve — Mild Steel</h1>
+  <p>Case 1: 구체적 전문 지시 결과물 · 인터랙티브 접선 + 접선 탄성계수</p>
+</header>
+
+<div class="card">
+  <div class="chart-wrap" id="wrap">
+    <canvas id="chart"></canvas>
+
+    <!-- HUD: 우측 상단 slope 패널 -->
+    <div id="hud">
+      <div class="hud-title">Tangent Modulus E<sub>t</sub></div>
+      <div class="hud-row"><span class="hud-label">σ</span><span class="hud-val" id="hud-s">— MPa</span></div>
+      <div class="hud-row"><span class="hud-label">ε</span><span class="hud-val" id="hud-e">—</span></div>
+      <div class="hud-row"><span class="hud-label">dσ/dε</span><span class="hud-val" id="hud-slope">— MPa</span></div>
+      <div class="hud-slope-bar"><div class="hud-slope-fill" id="hud-bar" style="width:0%"></div></div>
+      <div class="hud-region" id="hud-region"></div>
+    </div>
+
+    <!-- Keypoint popup -->
+    <div id="kp-popup">
+      <div class="kp-name" id="kp-name"></div>
+      <div class="kp-row"><span>σ</span><span id="kp-s"></span></div>
+      <div class="kp-row"><span>ε</span><span id="kp-e"></span></div>
+      <div class="kp-row"><span>E<sub>t</sub></span><span id="kp-et"></span></div>
+      <div class="kp-desc" id="kp-desc"></div>
+    </div>
+  </div>
+  <p class="hint">커브 위에서 마우스를 움직이면 접선(tangent line)과 접선 탄성계수(dσ/dε)가 표시됩니다.</p>
+  <div class="legend" id="legend"></div>
+</div>
+
+<div class="card">
+  <div class="section-title">Material Properties</div>
+  <table class="props">
+    <thead><tr><th>Point</th><th>ε</th><th>σ (MPa)</th><th>Et (MPa)</th><th>Description</th></tr></thead>
+    <tbody id="props-body"></tbody>
+  </table>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+/* ═══════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════ */
+const KP = [
+  { id:'origin',   label:'Origin',            e:0,      s:0,   color:'#6c757d', desc:'' },
+  { id:'prop',     label:'Proportional Limit', e:0.001,  s:200, color:'#198754',
+    desc:"Hooke's Law의 끝. E = σ/ε = 200 GPa. 이 구간까지 완전 선형." },
+  { id:'elastic',  label:'Elastic Limit',      e:0.0012, s:210, color:'#0d6efd',
+    desc:'소성변형 직전 한계. 하중 제거 시 완전 복원되는 마지막 지점.' },
+  { id:'upper_yp', label:'Upper Yield Point',  e:0.002,  s:250, color:'#fd7e14',
+    desc:'전위(dislocation) 움직임 시작. 급격한 응력 강하 발생.' },
+  { id:'lower_yp', label:'Lower Yield Point',  e:0.003,  s:220, color:'#ffc107',
+    desc:"안정적 항복. Lüders band 전파. Et ≈ 0 (응력 불변 구간)." },
+  { id:'uts',      label:'Ultimate Tensile Strength (UTS)', e:0.20, s:580, color:'#dc3545',
+    desc:'공학적 최대 응력. 넥킹(necking) 시작. Et = 0.' },
+  { id:'fracture', label:'Fracture Point',     e:0.28,   s:420, color:'#6f42c1',
+    desc:'재료 파단. Et < 0 (불안정 구간).' },
+];
+
+const REGIONS = [
+  { label:'Elastic Region',    color:'rgba(100,200,100,0.18)', from:'origin',   to:'upper_yp', bg:'#d1fae5', fg:'#065f46' },
+  { label:'Plastic (Yield)',   color:'rgba(200,200,100,0.18)', from:'upper_yp', to:'lower_yp', bg:'#fef9c3', fg:'#713f12' },
+  { label:'Strain Hardening',  color:'rgba(200,150,100,0.18)', from:'lower_yp', to:'uts',      bg:'#ffedd5', fg:'#7c2d12' },
+  { label:'Necking Region',    color:'rgba(200,100,100,0.18)', from:'uts',      to:'fracture', bg:'#fee2e2', fg:'#7f1d1d' },
+];
+
+const PAD     = { top:44, right:32, bottom:62, left:74 };
+const X_MAX_E = 0.30;
+const Y_MAX_S = 620;
+const TANGENT_LEN_PX = 120; // half-length of tangent line drawn
+
+const canvas  = document.getElementById('chart');
+const ctx     = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+const hud     = document.getElementById('hud');
+const kpPopup = document.getElementById('kp-popup');
+
+/* ═══════════════════════════════════════════
+   COORDINATE HELPERS
+═══════════════════════════════════════════ */
+const cw = () => canvas.width;
+const ch = () => canvas.height;
+const chartW = () => cw() - PAD.left - PAD.right;
+const chartH = () => ch() - PAD.top  - PAD.bottom;
+
+const toX = e  => PAD.left  + (e / X_MAX_E) * chartW();
+const toY = s  => ch() - PAD.bottom - (s / Y_MAX_S) * chartH();
+const fromX = cx => (cx - PAD.left)  / chartW() * X_MAX_E;
+const fromY = cy => (ch() - PAD.bottom - cy) / chartH() * Y_MAX_S;
+
+function getKP(id) { return KP.find(k => k.id === id); }
+function isDark()  { return window.matchMedia('(prefers-color-scheme: dark)').matches; }
+
+/* ═══════════════════════════════════════════
+   CURVE SAMPLING
+═══════════════════════════════════════════ */
+function buildCurve() {
+  const pts = [];
+  const kp = id => getKP(id);
+
+  seg(kp('origin'),   kp('prop'),     40, 'linear',      pts);
+  seg(kp('prop'),     kp('elastic'),   4, 'ease-out',    pts);
+  seg(kp('elastic'),  kp('upper_yp'),  6, 'ease-out',    pts);
+  seg(kp('upper_yp'), kp('lower_yp'),  6, 'ease-in-out', pts);
+
+  // yield plateau with slight oscillation
+  for (let i = 1; i <= 30; i++) {
+    const t = i / 30;
+    const e = kp('lower_yp').e + t * (0.08 - kp('lower_yp').e);
+    const s = kp('lower_yp').s + Math.sin(t * Math.PI * 3) * 4;
+    pts.push({ e, s });
+  }
+
+  seg({ e:0.08, s:kp('lower_yp').s }, kp('uts'),      80, 'ease-in', pts);
+  seg(kp('uts'), kp('fracture'),       25, 'ease-out',  pts);
+  return pts;
+}
+
+function seg(from, to, steps, ease, out) {
+  for (let i = 1; i <= steps; i++) {
+    let t = i / steps;
+    if (ease === 'ease-in')     t = t * t;
+    if (ease === 'ease-out')    t = 1 - (1-t)*(1-t);
+    if (ease === 'ease-in-out') t = t < .5 ? 2*t*t : 1-2*(1-t)*(1-t);
+    out.push({ e: from.e + t*(to.e-from.e), s: from.s + t*(to.s-from.s) });
+  }
+}
+
+/* canvas-space points (recomputed on resize) */
+let curvePts = [];   // { x, y, e, s, slope }  slope = dσ/dε
+
+function recomputeCurve() {
+  const raw = buildCurve();
+  curvePts = raw.map(p => ({ ...p, x: toX(p.e), y: toY(p.s) }));
+
+  // Numerical derivative dσ/dε via central difference
+  for (let i = 0; i < curvePts.length; i++) {
+    const prev = curvePts[Math.max(0, i-1)];
+    const next = curvePts[Math.min(curvePts.length-1, i+1)];
+    const de = next.e - prev.e;
+    const ds = next.s - prev.s;
+    curvePts[i].slope = de !== 0 ? ds / de : 0;
+  }
+}
+
+/* ═══════════════════════════════════════════
+   DRAW
+═══════════════════════════════════════════ */
+let hoverIdx  = -1;   // index into curvePts
+let lockedIdx = -1;   // click-locked tangent (-1 = none)
+
+function draw() {
+  const W = cw(), H = ch();
+  const dark    = isDark();
+  const textCol = dark ? '#e6edf3' : '#212529';
+  const gridCol = dark ? '#30363d' : '#e9ecef';
+  const axisCol = dark ? '#8b949e' : '#6c757d';
+  const lineCol = dark ? '#58a6ff' : '#0d6efd';
+
+  ctx.clearRect(0, 0, W, H);
+
+  /* ── grid ── */
+  ctx.strokeStyle = gridCol; ctx.lineWidth = 1;
+  for (let i = 0; i <= 10; i++) {
+    const x = PAD.left + i/10 * chartW();
+    ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, H-PAD.bottom); ctx.stroke();
+    const y = PAD.top + i/10 * chartH();
+    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W-PAD.right, y); ctx.stroke();
+  }
+
+  /* ── region fills ── */
+  REGIONS.forEach(r => {
+    const fx = toX(getKP(r.from).e), tx = toX(getKP(r.to).e);
+    const seg = curvePts.filter(p => p.x >= fx - 1 && p.x <= tx + 1);
+    if (!seg.length) return;
+    ctx.fillStyle = r.color;
+    ctx.beginPath();
+    ctx.moveTo(seg[0].x, H-PAD.bottom);
+    seg.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(seg[seg.length-1].x, H-PAD.bottom);
+    ctx.closePath(); ctx.fill();
+  });
+
+  /* ── region text labels ── */
+  const regionLabels = [
+    { text:'Elastic',          ex:0.001,  yf:0.55 },
+    { text:'Yield',            ex:0.0025, yf:0.35 },
+    { text:'Strain\nHardening',ex:0.10,   yf:0.25 },
+    { text:'Necking',          ex:0.245,  yf:0.65 },
+  ];
+  ctx.textAlign = 'center';
+  ctx.font = `${Math.max(9, W * 0.011)}px Segoe UI, sans-serif`;
+  ctx.fillStyle = axisCol;
+  regionLabels.forEach(r => {
+    const rx = toX(r.ex), ry = PAD.top + r.yf * chartH();
+    r.text.split('\n').forEach((l, i) => ctx.fillText(l, rx, ry + i * 13));
+  });
+
+  /* ── Young's modulus label ── */
+  ctx.save();
+  ctx.font = `bold ${Math.max(9, W * 0.012)}px Segoe UI, sans-serif`;
+  ctx.fillStyle = '#198754';
+  ctx.textAlign = 'left';
+  ctx.fillText('E = 200 GPa', toX(0.0002), toY(40));
+  ctx.restore();
+
+  /* ── main curve ── */
+  ctx.beginPath();
+  ctx.strokeStyle = lineCol;
+  ctx.lineWidth = Math.max(2, W * 0.003);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  curvePts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  ctx.stroke();
+
+  /* ── axes ── */
+  ctx.strokeStyle = axisCol; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(PAD.left, PAD.top); ctx.lineTo(PAD.left, H-PAD.bottom);
+  ctx.lineTo(W-PAD.right, H-PAD.bottom); ctx.stroke();
+
+  /* ── axis ticks ── */
+  ctx.fillStyle = textCol;
+  ctx.font = `${Math.max(9, W * 0.013)}px Segoe UI, sans-serif`;
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 10; i++) {
+    const s = Y_MAX_S * i / 10;
+    if (s > Y_MAX_S) continue;
+    ctx.fillText(Math.round(s), PAD.left - 6, toY(s) + 4);
+  }
+  ctx.textAlign = 'center';
+  [0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30].forEach(e => {
+    ctx.fillText(e.toFixed(2), toX(e), H - PAD.bottom + 18);
+  });
+
+  /* ── axis titles ── */
+  ctx.save();
+  ctx.font = `bold ${Math.max(10, W * 0.014)}px Segoe UI, sans-serif`;
+  ctx.fillStyle = textCol;
+  ctx.translate(16, PAD.top + chartH() / 2);
+  ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center';
+  ctx.fillText('Stress σ (MPa)', 0, 0); ctx.restore();
+  ctx.textAlign = 'center';
+  ctx.font = `bold ${Math.max(10, W * 0.014)}px Segoe UI, sans-serif`;
+  ctx.fillStyle = textCol;
+  ctx.fillText('Strain ε', PAD.left + chartW() / 2, H - 8);
+
+  /* ── tangent line (locked first, then hover) ── */
+  const tIdx = lockedIdx >= 0 ? lockedIdx : hoverIdx;
+  if (tIdx >= 0 && tIdx < curvePts.length) {
+    drawTangent(tIdx, lockedIdx >= 0);
+  }
+
+  /* ── key-point markers ── */
+  KP.forEach(kp => {
+    if (kp.id === 'origin') return;
+    const x = toX(kp.e), y = toY(kp.s);
+    const nearHover = hoverIdx >= 0 && Math.abs(curvePts[hoverIdx].e - kp.e) < 0.002;
+    const r = nearHover ? Math.max(6, W * 0.009) : Math.max(4, W * 0.006);
+    if (nearHover) {
+      ctx.beginPath(); ctx.arc(x, y, r + 4, 0, Math.PI*2);
+      ctx.fillStyle = kp.color + '33'; ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fillStyle = kp.color; ctx.fill();
+    ctx.strokeStyle = dark ? '#0d1117' : '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  });
+}
+
+/* ── draw tangent at curve index ── */
+function drawTangent(idx, locked) {
+  const p = curvePts[idx];
+  const slope_ds_de = p.slope; // dσ/dε  [MPa]
+
+  // canvas slope: dy_canvas / dx_canvas
+  // dσ = ds_de * de,  de = dx * X_MAX_E/chartW,  ds converts to dy: dy = -ds * chartH/Y_MAX_S
+  const canvasSlope = -(slope_ds_de) * (chartH() / Y_MAX_S) / (chartW() / X_MAX_E);
+  // = -slope * chartH * X_MAX_E / (Y_MAX_S * chartW)
+
+  const len  = TANGENT_LEN_PX;
+  const ang  = Math.atan2(canvasSlope, 1);
+  const dx   = Math.cos(ang) * len;
+  const dy   = Math.sin(ang) * len;
+
+  const slopeAbs = Math.abs(slope_ds_de);
+  // colour: blue (elastic/high), green (near 0), red (negative)
+  let lineColor;
+  if (slope_ds_de > 50000)     lineColor = '#0d6efd'; // elastic — near E
+  else if (slope_ds_de > 500)  lineColor = '#fd7e14'; // strain hardening
+  else if (slope_ds_de > -100) lineColor = '#198754'; // near zero (UTS)
+  else                         lineColor = '#dc3545'; // necking (negative)
+
+  // dashed tangent line
+  ctx.save();
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = locked ? lineColor : lineColor + 'cc';
+  ctx.lineWidth   = locked ? 2.5 : 2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(p.x - dx, p.y - dy);
+  ctx.lineTo(p.x + dx, p.y + dy);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // circle at tangent point
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 5, 0, Math.PI*2);
+  ctx.fillStyle = lineColor;
+  ctx.fill();
+  ctx.strokeStyle = isDark() ? '#0d1117' : '#fff';
+  ctx.lineWidth = 2; ctx.stroke();
+
+  // slope label near tangent
+  const labelX = p.x + dx * 0.5 + 10;
+  const labelY = p.y + dy * 0.5 - 8;
+  ctx.fillStyle = lineColor;
+  ctx.font = `bold ${Math.max(10, cw() * 0.013)}px Segoe UI, sans-serif`;
+  ctx.textAlign = 'left';
+
+  const slopeGPa = slope_ds_de / 1000;
+  const slopeText = Math.abs(slope_ds_de) > 1000
+    ? `Et = ${slopeGPa.toFixed(1)} GPa`
+    : `Et = ${slope_ds_de.toFixed(0)} MPa`;
+  ctx.fillText(slopeText, labelX, labelY);
+
+  if (locked) {
+    ctx.font = `${Math.max(8, cw() * 0.011)}px Segoe UI, sans-serif`;
+    ctx.fillStyle = lineColor + '99';
+    ctx.fillText('(click to unlock)', labelX, labelY + 14);
+  }
+
+  ctx.restore();
+}
+
+/* ═══════════════════════════════════════════
+   MOUSE INTERACTION
+═══════════════════════════════════════════ */
+function findNearestIdx(mx) {
+  let best = -1, minD = Infinity;
+  curvePts.forEach((p, i) => {
+    const d = Math.abs(p.x - mx);
+    if (d < minD) { minD = d; best = i; }
+  });
+  return (minD < cw() * 0.06) ? best : -1;
+}
+
+function regionOf(e) {
+  if (e <= getKP('upper_yp').e) return REGIONS[0];
+  if (e <= getKP('lower_yp').e) return REGIONS[1];
+  if (e <= getKP('uts').e)      return REGIONS[2];
+  return REGIONS[3];
+}
+
+function nearKeypoint(e) {
+  const threshold = X_MAX_E * 0.012;
+  return KP.find(k => k.id !== 'origin' && Math.abs(k.e - e) < threshold) || null;
+}
+
+canvas.addEventListener('mousemove', evt => {
+  const rect = canvas.getBoundingClientRect();
+  const mx   = (evt.clientX - rect.left)  * (cw() / rect.width);
+  const my   = (evt.clientY - rect.top)   * (ch() / rect.height);
+
+  const idx = findNearestIdx(mx);
+  hoverIdx = idx;
+
+  if (idx < 0) {
+    hud.classList.remove('visible');
+    kpPopup.classList.remove('visible');
+    tooltip.style.opacity = 0;
+    draw(); return;
+  }
+
+  const p   = curvePts[idx];
+  const reg = regionOf(p.e);
+  const slopeGPa = p.slope / 1000;
+  const slopeText = Math.abs(p.slope) > 1000
+    ? `${slopeGPa.toFixed(2)} GPa`
+    : `${p.slope.toFixed(0)} MPa`;
+
+  // HUD update
+  document.getElementById('hud-s').textContent     = `${p.s.toFixed(1)} MPa`;
+  document.getElementById('hud-e').textContent     = p.e.toFixed(5);
+  document.getElementById('hud-slope').textContent = slopeText;
+
+  const maxSlope = 200000; // ~E for mild steel
+  const pct = Math.min(100, Math.max(0, p.slope / maxSlope * 100));
+  const bar = document.getElementById('hud-bar');
+  bar.style.width = pct + '%';
+  bar.style.background = p.slope > 50000 ? '#0d6efd'
+                       : p.slope > 500   ? '#fd7e14'
+                       : p.slope > -100  ? '#198754'
+                       : '#dc3545';
+
+  const regionEl = document.getElementById('hud-region');
+  regionEl.textContent   = reg.label;
+  regionEl.style.background = reg.bg;
+  regionEl.style.color      = reg.fg;
+
+  hud.classList.add('visible');
+
+  // Tooltip
+  tooltip.style.left    = evt.clientX + 14 + 'px';
+  tooltip.style.top     = evt.clientY - 28 + 'px';
+  tooltip.style.opacity = 1;
+  tooltip.innerHTML     = `<b>σ = ${p.s.toFixed(1)} MPa</b> &nbsp; ε = ${p.e.toFixed(5)}`;
+
+  // Keypoint popup
+  const kp = nearKeypoint(p.e);
+  if (kp) {
+    const kpSlope = curvePts[idx].slope;
+    const kpSlopeText = Math.abs(kpSlope) > 1000
+      ? `${(kpSlope/1000).toFixed(2)} GPa`
+      : `${kpSlope.toFixed(0)} MPa`;
+
+    document.getElementById('kp-name').textContent = kp.label;
+    document.getElementById('kp-name').style.color = kp.color;
+    document.getElementById('kp-s').textContent    = `${kp.s} MPa`;
+    document.getElementById('kp-e').textContent    = kp.e.toFixed(4);
+    document.getElementById('kp-et').textContent   = kpSlopeText;
+    document.getElementById('kp-desc').textContent = kp.desc;
+
+    // position popup: prefer left side if near right edge
+    const popW = 220, popH = 140;
+    const wrap = document.getElementById('wrap').getBoundingClientRect();
+    const relX = evt.clientX - wrap.left;
+    const relY = evt.clientY - wrap.top;
+    const posLeft = relX > wrap.width * 0.6
+      ? Math.max(0, relX - popW - 14)
+      : relX + 14;
+    const posTop  = Math.min(wrap.height - popH, relY - 20);
+
+    kpPopup.style.left    = posLeft + 'px';
+    kpPopup.style.top     = posTop  + 'px';
+    kpPopup.classList.add('visible');
+  } else {
+    kpPopup.classList.remove('visible');
+  }
+
+  draw();
+});
+
+canvas.addEventListener('mouseleave', () => {
+  hoverIdx = -1;
+  hud.classList.remove('visible');
+  kpPopup.classList.remove('visible');
+  tooltip.style.opacity = 0;
+  draw();
+});
+
+canvas.addEventListener('click', evt => {
+  const rect = canvas.getBoundingClientRect();
+  const mx   = (evt.clientX - rect.left) * (cw() / rect.width);
+  const idx  = findNearestIdx(mx);
+  if (idx < 0) { lockedIdx = -1; draw(); return; }
+  lockedIdx = lockedIdx === idx ? -1 : idx;
+  draw();
+});
+
+/* ═══════════════════════════════════════════
+   RESIZE
+═══════════════════════════════════════════ */
+const ro = new ResizeObserver(() => {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width  = Math.round(rect.width * devicePixelRatio);
+  canvas.height = Math.round(rect.width * 9/16 * devicePixelRatio);
+  recomputeCurve();
+  draw();
+});
+ro.observe(canvas.parentElement);
+
+/* ═══════════════════════════════════════════
+   LEGEND
+═══════════════════════════════════════════ */
+const legendEl = document.getElementById('legend');
+REGIONS.forEach(r => {
+  const el = document.createElement('div'); el.className = 'legend-item';
+  el.innerHTML = `<div class="legend-box" style="background:${r.color};border:1px solid ${r.color.replace('0.18','0.5')}"></div>${r.label}`;
+  legendEl.appendChild(el);
+});
+KP.filter(k => k.id !== 'origin').forEach(k => {
+  const el = document.createElement('div'); el.className = 'legend-item';
+  el.innerHTML = `<div class="legend-box" style="background:${k.color};border-radius:50%"></div>${k.label}`;
+  legendEl.appendChild(el);
+});
+
+/* ═══════════════════════════════════════════
+   PROPS TABLE
+═══════════════════════════════════════════ */
+function etAtKP(kpId) {
+  const kp = getKP(kpId);
+  const near = curvePts.reduce((best, p) =>
+    Math.abs(p.e - kp.e) < Math.abs(best.e - kp.e) ? p : best, curvePts[0]);
+  const v = near.slope;
+  return Math.abs(v) > 1000 ? `${(v/1000).toFixed(1)} GPa` : `${v.toFixed(0)} MPa`;
+}
+
+const tbody = document.getElementById('props-body');
+KP.filter(k => k.id !== 'origin').forEach(k => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td><b style="color:${k.color}">${k.label}</b></td>
+    <td><code>${k.e.toFixed(4)}</code></td>
+    <td><code>${k.s}</code></td>
+    <td><code id="et-${k.id}">—</code></td>
+    <td style="font-size:0.74rem;color:var(--subtext)">${k.desc}</td>`;
+  tbody.appendChild(tr);
+});
+
+function updateTableEt() {
+  KP.filter(k => k.id !== 'origin').forEach(k => {
+    const el = document.getElementById(`et-${k.id}`);
+    if (el) el.textContent = etAtKP(k.id);
+  });
+}
+
+/* ── dark mode change ── */
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+
+/* ── initial trigger via ResizeObserver ── */
+// ResizeObserver fires on mount; fallback:
+setTimeout(() => { if (!curvePts.length) { recomputeCurve(); draw(); updateTableEt(); } }, 100);
+ro.observe(canvas.parentElement); // already called above but updateTable needs curve
+setTimeout(updateTableEt, 200);
+</script>
+</body>
+</html>

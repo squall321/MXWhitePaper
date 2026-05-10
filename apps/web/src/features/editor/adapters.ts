@@ -66,13 +66,21 @@ function blockToBN(b: Block): BNBlock {
         props: { docJsonId: b.id },
         content: plain((b as ParagraphBlock).text),
       }
-    case 'heading-4':
+    case 'heading-4': {
+      // Map our schema's 2/3/4 → BlockNote's 1/2/3 (BN tops out at 3 by
+      // default). Legacy fixtures stored the level under meta.level; read
+      // both during the transition so older docs still surface correctly.
+      const heading = b as Heading4Block
+      const legacy = (heading.meta as { level?: number } | undefined)?.level
+      const docLevel = heading.level ?? legacy ?? 4
+      const bnLevel = docLevel === 2 ? 1 : docLevel === 3 ? 2 : 3
       return {
         id: b.id,
         type: 'heading',
-        props: { level: 4, docJsonId: b.id },
-        content: plain((b as Heading4Block).title),
+        props: { level: bnLevel, docJsonId: b.id },
+        content: plain(heading.title),
       }
+    }
     case 'list': {
       const lb = b as ListBlock
       const itemType =
@@ -236,10 +244,17 @@ export function blockNoteToDocumentJson(bn: BNBlock[]): Block[] {
         break
       }
       case 'heading': {
+        // BlockNote ships heading levels 1..3 by default. Map them onto our
+        // schema's 2/3/4 (the schema has no level-1 because doc-title owns
+        // that role at the document level). BN level missing → smallest.
+        const bnLevel = (node.props as { level?: number } | undefined)?.level
+        const mapped: 2 | 3 | 4 =
+          bnLevel === 1 ? 2 : bnLevel === 2 ? 3 : 4
         out.push({
           type: 'heading-4',
           id,
           title: readPlain(node.content),
+          level: mapped,
         } satisfies Heading4Block)
         i++
         break

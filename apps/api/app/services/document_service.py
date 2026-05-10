@@ -27,6 +27,8 @@ from app.repos import document_repo
 from app.schemas.document import DocumentjsonV10
 from app.search import meili_indexer
 from app.services import webhook_dispatcher
+from app.services.heading_promote import promote_inline_headings
+from app.services import section_numbering
 from app.services.section_numbering import renumber_sections
 from app.services.wiki_link_extractor import extract_wiki_links
 
@@ -231,7 +233,7 @@ def parse_if_match(header: str | None) -> tuple[str, int] | None:
 
 
 def validate_documentjson(payload: dict[str, Any]) -> dict[str, Any]:
-    """DocumentJSON v1.0 Pydantic 검증 + section 재번호."""
+    """DocumentJSON v1.0 Pydantic 검증 + section 재번호 + columns widths 정합성."""
     from pydantic import ValidationError
 
     from app.core.errors import format_pydantic_errors
@@ -252,8 +254,72 @@ def validate_documentjson(payload: dict[str, Any]) -> dict[str, Any]:
 
     # by_alias=True 로 imageId / chartType 등 카멜 키 보존
     dumped = doc.model_dump(by_alias=True, mode="json", exclude_none=False)
+    # 본문 안의 heading-4 블록을 sub-section 으로 자동 승격.
+    # renumber 보다 *먼저* 호출해서 새 섹션도 1, 1.1, 1.1.1 번호를 받게.
+    promote_inline_headings(dumped)
     renumber_sections(dumped)
+    _normalise_columns_widths(dumped)
     return dumped
+
+
+def _normalise_columns_widths(content: dict[str, Any]) -> None:
+    """Walk every ColumnsBlock in the document. If `widths` is set, enforce
+    length == len(columns) and rescale the sum to 100 so the row always
+    fills the available width. Mutates ``content`` in place.
+    """
+
+    def _renorm(widths: list[Any]) -> list[float]:
+        nums = [float(w) for w in widths]
+        total = sum(nums)
+        if total <= 0:
+            # Degenerate input — fall back to equal split.
+            n = len(nums)
+            return [round(100.0 / n, 2)] * n
+        if abs(total - 100.0) <= 0.5:
+            return nums
+        return [round(w * 100.0 / total, 2) for w in nums]
+
+    def _walk_block(blk: Any) -> None:
+        if not isinstance(blk, dict):
+            return
+        t = blk.get("type")
+        if t == "columns":
+            cols = blk.get("columns") or []
+            widths = blk.get("widths")
+            if widths is not None:
+                if not isinstance(widths, list) or len(widths) != len(cols):
+                    raise ValidationFailed(
+                        "columns.widths length must match columns.length",
+                        details={
+                            "columns_len": len(cols),
+                            "widths_len": (
+                                len(widths) if isinstance(widths, list) else None
+                            ),
+                        },
+                    )
+                blk["widths"] = _renorm(widths)
+            for col in cols:
+                if isinstance(col, list):
+                    for child in col:
+                        _walk_block(child)
+        elif t == "tabs":
+            for tab in blk.get("tabs") or []:
+                for child in (tab or {}).get("blocks") or []:
+                    _walk_block(child)
+        elif t == "accordion":
+            for item in blk.get("items") or []:
+                for child in (item or {}).get("blocks") or []:
+                    _walk_block(child)
+
+    def _walk_section(sec: dict[str, Any]) -> None:
+        for blk in sec.get("blocks") or []:
+            _walk_block(blk)
+        for sub in sec.get("subsections") or []:
+            _walk_section(sub)
+
+    for sec in content.get("sections") or []:
+        if isinstance(sec, dict):
+            _walk_section(sec)
 
 
 async def update_links_for_document(
@@ -1005,6 +1071,14 @@ async def patch_section(
         sec["blocks"] = patch["blocks"]
     if "subsections" in patch and patch["subsections"] is not None:
         sec["subsections"] = patch["subsections"]
+    # `layout` is the visual template choice (stack / two-col / image-left
+    # / image-right / title-only / full-bleed). `null` clears the field
+    # back to the implicit default ('stack') so the JSON stays minimal.
+    if "layout" in patch:
+        if patch["layout"] is None:
+            sec.pop("layout", None)
+        else:
+            sec["layout"] = patch["layout"]
 
     log = normalize_change_log(change_log, default=f"section.patch:{section_id}")
     updated = await _persist_content_change(
@@ -1034,17 +1108,26 @@ async def patch_block(
     actor_id: str,
     change_log: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Block 전체 교체. (updated_doc, replaced_block) 반환."""
+    """Block PATCH (RFC 5789-style merge).
+
+    Accepts a partial body (e.g. ``{caption: 'new'}``) and merges it into
+    the existing block. ``id`` and ``type`` may be omitted — the URL's
+    ``block_id`` and the existing block's ``type`` are used. If either is
+    sent it must match (we don't allow id rewrites or type changes through
+    PATCH; use insert+delete for that).
+
+    Earlier behaviour was full-replace, which forced every FE call site to
+    re-send the entire block and made tiny edits (caption / alt / width)
+    return 422 because the FE only ships the changed fields.
+    """
     if not isinstance(new_block, dict):
         raise ValidationFailed("block payload must be an object")
     body_id = new_block.get("id")
-    if body_id != block_id:
+    if body_id is not None and body_id != block_id:
         raise ValidationFailed(
             "block id in URL must match body.id",
             details={"url_id": block_id, "body_id": body_id},
         )
-    if "type" not in new_block:
-        raise ValidationFailed("block.type required")
 
     existing = await get_document_or_404(s, slug)
     _check_etag(existing, if_match)
@@ -1053,8 +1136,22 @@ async def patch_block(
     found = _find_block(content, block_id)
     if not found:
         raise NotFound(f"block not found: {block_id}")
-    _, parent_list, idx, _ = found
-    parent_list[idx] = new_block
+    current_block, parent_list, idx, _owner = found
+
+    body_type = new_block.get("type")
+    if body_type is not None and body_type != current_block.get("type"):
+        # type-change request → full replace (the legacy "block 통째 교체"
+        # behaviour). Caller must supply a complete block body; downstream
+        # `validate_documentjson` enforces the per-type schema.
+        replacement = {**new_block, "id": block_id}
+        parent_list[idx] = replacement
+    else:
+        # Same type (or omitted) → RFC 5789-style merge of the partial body
+        # into the existing block. Lets the FE ship `{caption: 'new'}` etc.
+        merged = {**current_block, **new_block}
+        merged["id"] = block_id
+        merged["type"] = current_block.get("type")
+        parent_list[idx] = merged
 
     log = normalize_change_log(change_log, default=f"block.patch:{block_id}")
     updated = await _persist_content_change(
@@ -1080,6 +1177,7 @@ async def insert_block(
     if_match: str | None,
     actor_id: str,
     change_log: str | None = None,
+    index: int | None = None,
 ) -> dict[str, Any]:
     if not isinstance(new_block, dict) or "type" not in new_block or "id" not in new_block:
         raise ValidationFailed("block payload must include type and id")
@@ -1094,9 +1192,7 @@ async def insert_block(
     sec = sec_found[0]
     blocks: list[dict[str, Any]] = sec.setdefault("blocks", [])
 
-    if after_block_id is None:
-        blocks.append(new_block)
-    else:
+    if after_block_id is not None:
         # after_block_id 가 정확히 이 섹션의 top-level blocks 안에 있어야 한다
         target_idx = next(
             (i for i, b in enumerate(blocks) if isinstance(b, dict) and b.get("id") == after_block_id),
@@ -1107,6 +1203,12 @@ async def insert_block(
                 f"after_block_id not found in section.blocks: {after_block_id}"
             )
         blocks.insert(target_idx + 1, new_block)
+    elif isinstance(index, int) and 0 <= index <= len(blocks):
+        # FE contract — `index` is the slot to insert *at* (0..N). -1 ⇒ append
+        # (handled by the next branch). The slash-menu and dropzone send this.
+        blocks.insert(index, new_block)
+    else:
+        blocks.append(new_block)
 
     log = normalize_change_log(change_log, default=f"block.insert:{new_block['id']}")
     return await _persist_content_change(
@@ -1161,6 +1263,7 @@ async def move_block(
     if_match: str | None,
     actor_id: str,
     change_log: str | None = None,
+    to_index: int | None = None,
 ) -> dict[str, Any]:
     existing = await get_document_or_404(s, slug)
     _check_etag(existing, if_match)
@@ -1177,9 +1280,7 @@ async def move_block(
     if not tgt:
         raise NotFound(f"target section not found: {target_section_id}")
     tgt_blocks: list[dict[str, Any]] = tgt[0].setdefault("blocks", [])
-    if after_block_id is None:
-        tgt_blocks.append(moved)
-    else:
+    if after_block_id is not None:
         target_idx = next(
             (i for i, b in enumerate(tgt_blocks) if isinstance(b, dict) and b.get("id") == after_block_id),
             None,
@@ -1189,6 +1290,13 @@ async def move_block(
                 f"after_block_id not found in target section.blocks: {after_block_id}"
             )
         tgt_blocks.insert(target_idx + 1, moved)
+    elif isinstance(to_index, int) and 0 <= to_index <= len(tgt_blocks):
+        # FE contract — `to_index` is the slot to land at within the target
+        # section. The BlockToolbar ↑/↓ buttons send this. Out-of-range falls
+        # through to the append branch.
+        tgt_blocks.insert(to_index, moved)
+    else:
+        tgt_blocks.append(moved)
 
     log = normalize_change_log(change_log, default=f"block.move:{block_id}")
     return await _persist_content_change(
@@ -1217,12 +1325,20 @@ def _build_reordered_sections(
     depth: int = 1,
     seen: set[str] | None = None,
 ) -> list[dict[str, Any]]:
+    """Rebuild the section tree from the FE-supplied `outline`.
+
+    * Honours the same `MAX_DEPTH` cap that `renumber_sections` uses.
+    * When an outline entry references an `id` that doesn't exist in
+      the current document, we treat it as a *new* section with empty
+      blocks. This lets the FE's "+ 하위 / + 섹션" buttons round-trip
+      through this single endpoint instead of having to create the
+      section ahead of time.
+    """
     if seen is None:
         seen = set()
-    # 빈 리스트는 depth 검사 면제 — 실제 요소가 들어올 때만 depth>3 을 거부.
-    if depth > 3 and outline:
+    if depth > section_numbering.MAX_DEPTH and outline:
         raise ValidationFailed(
-            "section depth cannot exceed 3",
+            f"section depth exceeds limit (max={section_numbering.MAX_DEPTH})",
             details={"depth": depth},
         )
     out: list[dict[str, Any]] = []
@@ -1237,23 +1353,29 @@ def _build_reordered_sections(
             )
         seen.add(sid)
         original = index.get(sid)
-        if original is None:
-            raise ValidationFailed(
-                f"unknown section id in outline: {sid}",
-                details={"id": sid},
-            )
-        # 자식 outline 재귀
+        # Recurse into children regardless — the depth check above will
+        # catch absurd nesting.
         children_refs = ref.get("children") or []
         new_subs = _build_reordered_sections(children_refs, index, depth + 1, seen)
-        # 새 섹션 dict — 원본의 title/blocks/id 는 보존, level 은 depth 로 재유도.
-        new_sec = {
-            "id": sid,
-            "level": depth,
-            "title": original.get("title", ""),
-            "blocks": original.get("blocks") or [],
-            "subsections": new_subs,
-            # number 는 renumber 가 다시 채움
-        }
+        if original is None:
+            # New section emitted by the FE in the same payload as a
+            # reorder. Title comes from the outline; blocks start empty.
+            new_sec = {
+                "id": sid,
+                "level": depth,
+                "title": str(ref.get("title") or "새 섹션"),
+                "blocks": [],
+                "subsections": new_subs,
+            }
+        else:
+            new_sec = {
+                "id": sid,
+                "level": depth,
+                "title": original.get("title", ""),
+                "blocks": original.get("blocks") or [],
+                "subsections": new_subs,
+                # number 는 renumber 가 다시 채움
+            }
         out.append(new_sec)
     return out
 
@@ -1300,6 +1422,65 @@ async def reorder_sections(
         change_log=log,
         action="document.sections.reorder",
         target_suffix="#sections.reorder",
+    )
+
+
+async def patch_infobox(
+    s: AsyncSession,
+    *,
+    slug: str,
+    infobox: dict[str, Any],
+    if_match: str | None,
+    actor_id: str,
+    change_log: str | None = None,
+) -> dict[str, Any]:
+    """문서의 `infobox` 맵을 통째로 교체.
+
+    Schema: `additionalProperties: string | string[] | null` 같은 자유로운
+    key/value. 빈 문자열 / 빈 배열 / None 은 제거해서 잡 데이터가 누적되지
+    않게 한다.
+    """
+    if not isinstance(infobox, dict):
+        raise ValidationFailed("infobox payload must be an object")
+    cleaned: dict[str, Any] = {}
+    for k, v in infobox.items():
+        if not isinstance(k, str) or not k:
+            continue
+        if v is None:
+            continue
+        if isinstance(v, list):
+            arr = [str(item) for item in v if item is not None and str(item).strip()]
+            if arr:
+                cleaned[k] = arr
+            continue
+        if isinstance(v, (str, int, float, bool)):
+            text = str(v).strip()
+            if text:
+                cleaned[k] = text
+            continue
+        raise ValidationFailed(
+            "infobox values must be string or string list",
+            details={"key": k, "value_type": type(v).__name__},
+        )
+
+    existing = await get_document_or_404(s, slug)
+    _check_etag(existing, if_match)
+
+    content = copy.deepcopy(existing["content_json"])
+    if cleaned:
+        content["infobox"] = cleaned
+    else:
+        content.pop("infobox", None)
+
+    log = normalize_change_log(change_log, default="infobox.patch")
+    return await _persist_content_change(
+        s,
+        existing=existing,
+        new_content=content,
+        actor_id=actor_id,
+        change_log=log,
+        action="document.infobox.patch",
+        target_suffix="#infobox",
     )
 
 

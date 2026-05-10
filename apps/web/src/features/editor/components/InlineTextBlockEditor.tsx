@@ -370,7 +370,9 @@ export function mdLiteToHtml(src: string): string {
 export function htmlToMdLite(html: string): string {
   const tmp = document.createElement('div')
   tmp.innerHTML = html
-  return walkNodeForMdLite(tmp).replace(/ /g, ' ').trim()
+  // Replace NBSP (U+00A0) with a regular space. Use the \u escape so
+  // no-irregular-whitespace stays happy.
+  return walkNodeForMdLite(tmp).replace(/\u00A0/g, ' ').trim()
 }
 
 /**

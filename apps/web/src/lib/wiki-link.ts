@@ -40,7 +40,22 @@ export interface WikiNode {
   display?: string
 }
 
-export type InlineNode = TextNode | WikiNode
+/**
+ * Inline citation reference — `[[cite:KEY]]` or `[[cite:KEY|display]]`. The
+ * renderer turns this into a clickable superscript-style link that scrolls
+ * to the matching `BibliographyBlock` entry (`<li id="cite-KEY">`).
+ */
+export interface CiteNode {
+  kind: 'cite'
+  /** Citation key as written in the BibliographyBlock entry. */
+  key: string
+  /** Optional display label; defaults to the key. */
+  display?: string
+}
+
+export type InlineNode = TextNode | WikiNode | CiteNode
+
+const CITE_KEY_RE = /^[A-Za-z0-9_-]{1,60}$/
 
 // Polish D — ASCII lowercase + digits + hyphen + Hangul 음절 (가-힣) 모두 허용.
 const SLUG_RE = /^[a-z0-9가-힣][a-z0-9가-힣-]{0,99}$/
@@ -49,7 +64,7 @@ const ANCHOR_RE = /^(?:section-)?\d+(?:\.\d+){0,2}$/
 
 // Captures the inside of `[[...]]`. Greedy match is fine because we explicitly
 // reject if the inner blob contains `[[` or `]]`.
-const WIKI_RE = /\[\[([^\[\]]+?)\]\]/g
+const WIKI_RE = /\[\[([^[\]]+?)\]\]/g
 
 /**
  * Split inline text into text + wiki tokens. Pure; no side effects.
@@ -89,7 +104,7 @@ export function parseInline(text: string): InlineNode[] {
   return out
 }
 
-function parseWikiInner(inner: string): WikiNode | null {
+function parseWikiInner(inner: string): WikiNode | CiteNode | null {
   // Split on the FIRST `|` only (display can contain anything but `]]`/`[[`).
   const pipeAt = inner.indexOf('|')
   const targetRaw = (pipeAt === -1 ? inner : inner.slice(0, pipeAt)).trim()
@@ -97,6 +112,18 @@ function parseWikiInner(inner: string): WikiNode | null {
     pipeAt === -1 ? undefined : inner.slice(pipeAt + 1).trim() || undefined
 
   if (!targetRaw) return null
+
+  // Citation reference — `cite:KEY`. Branched off before the slug regex so
+  // the `:` doesn't trip Polish-D slug validation.
+  if (targetRaw.startsWith('cite:')) {
+    const key = targetRaw.slice('cite:'.length).trim()
+    if (!key || !CITE_KEY_RE.test(key)) return null
+    return {
+      kind: 'cite',
+      key,
+      ...(display ? { display } : {}),
+    }
+  }
 
   const hashAt = targetRaw.indexOf('#')
   const slug = (hashAt === -1 ? targetRaw : targetRaw.slice(0, hashAt)).trim()

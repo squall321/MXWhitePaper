@@ -51,7 +51,7 @@ function el(
 function walkFake(node: FakeNode): string {
   // Make Node.TEXT_NODE / Node.ELEMENT_NODE available globally — the function
   // references them as constants on the global Node object.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   ;(globalThis as any).Node = { TEXT_NODE, ELEMENT_NODE }
   return walkNodeForMdLite(node as unknown as Node)
 }

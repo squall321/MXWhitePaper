@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -97,19 +98,24 @@ async def test_reorder_promotes_subsection_to_root_renumbers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_reorder_422_on_depth_too_deep() -> None:
+async def test_reorder_422_on_depth_beyond_max() -> None:
+    """Section depth is now schema-unbounded but still capped at
+    `section_numbering.MAX_DEPTH` (16) so a runaway tree can't blow the
+    stack. Build an outline 17-deep and assert the BE rejects it."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         _data, etag = await _get(ac)
-        # 4단으로 중첩 → depth 4 → 422
+        # MAX_DEPTH = 16 → depth 17 should 422.
+        innermost: dict[str, Any] = {"id": "01ZZZZZZZZZZZZZZZZZZZZZZZZ", "children": []}
+        node: dict[str, Any] = innermost
+        # Build 14 fresh wrappers (depths 4..17) on top of ROOT/SUB/SUBSUB.
+        for i in range(14):
+            wrap_id = f"01AAAAAAAAAAAAAAAAAAAAAA{i:02d}"
+            node = {"id": wrap_id, "children": [node]}
         bad_outline = [
             {"id": ROOT, "children": [
                 {"id": SUB, "children": [
-                    {"id": SUBSUB, "children": [
-                        # 가짜 id — depth 검사 전에 중복/미지 체크가 먼저 동작할 수 있으나,
-                        # 우리 구현은 depth>3 을 우선적으로 422 로 막는다 (체크 순서 확인).
-                        {"id": "01ZZZZZZZZZZZZZZZZZZZZZZZZ", "children": []},
-                    ]},
+                    {"id": SUBSUB, "children": [node]},
                 ]},
             ]},
         ]

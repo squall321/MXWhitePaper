@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 import { create, all } from 'mathjs'
 import type { CalculatorBlock } from '@/types/document'
 import { Field, Input, Select } from '@/components/ui'

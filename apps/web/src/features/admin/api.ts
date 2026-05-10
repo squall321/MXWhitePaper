@@ -294,10 +294,11 @@ export interface ArchivedDocsPurgeResult {
 
 export async function purgeArchivedDocs(
   slugs: string[],
+  force = false,
 ): Promise<ArchivedDocsPurgeResult> {
   const res = await apiClient.delete<ApiEnvelope<ArchivedDocsPurgeResult>>(
     '/admin/archived-docs/purge',
-    { data: { slugs } },
+    { data: { slugs, force } },
   )
   return unwrap<ArchivedDocsPurgeResult>(res)
 }

@@ -50,7 +50,7 @@ export function MobileEditorToolbar({
   return (
     <div
       data-testid="mobile-editor-toolbar"
-      className="sticky top-[var(--header-h)] z-sticky -mx-4 flex items-center gap-1.5 border-b border-gray-200 bg-white px-3 py-2 text-sm shadow-sm md:hidden dark:border-gray-800 dark:bg-gray-900"
+      className="sticky top-[calc(var(--header-h)+2rem)] z-10 -mx-4 flex items-center gap-1.5 border-b border-gray-200 bg-white px-3 py-2 text-sm shadow-sm md:hidden dark:border-gray-800 dark:bg-gray-900"
     >
       <button
         type="button"

@@ -25,9 +25,14 @@ Wired in :func:`app.main.create_app`. Two responsibilities:
 CSP rationale:
 
 * ``default-src 'self'`` — deny third-party content by default.
-* ``script-src 'self' 'unsafe-inline' 'unsafe-eval'`` — Vite dev needs
-  ``eval`` for HMR; the markdown/document renderer also inlines small
-  bootstrap scripts. *TODO: drop ``'unsafe-eval'`` in production builds.*
+* ``script-src 'self' 'unsafe-inline'`` (prod) / ``'self' 'unsafe-inline'
+  'unsafe-eval'`` (dev). Vite's HMR runtime calls ``eval()`` so dev needs
+  the relaxation; production builds ship pre-bundled JS where ``eval`` is
+  never invoked. Dropping ``'unsafe-eval'`` in prod hardens us against
+  XSS escalation if an HTML-injection bug ever lands.
+  ``'unsafe-inline'`` stays for now — Tailwind-style inline event handlers
+  and the LCP bootstrap snippet rely on it. Migrating to nonces is a
+  follow-up.
 * ``style-src 'self' 'unsafe-inline'`` — Tailwind's runtime utilities and
   the editor inject inline ``style="…"`` on selected nodes.
 * ``img-src 'self' data: blob: <minio>`` — uploaded images are served
@@ -136,20 +141,44 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
 
-        ip = _client_ip(request)
+        # Bucket key: prefer the bearer token tail for authenticated traffic so
+        # a whole team behind a shared NAT doesn't share one bucket. Anonymous
+        # traffic falls back to client IP (the only thing we can key on).
+        auth_header = request.headers.get("authorization") or ""
+        if auth_header.lower().startswith("bearer "):
+            tok = auth_header.split(None, 1)[1].strip()
+            # Use the last 32 chars of the token as the key — short enough to
+            # cap memory in the LRU but long enough to be unique per user.
+            bucket_key = f"u:{tok[-32:]}" if tok else _client_ip(request)
+        else:
+            bucket_key = _client_ip(request)
         capacity, refill = _bucket_for(request)
         allowed, retry_after = get_limiter().check_with(
-            ip, capacity=capacity, refill_per_minute=refill
+            bucket_key, capacity=capacity, refill_per_minute=refill
         )
         if not allowed:
             return _rate_limited_response(retry_after)
         return await call_next(request)
 
 
-def _csp_value(minio_origin: str) -> str:
+def _csp_value(minio_origin: str, *, app_env: str) -> str:
+    # `'unsafe-eval'` is only required by Vite's HMR runtime — production
+    # builds ship pre-bundled JS that never calls eval(). We keep it on for
+    # any non-production env (development / staging-with-HMR / test) and
+    # drop it everywhere else so an HTML-injection bug can't escalate to
+    # arbitrary script execution via eval(). The toggle is a string compare
+    # rather than a hardcoded "production" because deployments may use
+    # "prod" / "production" / "live" interchangeably; treat anything that
+    # isn't explicitly a dev-class env as production.
+    is_dev = app_env.lower() in {"development", "dev", "test", "testing"}
+    script_src = (
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+        if is_dev
+        else "script-src 'self' 'unsafe-inline'"
+    )
     parts = [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        script_src,
         "style-src 'self' 'unsafe-inline'",
         f"img-src 'self' data: blob: {minio_origin}".strip(),
         "font-src 'self' data:",
@@ -195,7 +224,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         h.setdefault("X-Content-Type-Options", "nosniff")
         h.setdefault("Referrer-Policy", "same-origin")
         h.setdefault("X-XSS-Protection", "1; mode=block")
-        h.setdefault("Content-Security-Policy", _csp_value(minio_origin))
+        h.setdefault(
+            "Content-Security-Policy",
+            _csp_value(minio_origin, app_env=getattr(settings, "app_env", "production")),
+        )
         if request.url.scheme == "https":
             h.setdefault(
                 "Strict-Transport-Security",

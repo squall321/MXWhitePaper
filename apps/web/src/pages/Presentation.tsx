@@ -10,6 +10,7 @@ import {
   type Slide,
 } from '@/features/presentation/slideMachine'
 import { SlideBlockRenderer } from '@/features/presentation/SlideBlockRenderer'
+import { SectionLayout } from '@/components/SectionLayout'
 import { openPresenterChannel } from '@/features/presentation/presenterChannel'
 import {
   TRANSITIONS_CSS,
@@ -61,7 +62,7 @@ export function PresentationPage() {
     try {
       return buildSlides(data.document, { nested })
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error('[Presentation] buildSlides failed', err)
       return []
     }
@@ -430,23 +431,34 @@ function SlideContent({
   }
   const allBlocks = Array.isArray(slide.section?.blocks) ? slide.section.blocks : []
   const { body } = splitSpeakerNotes(allBlocks)
+  const layout = slide.section?.layout
+  // `title-only` is a deliberate cover-style slide: render only the heading,
+  // hide all body blocks. Other layouts go through SectionLayout for the
+  // 2-col / image-left / image-right / full-bleed shapes; the wrapper
+  // staggered-animation classes are applied to each layout cell.
+  const isTitleOnly = layout === 'title-only'
   return (
     <div className="slide-body slide-section">
       <header className="slide-heading">
         {slide.number && <span className="num">{slide.number}</span>}
         <h2>{slide.title || '(제목 없음)'}</h2>
       </header>
-      <div className="slide-blocks">
-        {body.map((block, i) => (
-          <div
-            key={block?.id ?? Math.random().toString(36)}
-            className={blockWrapperClass(staggerEnabled)}
-            style={staggerStyle(i, staggerEnabled)}
-          >
-            <SlideBlockRenderer block={block} />
-          </div>
-        ))}
-      </div>
+      {!isTitleOnly && (
+        <div className="slide-blocks">
+          <SectionLayout
+            blocks={body.filter((b): b is NonNullable<typeof b> => Boolean(b))}
+            layout={layout}
+            renderBlock={(block, i) => (
+              <div
+                className={blockWrapperClass(staggerEnabled)}
+                style={staggerStyle(i, staggerEnabled)}
+              >
+                <SlideBlockRenderer block={block} />
+              </div>
+            )}
+          />
+        </div>
+      )}
     </div>
   )
 }

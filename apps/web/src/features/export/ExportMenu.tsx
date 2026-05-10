@@ -59,7 +59,7 @@ export function ExportMenu({ slug }: ExportMenuProps) {
       await downloadMarkdown(slug)
       setStatusMsg('Markdown 다운로드 시작')
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error('[export] markdown failed', err)
       setStatusMsg('Markdown 내보내기 실패')
     } finally {
@@ -74,7 +74,7 @@ export function ExportMenu({ slug }: ExportMenuProps) {
       await downloadPptx(slug)
       setStatusMsg('PowerPoint 다운로드 시작')
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error('[export] pptx failed', err)
       setStatusMsg('PowerPoint 내보내기 실패')
     } finally {
@@ -89,7 +89,7 @@ export function ExportMenu({ slug }: ExportMenuProps) {
       await downloadDocx(slug)
       setStatusMsg('Word 다운로드 시작')
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error('[export] docx failed', err)
       setStatusMsg('Word 내보내기 실패')
     } finally {
@@ -110,7 +110,7 @@ export function ExportMenu({ slug }: ExportMenuProps) {
         setStatusMsg('PDF 다운로드 시작')
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error('[export] pdf failed', err)
       setStatusMsg('PDF 내보내기 실패')
     } finally {
@@ -146,7 +146,7 @@ export function ExportMenu({ slug }: ExportMenuProps) {
           <a
             href={htmlExportUrl(slug)}
             target="_blank"
-            rel="noopener"
+            rel="noopener noreferrer"
             className={itemClass}
             onClick={() => setOpen(false)}
             data-testid="export-html-item"

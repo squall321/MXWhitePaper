@@ -39,7 +39,7 @@ export function t(
       !seenMissing.has(key as string)
     ) {
       seenMissing.add(key as string)
-      // eslint-disable-next-line no-console
+       
       console.warn(`[i18n] missing key: ${String(key)}`)
     }
     return String(key)

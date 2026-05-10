@@ -28,7 +28,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
-    // eslint-disable-next-line no-console
+     
     console.error('[ErrorBoundary]', error, info)
     try {
       // 진단 보조: 사용자가 페이지 캡처해 보낼 수 있도록 stack 을 dom 에 박는다.

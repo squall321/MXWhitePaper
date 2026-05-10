@@ -69,4 +69,11 @@ infra/logs/e2e-report/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/.playwright/
+.playwright-mcp/
 new-ux-overview.png
+
+# DB backups (contain document data + user emails — not part of the repo)
+infra/backups/
+
+# meilisearch on-disk data (binary LMDB files, only ever live)
+data.ms/

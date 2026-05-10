@@ -742,7 +742,7 @@ function collapseWhitespace(s: string): string {
  * We escape `*` `~` `` ` `` `[` `]` — the round-trip parser handles `\*` etc.
  */
 function escapeMdLite(s: string): string {
-  return s.replace(/([*~`\\\[\]])/g, '\\$1')
+  return s.replace(/([*~`\\[\]])/g, '\\$1')
 }
 
 /**

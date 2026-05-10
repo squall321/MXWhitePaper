@@ -181,10 +181,9 @@ a.wiki-missing { color: var(--smsg-link-missing); }
 
 /* ── BlockNote (Mantine wrapper) editor surface — Sprint 7 polish ───── */
 .wp-editor-surface {
-  /* Inherit prose width so the editor blends into the article. */
-  max-width: 880px;
-  margin-left: auto;
-  margin-right: auto;
+  /* Use the available main column width — content area now spans the full
+     space between sidebars (caps removed). */
+  width: 100%;
 }
 
 .wp-editor-surface .bn-container,

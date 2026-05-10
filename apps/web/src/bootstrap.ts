@@ -33,7 +33,7 @@ function sanitizeStoredAccessToken(): { hasAccessToken: boolean } {
     )
     if (!trimmed || trimmed === 'undefined' || trimmed === 'null' || !looksLikeJwt) {
       window.sessionStorage.removeItem(ACCESS_TOKEN_KEY)
-      // eslint-disable-next-line no-console
+       
       console.warn('[mxwp] cleared invalid access_token in sessionStorage')
       return { hasAccessToken: false }
     }
@@ -61,7 +61,7 @@ export function bootstrapAuth() {
   // when reporting a "흰 화면" issue. Includes the resolved API URL so we can
   // distinguish "wrong baseURL" from "wrong network".
   try {
-    // eslint-disable-next-line no-console
+     
     console.info('[mxwp] boot', {
       apiUrl: (import.meta.env.VITE_API_URL as string) || '/api/v1',
       hasAccessToken,

@@ -374,6 +374,25 @@ def _b_math(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
 
 
 def _b_table(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    cells = block.get("cells")
+    if isinstance(cells, list) and cells:
+        _emit_table_cells(document, block, cells, ctx)
+    else:
+        _emit_table_flat(document, block, ctx)
+    # Caption (if meta.note set) — Word's "Caption" style follows the table.
+    meta = block.get("meta") or {}
+    caption = _str(meta.get("note")) if isinstance(meta, dict) else ""
+    if caption and caption != "page-break-before":
+        try:
+            cap_p = document.add_paragraph(style="Caption")
+        except KeyError:
+            cap_p = document.add_paragraph()
+        run = cap_p.add_run(caption)
+        run.italic = True
+
+
+def _emit_table_flat(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    """Legacy headers/rows layout — every slot is its own cell, no merges."""
     headers = block.get("headers") or []
     rows = block.get("rows") or []
     if not headers and not rows:
@@ -401,16 +420,69 @@ def _b_table(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
             p = cell.paragraphs[0]
             value = _str(row[c_idx]) if c_idx < len(row) else ""
             _emit_inline_runs(p, value, ctx)
-    # Caption (if meta.note set) — Word's "Caption" style follows the table.
-    meta = block.get("meta") or {}
-    caption = _str(meta.get("note")) if isinstance(meta, dict) else ""
-    if caption and caption != "page-break-before":
+
+
+def _emit_table_cells(
+    document: Any,
+    block: dict[str, Any],
+    cells: list[dict[str, Any]],
+    ctx: _Ctx,
+) -> None:
+    """Merge-aware layout — uses python-docx's `Cell.merge` to mirror our
+    sparse `cells` list back into Word ``<w:gridSpan>`` / ``<w:vMerge>`` so a
+    DOCX → MX → DOCX round trip preserves the table shape.
+    """
+    if not cells:
+        return
+    max_r = 0
+    max_c = 0
+    for cell in cells:
+        r_end = int(cell.get("r", 0)) + max(1, int(cell.get("rowSpan") or 1)) - 1
+        c_end = int(cell.get("c", 0)) + max(1, int(cell.get("colSpan") or 1)) - 1
+        max_r = max(max_r, r_end)
+        max_c = max(max_c, c_end)
+    n_rows = max_r + 1
+    n_cols = max_c + 1
+    if n_rows == 0 or n_cols == 0:
+        return
+    table = document.add_table(rows=n_rows, cols=n_cols)
+    table.style = "Table Grid"
+
+    # First fill every anchor cell with its text. Merges happen afterwards
+    # because python-docx merges modify the underlying XML grid; touching
+    # an already-merged cell is awkward, so we lay text down first.
+    for cell in cells:
+        r = int(cell.get("r", 0))
+        c = int(cell.get("c", 0))
+        text = _str(cell.get("text"))
+        is_header = bool(cell.get("header"))
         try:
-            cap_p = document.add_paragraph(style="Caption")
-        except KeyError:
-            cap_p = document.add_paragraph()
-        run = cap_p.add_run(caption)
-        run.italic = True
+            tc = table.rows[r].cells[c]
+        except IndexError:
+            continue
+        tc.text = ""
+        p = tc.paragraphs[0]
+        if is_header:
+            run = p.add_run(text)
+            run.bold = True
+        else:
+            _emit_inline_runs(p, text, ctx)
+
+    # Now apply each anchor's merges. python-docx's Cell.merge takes a
+    # diagonal-opposite cell and grows the rectangle; idempotent for 1×1.
+    for cell in cells:
+        r = int(cell.get("r", 0))
+        c = int(cell.get("c", 0))
+        rs = max(1, int(cell.get("rowSpan") or 1))
+        cs = max(1, int(cell.get("colSpan") or 1))
+        if rs == 1 and cs == 1:
+            continue
+        try:
+            anchor = table.rows[r].cells[c]
+            far = table.rows[r + rs - 1].cells[c + cs - 1]
+            anchor.merge(far)
+        except IndexError:
+            continue
 
 
 def _b_kpi_cards(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
@@ -705,6 +777,43 @@ def _b_calculator(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
         run.font.size = Pt(10)
 
 
+def _b_bibliography(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    """Render a BibliographyBlock as a docx heading + numbered list. Word
+    has no first-class "bibliography" type without a citation source XML;
+    we settle for a styled "References" heading and one paragraph per
+    entry so the output reads naturally and round-trips back via the
+    Step-3 References heuristic on import.
+    """
+    title = _str(block.get("title")) or "참고문헌"
+    entries = block.get("entries") or []
+    if not isinstance(entries, list) or not entries:
+        return
+    try:
+        h = document.add_paragraph(style="Heading 2")
+    except KeyError:
+        h = document.add_paragraph()
+    h_run = h.add_run(title)
+    h_run.bold = True
+    for idx, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            continue
+        text = _str(entry.get("text"))
+        url = _str(entry.get("url"))
+        key = _str(entry.get("key"))
+        p = document.add_paragraph()
+        # Number prefix + key (when set) + text + URL appended in italics.
+        prefix = f"[{idx}] "
+        if key:
+            prefix = f"[{key}] "
+        run = p.add_run(prefix)
+        run.bold = True
+        _emit_inline_runs(p, text, ctx)
+        if url:
+            p.add_run(" ")
+            url_run = p.add_run(url)
+            url_run.italic = True
+
+
 _BLOCK_HANDLERS: dict[str, Any] = {
     "paragraph": _b_paragraph,
     "heading-4": _b_heading_4,
@@ -732,6 +841,7 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "data-source": _b_data_source,
     "dashboard-embed": _b_dashboard_embed,
     "calculator": _b_calculator,
+    "bibliography": _b_bibliography,
 }
 
 

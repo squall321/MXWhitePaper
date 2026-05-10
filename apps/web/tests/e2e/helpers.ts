@@ -171,7 +171,7 @@ export async function deleteDoc(client: ApiClient, slug: string): Promise<void> 
   const res = await client.ctx.delete(`documents/${encodeURIComponent(slug)}`)
   if (!res.ok() && res.status() !== 404) {
     // Don't throw — cleanup must not break the next test.
-    // eslint-disable-next-line no-console
+     
     console.warn(`[deleteDoc] ${slug} -> ${res.status()}`)
   }
 }

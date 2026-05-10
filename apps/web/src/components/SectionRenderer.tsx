@@ -11,6 +11,7 @@ import {
   LAZY_THRESHOLD,
 } from '@/features/editor/components/LazyBlockSlot'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
+import { SectionLayout } from './SectionLayout'
 
 /**
  * Local alias — the schema declares 3 explicit Section interfaces; mostly
@@ -77,14 +78,18 @@ export function SectionRenderer({
     )
   }
 
-  // In fullEdit mode the level-1 section becomes a SimpleStackEditor
-  // (Notion-style block stack with `+` rails on every block, drag-to-reorder,
-  // and inline contentEditable for text blocks). Replaces the BlockNote-based
-  // SectionInlineEdit so users no longer need the "/" slash menu to add
-  // widgets. Sub-sections still render below for structure visibility.
-  if (isFullEditing && editableSlug && section.level === 1) {
+  // In fullEdit mode every section becomes a SimpleStackEditor (Notion-
+  // style block stack with `+` rails on every block, drag-to-reorder,
+  // and inline contentEditable for text blocks). Used to be level-1 only,
+  // which left sub-sections read-only and broke the "이 블록 뒤에 추가"
+  // affordance for anything nested. Now any depth gets the full editor.
+  if (isFullEditing && editableSlug) {
+    // Indent deeper sections so the visual hierarchy still reads at a
+    // glance even though every level shares the same editor surface.
+    const indentClass =
+      section.level === 1 ? '' : section.level === 2 ? 'pl-4' : 'pl-8'
     return (
-      <div data-section-level={section.level}>
+      <div data-section-level={section.level} className={indentClass}>
         <SimpleStackEditor
           slug={editableSlug}
           section={section}
@@ -106,12 +111,18 @@ export function SectionRenderer({
     )
   }
 
+  // Schema-wise the section depth is unbounded, but visually we cap the
+  // typographic scale at level 4 (smaller still works because HTML heading
+  // tags only run to <h6> and any deeper section just keeps the same look).
+  const visualLevel = Math.min(Math.max(section.level, 1), 4)
   const levelTextCls =
-    section.level === 1
+    visualLevel === 1
       ? 'text-2xl font-semibold mt-8 pb-1.5 border-b border-smsg-100 relative'
-      : section.level === 2
+      : visualLevel === 2
       ? 'text-xl font-semibold mt-6'
-      : 'text-lg font-semibold mt-4 text-gray-700'
+      : visualLevel === 3
+      ? 'text-lg font-semibold mt-4 text-gray-700'
+      : 'text-base font-semibold mt-3 text-gray-700'
 
   const showPencil = Boolean(editableSlug) && !isFullEditing
 
@@ -143,21 +154,26 @@ export function SectionRenderer({
       />
 
       <CollapsiblePanel id={panelId} collapsed={collapsed}>
-        <div className="mt-3 space-y-4">
-          {(() => {
-            const directBlocks = section.blocks ?? []
-            const isLong = directBlocks.length > LAZY_THRESHOLD
-            return directBlocks.map((block) =>
-              isLong ? (
-                <LazyBlockSlot key={block.id} block={block}>
+        {(() => {
+          const directBlocks = section.blocks ?? []
+          const isLong = directBlocks.length > LAZY_THRESHOLD
+          return (
+            <SectionLayout
+              blocks={directBlocks}
+              layout={section.layout}
+              className="mt-3"
+              renderBlock={(block) =>
+                isLong ? (
+                  <LazyBlockSlot block={block}>
+                    <BlockRenderer block={block} />
+                  </LazyBlockSlot>
+                ) : (
                   <BlockRenderer block={block} />
-                </LazyBlockSlot>
-              ) : (
-                <BlockRenderer key={block.id} block={block} />
-              ),
-            )
-          })()}
-        </div>
+                )
+              }
+            />
+          )
+        })()}
 
         {footnotes.length > 0 && <FootnoteList footnotes={footnotes} />}
 
@@ -205,39 +221,65 @@ function collectFootnotes(blocks: readonly { type?: string; text?: string }[]): 
 }
 
 /**
- * Section-bottom 각주 mini-list. Each entry carries `id="fn-TAG"` so the
+ * Section-bottom note mini-list. Each entry carries `id="fn-TAG"` so the
  * inline `<sup><a href="#fn-TAG">` can scroll-jump to it; a `↩` back-link
  * targets `#fnref-TAG` so the reader returns to the citation.
+ *
+ * Tags starting with `en-` are endnotes — split them into their own
+ * "미주" block so the two lists never visually mix even when both kinds
+ * are defined in the same section.
  */
 function FootnoteList({ footnotes }: { footnotes: FootnoteEntry[] }) {
+  const fns = footnotes.filter((f) => !f.tag.startsWith('en-'))
+  const ens = footnotes.filter((f) => f.tag.startsWith('en-'))
+  return (
+    <>
+      {fns.length > 0 && <NoteList kind="footnote" entries={fns} />}
+      {ens.length > 0 && <NoteList kind="endnote" entries={ens} />}
+    </>
+  )
+}
+
+function NoteList({
+  kind,
+  entries,
+}: {
+  kind: 'footnote' | 'endnote'
+  entries: FootnoteEntry[]
+}) {
+  const heading = kind === 'footnote' ? '각주' : '미주'
   return (
     <aside
-      data-footnote-list
+      data-footnote-list={kind === 'footnote' ? '' : undefined}
+      data-endnote-list={kind === 'endnote' ? '' : undefined}
       className="mt-6 border-t border-smsg-100 pt-3 text-xs text-gray-600"
-      aria-label="각주"
+      aria-label={heading}
     >
-      <div className="mb-1 font-semibold text-gray-700">각주</div>
+      <div className="mb-1 font-semibold text-gray-700">{heading}</div>
       <ol className="list-none space-y-1 pl-0">
-        {footnotes.map((fn) => (
-          <li key={fn.tag} id={`fn-${fn.tag}`} className="leading-5">
-            <span className="mr-1 font-mono text-gray-500">[{fn.tag}]</span>
-            <Inline text={fn.body} />
-            <a
-              href={`#fnref-${fn.tag}`}
-              className="ml-1 text-link no-underline hover:underline"
-              aria-label={`각주 ${fn.tag} 본문으로 돌아가기`}
-            >
-              ↩
-            </a>
-          </li>
-        ))}
+        {entries.map((fn) => {
+          const display = fn.tag.startsWith('en-') ? fn.tag.slice(3) : fn.tag
+          return (
+            <li key={fn.tag} id={`fn-${fn.tag}`} className="leading-5">
+              <span className="mr-1 font-mono text-gray-500">[{display}]</span>
+              <Inline text={fn.body} />
+              <a
+                href={`#fnref-${fn.tag}`}
+                className="ml-1 text-link no-underline hover:underline"
+                aria-label={`${heading} ${display} 본문으로 돌아가기`}
+              >
+                ↩
+              </a>
+            </li>
+          )
+        })}
       </ol>
     </aside>
   )
 }
 
 interface SectionHeadingProps {
-  level: 1 | 2 | 3
+  level: number
   id: string
   number?: string
   title: string
@@ -323,24 +365,15 @@ function SectionHeading({
     </>
   )
   const sharedCls = `group flex items-baseline scroll-mt-20 text-smsg-900 ${className}`
-  if (level === 1) {
-    return (
-      <h2 id={id} className={sharedCls}>
-        {inner}
-      </h2>
-    )
-  }
-  if (level === 2) {
-    return (
-      <h3 id={id} className={sharedCls}>
-        {inner}
-      </h3>
-    )
-  }
+  // HTML headings only run to <h6>. Map section level → DOM tag with a
+  // hard cap. The doc title owns <h1>, so level 1 is <h2>, level 2 is
+  // <h3>, …, level 5+ all clamp to <h6>.
+  const tagLevel = Math.min(Math.max(level + 1, 2), 6)
+  const Tag = `h${tagLevel}` as 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
   return (
-    <h4 id={id} className={sharedCls}>
+    <Tag id={id} className={sharedCls}>
       {inner}
-    </h4>
+    </Tag>
   )
 }
 
@@ -458,7 +491,7 @@ function CollapsiblePanel({
       const target = el.scrollHeight || measuredRef.current
       setMaxHeight(`${target}px`)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [collapsed, reduceMotion, mounted])
 
   const onTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {

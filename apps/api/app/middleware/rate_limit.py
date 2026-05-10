@@ -12,11 +12,13 @@ wait before another token is available. ``allowed=True`` always yields
 
 Bucket sizes (per-minute):
 
-  - anonymous           : 60   (default for unauthenticated traffic)
-  - authenticated user  : 300
-  - personal API token  : 600
-  - auth endpoints      : 10   (login / forgot / verify — brute-force shield)
-  - default capacity    : 120  (matches existing settings.rate_limit_per_minute)
+  - anonymous           : 60    (default for unauthenticated traffic)
+  - authenticated user  : 1200  (was 300 — too tight for a single page that
+                                  fans out 15-20 reads on mount, especially
+                                  behind a NAT shared by a whole team)
+  - personal API token  : 2400  (machine traffic — even higher headroom)
+  - auth endpoints      : 10    (login / forgot / verify — brute-force shield)
+  - default capacity    : 120   (matches existing settings.rate_limit_per_minute)
 
 Stats are tracked best-effort — ``snapshot()`` returns the top N IPs by
 recent activity for an admin telemetry endpoint.
@@ -230,8 +232,8 @@ def reset_for_tests() -> None:
 # Bucket sizing matrix — kept here so middleware + admin endpoint share
 # one source of truth.
 ANON_PER_MIN = 60
-AUTH_USER_PER_MIN = 300
-API_TOKEN_PER_MIN = 600
+AUTH_USER_PER_MIN = 1200
+API_TOKEN_PER_MIN = 2400
 AUTH_ENDPOINT_PER_MIN = 10
 
 # Path prefixes that get the strict auth bucket.

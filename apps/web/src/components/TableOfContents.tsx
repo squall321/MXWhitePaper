@@ -10,7 +10,7 @@ interface TocItem {
   sectionId: string
   number?: string
   title: string
-  level: 1 | 2 | 3
+  level: number
 }
 
 interface TableOfContentsProps {

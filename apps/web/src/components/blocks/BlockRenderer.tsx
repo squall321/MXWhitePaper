@@ -33,6 +33,7 @@ import { PdfBlockView } from './PdfBlock'
 import { QuizBlockView } from './QuizBlock'
 import { ImageAnnotationBlockView } from './ImageAnnotationBlock'
 import { SpreadsheetBlockView } from './SpreadsheetBlock'
+import { BibliographyBlockView } from './BibliographyBlock'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { InlineTextBlockEditor } from '@/features/editor/components/InlineTextBlockEditor'
 import { ListBlockEditor } from '@/features/editor/components/ListBlockEditor'
@@ -135,6 +136,11 @@ const QuizBlockEditor = lazy(() =>
 const SpreadsheetBlockEditor = lazy(() =>
   import('@/features/editor/blocks/SpreadsheetBlockEditor').then((m) => ({
     default: m.SpreadsheetBlockEditor,
+  })),
+)
+const BibliographyBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/BibliographyBlockEditor').then((m) => ({
+    default: m.BibliographyBlockEditor,
   })),
 )
 
@@ -412,6 +418,9 @@ function BlockRendererInner({ block }: { block: Block }) {
     if (block.type === 'spreadsheet') {
       return lazyEditor(<SpreadsheetBlockEditor slug={editorSlug} block={block} />)
     }
+    if (block.type === 'bibliography') {
+      return lazyEditor(<BibliographyBlockEditor slug={editorSlug} block={block} />)
+    }
     if (block.type === 'doc-link-card') {
       return <DocLinkCardBlockEditor slug={editorSlug} block={block} />
     }
@@ -494,6 +503,8 @@ function BlockRendererInner({ block }: { block: Block }) {
       return <ImageAnnotationBlockView block={block} />
     case 'spreadsheet':
       return <SpreadsheetBlockView block={block} />
+    case 'bibliography':
+      return <BibliographyBlockView block={block} />
     default:
       return (
         <PlaceholderBlockView

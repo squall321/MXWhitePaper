@@ -99,9 +99,14 @@ start_instance "$INST_API" "$API_SIF" \
   --env "APP_ENV=${APP_ENV}"
 
 # ── web ─────────────────────────────────────────────────────────────
+# VITE_API_URL is a relative path so the FE always asks its own origin
+# for /api/v1. Vite's dev-server proxy (apps/web/vite.config.ts) forwards
+# /api → http://127.0.0.1:${API_PORT}. This way logging in from a LAN
+# host (e.g. http://192.168.x.x:5173) works without any extra CORS or
+# host-aware build steps — the browser stays in same-origin land.
 start_instance "$INST_WEB" "$WEB_SIF" \
   --bind "$REPO_ROOT:/workspace" \
-  --env "VITE_API_URL=http://127.0.0.1:${API_PORT}/api/v1"
+  --env "VITE_API_URL=/api/v1"
 
 echo
 echo "✓ stack started"

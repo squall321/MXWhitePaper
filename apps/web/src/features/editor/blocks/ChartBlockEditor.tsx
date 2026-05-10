@@ -201,6 +201,50 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
         </label>
       </div>
 
+      {/* Engine picker — selects between the lightweight Recharts surface
+          and the rich ECharts surface (zoom, brush, markPoint annotations,
+          markArea regions). Switching is non-destructive: the data shape
+          is identical so a chart can flip between engines without losing
+          values. */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-gray-600">{t('editor.chart.engine')}:</span>
+        <div className="inline-flex rounded border border-gray-300 bg-white p-0.5">
+          <button
+            type="button"
+            onClick={() => onChange({ ...block, engine: 'recharts' })}
+            aria-pressed={(block.engine ?? 'recharts') === 'recharts'}
+            className={`rounded px-2 py-0.5 ${
+              (block.engine ?? 'recharts') === 'recharts'
+                ? 'bg-smsg-700 text-white'
+                : 'text-gray-700 hover:bg-smsg-50'
+            }`}
+          >
+            {t('editor.chart.engineRecharts')}
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ ...block, engine: 'echarts' })}
+            aria-pressed={block.engine === 'echarts'}
+            className={`rounded px-2 py-0.5 ${
+              block.engine === 'echarts'
+                ? 'bg-smsg-700 text-white'
+                : 'text-gray-700 hover:bg-smsg-50'
+            }`}
+          >
+            {t('editor.chart.engineEcharts')}
+          </button>
+        </div>
+        {block.engine === 'echarts' && (
+          <span className="text-amber-700">
+            {t('editor.chart.echartsHint')}
+          </span>
+        )}
+      </div>
+
+      {block.engine === 'echarts' && (
+        <InteractionsPanel block={block} onChange={onChange} />
+      )}
+
       {/* Type previews — quick visual switcher. */}
       <div role="radiogroup" aria-label={t('editor.chart.typePreviewLabel')} className="flex flex-wrap gap-1">
         {CHART_TYPE_META.map((meta) => {
@@ -378,7 +422,7 @@ function findFirstTable(
   for (const s1 of doc.sections) {
     const t = scanBlocks(s1.blocks)
     if (t) return t
-    for (const s2 of s1.subsections) {
+    for (const s2 of s1.subsections ?? []) {
       const t2 = scanBlocks(s2.blocks)
       if (t2) return t2
       for (const s3 of s2.subsections ?? []) {
@@ -395,5 +439,189 @@ function scanBlocks(blocks: import('@/types/document').Block[]): TableBlock | nu
     if (b.type === 'table') return b
   }
   return null
+}
+
+
+/* ── Interactions panel (ECharts only) ──────────────────────────────────
+   Surface for the friendly markPoint / markArea / dataZoom knobs that the
+   schema captures under `interactions`. Power users still get the raw
+   `options` escape hatch through the JSON textarea below. */
+function InteractionsPanel({
+  block,
+  onChange,
+}: {
+  block: ChartBlock
+  onChange: (next: ChartBlock) => void
+}) {
+  const interactions = block.interactions ?? {}
+  const keyPoints = interactions.keyPoints ?? []
+  const regions = interactions.regions ?? []
+  const setI = (patch: Partial<NonNullable<ChartBlock['interactions']>>) => {
+    const next = { ...interactions, ...patch }
+    onChange({ ...block, interactions: next as ChartBlock['interactions'] })
+  }
+  const addKp = () => {
+    const next = [...keyPoints, { label: 'Point', xIndex: 0 }]
+    setI({ keyPoints: next as NonNullable<ChartBlock['interactions']>['keyPoints'] })
+  }
+  const removeKp = (idx: number) => {
+    setI({
+      keyPoints: keyPoints.filter((_, i) => i !== idx) as NonNullable<
+        ChartBlock['interactions']
+      >['keyPoints'],
+    })
+  }
+  const updateKp = (
+    idx: number,
+    patch: Partial<NonNullable<NonNullable<ChartBlock['interactions']>['keyPoints']>[number]>,
+  ) => {
+    const next = keyPoints.map((kp, i) => (i === idx ? { ...kp, ...patch } : kp))
+    setI({ keyPoints: next as NonNullable<ChartBlock['interactions']>['keyPoints'] })
+  }
+  const addRegion = () => {
+    const next = [
+      ...regions,
+      { label: 'Region', xFromIndex: 0, xToIndex: 1 },
+    ]
+    setI({ regions: next as NonNullable<ChartBlock['interactions']>['regions'] })
+  }
+  const removeRegion = (idx: number) => {
+    setI({
+      regions: regions.filter((_, i) => i !== idx) as NonNullable<
+        ChartBlock['interactions']
+      >['regions'],
+    })
+  }
+  const updateRegion = (
+    idx: number,
+    patch: Partial<NonNullable<NonNullable<ChartBlock['interactions']>['regions']>[number]>,
+  ) => {
+    const next = regions.map((r, i) => (i === idx ? { ...r, ...patch } : r))
+    setI({ regions: next as NonNullable<ChartBlock['interactions']>['regions'] })
+  }
+  return (
+    <div className="space-y-2 rounded border border-amber-200 bg-amber-50/40 p-2 text-xs">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="inline-flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={!!interactions.showZoom}
+            onChange={(e) => setI({ showZoom: e.target.checked })}
+          />
+          줌 슬라이더
+        </label>
+        <label className="inline-flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={!!interactions.showCrosshair}
+            onChange={(e) => setI({ showCrosshair: e.target.checked })}
+          />
+          크로스헤어
+        </label>
+      </div>
+
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="font-semibold text-amber-900">키포인트 (markPoint)</span>
+          <button
+            type="button"
+            onClick={addKp}
+            className="rounded border border-amber-300 px-1.5 py-0.5 text-amber-900 hover:bg-amber-100"
+          >
+            + 추가
+          </button>
+        </div>
+        {keyPoints.map((kp, i) => (
+          <div key={i} className="flex items-center gap-1">
+            <input
+              type="text"
+              value={kp.label}
+              onChange={(e) => updateKp(i, { label: e.target.value })}
+              placeholder="라벨"
+              className="flex-1 rounded border border-gray-300 px-1.5 py-0.5"
+            />
+            <input
+              type="number"
+              value={kp.xIndex}
+              onChange={(e) => updateKp(i, { xIndex: Number(e.target.value) || 0 })}
+              min={0}
+              max={Math.max(0, (block.data.labels?.length ?? 1) - 1)}
+              className="w-16 rounded border border-gray-300 px-1.5 py-0.5"
+              title="x-축 라벨 인덱스"
+            />
+            <input
+              type="color"
+              value={kp.color ?? '#dc2626'}
+              onChange={(e) => updateKp(i, { color: e.target.value })}
+              className="h-6 w-8 rounded border border-gray-300"
+            />
+            <button
+              type="button"
+              onClick={() => removeKp(i)}
+              aria-label="삭제"
+              className="rounded px-1 text-gray-500 hover:bg-red-50 hover:text-red-600"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="font-semibold text-amber-900">영역 하이라이트 (markArea)</span>
+          <button
+            type="button"
+            onClick={addRegion}
+            className="rounded border border-amber-300 px-1.5 py-0.5 text-amber-900 hover:bg-amber-100"
+          >
+            + 추가
+          </button>
+        </div>
+        {regions.map((r, i) => (
+          <div key={i} className="flex items-center gap-1">
+            <input
+              type="text"
+              value={r.label}
+              onChange={(e) => updateRegion(i, { label: e.target.value })}
+              placeholder="라벨"
+              className="flex-1 rounded border border-gray-300 px-1.5 py-0.5"
+            />
+            <input
+              type="number"
+              value={r.xFromIndex}
+              onChange={(e) => updateRegion(i, { xFromIndex: Number(e.target.value) || 0 })}
+              min={0}
+              className="w-14 rounded border border-gray-300 px-1.5 py-0.5"
+              title="시작 인덱스"
+            />
+            <span className="text-gray-400">~</span>
+            <input
+              type="number"
+              value={r.xToIndex}
+              onChange={(e) => updateRegion(i, { xToIndex: Number(e.target.value) || 0 })}
+              min={0}
+              className="w-14 rounded border border-gray-300 px-1.5 py-0.5"
+              title="끝 인덱스 (포함)"
+            />
+            <input
+              type="color"
+              value={r.color ?? '#10b981'}
+              onChange={(e) => updateRegion(i, { color: e.target.value })}
+              className="h-6 w-8 rounded border border-gray-300"
+            />
+            <button
+              type="button"
+              onClick={() => removeRegion(i)}
+              aria-label="삭제"
+              className="rounded px-1 text-gray-500 hover:bg-red-50 hover:text-red-600"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
