@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import meilisearch
@@ -22,13 +23,41 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+
+# ── CamelCase / snake_case tokenizer ────────────────────────────────
+# Meilisearch tokenises on whitespace + a few CJK boundaries but does
+# NOT split CamelCase or snake_case. That means "KooRemapper_Manual"
+# stays as two tokens — "KooRemapper" and "Manual" — and a search for
+# "remapper" returns nothing because Meili only does PREFIX matching by
+# default. We work around this at index time: a derived `title_tokens`
+# field holds the human-word form ("Koo Remapper Manual") and gets the
+# same searchable weight as `title`. Original title stays intact so
+# exact-match queries still work.
+_RE_CAMEL_BOUNDARY_AB = re.compile(r"([A-Z]+)([A-Z][a-z])")  # XMLHttp → XML Http
+_RE_CAMEL_BOUNDARY_AC = re.compile(r"([a-z\d])([A-Z])")       # KooR → Koo R
+_RE_SEP_TO_SPACE = re.compile(r"[_\-]+")
+
+
+def _tokenize_words(s: str | None) -> str:
+    """Split CamelCase / snake_case / kebab-case into space-separated
+    words for search-friendly tokenisation. Korean text passes through
+    unchanged (Meili already tokenises CJK on character boundaries)."""
+    if not s:
+        return ""
+    out = _RE_CAMEL_BOUNDARY_AB.sub(r"\1 \2", s)
+    out = _RE_CAMEL_BOUNDARY_AC.sub(r"\1 \2", out)
+    out = _RE_SEP_TO_SPACE.sub(" ", out)
+    return out.strip()
+
 INDEX_UID = "documents"
 PRIMARY_KEY = "id"
 
 SEARCHABLE_ATTRS = [
     "title",
+    "title_tokens",  # CamelCase/snake_case split form (see _tokenize_words)
     "summary",
     "section_titles",
+    "section_titles_tokens",
     "body_text",
     "image_text",
     "tags",
@@ -123,7 +152,9 @@ async def _fetch_flat_row(s: AsyncSession, doc_id: str) -> dict[str, Any] | None
         "slug": row[1],
         "title": row[2],
         "summary": row[3] or "",
+        "title_tokens": _tokenize_words(row[2]),
         "section_titles": row[4] or "",
+        "section_titles_tokens": _tokenize_words(row[4]),
         "body_text": row[5] or "",
         "image_text": "",  # body_text 안에 caption/alt 가 이미 합쳐져 있음
         "tags": list(row[6]) if row[6] else [],
@@ -169,7 +200,9 @@ async def _fetch_all_flat_rows(s: AsyncSession) -> list[dict[str, Any]]:
             "slug": r[1],
             "title": r[2],
             "summary": r[3] or "",
+            "title_tokens": _tokenize_words(r[2]),
             "section_titles": r[4] or "",
+            "section_titles_tokens": _tokenize_words(r[4]),
             "body_text": r[5] or "",
             "image_text": "",
             "tags": list(r[6]) if r[6] else [],

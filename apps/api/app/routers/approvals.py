@@ -470,6 +470,18 @@ async def transition_status(
         ),
         {"st": target, "id": doc["id"]},
     )
+    # ── Sync Meilisearch (CRITICAL — without this, draft→published
+    # leaves the doc out of search even though it's in the DB).
+    # `documents_flat_v` filters by status='published', so:
+    #   - target=published    → upsert (doc now visible in flat view)
+    #   - target=archived     → delete from index
+    #   - other targets       → upsert (no-op if not in flat view yet)
+    from app.services.document_service import reindex_meili
+    await reindex_meili(
+        s,
+        doc_id=str(doc["id"]),
+        archived=(target == "archived"),
+    )
     await document_repo.insert_audit(
         s,
         user_id=user["id"],
