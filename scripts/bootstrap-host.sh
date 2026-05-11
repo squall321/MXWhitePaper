@@ -229,14 +229,34 @@ if [ "$MODE" = "offline" ]; then
   [ -d "$DEB_DIR" ] || fail "offline mode but $DEB_DIR not found. Bundle packages first (see infra/packages/README.md)."
 fi
 
+# Ensure standard system locations are on PATH even under `sudo` with a
+# stripped env. Without this, `command -v apptainer` (etc.) can miss a
+# binary that's clearly installed at /usr/bin/apptainer, and the script
+# bizarrely re-tries to install something already present.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH}"
+
 # ── Helper: package version test ────────────────────────────────────
 have_version() {
   # have_version <command> <minimum-major>
   # Returns 0 if `<command> --version` reports >= <minimum-major>.
+  # Tries multiple discovery routes so a stripped sudo env or an unusual
+  # install location (e.g. /opt/apptainer/bin) doesn't fool us into
+  # thinking the tool is missing.
   local cmd="$1" min="$2"
-  command -v "$cmd" >/dev/null 2>&1 || return 1
+  local bin=""
+  if command -v "$cmd" >/dev/null 2>&1; then
+    bin="$(command -v "$cmd")"
+  else
+    # Common fallbacks — apt-installed .deb lands in /usr/bin, the
+    # Apptainer go-build sometimes lands in /usr/local/bin or
+    # /opt/apptainer/bin. Pick whichever exists + is executable.
+    for cand in "/usr/bin/$cmd" "/usr/local/bin/$cmd" "/opt/$cmd/bin/$cmd"; do
+      [ -x "$cand" ] && bin="$cand" && break
+    done
+  fi
+  [ -z "$bin" ] && return 1
   local v
-  v="$($cmd --version 2>&1 | head -1)"
+  v="$("$bin" --version 2>&1 | head -1)"
   # Extract first integer that looks like a version major.
   local major
   major="$(printf '%s' "$v" | grep -oE '[0-9]+' | head -1)"
@@ -270,6 +290,13 @@ fi
 
 # ── Step 2: Apptainer ───────────────────────────────────────────────
 step "Step 2 — Apptainer (≥ 1.3)"
+
+# Diagnostic — print whatever the shell can see now, so if detection
+# fails the user can compare with what they think is installed.
+if [ -x /usr/bin/apptainer ] || command -v apptainer >/dev/null 2>&1; then
+  note "apptainer binaries on PATH: $(command -v apptainer 2>/dev/null || echo '(not on PATH)')"
+  note "explicit check: $(ls -la /usr/bin/apptainer 2>/dev/null || echo '/usr/bin/apptainer absent')"
+fi
 
 if have_version apptainer 1; then
   CUR="$(apptainer --version 2>&1 | head -1)"
