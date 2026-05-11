@@ -107,11 +107,31 @@ if run_step 2; then
     ok "pnpm install"
   fi
 
-  if python3 -c "import datamodel_code_generator" 2>/dev/null; then
+  # Detection via the CLI entry-point (works regardless of whether the
+  # package lives in system site-packages or a pipx-managed venv).
+  if command -v datamodel-codegen >/dev/null 2>&1 \
+     || python3 -c "import datamodel_code_generator" 2>/dev/null; then
     ok "datamodel-code-generator already installed"
   else
-    note "running: pip install --user datamodel-code-generator"
-    pip install --user --quiet datamodel-code-generator
+    # Ubuntu 24.04 enforces PEP-668 — plain `pip install --user` errors
+    # out with "externally-managed-environment". Preferred install path
+    # is pipx (separate venv, no system-site collision); fall back to
+    # `pip --break-system-packages --ignore-installed` only if pipx
+    # isn't on the host (rare on 24.04 where bootstrap-host.sh adds it).
+    if command -v pipx >/dev/null 2>&1; then
+      note "running: pipx install datamodel-code-generator"
+      pipx install datamodel-code-generator
+      pipx ensurepath || true
+      # `pipx ensurepath` modifies the shell rc but doesn't affect the
+      # current process; export the standard pipx bin dir so the codegen
+      # step right below can find the binary without a re-login.
+      export PATH="$HOME/.local/bin:/root/.local/bin:$PATH"
+    else
+      warn "pipx not found — falling back to pip --break-system-packages"
+      note "(consider running sudo ./scripts/bootstrap-host.sh first)"
+      python3 -m pip install --user --quiet --break-system-packages \
+        --ignore-installed datamodel-code-generator
+    fi
     ok "datamodel-code-generator"
   fi
 fi
