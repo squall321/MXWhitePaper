@@ -260,16 +260,51 @@ else
       apptainer_ver="1.3.6"
       url="https://github.com/apptainer/apptainer/releases/download/v${apptainer_ver}/apptainer_${apptainer_ver}_${local_arch}.deb"
       tmp_deb="$(mktemp --suffix=.deb)"
-      ok "downloading $url"
-      run curl -fsSL "$url" -o "$tmp_deb"
-      run dpkg -i "$tmp_deb" || run apt-get install -y -f
-      rm -f "$tmp_deb"
+
+      # 1) Did the operator pre-stage the .deb? (corporate firewall friendly)
+      #    Look in the offline cache dir even when we're in online mode —
+      #    most useful when GitHub CDN keeps getting RST by a strict
+      #    proxy and the user manually `scp`'d the file in.
+      if ls "$DEB_DIR"/apptainer*.deb >/dev/null 2>&1; then
+        ok "using pre-staged $DEB_DIR/apptainer*.deb (skipping download)"
+        # `apt-get install` on absolute-path .deb files resolves
+        # transitive dependencies in one shot (unlike `dpkg -i` which
+        # would need a follow-up `apt-get install -f`).
+        run apt-get install -y --no-install-recommends "$DEB_DIR"/apptainer*.deb
+        rm -f "$tmp_deb"
+      else
+        ok "downloading $url (with retries — GitHub CDN can RST behind corp proxies)"
+        # `--retry-all-errors` covers RST / TLS errors too (not just 5xx);
+        # the long `--max-time` accounts for slow proxies; `--retry 10`
+        # gives transient errors plenty of chances to recover before we
+        # bail with a clear pointer to the manual workaround.
+        if ! run curl -fL --retry 10 --retry-delay 5 --retry-all-errors \
+               --connect-timeout 30 --max-time 600 \
+               "$url" -o "$tmp_deb"; then
+          rm -f "$tmp_deb"
+          fail "apptainer .deb download failed (connection issue).
+
+  Workaround — download on a machine with internet access, then place
+  the .deb here on this server:
+
+    $DEB_DIR/
+
+  and re-run this script. The file is on:
+
+    $url
+
+  Or curl with wget instead:
+    wget --tries=10 --retry-connrefused $url -O $DEB_DIR/apptainer.deb"
+        fi
+        run apt-get install -y --no-install-recommends "$tmp_deb"
+        rm -f "$tmp_deb"
+      fi
     fi
   else
     # Offline: assume an `apptainer_*.deb` is present in the cache.
     if ls "$DEB_DIR"/apptainer*.deb >/dev/null 2>&1; then
       ok "installing apptainer from $DEB_DIR"
-      run dpkg -i "$DEB_DIR"/apptainer*.deb || run apt-get install -y -f
+      run apt-get install -y --no-install-recommends "$DEB_DIR"/apptainer*.deb
     else
       fail "offline mode but no apptainer*.deb in $DEB_DIR"
     fi
@@ -290,7 +325,7 @@ else
   else
     if ls "$DEB_DIR"/nodejs*.deb >/dev/null 2>&1; then
       ok "installing nodejs from $DEB_DIR"
-      run dpkg -i "$DEB_DIR"/nodejs*.deb || run apt-get install -y -f
+      run apt-get install -y --no-install-recommends "$DEB_DIR"/nodejs*.deb
     else
       fail "offline mode but no nodejs*.deb in $DEB_DIR"
     fi
