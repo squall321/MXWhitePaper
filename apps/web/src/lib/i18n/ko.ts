@@ -11,6 +11,7 @@ export const ko = {
   'topbar.menu.label': '메뉴 열기',
   'topbar.newDoc': '+ 새 문서',
   'topbar.newDoc.aria': '새 문서 작성',
+  'topbar.newDoc.blank': '📝 빈 문서로 시작',
   'topbar.newDoc.import': '📄 Word / 📊 PPT 가져오기',
   'topbar.more': '더 보기',
   'topbar.org': '조직',

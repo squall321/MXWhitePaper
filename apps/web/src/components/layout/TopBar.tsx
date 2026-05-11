@@ -224,7 +224,7 @@ export function TopBar({
             <NewDocMenu
               tNewDocLabel={t('topbar.newDoc')}
               tNewDocAria={t('topbar.newDoc.aria')}
-              tNewDocBlank={t('topbar.newDoc')}
+              tNewDocBlank={t('topbar.newDoc.blank')}
               tNewDocImport={t('topbar.newDoc.import')}
               isActiveNew={isActive('/docs/new')}
               isActiveImport={isActive('/docs/import')}
