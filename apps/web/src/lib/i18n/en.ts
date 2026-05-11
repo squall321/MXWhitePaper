@@ -11,7 +11,7 @@ export const en: Record<LocaleKey, string> = {
   'topbar.menu.label': 'Open menu',
   'topbar.newDoc': '+ New doc',
   'topbar.newDoc.aria': 'Create new document',
-  'topbar.newDoc.import': '📄 Import Word',
+  'topbar.newDoc.import': '📄 Import Word / 📊 PPT',
   'topbar.more': 'More',
   'topbar.org': 'Org',
   'topbar.orgFull': 'Org',
