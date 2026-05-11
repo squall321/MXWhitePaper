@@ -235,6 +235,64 @@ fi
 # bizarrely re-tries to install something already present.
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH}"
 
+# ── Cache-lookup helper used by apt-staged .deb installs ─────────────
+# find_cached_deb <name-prefix> → echoes the absolute path to the first
+# matching .deb (>=1 MB) it finds, or empty string if nothing usable.
+# Searches operator-friendly locations + the canonical $DEB_DIR.
+# Set MXWP_DEB_DIR to add a custom search root.
+find_cached_deb() {
+  local prefix="$1"
+  local dirs=(
+    "$DEB_DIR"
+    "$REPO_ROOT/infra/deb"
+    "$REPO_ROOT/infra/packages"
+    "$REPO_ROOT"
+    "${MXWP_DEB_DIR:-}"
+  )
+  shopt -s nullglob
+  local found="" f sz
+  for dir in "${dirs[@]}"; do
+    [ -n "$dir" ] && [ -d "$dir" ] || continue
+    # Match both lowercase and TitleCase filenames.
+    for f in "$dir/${prefix}"*.deb "$dir/${prefix^}"*.deb; do
+      [ -e "$f" ] || continue
+      sz="$(stat -c %s "$f" 2>/dev/null || echo 0)"
+      if [ "$sz" -lt 1000000 ]; then
+        warn "skipping $f — size ${sz} bytes is too small (incomplete download?)" >&2
+        continue
+      fi
+      found="$f"
+      break 2
+    done
+  done
+  shopt -u nullglob
+  printf '%s' "$found"
+}
+
+# Listing dump used by every "couldn't find anything" error path.
+dump_deb_search_paths() {
+  local prefix="$1"
+  local dirs=(
+    "$DEB_DIR"
+    "$REPO_ROOT/infra/deb"
+    "$REPO_ROOT/infra/packages"
+    "$REPO_ROOT"
+    "${MXWP_DEB_DIR:-}"
+  )
+  note "searched (in priority order):"
+  for dir in "${dirs[@]}"; do
+    [ -n "$dir" ] || continue
+    if [ -d "$dir" ]; then
+      local matches
+      matches="$(ls "$dir/${prefix}"*.deb 2>/dev/null | tr '\n' ' ')"
+      note "    $dir/ → ${matches:-(no ${prefix}*.deb)}"
+    else
+      note "    $dir/ → (directory does not exist)"
+    fi
+  done
+  note "    [tip] set MXWP_DEB_DIR=/path/to/your/dir to add a custom location"
+}
+
 # ── Helper: package version test ────────────────────────────────────
 have_version() {
   # have_version <command> <minimum-major>
@@ -333,49 +391,15 @@ else
       mkdir -p "$DEB_DIR"
       target_deb="$DEB_DIR/apptainer_${apptainer_ver}_${local_arch}.deb"
 
-      # Cache lookup — operators have placed files in various places over
-      # the course of this script's iterations, so search every plausible
-      # location instead of being strict about a single canonical path.
-      # First hit wins. Anything < 1 MB is treated as a partial download.
-      cache_candidates=(
-        "$DEB_DIR"                          # infra/packages/deb (canonical)
-        "$REPO_ROOT/infra/deb"              # operator shortcut some run into
-        "$REPO_ROOT/infra/packages"         # one level up
-        "$REPO_ROOT"                        # repo root
-        "${MXWP_DEB_DIR:-}"                 # env override (highest priority)
-      )
+      # Cache lookup via shared helper — searches every plausible
+      # location (infra/packages/deb, infra/deb, infra/packages, repo
+      # root, $MXWP_DEB_DIR override).
       note "looking for cached apptainer*.deb …"
-      cached_deb=""
-      shopt -s nullglob
-      for dir in "${cache_candidates[@]}"; do
-        [ -n "$dir" ] && [ -d "$dir" ] || continue
-        for f in "$dir"/apptainer*.deb "$dir"/Apptainer*.deb; do
-          [ -e "$f" ] || continue
-          sz="$(stat -c %s "$f" 2>/dev/null || echo 0)"
-          if [ "$sz" -lt 1000000 ]; then
-            warn "skipping $f — size ${sz} bytes is too small (incomplete download?)"
-            continue
-          fi
-          cached_deb="$f"
-          ok "found cached .deb: $f"
-          break 2
-        done
-      done
-      shopt -u nullglob
-
-      # Diagnostic: list every directory we checked so the user can spot
-      # path mismatches at a glance.
+      cached_deb="$(find_cached_deb apptainer)"
+      [ -n "$cached_deb" ] && ok "found cached .deb: $cached_deb"
       if [ -z "$cached_deb" ]; then
-        note "no cached .deb found. Searched (in priority order):"
-        for dir in "${cache_candidates[@]}"; do
-          [ -n "$dir" ] || continue
-          if [ -d "$dir" ]; then
-            note "    $dir/ → $(ls "$dir"/*.deb 2>/dev/null | tr '\n' ' ' || echo '(no .deb)')"
-          else
-            note "    $dir/ → (directory does not exist)"
-          fi
-        done
-        note "    [tip] set MXWP_DEB_DIR=/path/to/your/dir to add a custom location"
+        note "no cached .deb found."
+        dump_deb_search_paths apptainer
       fi
 
       if [ -n "$cached_deb" ]; then
@@ -427,10 +451,21 @@ step "Step 3 — Node.js 20"
 if have_version node 20; then
   ok "already installed: $(node --version)"
 else
-  if [ "$MODE" = "online" ]; then
+  # 1) Cache-first — operator-staged nodejs*.deb wins over the NodeSource
+  #    repo download. Saves a curl roundtrip + works behind a strict proxy.
+  cached_node="$(find_cached_deb nodejs)"
+  if [ -n "$cached_node" ]; then
+    ok "found cached .deb: $cached_node (skipping NodeSource setup script)"
+    run apt-get install -y --no-install-recommends "$cached_node"
+  elif [ "$MODE" = "online" ]; then
+    note "no cached nodejs*.deb found."
+    dump_deb_search_paths nodejs
     ok "adding NodeSource 20.x repo"
     # Download the installer script via the proxy-aware helper so the
     # same fallback that handled GitHub also handles deb.nodesource.com.
+    # The setup script writes /etc/apt/sources.list.d/nodesource.list and
+    # the GPG key, then we install nodejs via the normal apt path
+    # (which respects apt's proxy config).
     setup_script="$(mktemp --suffix=.sh)"
     if curl_with_proxy_fallback "$setup_script" "https://deb.nodesource.com/setup_20.x"; then
       run bash "$setup_script"
@@ -438,15 +473,16 @@ else
       run apt-get install -y --no-install-recommends nodejs
     else
       rm -f "$setup_script"
-      fail "NodeSource installer download failed. Pre-stage a nodejs*.deb in $DEB_DIR/ and re-run."
+      fail "NodeSource installer download failed. Either:
+
+  (a) place a nodejs_*.deb in one of the cache locations above, or
+  (b) check why both direct and fallback proxy ($FALLBACK_PROXY) couldn't
+      reach deb.nodesource.com.
+
+NodeSource publishes .deb at https://deb.nodesource.com/node_20.x/pool/main/n/nodejs/"
     fi
   else
-    if ls "$DEB_DIR"/nodejs*.deb >/dev/null 2>&1; then
-      ok "installing nodejs from $DEB_DIR"
-      run apt-get install -y --no-install-recommends "$DEB_DIR"/nodejs*.deb
-    else
-      fail "offline mode but no nodejs*.deb in $DEB_DIR"
-    fi
+    fail "offline mode but no nodejs*.deb in any cache location (searched above)"
   fi
   ok "$(node --version)"
 fi
