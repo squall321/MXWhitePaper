@@ -11,6 +11,7 @@ import {
 } from '@/features/presentation/slideMachine'
 import { SlideBlockRenderer } from '@/features/presentation/SlideBlockRenderer'
 import { SectionLayout } from '@/components/SectionLayout'
+import type { SectionLevel2, SectionLevel3 } from '@/types/document'
 import { openPresenterChannel } from '@/features/presentation/presenterChannel'
 import {
   TRANSITIONS_CSS,
@@ -437,6 +438,17 @@ function SlideContent({
   // 2-col / image-left / image-right / full-bleed shapes; the wrapper
   // staggered-animation classes are applied to each layout cell.
   const isTitleOnly = layout === 'title-only'
+
+  // Walk subsections so nested content isn't silently dropped on the
+  // slide. Without this, a level-1 slide rendering a section that has
+  // level-2 / level-3 subsections shows ONLY its direct blocks, and the
+  // user's writing inside subsections vanishes from the deck. We render
+  // each subsection as an inline mini-section (h3 + body + recurse).
+  const subsections = Array.isArray(slide.section?.subsections)
+    ? slide.section.subsections
+    : []
+  const cleanBody = body.filter((b): b is NonNullable<typeof b> => Boolean(b))
+
   return (
     <div className="slide-body slide-section">
       <header className="slide-heading">
@@ -446,7 +458,7 @@ function SlideContent({
       {!isTitleOnly && (
         <div className="slide-blocks">
           <SectionLayout
-            blocks={body.filter((b): b is NonNullable<typeof b> => Boolean(b))}
+            blocks={cleanBody}
             layout={layout}
             renderBlock={(block, i) => (
               <div
@@ -457,9 +469,70 @@ function SlideContent({
               </div>
             )}
           />
+          {subsections.map((sub) => (
+            <SubsectionInline
+              key={sub.id}
+              section={sub}
+              staggerEnabled={staggerEnabled}
+            />
+          ))}
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Renders a subsection inline within its parent slide: small heading +
+ * body blocks + recursive descent into deeper subsections. Used so the
+ * default (non-`?nested=1`) slide deck preserves all of the document's
+ * content, not just direct level-1 blocks.
+ *
+ * Heading levels:
+ *   level 2 → h3
+ *   level 3+ → h4 (capped — slides shouldn't get tinier-than-h4 text)
+ */
+function SubsectionInline({
+  section,
+  staggerEnabled,
+}: {
+  section: SectionLevel2 | SectionLevel3
+  staggerEnabled: boolean
+}) {
+  const allBlocks = Array.isArray(section?.blocks) ? section.blocks : []
+  const { body } = splitSpeakerNotes(allBlocks)
+  const cleanBody = body.filter((b): b is NonNullable<typeof b> => Boolean(b))
+  const layout = (section as { layout?: string })?.layout
+  const subs = Array.isArray((section as { subsections?: unknown[] }).subsections)
+    ? ((section as { subsections: unknown[] }).subsections as (SectionLevel2 | SectionLevel3)[])
+    : []
+  const number = section.number ?? ''
+  const title = section.title ?? ''
+  const Heading = section.level === 2 ? 'h3' : 'h4'
+  return (
+    <section className="slide-subsection">
+      <Heading className="slide-subheading">
+        {number && <span className="num-sub">{number}</span>}
+        {title}
+      </Heading>
+      {cleanBody.length > 0 && (
+        <SectionLayout
+          blocks={cleanBody}
+          layout={layout as never}
+          renderBlock={(block, i) => (
+            <div
+              className={blockWrapperClass(staggerEnabled)}
+              style={staggerStyle(i, staggerEnabled)}
+            >
+              <SlideBlockRenderer block={block} />
+            </div>
+          )}
+        />
+      )}
+      {subs.map((s) => (
+        <SubsectionInline key={s.id} section={s} staggerEnabled={staggerEnabled} />
+      ))}
+    </section>
   )
 }
 
@@ -640,9 +713,13 @@ const PRESENTATION_CSS = `
   color: #a5b4fc;
 }
 .slide-meta .tag { color: #94a3b8; }
-.slide-section .slide-heading { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; }
+.slide-section .slide-heading { display: flex; align-items: baseline; gap: clamp(8px, 0.8vw, 16px); margin-bottom: 24px; }
 .slide-section .slide-heading .num {
-  font-family: 'JetBrains Mono', monospace; color: #6f87d6; font-size: 28px;
+  font-family: 'JetBrains Mono', monospace; color: #6f87d6;
+  /* Scale alongside the h2 (clamp(36, 4.5vw, 56)) so the ratio stays
+     readable across small / large screens. ~70% of heading size keeps
+     the chapter number prominent without overpowering the title. */
+  font-size: clamp(24px, 3.2vw, 40px);
 }
 .slide-section .slide-heading h2 {
   font-size: clamp(36px, 4.5vw, 56px); margin: 0; line-height: 1.15; color: var(--mx-stage-fg, #f8fafc);
@@ -656,6 +733,29 @@ const PRESENTATION_CSS = `
 .slide-section .prose-slide li { margin: 4px 0; }
 .slide-section .prose-slide table { font-size: 16px; }
 .slide-section .prose-slide img { max-height: 60vh; width: auto; max-width: 100%; }
+
+/* Inline-rendered subsection inside a parent slide.
+   Heading (h3) sits ~70% of the parent h2 size; nested subsections (h4)
+   step down again. .num-sub mirrors .num at the subheading scale so the
+   dotted ordinal stays visually balanced. */
+.slide-subsection { margin-top: 32px; }
+.slide-subheading {
+  display: flex; align-items: baseline; gap: 12px;
+  font-size: clamp(22px, 2.4vw, 32px);
+  line-height: 1.2;
+  color: #cbd5e1;
+  margin: 0 0 12px;
+  border-left: 3px solid #6f87d6;
+  padding-left: 12px;
+}
+.slide-subheading .num-sub {
+  font-family: 'JetBrains Mono', monospace; color: #6f87d6;
+  font-size: clamp(16px, 1.8vw, 22px);
+}
+.slide-subsection h4.slide-subheading {
+  font-size: clamp(18px, 2vw, 26px);
+  border-left-width: 2px;
+}
 .slide-watermark {
   position: absolute; right: 16px; bottom: 16px; font-size: 11px;
   color: rgba(148, 163, 184, 0.6); font-family: 'JetBrains Mono', monospace;
