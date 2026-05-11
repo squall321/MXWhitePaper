@@ -25,6 +25,11 @@
 #    sudo ./scripts/bootstrap-host.sh --online        # force online
 #    sudo ./scripts/bootstrap-host.sh --dry-run       # show what would be done
 #    ./scripts/bootstrap-host.sh --help               # usage
+#
+#  Corporate proxy:
+#    sudo -E ./scripts/bootstrap-host.sh                          # inherit HTTP(S)_PROXY env
+#    sudo ./scripts/bootstrap-host.sh --proxy http://proxy:8080   # explicit URL
+#    (script auto-detects "apt already has a proxy configured" → online)
 # ─────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -50,18 +55,77 @@ note() { printf "  ${C_DIM}%s${C_RESET}\n" "$*"; }
 # ── Args ────────────────────────────────────────────────────────────
 MODE="auto"
 DRY_RUN=0
-for arg in "$@"; do
-  case "$arg" in
+PROXY_ARG=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     --online)  MODE="online" ;;
     --offline) MODE="offline" ;;
     --dry-run) DRY_RUN=1 ;;
+    --proxy)
+      [ -n "${2:-}" ] || fail "--proxy requires a URL (e.g. http://proxy.corp:8080)"
+      PROXY_ARG="$2"; shift
+      ;;
+    --proxy=*) PROXY_ARG="${1#--proxy=}" ;;
     -h|--help)
       sed -n '2,28p' "$0" | sed 's/^# \?//'
       exit 0
       ;;
-    *) fail "unknown arg: $arg (use --help)" ;;
+    *) fail "unknown arg: $1 (use --help)" ;;
   esac
+  shift
 done
+
+# ── Proxy: accept either env vars (HTTP_PROXY / HTTPS_PROXY) or --proxy.
+# `sudo` strips environment by default, so the user needs `sudo -E` OR
+# `--proxy http://…`. Detect both and re-export to every downstream call.
+PROXY_URL="${PROXY_ARG:-${HTTPS_PROXY:-${HTTP_PROXY:-${https_proxy:-${http_proxy:-}}}}}"
+NO_PROXY_VAL="${NO_PROXY:-${no_proxy:-localhost,127.0.0.1,::1}}"
+
+if [ -n "$PROXY_URL" ]; then
+  export HTTP_PROXY="$PROXY_URL"
+  export HTTPS_PROXY="$PROXY_URL"
+  export http_proxy="$PROXY_URL"
+  export https_proxy="$PROXY_URL"
+  export NO_PROXY="$NO_PROXY_VAL"
+  export no_proxy="$NO_PROXY_VAL"
+  note "proxy in use: $PROXY_URL  (no_proxy: $NO_PROXY_VAL)"
+fi
+
+# Apply the proxy to apt/npm. pip + curl honour HTTPS_PROXY env directly,
+# but apt and npm both need explicit config — apt reads
+# /etc/apt/apt.conf.d/*, npm reads ~/.npmrc or its own config store.
+apt_already_has_proxy() {
+  # Look for any "Acquire::http(s)::Proxy" line in apt's config snippets.
+  # `apt-config dump` is the most reliable way: it merges every file in
+  # /etc/apt/apt.conf.d AND environment overrides.
+  apt-config dump 2>/dev/null | grep -qE 'Acquire::https?::Proxy[[:space:]]+"[^"]+"'
+}
+
+configure_proxy_for_apt_and_npm() {
+  [ -z "$PROXY_URL" ] && return 0
+  if apt_already_has_proxy; then
+    note "apt proxy already configured system-wide — leaving it as is"
+  else
+    local apt_conf=/etc/apt/apt.conf.d/99proxy-mxwp-bootstrap
+    if [ "$DRY_RUN" -eq 1 ]; then
+      note "[dry-run] would write $apt_conf with Acquire::http/https::Proxy"
+    else
+      cat > "$apt_conf" <<EOF
+Acquire::http::Proxy "$PROXY_URL";
+Acquire::https::Proxy "$PROXY_URL";
+EOF
+      ok "apt proxy config → $apt_conf"
+    fi
+  fi
+  # npm — best-effort. Only run if npm is already on PATH (after Step 3
+  # it always is). For the initial run we silently skip; the Step 4 pnpm
+  # install retries after npm gets installed.
+  if command -v npm >/dev/null 2>&1; then
+    run npm config set proxy "$PROXY_URL"
+    run npm config set https-proxy "$PROXY_URL"
+  fi
+}
+configure_proxy_for_apt_and_npm
 
 run() {
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -91,9 +155,20 @@ fi
 
 # ── Online detection ────────────────────────────────────────────────
 detect_online() {
-  # Try a tiny HEAD request against Ubuntu archive (5 s timeout).
-  # If it works we're online; otherwise fall back to offline.
+  # 1) An apt proxy already configured system-wide is a strong signal we
+  #    have a routable path to upstream archives. Trust that over curl
+  #    probes — in corporate networks, direct curl to archive.ubuntu.com
+  #    often fails even though `apt-get update` works via the proxy.
+  if apt_already_has_proxy; then
+    return 0
+  fi
+  # 2) Otherwise probe Ubuntu archive + NodeSource (5 s timeout each).
+  #    curl honours HTTP(S)_PROXY env vars exported above.
   if curl -sSf --max-time 5 --head https://archive.ubuntu.com/ubuntu/ \
+       >/dev/null 2>&1; then
+    return 0
+  fi
+  if curl -sSf --max-time 5 --head https://deb.nodesource.com/ \
        >/dev/null 2>&1; then
     return 0
   fi
