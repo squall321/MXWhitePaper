@@ -299,26 +299,41 @@ else
       # URL 404s is loud and easy to spot.
       apptainer_ver="1.3.6"
       url="https://github.com/apptainer/apptainer/releases/download/v${apptainer_ver}/apptainer_${apptainer_ver}_${local_arch}.deb"
-      tmp_deb="$(mktemp --suffix=.deb)"
 
-      # 1) Did the operator pre-stage the .deb? (corporate firewall friendly)
-      #    Look in the offline cache dir even when we're in online mode —
-      #    most useful when GitHub CDN keeps getting RST by a strict
-      #    proxy and the user manually `scp`'d the file in.
-      if ls "$DEB_DIR"/apptainer*.deb >/dev/null 2>&1; then
-        ok "using pre-staged $DEB_DIR/apptainer*.deb (skipping download)"
+      # Persistent cache location — downloads go here so re-runs skip
+      # the network entirely. The operator can also pre-`scp` a .deb
+      # into this directory and the script will pick it up.
+      mkdir -p "$DEB_DIR"
+      target_deb="$DEB_DIR/apptainer_${apptainer_ver}_${local_arch}.deb"
+
+      # 1) Cached / pre-staged .deb? Use any apptainer*.deb in the dir.
+      #    Validate size > 1 MB to reject partial downloads from prior
+      #    aborted runs (.deb is always at least a few MB).
+      cached_deb=""
+      if [ -s "$target_deb" ] && [ "$(stat -c %s "$target_deb")" -gt 1000000 ]; then
+        cached_deb="$target_deb"
+      else
+        for f in "$DEB_DIR"/apptainer*.deb; do
+          [ -e "$f" ] || continue
+          [ "$(stat -c %s "$f" 2>/dev/null || echo 0)" -gt 1000000 ] || continue
+          cached_deb="$f"
+          break
+        done
+      fi
+
+      if [ -n "$cached_deb" ]; then
+        ok "using cached $cached_deb (skipping download)"
         # `apt-get install` on absolute-path .deb files resolves
         # transitive dependencies in one shot (unlike `dpkg -i` which
         # would need a follow-up `apt-get install -f`).
-        run apt-get install -y --no-install-recommends "$DEB_DIR"/apptainer*.deb
-        rm -f "$tmp_deb"
+        run apt-get install -y --no-install-recommends "$cached_deb"
       else
-        ok "downloading $url (with retries — GitHub CDN can RST behind corp proxies)"
+        ok "downloading $url → $target_deb"
         # curl_with_proxy_fallback tries the env/system proxy first, then
         # automatically retries via $FALLBACK_PROXY when the first attempt
         # gets connection-reset by the corporate firewall.
-        if ! curl_with_proxy_fallback "$tmp_deb" "$url"; then
-          rm -f "$tmp_deb"
+        if ! curl_with_proxy_fallback "$target_deb" "$url"; then
+          rm -f "$target_deb"
           fail "apptainer .deb download failed (both direct and fallback proxy).
 
   Workaround — download on a machine with internet access, then place
@@ -333,8 +348,8 @@ else
   Or curl with wget instead:
     wget --tries=10 --retry-connrefused $url -O $DEB_DIR/apptainer.deb"
         fi
-        run apt-get install -y --no-install-recommends "$tmp_deb"
-        rm -f "$tmp_deb"
+        ok "saved to $target_deb (cached for future runs)"
+        run apt-get install -y --no-install-recommends "$target_deb"
       fi
     fi
   else
