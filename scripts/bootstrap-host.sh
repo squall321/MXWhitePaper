@@ -306,19 +306,31 @@ else
       mkdir -p "$DEB_DIR"
       target_deb="$DEB_DIR/apptainer_${apptainer_ver}_${local_arch}.deb"
 
-      # 1) Cached / pre-staged .deb? Use any apptainer*.deb in the dir.
-      #    Validate size > 1 MB to reject partial downloads from prior
-      #    aborted runs (.deb is always at least a few MB).
+      # Cache lookup — find ANY apptainer .deb in the dir, regardless of
+      # exact filename (operator may have downloaded with the GitHub
+      # default name, or renamed it). Anything >= 1 MB counts as a
+      # plausibly-complete file; truly tiny stubs from aborted downloads
+      # are rejected so we don't try to apt-get install a broken archive.
+      note "looking for cached .deb in $DEB_DIR/ …"
       cached_deb=""
-      if [ -s "$target_deb" ] && [ "$(stat -c %s "$target_deb")" -gt 1000000 ]; then
-        cached_deb="$target_deb"
-      else
-        for f in "$DEB_DIR"/apptainer*.deb; do
-          [ -e "$f" ] || continue
-          [ "$(stat -c %s "$f" 2>/dev/null || echo 0)" -gt 1000000 ] || continue
-          cached_deb="$f"
-          break
-        done
+      shopt -s nullglob
+      for f in "$DEB_DIR"/apptainer*.deb "$DEB_DIR"/Apptainer*.deb; do
+        [ -e "$f" ] || continue
+        sz="$(stat -c %s "$f" 2>/dev/null || echo 0)"
+        if [ "$sz" -lt 1000000 ]; then
+          warn "skipping $f — size ${sz} bytes is too small (incomplete download?)"
+          continue
+        fi
+        cached_deb="$f"
+        break
+      done
+      shopt -u nullglob
+
+      # Diagnostic: dump dir listing so the user can see exactly what
+      # the script sees. Helps when the file is at the wrong path.
+      if [ -z "$cached_deb" ]; then
+        note "no cached .deb found. Current $DEB_DIR/ contents:"
+        ls -la "$DEB_DIR" 2>/dev/null | sed 's/^/    /' || note "    (directory empty / missing)"
       fi
 
       if [ -n "$cached_deb" ]; then
