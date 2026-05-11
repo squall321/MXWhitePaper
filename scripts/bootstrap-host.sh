@@ -544,21 +544,25 @@ else
     ok "found cached tarball: $cached_pnpm"
     run npm install -g "$cached_pnpm"
   elif [ "$MODE" = "online" ]; then
-    # Preconfigure npm: tight timeout (so hangs become failures we can
-    # catch) + proxy from env if available. Without --fetch-timeout the
-    # `npm install` will spin forever when the registry connection is
-    # silently dropped by a strict firewall.
-    ok "npm install -g pnpm@9 (with 30 s timeout + proxy aware)"
+    # Preconfigure npm: tight timeout + proxy + reduced chatter.
+    # `--fetch-timeout` controls per-request timeouts but doesn't help
+    # when DNS or TCP-SYN itself hangs — wrap the whole call with the
+    # `timeout(1)` command for a hard upper bound that always works.
+    ok "npm install -g pnpm@9 (90 s hard limit + proxy aware)"
     run npm config set fetch-timeout 30000
     run npm config set fetch-retries 3
     [ -n "$PROXY_URL" ] && run npm config set proxy "$PROXY_URL"
     [ -n "$PROXY_URL" ] && run npm config set https-proxy "$PROXY_URL"
-    if ! run npm install -g pnpm@9; then
+    # Try the env-configured proxy (or no proxy if PROXY_URL is empty)
+    # under a 90 s wall-clock cap. timeout 124 = process killed for
+    # running too long; the caller treats that as plain failure and
+    # moves on to the fallback proxy attempt.
+    if ! run timeout --foreground 90 npm install -g --no-audit --no-fund pnpm@9; then
       if [ -n "$FALLBACK_PROXY" ]; then
-        warn "npm install via current config failed; retrying via $FALLBACK_PROXY"
+        warn "first npm install attempt failed/timed-out; retrying via $FALLBACK_PROXY"
         run npm config set proxy "$FALLBACK_PROXY"
         run npm config set https-proxy "$FALLBACK_PROXY"
-        if ! run npm install -g pnpm@9; then
+        if ! run timeout --foreground 90 npm install -g --no-audit --no-fund pnpm@9; then
           fail "npm install -g pnpm@9 failed even via fallback proxy.
 
   Workaround — download the pnpm tarball on a reachable machine and
