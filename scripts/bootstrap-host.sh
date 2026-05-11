@@ -598,20 +598,41 @@ if command -v datamodel-codegen >/dev/null 2>&1; then
   ok "already installed: $(datamodel-codegen --version 2>&1)"
 else
   if [ "$MODE" = "online" ]; then
-    ok "pip install --break-system-packages datamodel-code-generator"
-    # Ubuntu 24.04 enforces PEP-668 (externally-managed env). For a
-    # bootstrap script targeting a server context we accept the override;
-    # users who want isolation can switch to a venv after install.
-    if ! run python3.12 -m pip install --break-system-packages \
-        datamodel-code-generator; then
+    # Strategy: pipx > venv > pip --break-system-packages --ignore-installed.
+    #
+    # On Ubuntu 24.04 the system Python is PEP-668-locked: plain `pip
+    # install` refuses to touch the global site-packages. `--break-
+    # system-packages` works but bumps into the classic "Cannot
+    # uninstall typing_extensions 4.10.0 — RECORD file not found"
+    # error whenever pip wants to upgrade a package that apt placed
+    # there as `python3-typing-extensions` (no RECORD = no clean
+    # uninstall).
+    #
+    # pipx sidesteps the whole mess by installing the CLI tool into
+    # its own venv and dropping a wrapper on PATH — exactly what an
+    # operator wants for a one-off codegen utility.
+    if ! command -v pipx >/dev/null 2>&1; then
+      ok "installing pipx (Ubuntu's recommended CLI installer for Python)"
+      run apt-get install -y --no-install-recommends pipx
+    fi
+    ok "pipx install datamodel-code-generator"
+    # pipx honours HTTPS_PROXY env automatically; we exported it above.
+    if ! run pipx install datamodel-code-generator; then
       if [ -n "$FALLBACK_PROXY" ]; then
-        warn "pip install failed; retrying via $FALLBACK_PROXY"
-        run python3.12 -m pip install --break-system-packages \
-          --proxy "$FALLBACK_PROXY" datamodel-code-generator
+        warn "pipx install failed; retrying with PIP_INDEX_URL via $FALLBACK_PROXY"
+        run env https_proxy="$FALLBACK_PROXY" HTTPS_PROXY="$FALLBACK_PROXY" \
+          pipx install datamodel-code-generator || \
+          fail "pipx install failed even via fallback proxy"
       else
-        fail "pip install failed and no fallback proxy configured"
+        # Last-resort legacy path: --break-system-packages + --ignore-installed.
+        warn "pipx unavailable; falling back to pip --break-system-packages"
+        run python3.12 -m pip install --break-system-packages \
+          --ignore-installed datamodel-code-generator
       fi
     fi
+    # pipx writes binaries to ~/.local/bin or /root/.local/bin. Ensure
+    # they land on PATH for subsequent quickstart steps.
+    run pipx ensurepath || true
   else
     if ls "$PIP_DIR"/*.whl >/dev/null 2>&1; then
       ok "installing wheels from $PIP_DIR (offline)"
