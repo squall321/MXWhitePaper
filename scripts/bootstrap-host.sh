@@ -236,13 +236,35 @@ if have_version apptainer 1; then
   ok "already installed: $CUR"
 else
   if [ "$MODE" = "online" ]; then
-    # Apptainer ships a PPA that supports both 22.04 (jammy) and 24.04
-    # (noble). The PPA's add-apt-repository handles the keyring + sources
-    # entry in one go. Backed by the maintainer (sylabs/apptainer-admins).
-    ok "adding ppa:apptainer/ppa"
-    run add-apt-repository -y ppa:apptainer/ppa
-    run apt-get update -y
-    run apt-get install -y --no-install-recommends apptainer
+    # Strategy: try the official PPA first (slim install + future
+    # auto-updates), and fall back to the maintainer's GitHub release
+    # .deb if that fails. PPA can fail behind a corporate proxy because
+    # `add-apt-repository` shells out to `gpg --keyserver hkps://...`
+    # and the launchpad API, neither of which always honour the apt
+    # proxy config. The GitHub .deb route only needs https + curl.
+    ok "trying ppa:apptainer/ppa first"
+    if [ "$DRY_RUN" -eq 1 ]; then
+      note "[dry-run] add-apt-repository ppa:apptainer/ppa && apt install apptainer"
+    elif add-apt-repository -y ppa:apptainer/ppa 2>/tmp/mxwp-ppa.err \
+         && apt-get update -y \
+         && apt-get install -y --no-install-recommends apptainer; then
+      ok "installed via PPA"
+    else
+      warn "PPA route failed — likely add-apt-repository couldn't reach launchpad through the proxy."
+      note "$(head -3 /tmp/mxwp-ppa.err 2>/dev/null || true)"
+      note "falling back to GitHub release .deb"
+      local_arch="$(dpkg --print-architecture)"
+      # Pin to a version that's known to work on both 22.04 and 24.04.
+      # Bump when a newer release is required; the failure mode if the
+      # URL 404s is loud and easy to spot.
+      apptainer_ver="1.3.6"
+      url="https://github.com/apptainer/apptainer/releases/download/v${apptainer_ver}/apptainer_${apptainer_ver}_${local_arch}.deb"
+      tmp_deb="$(mktemp --suffix=.deb)"
+      ok "downloading $url"
+      run curl -fsSL "$url" -o "$tmp_deb"
+      run dpkg -i "$tmp_deb" || run apt-get install -y -f
+      rm -f "$tmp_deb"
+    fi
   else
     # Offline: assume an `apptainer_*.deb` is present in the cache.
     if ls "$DEB_DIR"/apptainer*.deb >/dev/null 2>&1; then
