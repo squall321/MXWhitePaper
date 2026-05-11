@@ -412,6 +412,49 @@ def _heading_level(p: ET.Element) -> int | None:
     return None
 
 
+# Patterns the user (or Word's auto-numbering, when flattened into run
+# text instead of <w:numPr>) typically prefixes onto a heading. Stripping
+# these on import is critical: the BE re-numbers every section as
+# "1.1.1…" automatically, so if "1.1 제목" survives untouched the
+# rendered output reads "1.1 1.1 제목".
+#
+# Matches:
+#   "1 ", "1. ", "1) ", "1: "
+#   "1.1 ", "1.1. ", "1.1) ", "1.1.1 ", …
+#   "I. ", "IV) "  — Roman numeral chapters
+#   "Chapter 1: ", "Section 1.2 ", "Part 1 "
+#   "제 1 장", "1장.", "1편 "  — Korean conventions
+# Leaves alone "1st quarter", "v1.0", anything that isn't followed by a
+# space / separator + content.
+_LEADING_NUMBER_RES = (
+    # 1, 1.1, 1.1.1 … + . / ) / : separator + at least one whitespace
+    re.compile(r"^\s*\d+(?:\.\d+)*(?:[\.)\:]\s+|\s+)"),
+    # Roman numerals (1..3999) followed by . or ) + space
+    re.compile(r"^\s*(?=[IVXLCDM])M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})[\.)]\s+", re.IGNORECASE),
+    # English chapter prefixes
+    re.compile(r"^\s*(?:Chapter|Section|Part|Article|Appendix)\s+\d+(?:\.\d+)*[\.)\:]?\s+", re.IGNORECASE),
+    # Korean: 제 1 장 / 1장 / 1편 / 1절
+    re.compile(r"^\s*(?:제\s*)?\d+\s*[장편절][\.)\:]?\s+"),
+)
+
+
+def _strip_leading_numbering(title: str) -> str:
+    """Remove auto/manual heading numbering prefix so BE renumbering
+    doesn't produce "1.1 1.1 …" duplicates after import."""
+    out = title
+    for pat in _LEADING_NUMBER_RES:
+        m = pat.match(out)
+        if m:
+            stripped = out[m.end():].strip()
+            # Defensive: never strip the whole title to empty — return the
+            # original (with the prefix kept) when stripping would leave
+            # nothing useful behind.
+            if stripped:
+                out = stripped
+                break
+    return out
+
+
 def _list_info(p: ET.Element) -> tuple[int, str] | None:
     """`(ilvl, numId)` 또는 None. numPr 가 있어야 함."""
     pPr = p.find(_q("w", "pPr"))
@@ -807,6 +850,10 @@ def _build_sections(
             _flush_list()
             text, _drawings = _paragraph_text(node, ctx)
             text = text.strip() or "(제목 없음)"
+            # Drop user-typed or flattened auto-numbering ("1.1 ", "Chapter 2: ",
+            # "제 1 장 ") so the BE's automatic dotted-ordinal renumbering
+            # doesn't visually duplicate it ("1.1 1.1 …").
+            text = _strip_leading_numbering(text) or text
             if h_level <= 3:
                 _ensure_section_path(sections, stack, h_level, text)
                 ctx.summary.headings += 1
