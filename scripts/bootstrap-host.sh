@@ -525,16 +525,48 @@ step "Step 4 — pnpm 9"
 if have_version pnpm 9; then
   ok "already installed: $(pnpm --version)"
 else
-  if [ "$MODE" = "online" ]; then
-    ok "npm install -g pnpm@9"
-    # Try the env-configured proxy first (or no proxy); on failure retry
-    # via the fallback proxy if defined.
+  # 1) Cache-first — operator-staged pnpm-*.tgz wins. The npm CLI
+  #    accepts a local tarball as `npm install -g <path.tgz>` so this
+  #    skips the registry round-trip entirely.
+  cached_pnpm=""
+  shopt -s nullglob
+  for dir in "$DEB_DIR" "$REPO_ROOT/infra/deb" "$REPO_ROOT/infra/packages" "$REPO_ROOT" "${MXWP_DEB_DIR:-}"; do
+    [ -n "$dir" ] && [ -d "$dir" ] || continue
+    for f in "$dir"/pnpm-*.tgz; do
+      [ -e "$f" ] || continue
+      cached_pnpm="$f"
+      break 2
+    done
+  done
+  shopt -u nullglob
+
+  if [ -n "$cached_pnpm" ]; then
+    ok "found cached tarball: $cached_pnpm"
+    run npm install -g "$cached_pnpm"
+  elif [ "$MODE" = "online" ]; then
+    # Preconfigure npm: tight timeout (so hangs become failures we can
+    # catch) + proxy from env if available. Without --fetch-timeout the
+    # `npm install` will spin forever when the registry connection is
+    # silently dropped by a strict firewall.
+    ok "npm install -g pnpm@9 (with 30 s timeout + proxy aware)"
+    run npm config set fetch-timeout 30000
+    run npm config set fetch-retries 3
+    [ -n "$PROXY_URL" ] && run npm config set proxy "$PROXY_URL"
+    [ -n "$PROXY_URL" ] && run npm config set https-proxy "$PROXY_URL"
     if ! run npm install -g pnpm@9; then
       if [ -n "$FALLBACK_PROXY" ]; then
         warn "npm install via current config failed; retrying via $FALLBACK_PROXY"
         run npm config set proxy "$FALLBACK_PROXY"
         run npm config set https-proxy "$FALLBACK_PROXY"
-        run npm install -g pnpm@9
+        if ! run npm install -g pnpm@9; then
+          fail "npm install -g pnpm@9 failed even via fallback proxy.
+
+  Workaround — download the pnpm tarball on a reachable machine and
+  drop it into one of the cache locations searched above:
+
+    curl -fL https://registry.npmjs.org/pnpm/-/pnpm-9.15.0.tgz -o pnpm-9.15.0.tgz
+    # then scp to infra/deb/  and re-run this script"
+        fi
       else
         fail "npm install -g pnpm@9 failed and no fallback proxy configured"
       fi
