@@ -57,10 +57,14 @@ router = APIRouter(prefix="/api/v1", tags=["approvals"])
 # ── transitions table ───────────────────────────────────────────────────
 
 ALLOWED_TRANSITIONS: dict[str, set[str]] = {
-    "draft": {"in_review", "archived"},
+    # `draft → published` is the "바로 게시" shortcut: imported docs and
+    # internal wikis often don't go through a formal review cycle, so the
+    # editor can skip the in_review/approved hops. The full review path
+    # stays available for cases where it makes sense.
+    "draft": {"in_review", "published", "archived"},
     "in_review": {"approved", "draft", "archived"},
     "approved": {"published", "archived"},
-    "published": {"archived"},
+    "published": {"archived", "draft"},
     "archived": {"draft"},
 }
 

@@ -338,15 +338,33 @@ async def test_transition_approved_to_published() -> None:
 async def test_illegal_transition_returns_422() -> None:
     await _reset_doc_state()
     async with await _client() as ac:
-        # draft → published is not a legal direct edge.
+        # archived → published is illegal (must go via draft first).
+        # Set the doc to archived first.
+        await ac.post(
+            f"/api/v1/documents/{SEED_SLUG}/transition",
+            json={"status": "archived"},
+        )
         r = await ac.post(
             f"/api/v1/documents/{SEED_SLUG}/transition",
             json={"status": "published"},
         )
         assert r.status_code == 422
         details = r.json()["error"]["details"]
-        assert details["from"] == "draft"
+        assert details["from"] == "archived"
         assert details["to"] == "published"
+
+
+@pytest.mark.asyncio
+async def test_draft_to_published_direct_is_allowed() -> None:
+    """The "바로 게시" shortcut — imported / internal-wiki docs skip review."""
+    await _reset_doc_state()
+    async with await _client() as ac:
+        r = await ac.post(
+            f"/api/v1/documents/{SEED_SLUG}/transition",
+            json={"status": "published"},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["status"] == "published"
 
 
 @pytest.mark.asyncio

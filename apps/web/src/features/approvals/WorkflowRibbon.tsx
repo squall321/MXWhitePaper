@@ -118,15 +118,33 @@ export function WorkflowRibbon({
 
       <div className="ml-auto flex flex-wrap gap-2">
         {status === 'draft' && isEditor && (
-          <button
-            type="button"
-            data-testid="workflow-action-request-review"
-            disabled={busy}
-            onClick={() => run('in_review')}
-            className="rounded bg-smsg-700 px-3 py-1 text-xs font-semibold text-white hover:bg-smsg-900 disabled:opacity-50"
-          >
-            리뷰 요청
-          </button>
+          <>
+            <button
+              type="button"
+              data-testid="workflow-action-request-review"
+              disabled={busy}
+              onClick={() => run('in_review')}
+              className="rounded border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              title="리뷰어 승인을 거쳐 게시하기"
+            >
+              리뷰 요청
+            </button>
+            {/* Single-step publish shortcut. The full draft → in_review →
+               approved → published flow is useful for reviewed docs, but
+               most operational wikis (imported PPT/Word, internal SOPs)
+               just need to flip the visibility bit. We trust the editor
+               role here — the audit log keeps the actor on record. */}
+            <button
+              type="button"
+              data-testid="workflow-action-publish-direct"
+              disabled={busy}
+              onClick={() => run('published')}
+              className="rounded bg-smsg-700 px-3 py-1 text-xs font-semibold text-white hover:bg-smsg-900 disabled:opacity-50"
+              title="리뷰 단계 생략하고 바로 게시 (검색에 즉시 노출)"
+            >
+              바로 게시
+            </button>
+          </>
         )}
 
         {status === 'in_review' && isEditor && (
