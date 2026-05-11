@@ -95,11 +95,16 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
   const widgetMatches = useMemo(() => {
     const needle = q.trim().toLowerCase()
     if (!needle) return widgetList
+    // Defend every field — the widget registry response can include
+    // entries where `name`/`type` are missing (older docs / partial
+    // server payloads), and `.toLowerCase()` on undefined crashes the
+    // whole palette. `?? ''` keeps the row in the result set but lets
+    // the search safely miss it.
     return widgetList.filter(
       (w) =>
-        w.name.toLowerCase().includes(needle) ||
-        w.type.toLowerCase().includes(needle) ||
-        (w.description ?? '').toLowerCase().includes(needle),
+        (w?.name ?? '').toLowerCase().includes(needle) ||
+        (w?.type ?? '').toLowerCase().includes(needle) ||
+        (w?.description ?? '').toLowerCase().includes(needle),
     )
   }, [widgetList, q])
 
@@ -112,8 +117,8 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
     if (!needle) return commands
     return commands.filter(
       (c) =>
-        c.label.toLowerCase().includes(needle) ||
-        (c.hint ?? '').toLowerCase().includes(needle),
+        (c?.label ?? '').toLowerCase().includes(needle) ||
+        (c?.hint ?? '').toLowerCase().includes(needle),
     )
   }, [commands, q])
 
@@ -522,10 +527,10 @@ function groupHits(q: string, hits: DocSearchHit[]): GroupedDocs {
   for (const h of hits) {
     const tHit =
       (h._formatted?.title && h._formatted.title.includes('<em>')) ||
-      h.title.toLowerCase().includes(needle)
+      (h.title ?? '').toLowerCase().includes(needle)
     const tagHit =
-      (Array.isArray(h._formatted?.tags) && h._formatted!.tags!.some((t) => t.includes('<em>'))) ||
-      (Array.isArray(h.tags) && h.tags.some((t) => t.toLowerCase().includes(needle)))
+      (Array.isArray(h._formatted?.tags) && h._formatted!.tags!.some((t) => (t ?? '').includes('<em>'))) ||
+      (Array.isArray(h.tags) && h.tags.some((t) => (t ?? '').toLowerCase().includes(needle)))
     if (tHit) title.push(h)
     else if (tagHit) tag.push(h)
     else body.push(h)
