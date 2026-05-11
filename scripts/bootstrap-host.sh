@@ -333,31 +333,49 @@ else
       mkdir -p "$DEB_DIR"
       target_deb="$DEB_DIR/apptainer_${apptainer_ver}_${local_arch}.deb"
 
-      # Cache lookup — find ANY apptainer .deb in the dir, regardless of
-      # exact filename (operator may have downloaded with the GitHub
-      # default name, or renamed it). Anything >= 1 MB counts as a
-      # plausibly-complete file; truly tiny stubs from aborted downloads
-      # are rejected so we don't try to apt-get install a broken archive.
-      note "looking for cached .deb in $DEB_DIR/ …"
+      # Cache lookup — operators have placed files in various places over
+      # the course of this script's iterations, so search every plausible
+      # location instead of being strict about a single canonical path.
+      # First hit wins. Anything < 1 MB is treated as a partial download.
+      cache_candidates=(
+        "$DEB_DIR"                          # infra/packages/deb (canonical)
+        "$REPO_ROOT/infra/deb"              # operator shortcut some run into
+        "$REPO_ROOT/infra/packages"         # one level up
+        "$REPO_ROOT"                        # repo root
+        "${MXWP_DEB_DIR:-}"                 # env override (highest priority)
+      )
+      note "looking for cached apptainer*.deb …"
       cached_deb=""
       shopt -s nullglob
-      for f in "$DEB_DIR"/apptainer*.deb "$DEB_DIR"/Apptainer*.deb; do
-        [ -e "$f" ] || continue
-        sz="$(stat -c %s "$f" 2>/dev/null || echo 0)"
-        if [ "$sz" -lt 1000000 ]; then
-          warn "skipping $f — size ${sz} bytes is too small (incomplete download?)"
-          continue
-        fi
-        cached_deb="$f"
-        break
+      for dir in "${cache_candidates[@]}"; do
+        [ -n "$dir" ] && [ -d "$dir" ] || continue
+        for f in "$dir"/apptainer*.deb "$dir"/Apptainer*.deb; do
+          [ -e "$f" ] || continue
+          sz="$(stat -c %s "$f" 2>/dev/null || echo 0)"
+          if [ "$sz" -lt 1000000 ]; then
+            warn "skipping $f — size ${sz} bytes is too small (incomplete download?)"
+            continue
+          fi
+          cached_deb="$f"
+          ok "found cached .deb: $f"
+          break 2
+        done
       done
       shopt -u nullglob
 
-      # Diagnostic: dump dir listing so the user can see exactly what
-      # the script sees. Helps when the file is at the wrong path.
+      # Diagnostic: list every directory we checked so the user can spot
+      # path mismatches at a glance.
       if [ -z "$cached_deb" ]; then
-        note "no cached .deb found. Current $DEB_DIR/ contents:"
-        ls -la "$DEB_DIR" 2>/dev/null | sed 's/^/    /' || note "    (directory empty / missing)"
+        note "no cached .deb found. Searched (in priority order):"
+        for dir in "${cache_candidates[@]}"; do
+          [ -n "$dir" ] || continue
+          if [ -d "$dir" ]; then
+            note "    $dir/ → $(ls "$dir"/*.deb 2>/dev/null | tr '\n' ' ' || echo '(no .deb)')"
+          else
+            note "    $dir/ → (directory does not exist)"
+          fi
+        done
+        note "    [tip] set MXWP_DEB_DIR=/path/to/your/dir to add a custom location"
       fi
 
       if [ -n "$cached_deb" ]; then
