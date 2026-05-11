@@ -77,7 +77,15 @@ export function TopBar({
   return (
     <header
       data-testid="topbar"
-      className="fixed inset-x-0 top-0 z-sticky isolate h-[var(--header-h)] bg-smsg-700 text-white shadow-md"
+      // `isolate` was creating a stacking context that capped the
+      // dropdown menus (z-popover = 9300) at TopBar's own z-sticky
+      // (9000). Result: clicking 조직 / 최근 made the Breadcrumb bar
+      // (also z-sticky, rendered after TopBar in DOM) paint over the
+      // dropdown. Dropping isolate lets the popover children break out
+      // and stack above siblings normally — the only side-effect we
+      // had relied on (preventing body content from blending through
+      // TopBar) is still covered by TopBar's opaque bg-smsg-700.
+      className="fixed inset-x-0 top-0 z-sticky h-[var(--header-h)] bg-smsg-700 text-white shadow-md"
     >
       <div className="flex h-[var(--header-h)] items-center gap-2 px-3 sm:gap-4 sm:px-6">
         {/* Mobile hamburger */}
