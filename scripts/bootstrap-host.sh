@@ -9,6 +9,20 @@
 #    ONLINE   → fetches packages from upstream repos (apt / NodeSource / npm / pip)
 #    OFFLINE  → uses pre-staged packages under `infra/packages/`
 #
+#  Ubuntu 24.04 LTS quirks handled automatically:
+#    - PEP-668 lock on system Python  → uses `pipx` (apt-installed in Step 1)
+#                                         instead of `pip install`.
+#    - PPA add-apt-repository hangs   → skipped; apptainer comes from the
+#                                         maintainer's GitHub release .deb.
+#    - npm registry RST behind proxy  → 90 s timeout(1) + auto retry via
+#                                         MXWP_FALLBACK_PROXY.
+#    - apt-get update hang behind proxy → 120 s timeout, soft-fails.
+#    - typing_extensions RECORD-file error → pipx avoids it (separate venv).
+#    - GitHub CDN reset by firewall   → `curl_with_proxy_fallback` retries
+#                                         every download through MXWP_FALLBACK_PROXY.
+#    - NodeSource directory listing 404 → cache lookup + nodejs.org tarball
+#                                         as tertiary fallback.
+#
 #  Offline cache layout (see `infra/packages/README.md`):
 #    infra/packages/
 #      deb/        # *.deb (apt-get install /...)  — apptainer, python, nodejs
@@ -325,11 +339,16 @@ have_version() {
 }
 
 # ── Step 1: apt update + base packages ──────────────────────────────
-step "Step 1 — Base system packages (git / curl / make / build-essential / python3.12)"
+step "Step 1 — Base system packages (git / curl / make / python3.12 / pipx)"
 
+# `pipx` is included here so Step 5 (datamodel-code-generator) can use
+# it directly without a separate apt install — works around Ubuntu
+# 24.04's PEP-668 lock on the global Python site-packages. It is a
+# tiny package (≈ 100 KB) so no harm pulling it upfront.
 NEED_APT=()
 for pkg in git curl make build-essential ca-certificates gnupg lsb-release \
-           python3.12 python3.12-venv python3-pip software-properties-common; do
+           python3.12 python3.12-venv python3-pip software-properties-common \
+           pipx; do
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
     NEED_APT+=("$pkg")
   fi
@@ -339,7 +358,11 @@ if [ "${#NEED_APT[@]}" -eq 0 ]; then
   ok "all base packages already installed"
 elif [ "$MODE" = "online" ]; then
   ok "installing via apt: ${NEED_APT[*]}"
-  run apt-get update -y
+  # `apt-get update` can silently hang behind a strict proxy. The
+  # timeout wrapper guarantees the script never wedges forever — if
+  # the update fails we still try the install (apt may have cached
+  # the index from a previous run).
+  run timeout --foreground 120 apt-get update -y || warn "apt-get update timed out or failed; trying install anyway"
   run apt-get install -y --no-install-recommends "${NEED_APT[@]}"
 else
   ok "installing from $DEB_DIR (offline)"
@@ -364,24 +387,16 @@ if have_version apptainer 1; then
   ok "already installed: $CUR"
 else
   if [ "$MODE" = "online" ]; then
-    # Strategy: try the official PPA first (slim install + future
-    # auto-updates), and fall back to the maintainer's GitHub release
-    # .deb if that fails. PPA can fail behind a corporate proxy because
-    # `add-apt-repository` shells out to `gpg --keyserver hkps://...`
-    # and the launchpad API, neither of which always honour the apt
-    # proxy config. The GitHub .deb route only needs https + curl.
-    ok "trying ppa:apptainer/ppa first"
-    if [ "$DRY_RUN" -eq 1 ]; then
-      note "[dry-run] add-apt-repository ppa:apptainer/ppa && apt install apptainer"
-    elif add-apt-repository -y ppa:apptainer/ppa 2>/tmp/mxwp-ppa.err \
-         && apt-get update -y \
-         && apt-get install -y --no-install-recommends apptainer; then
-      ok "installed via PPA"
-    else
-      warn "PPA route failed — likely add-apt-repository couldn't reach launchpad through the proxy."
-      note "$(head -3 /tmp/mxwp-ppa.err 2>/dev/null || true)"
-      note "falling back to GitHub release .deb"
-      local_arch="$(dpkg --print-architecture)"
+    # We used to try ppa:apptainer/ppa first, but that path fails ~100%
+    # of the time on corporate networks because add-apt-repository
+    # contacts launchpad.net + a GPG keyserver that don't honour apt's
+    # proxy. The GitHub release .deb works everywhere (single HTTPS
+    # download via the proxy-aware helper) so it's now the default;
+    # the PPA path remains in the offline-mode branch for completeness.
+    note "installing apptainer via the maintainer's GitHub release .deb"
+    note "(PPA route skipped — add-apt-repository contacts launchpad/keyserver which often hang behind corporate proxies)"
+    local_arch="$(dpkg --print-architecture)"
+    if true; then  # keep block structure for diff readability
       # Pin to a version that's known to work on both 22.04 and 24.04.
       # Bump when a newer release is required; the failure mode if the
       # URL 404s is loud and easy to spot.
