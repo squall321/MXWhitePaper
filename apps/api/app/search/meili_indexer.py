@@ -49,6 +49,22 @@ def _tokenize_words(s: str | None) -> str:
     out = _RE_SEP_TO_SPACE.sub(" ", out)
     return out.strip()
 
+
+# Strip anything that LOOKS like an HTML/XML tag (`<mark>`, `</em>`,
+# `<br/>`, `<div class="…">`) from indexed body / summary text. Word
+# imports and code samples often leave literal tag strings in the body
+# that subsequently show up inside MeiliSearch's `_formatted` snippets
+# — readable as "<Mark>this is highlight</Mark>" which looks ugly even
+# after our sanitiser since it preserves the literal angle brackets.
+# We keep the inner text and just drop the tag wrappers.
+_RE_TAG_LIKE = re.compile(r"<\s*/?\s*[A-Za-z][A-Za-z0-9-]*(?:\s+[^>]*)?\s*/?\s*>")
+
+
+def _strip_tag_literals(s: str | None) -> str:
+    if not s:
+        return ""
+    return _RE_TAG_LIKE.sub(" ", s)
+
 INDEX_UID = "documents"
 PRIMARY_KEY = "id"
 
@@ -151,11 +167,11 @@ async def _fetch_flat_row(s: AsyncSession, doc_id: str) -> dict[str, Any] | None
         "id": row[0],
         "slug": row[1],
         "title": row[2],
-        "summary": row[3] or "",
+        "summary": _strip_tag_literals(row[3] or ""),
         "title_tokens": _tokenize_words(row[2]),
-        "section_titles": row[4] or "",
-        "section_titles_tokens": _tokenize_words(row[4]),
-        "body_text": row[5] or "",
+        "section_titles": _strip_tag_literals(row[4] or ""),
+        "section_titles_tokens": _tokenize_words(_strip_tag_literals(row[4])),
+        "body_text": _strip_tag_literals(row[5] or ""),
         "image_text": "",  # body_text 안에 caption/alt 가 이미 합쳐져 있음
         "tags": list(row[6]) if row[6] else [],
         "updated_at": row[7].isoformat() if row[7] else None,
@@ -199,11 +215,11 @@ async def _fetch_all_flat_rows(s: AsyncSession) -> list[dict[str, Any]]:
             "id": r[0],
             "slug": r[1],
             "title": r[2],
-            "summary": r[3] or "",
+            "summary": _strip_tag_literals(r[3] or ""),
             "title_tokens": _tokenize_words(r[2]),
-            "section_titles": r[4] or "",
-            "section_titles_tokens": _tokenize_words(r[4]),
-            "body_text": r[5] or "",
+            "section_titles": _strip_tag_literals(r[4] or ""),
+            "section_titles_tokens": _tokenize_words(_strip_tag_literals(r[4])),
+            "body_text": _strip_tag_literals(r[5] or ""),
             "image_text": "",
             "tags": list(r[6]) if r[6] else [],
             "updated_at": r[7].isoformat() if r[7] else None,
