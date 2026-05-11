@@ -451,21 +451,39 @@ step "Step 3 — Node.js 20"
 if have_version node 20; then
   ok "already installed: $(node --version)"
 else
-  # 1) Cache-first — operator-staged nodejs*.deb wins over the NodeSource
-  #    repo download. Saves a curl roundtrip + works behind a strict proxy.
-  cached_node="$(find_cached_deb nodejs)"
-  if [ -n "$cached_node" ]; then
-    ok "found cached .deb: $cached_node (skipping NodeSource setup script)"
-    run apt-get install -y --no-install-recommends "$cached_node"
+  # 1) Cache-first .deb — operator-staged nodejs*.deb wins over the
+  #    NodeSource repo download. Saves a curl roundtrip + works behind
+  #    a strict proxy.
+  cached_node_deb="$(find_cached_deb nodejs)"
+  # 2) Cache-first tarball — accept node-v*-linux-x64.tar.{xz,gz} too.
+  #    nodejs.org's tarball is the most universally-reachable Node 20
+  #    distribution in restricted networks (often allowlisted because
+  #    it's the canonical source).
+  cached_node_tar=""
+  shopt -s nullglob
+  for dir in "$DEB_DIR" "$REPO_ROOT/infra/deb" "$REPO_ROOT/infra/packages" "$REPO_ROOT" "${MXWP_DEB_DIR:-}"; do
+    [ -n "$dir" ] && [ -d "$dir" ] || continue
+    for f in "$dir"/node-v*-linux-x64.tar.xz "$dir"/node-v*-linux-x64.tar.gz; do
+      [ -e "$f" ] || continue
+      cached_node_tar="$f"
+      break 2
+    done
+  done
+  shopt -u nullglob
+
+  if [ -n "$cached_node_deb" ]; then
+    ok "found cached .deb: $cached_node_deb (skipping NodeSource setup script)"
+    run apt-get install -y --no-install-recommends "$cached_node_deb"
+  elif [ -n "$cached_node_tar" ]; then
+    ok "found cached tarball: $cached_node_tar"
+    note "extracting to /usr/local (--strip-components=1)"
+    run tar -xf "$cached_node_tar" -C /usr/local --strip-components=1
   elif [ "$MODE" = "online" ]; then
-    note "no cached nodejs*.deb found."
+    note "no cached nodejs*.deb / node-v*.tar.xz found."
     dump_deb_search_paths nodejs
     ok "adding NodeSource 20.x repo"
     # Download the installer script via the proxy-aware helper so the
     # same fallback that handled GitHub also handles deb.nodesource.com.
-    # The setup script writes /etc/apt/sources.list.d/nodesource.list and
-    # the GPG key, then we install nodejs via the normal apt path
-    # (which respects apt's proxy config).
     setup_script="$(mktemp --suffix=.sh)"
     if curl_with_proxy_fallback "$setup_script" "https://deb.nodesource.com/setup_20.x"; then
       run bash "$setup_script"
@@ -473,16 +491,30 @@ else
       run apt-get install -y --no-install-recommends nodejs
     else
       rm -f "$setup_script"
-      fail "NodeSource installer download failed. Either:
+      # Tertiary fallback: pull the official nodejs.org tarball, which
+      # tends to be reachable when deb.nodesource.com is blocked.
+      warn "NodeSource setup script unreachable; trying nodejs.org tarball"
+      node_ver="20.18.1"
+      tar_url="https://nodejs.org/dist/v${node_ver}/node-v${node_ver}-linux-x64.tar.xz"
+      tar_file="$DEB_DIR/node-v${node_ver}-linux-x64.tar.xz"
+      mkdir -p "$DEB_DIR"
+      if curl_with_proxy_fallback "$tar_file" "$tar_url"; then
+        ok "extracting $tar_file to /usr/local"
+        run tar -xf "$tar_file" -C /usr/local --strip-components=1
+      else
+        fail "Node.js install failed. Manual options:
 
-  (a) place a nodejs_*.deb in one of the cache locations above, or
-  (b) check why both direct and fallback proxy ($FALLBACK_PROXY) couldn't
-      reach deb.nodesource.com.
-
-NodeSource publishes .deb at https://deb.nodesource.com/node_20.x/pool/main/n/nodejs/"
+  (a) download node-v20.x-linux-x64.tar.xz from https://nodejs.org/dist/
+      and place it in one of the cache locations above, or
+  (b) download a NodeSource .deb (Chrome via SSO usually works) from
+      a specific file URL such as
+        https://deb.nodesource.com/node_20.x/pool/main/n/nodejs/nodejs_20.18.1-1nodesource1_amd64.deb
+      (browse the parent dir is blocked, but file URLs work) and
+      place it as nodejs_*.deb in one of the cache locations."
+      fi
     fi
   else
-    fail "offline mode but no nodejs*.deb in any cache location (searched above)"
+    fail "offline mode but no nodejs*.deb / node-v*.tar in any cache location (searched above)"
   fi
   ok "$(node --version)"
 fi
