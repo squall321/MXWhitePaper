@@ -233,6 +233,10 @@ export interface BlockMeta {
    * 사용자 지정 블록 높이(px). 미지정이면 콘텐츠 자동 높이(기존 동작).
    */
   height?: number
+  /**
+   * 이 블록이 노출되는 뷰. 'both'(기본): 위키 + 슬라이드 둘 다. 'wiki-only': 위키에만 (프레젠테이션에서 숨김). 'slide-only': 프레젠테이션에서만 (위키 본문에서는 숨김). 발표용 큰 이미지/스피커 멘트, 또는 위키엔 자세히 적고 슬라이드엔 빼고 싶은 표 등을 분리할 때 사용.
+   */
+  audience?: 'both' | 'wiki-only' | 'slide-only'
 }
 export interface Heading4Block {
   type: 'heading-4'

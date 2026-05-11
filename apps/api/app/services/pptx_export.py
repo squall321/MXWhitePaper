@@ -341,6 +341,14 @@ def _render_block_into(
     btype = _str(block.get("type"))
     meta = block.get("meta") or {}
 
+    # Honor the per-block audience opt-out — `wiki-only` blocks never
+    # appear in slide exports. Mirrors the FE `filterForAudience` used by
+    # the in-browser Presentation page so wiki/slide outputs stay aligned.
+    if isinstance(meta, dict):
+        audience = _str(meta.get("audience"))
+        if audience == "wiki-only":
+            return False
+
     # speaker note — append to slide notes pane regardless of type.
     if isinstance(meta, dict):
         note = _str(meta.get("note"))

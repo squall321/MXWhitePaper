@@ -65,6 +65,28 @@ export function BlockToolbar({ slug, block, sectionId, index, total }: BlockTool
     const meta = { ...(block.meta ?? {}), locked: !block.meta?.locked }
     return wrap(() => patchBlock(slug, block.id, { meta } as Partial<Block>, etag!, '블록 잠금 변경'))
   }
+  const setAudience = (next: 'both' | 'wiki-only' | 'slide-only') => {
+    const meta = { ...(block.meta ?? {}) } as NonNullable<Block['meta']>
+    if (next === 'both') delete (meta as { audience?: string }).audience
+    else (meta as { audience: string }).audience = next
+    return wrap(() => patchBlock(slug, block.id, { meta } as Partial<Block>, etag!, '블록 노출 범위 변경'))
+  }
+  const audience = (block.meta as { audience?: 'both' | 'wiki-only' | 'slide-only' } | undefined)?.audience ?? 'both'
+  // Cycle through the 3 audience states: 전체 → 위키만 → 슬라이드만 → 전체 …
+  // Single-click toggle keeps the toolbar compact; the icon + tooltip
+  // tell the user the current state and what the next click does.
+  const cycleAudience = () => {
+    const next = audience === 'both' ? 'wiki-only' : audience === 'wiki-only' ? 'slide-only' : 'both'
+    return setAudience(next)
+  }
+  const audienceLabel =
+    audience === 'wiki-only'
+      ? '📄 위키만 (슬라이드 제외)'
+      : audience === 'slide-only'
+        ? '📊 슬라이드만 (위키 제외)'
+        : '🌐 전체 (위키 + 슬라이드)'
+  const audienceGlyph =
+    audience === 'wiki-only' ? '📄' : audience === 'slide-only' ? '📊' : '🌐'
 
   return (
     <div className="absolute -top-3 right-1 hidden gap-0.5 rounded border border-gray-200 bg-white px-1 py-0.5 text-xs shadow-sm group-hover:flex">
@@ -94,6 +116,18 @@ export function BlockToolbar({ slug, block, sectionId, index, total }: BlockTool
         className="px-1 hover:bg-smsg-100"
       >
         {block.meta?.locked ? '🔒' : '🔓'}
+      </button>
+      <button
+        type="button"
+        onClick={() => void cycleAudience()}
+        disabled={busy}
+        title={`노출 범위 — ${audienceLabel} (클릭으로 순환)`}
+        aria-label={`현재 노출 범위: ${audienceLabel}`}
+        data-action="cycle-audience"
+        data-audience={audience}
+        className={`px-1 hover:bg-smsg-100 ${audience !== 'both' ? 'bg-amber-50' : ''}`}
+      >
+        {audienceGlyph}
       </button>
       <button
         type="button"

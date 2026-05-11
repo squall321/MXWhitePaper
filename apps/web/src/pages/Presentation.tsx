@@ -11,6 +11,7 @@ import {
 } from '@/features/presentation/slideMachine'
 import { SlideBlockRenderer } from '@/features/presentation/SlideBlockRenderer'
 import { SectionLayout } from '@/components/SectionLayout'
+import { filterForAudience } from '@/components/blocks/audienceFilter'
 import type { SectionLevel2, SectionLevel3 } from '@/types/document'
 import { openPresenterChannel } from '@/features/presentation/presenterChannel'
 import {
@@ -447,7 +448,13 @@ function SlideContent({
   const subsections = Array.isArray(slide.section?.subsections)
     ? slide.section.subsections
     : []
-  const cleanBody = body.filter((b): b is NonNullable<typeof b> => Boolean(b))
+  // Honor per-block `meta.audience`: drop blocks that opted out of the
+  // slide view. `wiki-only` blocks stay in the wiki article but vanish
+  // from every deck the user generates.
+  const cleanBody = filterForAudience(
+    body.filter((b): b is NonNullable<typeof b> => Boolean(b)),
+    'slide',
+  )
 
   return (
     <div className="slide-body slide-section">
@@ -501,7 +508,10 @@ function SubsectionInline({
 }) {
   const allBlocks = Array.isArray(section?.blocks) ? section.blocks : []
   const { body } = splitSpeakerNotes(allBlocks)
-  const cleanBody = body.filter((b): b is NonNullable<typeof b> => Boolean(b))
+  const cleanBody = filterForAudience(
+    body.filter((b): b is NonNullable<typeof b> => Boolean(b)),
+    'slide',
+  )
   const layout = (section as { layout?: string })?.layout
   const subs = Array.isArray((section as { subsections?: unknown[] }).subsections)
     ? ((section as { subsections: unknown[] }).subsections as (SectionLevel2 | SectionLevel3)[])

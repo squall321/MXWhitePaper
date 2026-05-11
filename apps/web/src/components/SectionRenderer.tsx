@@ -12,6 +12,7 @@ import {
 } from '@/features/editor/components/LazyBlockSlot'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
 import { SectionLayout } from './SectionLayout'
+import { filterForAudience } from './blocks/audienceFilter'
 
 /**
  * Local alias — the schema declares 3 explicit Section interfaces; mostly
@@ -155,7 +156,9 @@ export function SectionRenderer({
 
       <CollapsiblePanel id={panelId} collapsed={collapsed}>
         {(() => {
-          const directBlocks = section.blocks ?? []
+          // Drop slide-only blocks from the wiki view so authors can stash
+          // big presenter visuals in the doc without cluttering the prose.
+          const directBlocks = filterForAudience(section.blocks ?? [], 'wiki')
           const isLong = directBlocks.length > LAZY_THRESHOLD
           return (
             <SectionLayout

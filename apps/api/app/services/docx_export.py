@@ -196,6 +196,13 @@ def _render_block(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     meta = block.get("meta") if isinstance(block.get("meta"), dict) else {}
     note = _str(meta.get("note")) if meta else ""
 
+    # `slide-only` blocks belong on a presentation deck, not in a Word
+    # document; drop them so the .docx export reads naturally even when
+    # the author keeps presenter-visual blocks in the document body.
+    audience = _str(meta.get("audience")) if meta else ""
+    if audience == "slide-only":
+        return
+
     # speaker notes have no DOCX equivalent — drop.
     if note.startswith("speaker:"):
         return
