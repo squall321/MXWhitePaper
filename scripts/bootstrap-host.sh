@@ -30,6 +30,14 @@
 #    sudo -E ./scripts/bootstrap-host.sh                          # inherit HTTP(S)_PROXY env
 #    sudo ./scripts/bootstrap-host.sh --proxy http://proxy:8080   # explicit URL
 #    (script auto-detects "apt already has a proxy configured" → online)
+#
+#  Fallback proxy:
+#    If a curl / npm / pip download fails on the first attempt, the script
+#    automatically retries through the proxy in MXWP_FALLBACK_PROXY
+#    (default http://169.219.61.252:8080 — Samsung MX network egress).
+#    Override or disable:
+#      MXWP_FALLBACK_PROXY=http://10.0.0.1:8080 sudo -E ./scripts/bootstrap-host.sh
+#      MXWP_FALLBACK_PROXY=  sudo ./scripts/bootstrap-host.sh   # disable
 # ─────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -133,6 +141,38 @@ run() {
   else
     "$@"
   fi
+}
+
+# ── Fallback proxy for curl downloads ───────────────────────────────
+# Some corporate networks expose a single dedicated egress proxy that
+# Chrome (via Windows SSO) traverses fine but curl can't reach without
+# being told explicitly. When the first curl attempt to fetch a .deb
+# or installer script fails, we automatically retry through this fallback.
+# Override at runtime with:
+#   MXWP_FALLBACK_PROXY=http://10.x.x.x:8080 ./bootstrap-host.sh
+# Set to empty to disable the second attempt.
+FALLBACK_PROXY="${MXWP_FALLBACK_PROXY:-http://169.219.61.252:8080}"
+
+# curl with two passes: first whatever-the-env-says, then with the
+# fallback proxy if available. Bash arg order doesn't matter; positional
+# args after `--` become the curl URL + flags carried as-is.
+curl_with_proxy_fallback() {
+  # Usage: curl_with_proxy_fallback OUTFILE URL [extra curl args...]
+  local out="$1" url="$2"; shift 2
+  local common=(-fL --retry 10 --retry-delay 5 --retry-all-errors
+                --connect-timeout 30 --max-time 600 "$@")
+  if curl "${common[@]}" "$url" -o "$out" 2>/tmp/mxwp-curl.err; then
+    return 0
+  fi
+  if [ -n "$FALLBACK_PROXY" ]; then
+    warn "first curl attempt failed; retrying via fallback proxy $FALLBACK_PROXY"
+    note "$(tail -2 /tmp/mxwp-curl.err 2>/dev/null || true)"
+    if curl "${common[@]}" --proxy "$FALLBACK_PROXY" "$url" -o "$out"; then
+      ok "downloaded via fallback proxy"
+      return 0
+    fi
+  fi
+  return 1
 }
 
 # ── Sanity ──────────────────────────────────────────────────────────
@@ -274,15 +314,12 @@ else
         rm -f "$tmp_deb"
       else
         ok "downloading $url (with retries — GitHub CDN can RST behind corp proxies)"
-        # `--retry-all-errors` covers RST / TLS errors too (not just 5xx);
-        # the long `--max-time` accounts for slow proxies; `--retry 10`
-        # gives transient errors plenty of chances to recover before we
-        # bail with a clear pointer to the manual workaround.
-        if ! run curl -fL --retry 10 --retry-delay 5 --retry-all-errors \
-               --connect-timeout 30 --max-time 600 \
-               "$url" -o "$tmp_deb"; then
+        # curl_with_proxy_fallback tries the env/system proxy first, then
+        # automatically retries via $FALLBACK_PROXY when the first attempt
+        # gets connection-reset by the corporate firewall.
+        if ! curl_with_proxy_fallback "$tmp_deb" "$url"; then
           rm -f "$tmp_deb"
-          fail "apptainer .deb download failed (connection issue).
+          fail "apptainer .deb download failed (both direct and fallback proxy).
 
   Workaround — download on a machine with internet access, then place
   the .deb here on this server:
@@ -320,8 +357,17 @@ if have_version node 20; then
 else
   if [ "$MODE" = "online" ]; then
     ok "adding NodeSource 20.x repo"
-    run bash -c 'curl -fsSL https://deb.nodesource.com/setup_20.x | bash -'
-    run apt-get install -y --no-install-recommends nodejs
+    # Download the installer script via the proxy-aware helper so the
+    # same fallback that handled GitHub also handles deb.nodesource.com.
+    setup_script="$(mktemp --suffix=.sh)"
+    if curl_with_proxy_fallback "$setup_script" "https://deb.nodesource.com/setup_20.x"; then
+      run bash "$setup_script"
+      rm -f "$setup_script"
+      run apt-get install -y --no-install-recommends nodejs
+    else
+      rm -f "$setup_script"
+      fail "NodeSource installer download failed. Pre-stage a nodejs*.deb in $DEB_DIR/ and re-run."
+    fi
   else
     if ls "$DEB_DIR"/nodejs*.deb >/dev/null 2>&1; then
       ok "installing nodejs from $DEB_DIR"
@@ -341,7 +387,18 @@ if have_version pnpm 9; then
 else
   if [ "$MODE" = "online" ]; then
     ok "npm install -g pnpm@9"
-    run npm install -g pnpm@9
+    # Try the env-configured proxy first (or no proxy); on failure retry
+    # via the fallback proxy if defined.
+    if ! run npm install -g pnpm@9; then
+      if [ -n "$FALLBACK_PROXY" ]; then
+        warn "npm install via current config failed; retrying via $FALLBACK_PROXY"
+        run npm config set proxy "$FALLBACK_PROXY"
+        run npm config set https-proxy "$FALLBACK_PROXY"
+        run npm install -g pnpm@9
+      else
+        fail "npm install -g pnpm@9 failed and no fallback proxy configured"
+      fi
+    fi
   else
     if ls "$NPM_DIR"/pnpm-*.tgz >/dev/null 2>&1; then
       ok "installing pnpm from $NPM_DIR (offline tarball)"
@@ -366,8 +423,16 @@ else
     # Ubuntu 24.04 enforces PEP-668 (externally-managed env). For a
     # bootstrap script targeting a server context we accept the override;
     # users who want isolation can switch to a venv after install.
-    run python3.12 -m pip install --break-system-packages \
-      datamodel-code-generator
+    if ! run python3.12 -m pip install --break-system-packages \
+        datamodel-code-generator; then
+      if [ -n "$FALLBACK_PROXY" ]; then
+        warn "pip install failed; retrying via $FALLBACK_PROXY"
+        run python3.12 -m pip install --break-system-packages \
+          --proxy "$FALLBACK_PROXY" datamodel-code-generator
+      else
+        fail "pip install failed and no fallback proxy configured"
+      fi
+    fi
   else
     if ls "$PIP_DIR"/*.whl >/dev/null 2>&1; then
       ok "installing wheels from $PIP_DIR (offline)"
