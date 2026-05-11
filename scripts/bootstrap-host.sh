@@ -99,6 +99,17 @@ if [ -n "$PROXY_URL" ]; then
   note "proxy in use: $PROXY_URL  (no_proxy: $NO_PROXY_VAL)"
 fi
 
+# `run` honours --dry-run by printing the would-be command instead of
+# executing it. Defined here (before configure_proxy_for_apt_and_npm)
+# because that function calls `run` immediately on script load.
+run() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    note "[dry-run] $*"
+  else
+    "$@"
+  fi
+}
+
 # Apply the proxy to apt/npm. pip + curl honour HTTPS_PROXY env directly,
 # but apt and npm both need explicit config — apt reads
 # /etc/apt/apt.conf.d/*, npm reads ~/.npmrc or its own config store.
@@ -134,14 +145,6 @@ EOF
   fi
 }
 configure_proxy_for_apt_and_npm
-
-run() {
-  if [ "$DRY_RUN" -eq 1 ]; then
-    note "[dry-run] $*"
-  else
-    "$@"
-  fi
-}
 
 # ── Fallback proxy for curl downloads ───────────────────────────────
 # Some corporate networks expose a single dedicated egress proxy that
