@@ -77,3 +77,10 @@ infra/backups/
 
 # meilisearch on-disk data (binary LMDB files, only ever live)
 data.ms/
+
+# offline package cache (700MB — produced by scripts/download-packages.sh,
+# copied to air-gapped hosts via tar bundle, not part of the repo)
+infra/packages/deb/
+infra/packages/npm/
+infra/packages/pip/
+infra/packages/sif/

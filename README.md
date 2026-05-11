@@ -11,7 +11,27 @@
 
 > 본 프로젝트는 **Apptainer**로 운영됩니다(Docker 아님). HPC 친화적, root 불필요, single-`.sif` 이미지.
 
-### 한 줄 시작 — 권장
+### 0. 호스트 부트스트랩 (Ubuntu 24.04 LTS, 최초 1회만)
+
+생짜 우분투 24.04 머신이면 시스템 패키지(apptainer / node 20 / pnpm 9 / python 3.12)를 자동으로 깔아주는 스크립트가 있습니다:
+
+```bash
+sudo ./scripts/bootstrap-host.sh              # 온라인/오프라인 자동 감지
+sudo ./scripts/bootstrap-host.sh --offline    # 에어갭 망: infra/packages/ 만 사용
+sudo ./scripts/bootstrap-host.sh --dry-run    # 무엇을 깔지만 미리 보기
+```
+
+오프라인 모드용 패키지 cache는 **인터넷 가능한 머신**에서 미리 준비:
+
+```bash
+./scripts/download-packages.sh     # 약 700MB → infra/packages/ 생성
+tar -czf mxwp-offline-bundle.tar.gz infra/packages/
+# 위 bundle을 에어갭 서버에 풀고 bootstrap-host.sh --offline
+```
+
+자세한 사용법: [`infra/packages/README.md`](infra/packages/README.md).
+
+### 1. 한 줄 시작 — 권장
 
 ```bash
 ./quickstart.sh
