@@ -104,14 +104,28 @@ http_check "minio health" "http://127.0.0.1:${MINIO_API_PORT}/minio/health/live"
 echo
 echo "▶ E. From inside web container → API (the typical login-hang root cause)"
 if instance_running "$INST_WEB"; then
-  inner=$("$APPTAINER" exec instance://"$INST_WEB" \
-    /bin/sh -c "curl -s -o /dev/null -w '%{http_code}' -m 3 http://127.0.0.1:${API_PORT}/api/v1/admin/health 2>/dev/null || echo CONN_REFUSED")
+  # node:20-bookworm-slim has no curl/wget. Try node (always present)
+  # → falls back to a tiny http.get one-liner.
+  inner=$("$APPTAINER" exec instance://"$INST_WEB" /bin/sh -c "
+    if command -v curl >/dev/null 2>&1; then
+      curl -s -o /dev/null -w '%{http_code}' -m 3 http://127.0.0.1:${API_PORT}/api/v1/admin/health 2>/dev/null
+    elif command -v node >/dev/null 2>&1; then
+      node -e 'require(\"http\").get(\"http://127.0.0.1:${API_PORT}/api/v1/admin/health\", r => { console.log(r.statusCode); process.exit(0); }).on(\"error\", () => { console.log(\"CONN_REFUSED\"); process.exit(0); }).setTimeout(3000, function(){ console.log(\"TIMEOUT\"); this.destroy(); })'
+    elif command -v python >/dev/null 2>&1 || command -v python3 >/dev/null 2>&1; then
+      \$(command -v python3 || command -v python) -c 'import urllib.request; print(urllib.request.urlopen(\"http://127.0.0.1:${API_PORT}/api/v1/admin/health\", timeout=3).status)' 2>/dev/null || echo CONN_REFUSED
+    else
+      echo NO_TOOL
+    fi
+  ")
   if [[ "$inner" =~ ^[23] ]]; then
     echo -e "  $PASS web container can reach host loopback :${API_PORT}  (HTTP ${inner})"
+  elif [ "$inner" = "NO_TOOL" ]; then
+    echo -e "  $WARN no curl/node/python in container — can't verify (D section is authoritative)"
   else
     echo -e "  $FAIL web container CANNOT reach host loopback :${API_PORT}  ($inner)"
-    echo "    → set MXWP_APPT_HOST_NET=1 in .env and restart"
-    echo "    → ./infra/scripts/restart.sh"
+    echo "    → try VITE_PROXY_TARGET=http://<server-public-ip>:${API_PORT} in .env"
+    echo "    → or MXWP_APPT_HOST_NET=1 if /etc/apptainer/network has 'host' CNI"
+    echo "    → then ./infra/scripts/restart.sh"
   fi
 else
   echo "  (web not running — skipping)"
