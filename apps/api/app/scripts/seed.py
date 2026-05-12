@@ -178,6 +178,13 @@ async def main() -> None:
     except Exception as e:  # noqa: BLE001
         print(f"⚠ form/quiz defs seed skipped: {e}")
 
+    # Cohort retention / funnel / audit summary / incidents / campaigns.
+    try:
+        from app.scripts import seed_more_facts
+        await seed_more_facts._amain()
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠ more facts seed skipped: {e}")
+
     print("✓ seed complete")
 
 

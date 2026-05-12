@@ -418,6 +418,314 @@ async def launch_forecast(
     )
 
 
+# ── Analytics / operations widgets (round 6 — full set) ──────────
+
+@router.get("/chart/team-share")
+async def chart_team_share(
+    request: Request,
+    days: int = Query(default=30, ge=1, le=120),
+    s: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    async def _compute() -> dict[str, Any]:
+        rows = (await s.execute(
+            text("""
+                SELECT team, SUM(revenue) AS total
+                  FROM sales_daily
+                 WHERE day >= CURRENT_DATE - (:d || ' days')::interval
+                 GROUP BY team
+                 ORDER BY total DESC
+            """),
+            {"d": days},
+        )).mappings().all()
+        return envelope(
+            data={
+                "labels": [r["team"] for r in rows],
+                "series": [{"name": "share", "values": [float(r["total"]) for r in rows]}],
+                "chartType": "pie",
+                "engine": "echarts",
+                "options": {
+                    "title": {"text": f"팀별 매출 비중 — 최근 {days}일", "left": "center"},
+                    "tooltip": {"trigger": "item", "formatter": "{b}: {c} ({d}%)"},
+                    "color": ["#1428A0", "#16a34a", "#ea580c", "#7c3aed"],
+                },
+            },
+            meta={"days": days, "source": "sales_daily"},
+        )
+    return await cached(request, _compute)
+
+
+@router.get("/chart/region-share")
+async def chart_region_share(
+    request: Request,
+    period: str = Query(default="2026-Q1"),
+    s: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    async def _compute() -> dict[str, Any]:
+        rows = (await s.execute(
+            text("SELECT region, share_pct FROM region_metrics "
+                 "WHERE period = :p ORDER BY share_pct DESC"),
+            {"p": period},
+        )).mappings().all()
+        return envelope(
+            data={
+                "labels": [r["region"] for r in rows],
+                "series": [{"name": "share_pct", "values": [float(r["share_pct"]) for r in rows]}],
+                "chartType": "pie",
+                "engine": "echarts",
+                "options": {
+                    "title": {"text": f"지역별 매출 비중 — {period}", "left": "center"},
+                    "tooltip": {"trigger": "item", "formatter": "{b}: {c}%"},
+                    "color": ["#1428A0", "#06b6d4", "#16a34a", "#ea580c"],
+                },
+            },
+            meta={"period": period, "source": "region_metrics"},
+        )
+    return await cached(request, _compute)
+
+
+@router.get("/chart/cohort-retention")
+async def chart_cohort_retention(
+    request: Request,
+    s: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    async def _compute() -> dict[str, Any]:
+        rows = (await s.execute(
+            text("""
+                SELECT cohort_label, day_offset, retention_pct
+                  FROM cohort_retention
+                 ORDER BY cohort_label, day_offset
+            """),
+        )).mappings().all()
+        # Pivot cohort_label → series, day_offset → labels
+        offsets: list[int] = []
+        by_cohort: dict[str, dict[int, float]] = {}
+        for r in rows:
+            if r["day_offset"] not in offsets:
+                offsets.append(int(r["day_offset"]))
+            by_cohort.setdefault(r["cohort_label"], {})[int(r["day_offset"])] = float(r["retention_pct"])
+        offsets.sort()
+        return envelope(
+            data={
+                "labels": [f"D+{o}" for o in offsets],
+                "series": [
+                    {"name": c, "values": [by_cohort[c].get(o, 0.0) for o in offsets]}
+                    for c in sorted(by_cohort.keys())
+                ],
+                "chartType": "line",
+                "engine": "echarts",
+                "options": {
+                    "title": {"text": "코호트 잔존율", "left": "center"},
+                    "legend": {"top": 28},
+                    "yAxis": {"max": 100, "axisLabel": {"formatter": "{value}%"}},
+                    "smooth": True,
+                },
+            },
+            meta={"source": "cohort_retention"},
+        )
+    return await cached(request, _compute)
+
+
+@router.get("/chart/funnel-conversion")
+async def chart_funnel_conversion(
+    request: Request,
+    funnel: str = Query(default="signup"),
+    s: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    async def _compute() -> dict[str, Any]:
+        rows = (await s.execute(
+            text("SELECT step_label, users FROM funnel_metrics "
+                 "WHERE funnel_key = :k ORDER BY sort_order"),
+            {"k": funnel},
+        )).mappings().all()
+        return envelope(
+            data={
+                "labels": [r["step_label"] for r in rows],
+                "series": [{"name": "users", "values": [int(r["users"]) for r in rows]}],
+                "chartType": "bar",
+                "engine": "echarts",
+                "options": {
+                    "title": {"text": f"전환 funnel — {funnel}", "left": "center"},
+                    "tooltip": {"trigger": "axis"},
+                    "color": ["#7c3aed"],
+                },
+            },
+            meta={"funnel": funnel, "source": "funnel_metrics"},
+        )
+    return await cached(request, _compute)
+
+
+@router.get("/chart/audit-volume")
+async def chart_audit_volume(
+    request: Request,
+    days: int = Query(default=30, ge=1, le=120),
+    s: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    async def _compute() -> dict[str, Any]:
+        rows = (await s.execute(
+            text("""
+                SELECT day, event_kind, count
+                  FROM audit_summary_daily
+                 WHERE day >= CURRENT_DATE - (:d || ' days')::interval
+                 ORDER BY day, event_kind
+            """),
+            {"d": days},
+        )).mappings().all()
+        days_seen: list[str] = []
+        by_kind: dict[str, dict[str, int]] = {}
+        for r in rows:
+            lbl = r["day"].isoformat()
+            if lbl not in days_seen:
+                days_seen.append(lbl)
+            by_kind.setdefault(r["event_kind"], {})[lbl] = int(r["count"])
+        return envelope(
+            data={
+                "labels": days_seen,
+                "series": [
+                    {"name": kind, "values": [by_kind[kind].get(d, 0) for d in days_seen]}
+                    for kind in sorted(by_kind.keys())
+                ],
+                "chartType": "line",
+                "engine": "echarts",
+                "options": {
+                    "title": {"text": f"감사 이벤트 추이 — 최근 {days}일", "left": "center"},
+                    "legend": {"top": 28},
+                    "tooltip": {"trigger": "axis"},
+                    "dataZoom": [{"type": "slider", "start": 60, "end": 100, "height": 18}],
+                },
+            },
+            meta={"days": days, "source": "audit_summary_daily"},
+        )
+    return await cached(request, _compute)
+
+
+@router.get("/table/incidents-recent")
+async def table_incidents_recent(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100),
+    s: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    async def _compute() -> dict[str, Any]:
+        rows = (await s.execute(
+            text("""
+                SELECT incident_id, severity, status, title, owner,
+                       duration_min, started_at
+                  FROM incidents_log
+                 ORDER BY started_at DESC
+                 LIMIT :lim
+            """),
+            {"lim": limit},
+        )).mappings().all()
+        return envelope(
+            data={
+                "columns": ["ID", "severity", "status", "제목", "owner", "지속(분)", "시작"],
+                "rows": [
+                    [r["incident_id"], r["severity"], r["status"], r["title"],
+                     r["owner"] or "", r["duration_min"] if r["duration_min"] else "—",
+                     r["started_at"].isoformat()]
+                    for r in rows
+                ],
+            },
+            meta={"row_count": len(rows), "source": "incidents_log"},
+        )
+    return await cached(request, _compute)
+
+
+@router.get("/table/campaigns-active")
+async def table_campaigns_active(
+    request: Request,
+    s: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    async def _compute() -> dict[str, Any]:
+        rows = (await s.execute(
+            text("""
+                SELECT campaign_id, name, status, impressions, clicks,
+                       conversions, spent
+                  FROM marketing_campaigns
+                 ORDER BY status, started_at DESC
+            """),
+        )).mappings().all()
+        return envelope(
+            data={
+                "columns": ["ID", "캠페인", "상태", "노출", "클릭", "전환", "지출"],
+                "rows": [
+                    [r["campaign_id"], r["name"], r["status"],
+                     int(r["impressions"]), int(r["clicks"]),
+                     int(r["conversions"]), float(r["spent"])]
+                    for r in rows
+                ],
+            },
+            meta={"row_count": len(rows), "source": "marketing_campaigns"},
+        )
+    return await cached(request, _compute)
+
+
+@router.get("/table/documents-top")
+async def table_documents_top(
+    request: Request,
+    limit: int = Query(default=10, ge=1, le=50),
+    s: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    async def _compute() -> dict[str, Any]:
+        rows = (await s.execute(
+            text("""
+                SELECT slug, title, status, version, updated_at
+                  FROM documents
+                 WHERE status = 'published'
+                 ORDER BY updated_at DESC
+                 LIMIT :lim
+            """),
+            {"lim": limit},
+        )).mappings().all()
+        return envelope(
+            data={
+                "columns": ["slug", "제목", "상태", "버전", "최근 갱신"],
+                "rows": [
+                    [r["slug"], r["title"], r["status"], int(r["version"]),
+                     r["updated_at"].isoformat()]
+                    for r in rows
+                ],
+            },
+            meta={"row_count": len(rows), "source": "documents"},
+        )
+    return await cached(request, _compute)
+
+
+@router.get("/table/glossary-top")
+async def table_glossary_top(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100),
+    s: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    async def _compute() -> dict[str, Any]:
+        rows = (await s.execute(
+            text("""
+                SELECT term, definition,
+                       COALESCE(array_length(related_docs,1), 0) AS uses
+                  FROM terms
+                 ORDER BY uses DESC, term
+                 LIMIT :lim
+            """),
+            {"lim": limit},
+        )).mappings().all()
+        return envelope(
+            data={
+                "columns": ["용어", "정의", "참조 문서 수"],
+                "rows": [[r["term"], r["definition"], int(r["uses"])] for r in rows],
+            },
+            meta={"row_count": len(rows), "source": "terms"},
+        )
+    return await cached(request, _compute)
+
+
 # ── Fallback — explicit "not implemented" so FE renders a placeholder
 @router.get("/{kind}/{widget_id:path}")
 async def widget_not_implemented(

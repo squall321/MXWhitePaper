@@ -15796,6 +15796,121 @@
         ]
       }
     },
+    "/api/v1/widgets/chart/audit-volume": {
+      "get": {
+        "operationId": "chart_audit_volume_api_v1_widgets_chart_audit_volume_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 120,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Chart Audit Volume Api V1 Widgets Chart Audit Volume Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chart Audit Volume",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/chart/cohort-retention": {
+      "get": {
+        "operationId": "chart_cohort_retention_api_v1_widgets_chart_cohort_retention_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Chart Cohort Retention Api V1 Widgets Chart Cohort Retention Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Chart Cohort Retention",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/chart/funnel-conversion": {
+      "get": {
+        "operationId": "chart_funnel_conversion_api_v1_widgets_chart_funnel_conversion_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "funnel",
+            "required": false,
+            "schema": {
+              "default": "signup",
+              "title": "Funnel",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Chart Funnel Conversion Api V1 Widgets Chart Funnel Conversion Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chart Funnel Conversion",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
     "/api/v1/widgets/chart/month-end-progress": {
       "get": {
         "description": "5-stage month-end closing progress derived from the KPI snapshot.",
@@ -15815,6 +15930,51 @@
           }
         },
         "summary": "Chart Month End Progress",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/chart/region-share": {
+      "get": {
+        "operationId": "chart_region_share_api_v1_widgets_chart_region_share_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "2026-Q1",
+              "title": "Period",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Chart Region Share Api V1 Widgets Chart Region Share Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chart Region Share",
         "tags": [
           "widgets"
         ]
@@ -15872,6 +16032,53 @@
           }
         },
         "summary": "Chart Sales Trend",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/chart/team-share": {
+      "get": {
+        "operationId": "chart_team_share_api_v1_widgets_chart_team_share_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 120,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Chart Team Share Api V1 Widgets Chart Team Share Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chart Team Share",
         "tags": [
           "widgets"
         ]
@@ -16095,6 +16302,170 @@
           }
         },
         "summary": "Get Registry",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/table/campaigns-active": {
+      "get": {
+        "operationId": "table_campaigns_active_api_v1_widgets_table_campaigns_active_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Table Campaigns Active Api V1 Widgets Table Campaigns Active Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Table Campaigns Active",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/table/documents-top": {
+      "get": {
+        "operationId": "table_documents_top_api_v1_widgets_table_documents_top_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Table Documents Top Api V1 Widgets Table Documents Top Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Table Documents Top",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/table/glossary-top": {
+      "get": {
+        "operationId": "table_glossary_top_api_v1_widgets_table_glossary_top_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Table Glossary Top Api V1 Widgets Table Glossary Top Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Table Glossary Top",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/table/incidents-recent": {
+      "get": {
+        "operationId": "table_incidents_recent_api_v1_widgets_table_incidents_recent_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Table Incidents Recent Api V1 Widgets Table Incidents Recent Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Table Incidents Recent",
         "tags": [
           "widgets"
         ]

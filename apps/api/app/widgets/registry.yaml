@@ -93,3 +93,68 @@ widgets:
     endpoint: /api/v1/widgets/launch/galaxy-flip-2026/forecast
     render: chart
     description: demand_forecast 를 분기 x 시나리오 차트로 pivot.
+
+  # ── Full set: analytics + operations (round 6) ───────────────────
+  - id: chart.team-share
+    name: 팀별 매출 비중 (pie)
+    endpoint: /api/v1/widgets/chart/team-share
+    render: chart
+    refreshInterval: 600
+    params:
+      - { name: days, kind: integer, default: 30 }
+    description: sales_daily 를 팀별 SUM 후 파이.
+
+  - id: chart.region-share
+    name: 지역별 매출 비중 (pie)
+    endpoint: /api/v1/widgets/chart/region-share
+    render: chart
+    refreshInterval: 1800
+    params:
+      - { name: period, kind: string, default: "2026-Q1" }
+
+  - id: chart.cohort-retention
+    name: 코호트 잔존율
+    endpoint: /api/v1/widgets/chart/cohort-retention
+    render: chart
+    refreshInterval: 3600
+    description: cohort_retention 분기별 잔존 곡선.
+
+  - id: chart.funnel-conversion
+    name: 전환 funnel
+    endpoint: /api/v1/widgets/chart/funnel-conversion
+    render: chart
+    params:
+      - { name: funnel, kind: string, default: signup }
+    description: funnel_metrics 단계별 user count.
+
+  - id: chart.audit-volume
+    name: 감사 이벤트 추이
+    endpoint: /api/v1/widgets/chart/audit-volume
+    render: chart
+    refreshInterval: 600
+    params:
+      - { name: days, kind: integer, default: 30 }
+
+  - id: table.incidents-recent
+    name: 최근 운영 인시던트
+    endpoint: /api/v1/widgets/table/incidents-recent
+    render: table
+    refreshInterval: 300
+
+  - id: table.campaigns-active
+    name: 진행 중인 마케팅 캠페인
+    endpoint: /api/v1/widgets/table/campaigns-active
+    render: table
+
+  - id: table.documents-top
+    name: 최근 게시된 문서
+    endpoint: /api/v1/widgets/table/documents-top
+    render: table
+    params:
+      - { name: limit, kind: integer, default: 10 }
+
+  - id: table.glossary-top
+    name: 자주 쓰이는 용어
+    endpoint: /api/v1/widgets/table/glossary-top
+    render: table
+    refreshInterval: 1800
