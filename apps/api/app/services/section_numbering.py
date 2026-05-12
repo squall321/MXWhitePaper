@@ -33,18 +33,11 @@ def _validate_and_renumber(
             details={"depth": expected_level},
         )
     for idx, section in enumerate(sections, start=1):
-        # level 가 없거나 잘못된 경우 거부
-        actual_level = section.get("level")
-        if actual_level != expected_level:
-            raise ValidationFailed(
-                f"Section level mismatch: expected level={expected_level}, "
-                f"got level={actual_level} (title={section.get('title')!r})",
-                details={
-                    "expected_level": expected_level,
-                    "got_level": actual_level,
-                    "title": section.get("title"),
-                },
-            )
+        # The tree position is the source of truth — auto-correct level to
+        # match (same policy as number). Old imports / manual edits sometimes
+        # leave a stale level field; rejecting on save was too aggressive
+        # and blocked unrelated edits with VALIDATION_ERROR 422.
+        section["level"] = expected_level
 
         # number 재계산: 1, 1.1, 1.1.1, ...
         number = f"{parent_prefix}{idx}" if not parent_prefix else f"{parent_prefix}.{idx}"
