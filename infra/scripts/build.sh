@@ -1,12 +1,60 @@
 #!/usr/bin/env bash
 # Build / pull all .sif images required for the MXWP stack.
 # Idempotent — skips images that already exist (use --force to rebuild).
+#
+# Proxy handling:
+#   Apptainer respects HTTP(S)_PROXY env for OCI registry pulls, but
+#   `sudo` strips those vars by default. This script:
+#     1. Inherits HTTP_PROXY / HTTPS_PROXY from the caller (sudo -E or
+#        explicit `--preserve-env=HTTPS_PROXY` works).
+#     2. Falls back to MXWP_FALLBACK_PROXY (default
+#        http://169.219.61.252:8080 — Samsung MX egress) when no env
+#        proxy is set OR when the first pull attempt fails.
+#     3. Pre-staged .sif files in infra/apptainer/ are always honoured
+#        first — no network call at all if the file already exists.
+#
+# Override or disable:
+#   MXWP_FALLBACK_PROXY=http://10.0.0.1:8080 sudo -E ./build.sh
+#   MXWP_FALLBACK_PROXY= sudo ./build.sh                 # disable fallback
 set -euo pipefail
 . "$(dirname "$0")/_common.sh"
 require_apptainer
 
 FORCE=0
 [ "${1:-}" = "--force" ] && FORCE=1
+
+# Proxy: prefer existing env (sudo -E preserves HTTPS_PROXY etc.); fall
+# back to the well-known corporate egress. Apptainer reads the lowercase
+# variants — export both casings so any underlying lib finds them.
+FALLBACK_PROXY="${MXWP_FALLBACK_PROXY:-http://169.219.61.252:8080}"
+PROXY_URL="${HTTPS_PROXY:-${HTTP_PROXY:-${https_proxy:-${http_proxy:-}}}}"
+
+if [ -z "$PROXY_URL" ] && [ -n "$FALLBACK_PROXY" ]; then
+  PROXY_URL="$FALLBACK_PROXY"
+  echo "ℹ no proxy in env — using fallback $PROXY_URL"
+fi
+
+if [ -n "$PROXY_URL" ]; then
+  export HTTP_PROXY="$PROXY_URL"
+  export HTTPS_PROXY="$PROXY_URL"
+  export http_proxy="$PROXY_URL"
+  export https_proxy="$PROXY_URL"
+  export NO_PROXY="${NO_PROXY:-localhost,127.0.0.1,::1}"
+  export no_proxy="$NO_PROXY"
+fi
+
+_try_pull() {
+  # Wrapper so we can retry once with the fallback proxy. apptainer pull
+  # talks to the OCI registry over HTTPS — it honours HTTP(S)_PROXY env.
+  local sif="$1" src="$2" proxy="${3:-}"
+  if [ -n "$proxy" ]; then
+    HTTPS_PROXY="$proxy" HTTP_PROXY="$proxy" \
+    https_proxy="$proxy" http_proxy="$proxy" \
+      "$APPTAINER" pull --force "$sif" "$src"
+  else
+    "$APPTAINER" pull --force "$sif" "$src"
+  fi
+}
 
 build_or_pull() {
   local sif="$1" src="$2" def="${3:-}"
@@ -16,22 +64,31 @@ build_or_pull() {
       "$APPTAINER" build --force "$sif" "$def"
     else
       echo "→ pull  $(basename "$sif") from $src"
-      if ! "$APPTAINER" pull --force "$sif" "$src"; then
-        echo
-        echo "✗ pull failed for $(basename "$sif")"
-        echo "  Probable cause: corporate firewall blocking docker.io / registry-1.docker.io."
-        echo
-        echo "  Options:"
-        echo "    a) Transfer pre-built .sif files from another machine:"
-        echo "         scp <other-host>:.../infra/apptainer/*.sif $APPT_DIR/"
-        echo "         then re-run this script (existing files are skipped)."
-        echo "    b) Run with proxy env preserved:"
-        echo "         sudo -E HTTPS_PROXY=http://<proxy>:<port> $0"
-        echo "         (apptainer reads HTTPS_PROXY for OCI pulls, but sudo strips env by default)"
-        echo "    c) Use a corporate Docker Hub mirror — replace docker:// URLs above"
-        echo "       with the mirror, e.g. docker://nexus.corp/dockerhub-proxy/<image>:<tag>"
-        exit 1
+      # 1) Use whatever proxy is already exported (FALLBACK applied at top).
+      if _try_pull "$sif" "$src"; then
+        return 0
       fi
+      # 2) Explicit retry via the well-known fallback (in case current env
+      # was misconfigured). Only fires when FALLBACK differs from current.
+      if [ -n "$FALLBACK_PROXY" ] && [ "$FALLBACK_PROXY" != "${HTTPS_PROXY:-}" ]; then
+        echo "  ↻ retry via $FALLBACK_PROXY"
+        if _try_pull "$sif" "$src" "$FALLBACK_PROXY"; then
+          return 0
+        fi
+      fi
+      echo
+      echo "✗ pull failed for $(basename "$sif")"
+      echo "  Probable cause: corporate firewall blocking docker.io / registry-1.docker.io."
+      echo
+      echo "  Options:"
+      echo "    a) Transfer pre-built .sif files from another machine:"
+      echo "         scp <other-host>:.../infra/apptainer/*.sif $APPT_DIR/"
+      echo "         then re-run this script (existing files are skipped)."
+      echo "    b) Try a different proxy:"
+      echo "         MXWP_FALLBACK_PROXY=http://<proxy>:<port> sudo -E $0"
+      echo "    c) Use a corporate Docker Hub mirror — replace docker:// URLs above"
+      echo "       with the mirror, e.g. docker://nexus.corp/dockerhub-proxy/<image>:<tag>"
+      exit 1
     fi
   else
     echo "✓ skip  $(basename "$sif") (exists)"
