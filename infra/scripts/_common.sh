@@ -43,6 +43,18 @@ INST_WEB=mxwp_web
 # Apptainer command (allow override for env where it lives elsewhere)
 : "${APPTAINER:=apptainer}"
 
+# VITE_PROXY_TARGET — auto-fill if missing. start.sh forwards this into
+# the web container so vite can reach the API across netns boundaries.
+# Missing this env causes login to hang with ERR_EMPTY_RESPONSE (most
+# common failure mode on a new server). Default = this host's primary IP.
+if [ -z "${VITE_PROXY_TARGET:-}" ]; then
+  _HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  if [ -n "$_HOST_IP" ]; then
+    export VITE_PROXY_TARGET="http://${_HOST_IP}:${API_PORT}"
+    echo "ℹ VITE_PROXY_TARGET not set in .env — auto-filled: $VITE_PROXY_TARGET" >&2
+  fi
+fi
+
 require_apptainer() {
   command -v "$APPTAINER" >/dev/null 2>&1 || {
     echo "✗ '$APPTAINER' not found in PATH"
