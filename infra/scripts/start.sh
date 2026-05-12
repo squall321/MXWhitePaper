@@ -84,6 +84,12 @@ for i in $(seq 1 5); do
 done
 
 # ── api ─────────────────────────────────────────────────────────────
+# Same proxy passthrough as the web instance — the API container may
+# need to reach external services (Meilisearch update task queue,
+# any PyPI install if the .def added new deps post-build, etc).
+# 127.0.0.1 is added to no_proxy explicitly so the API doesn't try to
+# tunnel localhost calls (postgres/meili/minio) through the proxy.
+MXWP_PROXY="${HTTPS_PROXY:-${HTTP_PROXY:-${MXWP_FALLBACK_PROXY:-http://168.219.61.252:8080}}}"
 start_instance "$INST_API" "$API_SIF" \
   --bind "$REPO_ROOT:/workspace" \
   --env "API_PORT=${API_PORT}" \
@@ -96,7 +102,13 @@ start_instance "$INST_API" "$API_SIF" \
   --env "MINIO_SECRET_KEY=${MINIO_SECRET_KEY}" \
   --env "JWT_SECRET=${JWT_SECRET}" \
   --env "CORS_ORIGINS=${CORS_ORIGINS}" \
-  --env "APP_ENV=${APP_ENV}"
+  --env "APP_ENV=${APP_ENV}" \
+  --env "HTTP_PROXY=${MXWP_PROXY}" \
+  --env "HTTPS_PROXY=${MXWP_PROXY}" \
+  --env "http_proxy=${MXWP_PROXY}" \
+  --env "https_proxy=${MXWP_PROXY}" \
+  --env "NO_PROXY=localhost,127.0.0.1,::1" \
+  --env "no_proxy=localhost,127.0.0.1,::1"
 
 # ── web ─────────────────────────────────────────────────────────────
 # VITE_API_URL is a relative path so the FE always asks its own origin
@@ -104,9 +116,21 @@ start_instance "$INST_API" "$API_SIF" \
 # /api → http://127.0.0.1:${API_PORT}. This way logging in from a LAN
 # host (e.g. http://192.168.x.x:5173) works without any extra CORS or
 # host-aware build steps — the browser stays in same-origin land.
+#
+# Proxy env passthrough: the web container runs `pnpm install` in its
+# %startscript on first boot, which talks to registry.npmjs.org. In
+# corporate networks the registry isn't directly reachable, so forward
+# the same proxy that the host scripts use (env > MXWP_FALLBACK_PROXY).
+MXWP_PROXY="${HTTPS_PROXY:-${HTTP_PROXY:-${MXWP_FALLBACK_PROXY:-http://168.219.61.252:8080}}}"
 start_instance "$INST_WEB" "$WEB_SIF" \
   --bind "$REPO_ROOT:/workspace" \
-  --env "VITE_API_URL=/api/v1"
+  --env "VITE_API_URL=/api/v1" \
+  --env "HTTP_PROXY=${MXWP_PROXY}" \
+  --env "HTTPS_PROXY=${MXWP_PROXY}" \
+  --env "http_proxy=${MXWP_PROXY}" \
+  --env "https_proxy=${MXWP_PROXY}" \
+  --env "NO_PROXY=localhost,127.0.0.1,::1" \
+  --env "no_proxy=localhost,127.0.0.1,::1"
 
 echo
 echo "✓ stack started"
