@@ -15,7 +15,16 @@ start_instance() {
     return 0
   fi
   echo "→ start $name"
-  "$APPTAINER" instance start "$@" "$sif" "$name"
+  # Some Apptainer installs (e.g. when /etc/apptainer/apptainer.conf sets
+  # default network = bridge) put each instance into its own netns, so
+  # container 127.0.0.1 can't reach the host's loopback API on :8800.
+  # Setting MXWP_APPT_HOST_NET=1 in .env forces explicit host network on
+  # every instance start, fixing vite → API proxy in those environments.
+  local net_args=()
+  if [ "${MXWP_APPT_HOST_NET:-0}" = "1" ]; then
+    net_args=(--net --network=host)
+  fi
+  "$APPTAINER" instance start "${net_args[@]}" "$@" "$sif" "$name"
 }
 
 # ── postgres ────────────────────────────────────────────────────────
