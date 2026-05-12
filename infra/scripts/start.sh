@@ -141,15 +141,32 @@ MXWP_PROXY="${HTTPS_PROXY:-${HTTP_PROXY:-${MXWP_FALLBACK_PROXY:-http://168.219.6
 # `COREPACK_ENABLE_NETWORK=0` tells corepack to trust the cached
 # binary and skip the verification — safe because we *just* baked it
 # in. `COREPACK_ENABLE_STRICT=0` covers older corepack versions.
+# Dedicated writable tmp dir — some apptainer installs mount the container's
+# own private /tmp (not the host's 1777), so the in-container user (uid=1000
+# 'node') can't redirect pnpm-install.log to /tmp. Binding a chmod-777 host
+# dir as /tmp dodges the issue without rebuilding the image.
+mkdir -p "$DATA_DIR/web-tmp"
+chmod 777 "$DATA_DIR/web-tmp"
+
+# COREPACK_ENABLE_NETWORK=0 was originally added for Samsung MX's strict
+# corporate firewall where corepack's npm-registry verification times out.
+# But on networks where corepack CAN reach the registry, NETWORK=0 actually
+# blocks pnpm itself ("Network access disabled by the environment"). Opt-in
+# now via MXWP_COREPACK_OFFLINE=1 in .env; default is on-line.
+COREPACK_NET_ARGS=()
+if [ "${MXWP_COREPACK_OFFLINE:-0}" = "1" ]; then
+  COREPACK_NET_ARGS=(--env "COREPACK_ENABLE_NETWORK=0")
+fi
+
 start_instance "$INST_WEB" "$WEB_SIF" \
   --bind "$REPO_ROOT:/workspace" \
-  --bind /tmp:/tmp \
+  --bind "$DATA_DIR/web-tmp:/tmp" \
   --env "VITE_API_URL=/api/v1" \
   --env "VITE_PROXY_TARGET=${VITE_PROXY_TARGET:-http://127.0.0.1:${API_PORT}}" \
   --env "HTTP_PROXY=${MXWP_PROXY}" \
   --env "HTTPS_PROXY=${MXWP_PROXY}" \
   --env "NO_PROXY=localhost,127.0.0.1,::1" \
-  --env "COREPACK_ENABLE_NETWORK=0" \
+  "${COREPACK_NET_ARGS[@]}" \
   --env "COREPACK_ENABLE_STRICT=0" \
   --env "COREPACK_ENABLE_DOWNLOAD_PROMPT=0"
 
