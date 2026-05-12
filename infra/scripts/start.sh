@@ -43,7 +43,19 @@ start_instance "$INST_POSTGRES" "$POSTGRES_SIF" \
   --env "LC_ALL=C.UTF-8"
 
 # ── meilisearch ─────────────────────────────────────────────────────
+# Some apptainer installs map the in-container `meili` user (UID baked
+# into the getmeili/meilisearch image) onto an unprivileged host UID
+# that can't write to the bind-mounted /meili_data even when host
+# perms are 777. --fakeroot routes through user namespaces so the
+# in-container process effectively has UID 0 → writes always succeed.
+# Set MXWP_MEILI_FAKEROOT=0 in .env to disable if your apptainer
+# build rejects --fakeroot.
+MEILI_NS_ARGS=()
+if [ "${MXWP_MEILI_FAKEROOT:-1}" = "1" ]; then
+  MEILI_NS_ARGS=(--fakeroot)
+fi
 start_instance "$INST_MEILI" "$MEILI_SIF" \
+  "${MEILI_NS_ARGS[@]}" \
   --bind "$DATA_DIR/meili:/meili_data" \
   --env "MEILI_MASTER_KEY=${MEILI_MASTER_KEY}" \
   --env "MEILI_ENV=development" \
