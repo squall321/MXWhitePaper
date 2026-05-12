@@ -252,3 +252,29 @@ a.wiki-missing { color: var(--smsg-link-missing); }
 .wp-pulse {
   animation: wp-pulse var(--duration-slow) var(--ease-out) 1;
 }
+
+/* ── Figure auto-numbering ─────────────────────────────────────────
+   CSS counters increment per <figure data-block-type="image"> inside the
+   article. The figcaption gets a "그림 N: " prefix without needing any
+   doc-side numbering or React context. Counter resets at each <article>
+   so navigating across documents starts fresh. */
+.wp-reader-article,
+article {
+  counter-reset: wp-figure;
+}
+
+figure[data-block-type="image"][data-has-caption="true"] {
+  counter-increment: wp-figure;
+}
+
+figure[data-block-type="image"][data-has-caption="true"] .figure-caption-text::before {
+  content: "그림 " counter(wp-figure) ": ";
+  font-weight: 600;
+  color: var(--smsg-blue-700, #1e3a8a);
+}
+
+@media print {
+  figure[data-block-type="image"][data-has-caption="true"] {
+    counter-increment: wp-figure;
+  }
+}

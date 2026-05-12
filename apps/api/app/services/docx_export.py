@@ -120,7 +120,7 @@ def render_docx(
 
         doc = scrub_for_response(doc, role=requester_role)
     document = Document()
-    ctx = _Ctx(document=document, opts=opts, footnotes=_collect_footnotes(doc))
+    ctx = _Ctx(document=document, opts=opts, footnotes=_collect_footnotes(doc), requester_role=requester_role)
 
     _render_title(document, doc)
     for section in doc.get("sections") or []:
@@ -139,6 +139,8 @@ class _Ctx:
     document: Any
     opts: DocxOptions
     footnotes: dict[str, str]  # marker -> body text
+    figure_counter: int = 0     # incremented each time an image with caption is rendered
+    requester_role: str | None = None
 
 
 # ── Title / metadata ────────────────────────────────────────────────
@@ -673,8 +675,21 @@ def _b_image(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
             cap_p = document.add_paragraph(style="Caption")
         except KeyError:
             cap_p = document.add_paragraph()
+        ctx.figure_counter += 1
+        prefix_run = cap_p.add_run(f"그림 {ctx.figure_counter}: ")
+        prefix_run.bold = True
         run = cap_p.add_run(caption)
         run.italic = True
+
+    # Image link — if present, append a small "↗ 링크 열기" hyperlink line
+    # below the caption (python-docx can't wrap an inline-image hyperlink
+    # without raw XML manipulation; this is the same compromise the FE
+    # makes).
+    link = _str(block.get("link"))
+    if link:
+        target = link if link.startswith(("http://", "https://")) else f"/docs/{link.lstrip('/')}"
+        link_p = document.add_paragraph()
+        _add_hyperlink(link_p, target, "↗ 링크 열기")
 
 
 def _b_gallery(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
