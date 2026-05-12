@@ -156,6 +156,21 @@ async def main() -> None:
     except Exception as e:  # noqa: BLE001
         print(f"⚠ widget fact seed skipped: {e}")
 
+    # Canonical glossary terms — DB-backs the `glossary-ref` block
+    # so samples don't need inline definitions.
+    try:
+        from app.scripts import seed_glossary
+        await seed_glossary._amain()
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠ glossary seed skipped: {e}")
+
+    # Launch tasks / timeline / demand forecast — DB-backs sample 06.
+    try:
+        from app.scripts import seed_launch_facts
+        await seed_launch_facts._amain()
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠ launch facts seed skipped: {e}")
+
     print("✓ seed complete")
 
 

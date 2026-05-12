@@ -7,8 +7,14 @@
   "metadata": {
     "division": "MX",
     "team": "전략팀",
-    "owners": ["u-strategy-lead"],
-    "tags": ["KPI", "대시보드", "지표"],
+    "owners": [
+      "u-strategy-lead"
+    ],
+    "tags": [
+      "KPI",
+      "대시보드",
+      "지표"
+    ],
     "category": "가이드",
     "confidentiality": "internal"
   },
@@ -20,13 +26,12 @@
       "title": "주요 지표 한눈에",
       "blocks": [
         {
-          "type": "kpi-cards",
-          "id": "01J9X1Y2Z3A4B5C6D7E8F9G4B1",
-          "items": [
-            { "label": "월 출하량",  "value": "1.2M",  "delta": "+3.4%", "trend": "up" },
-            { "label": "ASP",        "value": "$520",  "delta": "-1.2%", "trend": "down" },
-            { "label": "MoM 매출",   "value": "$0.62B","delta": "+2.1%", "trend": "up" }
-          ]
+          "type": "data-source",
+          "id": "XCH41JQ8YYVMPCMKN6WCWJ9DK4",
+          "endpoint": "/api/v1/widgets/kpi-finance-daily-summary",
+          "params": {},
+          "render": "kpi-cards",
+          "refreshInterval": 300
         }
       ],
       "subsections": []
@@ -71,8 +76,14 @@
   ],
   "related_documents": [],
   "glossary": [
-    { "term": "ASP", "definition": "Average Selling Price — 평균 판매가" },
-    { "term": "MoM", "definition": "Month-over-Month — 전월 대비" }
+    {
+      "term": "ASP",
+      "definition": "Average Selling Price — 평균 판매가"
+    },
+    {
+      "term": "MoM",
+      "definition": "Month-over-Month — 전월 대비"
+    }
   ],
   "references": [],
   "see_also": []

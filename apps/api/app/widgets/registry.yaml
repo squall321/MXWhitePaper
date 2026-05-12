@@ -74,3 +74,22 @@ widgets:
         kind: integer
         default: 30
     description: sales_daily 를 팀별로 SUM aggregate.
+
+  # ── Launch program widgets (sample 06) ──────────────────────────
+  - id: launch.tasks
+    name: 출시 Gantt — Tasks
+    endpoint: /api/v1/widgets/launch/galaxy-flip-2026/tasks
+    render: table
+    description: launch_tasks 의 program=galaxy-flip-2026 행. start/end/progress%/owner.
+
+  - id: launch.timeline
+    name: 출시 주차별 활동
+    endpoint: /api/v1/widgets/launch/galaxy-flip-2026/timeline
+    render: table
+    description: launch_timeline — 주차/활동/담당/산출물.
+
+  - id: launch.forecast
+    name: 수요 시나리오 (baseline/bull/bear)
+    endpoint: /api/v1/widgets/launch/galaxy-flip-2026/forecast
+    render: chart
+    description: demand_forecast 를 분기 x 시나리오 차트로 pivot.

@@ -250,6 +250,93 @@ async def table_sales_summary(
     )
 
 
+# ── Launch program widgets (sample 06 — galaxy-flip-2026) ──────────
+@router.get("/launch/{program}/tasks")
+async def launch_tasks(
+    program: str,
+    s: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    rows = (await s.execute(
+        text("""
+            SELECT task, start_date, end_date, progress_pct, owner
+              FROM launch_tasks
+             WHERE program_slug = :p
+             ORDER BY sort_order
+        """),
+        {"p": program},
+    )).mappings().all()
+    return envelope(
+        data={
+            "columns": ["task", "start", "end", "progress", "owner"],
+            "rows": [
+                [r["task"], r["start_date"].isoformat(), r["end_date"].isoformat(),
+                 float(r["progress_pct"]), r["owner"]]
+                for r in rows
+            ],
+        },
+        meta={"program": program, "row_count": len(rows), "source": "launch_tasks"},
+    )
+
+
+@router.get("/launch/{program}/timeline")
+async def launch_timeline(
+    program: str,
+    s: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    rows = (await s.execute(
+        text("""
+            SELECT week_label, activity, owner, deliverable
+              FROM launch_timeline
+             WHERE program_slug = :p
+             ORDER BY sort_order
+        """),
+        {"p": program},
+    )).mappings().all()
+    return envelope(
+        data={
+            "columns": ["주차", "활동", "담당", "산출물"],
+            "rows": [[r["week_label"], r["activity"], r["owner"], r["deliverable"]] for r in rows],
+        },
+        meta={"program": program, "row_count": len(rows), "source": "launch_timeline"},
+    )
+
+
+@router.get("/launch/{program}/forecast")
+async def launch_forecast(
+    program: str,
+    s: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    rows = (await s.execute(
+        text("""
+            SELECT quarter, scenario, units
+              FROM demand_forecast
+             WHERE program_slug = :p
+             ORDER BY quarter, scenario
+        """),
+        {"p": program},
+    )).mappings().all()
+    # Pivot to chart shape: labels = quarters, series = scenarios
+    quarters: list[str] = []
+    by_scenario: dict[str, dict[str, float]] = {}
+    for r in rows:
+        if r["quarter"] not in quarters:
+            quarters.append(r["quarter"])
+        by_scenario.setdefault(r["scenario"], {})[r["quarter"]] = float(r["units"])
+    return envelope(
+        data={
+            "labels": quarters,
+            "series": [
+                {"name": scen, "values": [by_scenario[scen].get(q, 0.0) for q in quarters]}
+                for scen in sorted(by_scenario.keys())
+            ],
+        },
+        meta={"program": program, "source": "demand_forecast"},
+    )
+
+
 # ── Fallback — explicit "not implemented" so FE renders a placeholder
 @router.get("/{kind}/{widget_id:path}")
 async def widget_not_implemented(

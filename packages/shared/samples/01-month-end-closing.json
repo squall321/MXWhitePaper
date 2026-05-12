@@ -9,16 +9,27 @@
     "team": "재무팀",
     "group": "회계그룹",
     "part": "결산파트",
-    "owners": ["u-hong-gildong"],
-    "reviewers": ["u-kim-cheolsu"],
-    "tags": ["결산", "프로세스", "R&R"],
+    "owners": [
+      "u-hong-gildong"
+    ],
+    "reviewers": [
+      "u-kim-cheolsu"
+    ],
+    "tags": [
+      "결산",
+      "프로세스",
+      "R&R"
+    ],
     "category": "프로세스",
     "confidentiality": "internal"
   },
   "infobox": {
     "주요 산출물": "재무제표",
     "주기": "월간",
-    "관련 시스템": ["SAP", "Hyperion"]
+    "관련 시스템": [
+      "SAP",
+      "Hyperion"
+    ]
   },
   "sections": [
     {
@@ -49,11 +60,27 @@
             {
               "type": "table",
               "id": "01J9X1Y2Z3A4B5C6D7E8F9G0B3",
-              "headers": ["단계", "D-day", "담당"],
+              "headers": [
+                "단계",
+                "D-day",
+                "담당"
+              ],
               "rows": [
-                ["취합", "D-3", "결산팀"],
-                ["검토", "D-1", "감사팀"],
-                ["확정", "D",   "팀장"]
+                [
+                  "취합",
+                  "D-3",
+                  "결산팀"
+                ],
+                [
+                  "검토",
+                  "D-1",
+                  "감사팀"
+                ],
+                [
+                  "확정",
+                  "D",
+                  "팀장"
+                ]
               ]
             }
           ],
@@ -65,18 +92,12 @@
               "title": "월결산 상세 일정",
               "blocks": [
                 {
-                  "type": "chart",
-                  "id": "01J9X1Y2Z3A4B5C6D7E8F9G0B4",
-                  "chartType": "line",
-                  "title": "월별 결산 소요 일수",
-                  "data": {
-                    "labels": ["1월", "2월", "3월", "4월"],
-                    "series": [
-                      { "name": "실적", "values": [5.0, 4.5, 4.8, 4.2] },
-                      { "name": "목표", "values": [5.0, 5.0, 5.0, 5.0] }
-                    ]
-                  },
-                  "options": { "yLabel": "Days" }
+                  "type": "data-source",
+                  "id": "GVTQZ8XZTM830TD5WYVH7S1DXN",
+                  "endpoint": "/api/v1/widgets/chart/month-end-progress",
+                  "params": {},
+                  "render": "chart",
+                  "refreshInterval": 600
                 }
               ],
               "subsections": []
@@ -87,15 +108,34 @@
     }
   ],
   "related_documents": [
-    { "slug": "month-end-checklist",  "relation": "참고" },
-    { "slug": "sap-account-mapping",  "relation": "선행" }
+    {
+      "slug": "month-end-checklist",
+      "relation": "참고"
+    },
+    {
+      "slug": "sap-account-mapping",
+      "relation": "선행"
+    }
   ],
   "glossary": [
-    { "term": "DPS", "definition": "Days Payable Sales" }
+    {
+      "term": "DPS",
+      "definition": "Days Payable Sales"
+    }
   ],
   "references": [
-    { "type": "internal", "label": "사내 회계규정 v3.2" },
-    { "type": "external", "label": "K-IFRS 1018", "url": "https://www.kasb.or.kr/" }
+    {
+      "type": "internal",
+      "label": "사내 회계규정 v3.2"
+    },
+    {
+      "type": "external",
+      "label": "K-IFRS 1018",
+      "url": "https://www.kasb.or.kr/"
+    }
   ],
-  "see_also": ["financial-policy", "audit-process"]
+  "see_also": [
+    "financial-policy",
+    "audit-process"
+  ]
 }

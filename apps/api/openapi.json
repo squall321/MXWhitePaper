@@ -10766,6 +10766,51 @@
         ]
       }
     },
+    "/api/v1/glossary/term/{term}": {
+      "get": {
+        "description": "Single-term lookup for the `glossary-ref` block renderer.",
+        "operationId": "get_term_api_v1_glossary_term__term__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "term",
+            "required": true,
+            "schema": {
+              "title": "Term",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Term Api V1 Glossary Term  Term  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Term",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
     "/api/v1/groups": {
       "get": {
         "operationId": "list_groups_api_v1_groups_get",
@@ -15649,6 +15694,138 @@
           }
         },
         "summary": "Get Kpi",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/launch/{program}/forecast": {
+      "get": {
+        "operationId": "launch_forecast_api_v1_widgets_launch__program__forecast_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "program",
+            "required": true,
+            "schema": {
+              "title": "Program",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Launch Forecast Api V1 Widgets Launch  Program  Forecast Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Launch Forecast",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/launch/{program}/tasks": {
+      "get": {
+        "operationId": "launch_tasks_api_v1_widgets_launch__program__tasks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "program",
+            "required": true,
+            "schema": {
+              "title": "Program",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Launch Tasks Api V1 Widgets Launch  Program  Tasks Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Launch Tasks",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/launch/{program}/timeline": {
+      "get": {
+        "operationId": "launch_timeline_api_v1_widgets_launch__program__timeline_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "program",
+            "required": true,
+            "schema": {
+              "title": "Program",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Launch Timeline Api V1 Widgets Launch  Program  Timeline Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Launch Timeline",
         "tags": [
           "widgets"
         ]

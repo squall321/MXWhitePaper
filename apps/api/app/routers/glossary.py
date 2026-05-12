@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,29 @@ from app.core.db import get_db
 from app.core.errors import envelope
 
 router = APIRouter(prefix="/api/v1", tags=["glossary"])
+
+
+@router.get("/glossary/term/{term}")
+async def get_term(
+    term: str,
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Single-term lookup for the `glossary-ref` block renderer."""
+    row = (await s.execute(
+        text("SELECT term, definition, COALESCE(array_length(related_docs,1),0) "
+             "FROM terms WHERE term = :term"),
+        {"term": term},
+    )).first()
+    if not row:
+        raise HTTPException(404, detail={
+            "error": "term_not_found",
+            "term": term,
+            "hint": "Run `python -m app.scripts.seed_glossary` to populate the terms table.",
+        })
+    return envelope(
+        data={"term": row[0], "definition": row[1], "related_doc_count": int(row[2] or 0)},
+        meta={"source": "terms"},
+    )
 
 
 @router.get("/glossary")
