@@ -11,8 +11,13 @@ From: node:20-bookworm-slim
     apt-get update
     apt-get install -y --no-install-recommends git ca-certificates
     rm -rf /var/lib/apt/lists/*
-    corepack enable
-    corepack prepare pnpm@9.12.0 --activate
+    # Install pnpm directly via npm instead of corepack — corepack does a
+    # network-bound integrity check on EVERY invocation that fails behind
+    # SSL-intercepting corporate proxies (UNABLE_TO_VERIFY_LEAF_SIGNATURE),
+    # and COREPACK_ENABLE_NETWORK=0 makes it refuse to use the cached
+    # binary too. Skipping corepack avoids that catch-22.
+    corepack disable 2>/dev/null || true
+    npm install -g pnpm@9.12.0
     mkdir -p /workspace
 
 %environment
