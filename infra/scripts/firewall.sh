@@ -73,21 +73,23 @@ fi
 UFW_STATUS=$(ufw status 2>/dev/null | head -1)
 echo "→ current ufw: $UFW_STATUS"
 
-# helper: idempotent rule add/remove
+# helper: idempotent rule add/remove. Pass each ufw arg as a separate
+# positional — shell-quoting single-quoted comments inside a single
+# string mangled the value (split on whitespace, ufw saw `'MXWP-...'`
+# as literal-with-quotes and dropped the rule silently).
 rule_op() {
-  local op="$1" spec="$2"
-  # ufw doesn't have an idempotent 'add' — re-adding is a no-op and prints "Skipping adding existing rule"
-  ufw "$op" $spec 2>&1 | grep -vE "Skipping|existing rule" || true
+  local op="$1"; shift
+  ufw "$op" "$@" 2>&1 | grep -vE "Skipping|existing rule" || true
 }
 
 if [ "$REMOVE" = 1 ]; then
   echo "▶ removing rules"
   for port in "${PORTS[@]}"; do
     if [ "$ANYWHERE" = 1 ]; then
-      rule_op delete "allow ${port}/tcp"
+      rule_op delete allow "${port}/tcp"
     else
       for net in "${PRIVATE_NETS[@]}"; do
-        rule_op delete "allow from $net to any port $port proto tcp"
+        rule_op delete allow from "$net" to any port "$port" proto tcp
       done
     fi
   done
@@ -96,10 +98,10 @@ else
   echo "▶ adding rules"
   for port in "${PORTS[@]}"; do
     if [ "$ANYWHERE" = 1 ]; then
-      rule_op allow "${port}/tcp comment 'MXWP-${port}'"
+      rule_op allow "${port}/tcp"
     else
       for net in "${PRIVATE_NETS[@]}"; do
-        rule_op allow "from $net to any port $port proto tcp comment 'MXWP-${port}'"
+        rule_op allow from "$net" to any port "$port" proto tcp
       done
     fi
   done
@@ -108,7 +110,7 @@ else
   # Make sure ssh stays open if we're enabling ufw for the first time
   if echo "$UFW_STATUS" | grep -qi inactive; then
     echo "▶ ufw was inactive — preserving ssh (22) and enabling"
-    rule_op allow "OpenSSH"
+    rule_op allow OpenSSH
     echo "y" | ufw enable
   fi
 fi
