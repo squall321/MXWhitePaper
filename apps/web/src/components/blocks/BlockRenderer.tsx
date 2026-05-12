@@ -34,6 +34,7 @@ import { QuizBlockView } from './QuizBlock'
 import { ImageAnnotationBlockView } from './ImageAnnotationBlock'
 import { SpreadsheetBlockView } from './SpreadsheetBlock'
 import { BibliographyBlockView } from './BibliographyBlock'
+import { FigureIndexBlockView } from './FigureIndexBlock'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { InlineTextBlockEditor } from '@/features/editor/components/InlineTextBlockEditor'
 import { ListBlockEditor } from '@/features/editor/components/ListBlockEditor'
@@ -451,16 +452,38 @@ function BlockRendererInner({ block }: { block: Block }) {
       return <CalloutBlockView block={block} />
     case 'code':
       return <CodeBlockView block={block} />
-    case 'table':
-      return <TableBlockView block={block} />
+    case 'table': {
+      const cap = (block as { caption?: string }).caption
+      if (!cap) return <TableBlockView block={block} />
+      // Wrap in <figure> so CSS counters fire and the caption gets
+      // "표 N:" prefix consistently with images/charts.
+      return (
+        <figure data-block-type="table" data-has-caption="true" className="my-2">
+          <TableBlockView block={block} />
+          <figcaption className="mt-1 text-center text-xs text-gray-500">
+            <span className="figure-caption-text">{cap}</span>
+          </figcaption>
+        </figure>
+      )
+    }
     case 'image':
       return <ImageBlockView block={block} />
     case 'video':
       return <VideoBlockView block={block} />
     case 'gallery':
       return <GalleryBlockView block={block} />
-    case 'chart':
-      return <ChartBlockView block={block} />
+    case 'chart': {
+      const t = (block as { title?: string }).title
+      if (!t) return <ChartBlockView block={block} />
+      return (
+        <figure data-block-type="chart" data-has-caption="true" className="my-2">
+          <ChartBlockView block={block} />
+          <figcaption className="mt-1 text-center text-xs text-gray-500">
+            <span className="figure-caption-text">{t}</span>
+          </figcaption>
+        </figure>
+      )
+    }
     case 'math':
       return <MathBlockView block={block} />
     case 'kpi-cards':
@@ -505,6 +528,8 @@ function BlockRendererInner({ block }: { block: Block }) {
       return <SpreadsheetBlockView block={block} />
     case 'bibliography':
       return <BibliographyBlockView block={block} />
+    case 'figure-index':
+      return <FigureIndexBlockView block={block as { title?: string; kinds?: ('image' | 'table' | 'chart')[] }} />
     case 'spacer': {
       // Deliberate vertical breathing room. Defaults are tight in
       // SectionLayout (space-y-2 = 8px); spacer block adds 16/32/64px

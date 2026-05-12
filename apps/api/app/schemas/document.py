@@ -464,6 +464,10 @@ class TableBlock(BaseModel):
     )
     type: Literal['table']
     id: Ulid
+    caption: str | None = Field(None, max_length=500)
+    """
+    Optional caption rendered below the table; participates in auto-numbering ('표 N: ...').
+    """
     headers: list[str]
     rows: list[list[str]]
     cells: list[Cell] | None = None
@@ -798,6 +802,30 @@ class Width1(RootModel[float]):
     root: float = Field(..., ge=5.0, le=95.0)
 
 
+class Kind(Enum):
+    image = 'image'
+    table = 'table'
+    chart = 'chart'
+
+
+class FigureIndexBlock(BaseModel):
+    """
+    Auto-generated table of figures (그림/표/차트 목차). The renderer walks the document and lists every captioned image, table (with caption), and chart (with title), each linked to its anchor. `kinds` controls which lists to render.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['figure-index']
+    id: Ulid
+    title: str | None = '그림 목차'
+    kinds: list[Kind] | None = Field(None, max_length=3, min_length=1)
+    """
+    Which figure types to include — 'image' (그림), 'table' (표), 'chart' (차트). Order in this array determines section order. Omit for all three.
+    """
+    meta: BlockMeta | None = None
+
+
 class Size(Enum):
     sm = 'sm'
     md = 'md'
@@ -894,7 +922,7 @@ class DashboardEmbedBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
-class Kind(Enum):
+class Kind1(Enum):
     number = 'number'
     text = 'text'
     select = 'select'
@@ -904,7 +932,7 @@ class Input(BaseModel):
     name: str
     label: str
     default: str | float | bool | None = None
-    kind: Kind | None = Kind.number
+    kind: Kind1 | None = Kind1.number
 
 
 class CalculatorBlock(BaseModel):
@@ -987,7 +1015,7 @@ class WhiteboardElement(
     root: WhiteboardElement1 | WhiteboardElement2 | WhiteboardElement3
 
 
-class Kind1(Enum):
+class Kind2(Enum):
     text = 'text'
     long_text = 'long-text'
     email = 'email'
@@ -1004,14 +1032,14 @@ class FormQuestion(BaseModel):
         extra='forbid',
     )
     id: str
-    kind: Kind1
+    kind: Kind2
     label: str
     required: bool | None = False
     placeholder: str | None = None
     options: list[str] | None = None
 
 
-class Kind2(Enum):
+class Kind3(Enum):
     single_choice = 'single-choice'
     multi_choice = 'multi-choice'
     true_false = 'true-false'
@@ -1023,7 +1051,7 @@ class QuizQuestion(BaseModel):
         extra='forbid',
     )
     id: str
-    kind: Kind2
+    kind: Kind3
     label: str
     options: list[str] | None = None
     correct: str | list[str] | bool
@@ -1426,6 +1454,7 @@ class Block(
         | SpreadsheetBlock
         | BibliographyBlock
         | SpacerBlock
+        | FigureIndexBlock
         ,
         Field(discriminator='type'),
     ]
@@ -1466,6 +1495,7 @@ class Block(
         | SpreadsheetBlock
         | BibliographyBlock
         | SpacerBlock
+        | FigureIndexBlock
         ,
         Field(discriminator='type'),
     ]

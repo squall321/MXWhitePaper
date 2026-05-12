@@ -47,6 +47,7 @@ export type Block =
   | SpreadsheetBlock
   | BibliographyBlock
   | SpacerBlock
+  | FigureIndexBlock
 /**
  * FK to images.id — accepts ULID (legacy seed data) or UUID (uploaded images)
  */
@@ -306,6 +307,10 @@ export interface MathBlock {
 export interface TableBlock {
   type: 'table'
   id: Ulid
+  /**
+   * Optional caption rendered below the table; participates in auto-numbering ('표 N: ...').
+   */
+  caption?: string
   headers: string[]
   rows: string[][]
   /**
@@ -864,6 +869,25 @@ export interface SpacerBlock {
   type: 'spacer'
   id: Ulid
   size?: 'sm' | 'md' | 'lg'
+  meta?: BlockMeta
+}
+/**
+ * Auto-generated table of figures (그림/표/차트 목차). The renderer walks the document and lists every captioned image, table (with caption), and chart (with title), each linked to its anchor. `kinds` controls which lists to render.
+ */
+export interface FigureIndexBlock {
+  type: 'figure-index'
+  id: Ulid
+  title?: string
+  /**
+   * Which figure types to include — 'image' (그림), 'table' (표), 'chart' (차트). Order in this array determines section order. Omit for all three.
+   *
+   * @minItems 1
+   * @maxItems 3
+   */
+  kinds?:
+    | ['image' | 'table' | 'chart']
+    | ['image' | 'table' | 'chart', 'image' | 'table' | 'chart']
+    | ['image' | 'table' | 'chart', 'image' | 'table' | 'chart', 'image' | 'table' | 'chart']
   meta?: BlockMeta
 }
 export interface RelatedDoc {

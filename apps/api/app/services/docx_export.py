@@ -121,6 +121,7 @@ def render_docx(
         doc = scrub_for_response(doc, role=requester_role)
     document = Document()
     ctx = _Ctx(document=document, opts=opts, footnotes=_collect_footnotes(doc), requester_role=requester_role)
+    ctx.figure_index = _precompute_figure_index(doc)
 
     _render_title(document, doc)
     for section in doc.get("sections") or []:
@@ -139,8 +140,15 @@ class _Ctx:
     document: Any
     opts: DocxOptions
     footnotes: dict[str, str]  # marker -> body text
-    figure_counter: int = 0     # incremented each time an image with caption is rendered
+    figure_counter: int = 0     # image with caption
+    table_counter: int = 0      # table with caption
+    chart_counter: int = 0      # chart with title
     requester_role: str | None = None
+    # Pre-collected entries for figure-index blocks. Filled by
+    # _precompute_figure_index() before block dispatch begins so the
+    # index block can render its list even if it appears before the
+    # first figure in document order.
+    figure_index: list[dict[str, Any]] = None  # type: ignore[assignment]
 
 
 # ── Title / metadata ────────────────────────────────────────────────
@@ -388,16 +396,24 @@ def _b_table(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
         _emit_table_cells(document, block, cells, ctx)
     else:
         _emit_table_flat(document, block, ctx)
-    # Caption (if meta.note set) — Word's "Caption" style follows the table.
-    meta = block.get("meta") or {}
-    caption = _str(meta.get("note")) if isinstance(meta, dict) else ""
-    if caption and caption != "page-break-before":
+    # Caption — prefer explicit block.caption; fall back to meta.note.
+    caption = _str(block.get("caption"))
+    if not caption:
+        meta = block.get("meta") or {}
+        if isinstance(meta, dict):
+            note = _str(meta.get("note"))
+            if note and note != "page-break-before":
+                caption = note
+    if caption:
         try:
             cap_p = document.add_paragraph(style="Caption")
         except KeyError:
             cap_p = document.add_paragraph()
-        run = cap_p.add_run(caption)
-        run.italic = True
+        ctx.table_counter += 1
+        prefix = cap_p.add_run(f"표 {ctx.table_counter}: ")
+        prefix.bold = True
+        rest = cap_p.add_run(caption)
+        rest.italic = True
 
 
 def _emit_table_flat(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
@@ -525,14 +541,18 @@ def _b_kpi_cards(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
             run.font.size = Pt(9)
 
 
-def _b_chart(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
+def _b_chart(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     title = _str(block.get("title"))
     chart_type = _str(block.get("chartType") or block.get("chart_type"))
     data = block.get("data") or {}
     labels = data.get("labels") or []
     series = data.get("series") or []
     p = document.add_paragraph()
-    run = p.add_run(f"[차트] {title or chart_type or 'chart'}".strip())
+    if title:
+        ctx.chart_counter += 1
+        prefix = p.add_run(f"차트 {ctx.chart_counter}: ")
+        prefix.bold = True
+    run = p.add_run(f"[{chart_type or 'chart'}] {title}".strip() if title else f"[차트] {chart_type or 'chart'}")
     run.bold = True
     if not (labels or series):
         return
@@ -946,6 +966,74 @@ def _b_image_annotation(document: Any, block: dict[str, Any], ctx: _Ctx) -> None
             item.add_run(f"  ({coords})").italic = True
 
 
+def _precompute_figure_index(doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """Walk the document tree in render order and collect every captioned
+    image / table / chart with the number it will receive."""
+    out: list[dict[str, Any]] = []
+    counters = {"image": 0, "table": 0, "chart": 0}
+
+    def walk_blocks(blocks: list[dict[str, Any]]) -> None:
+        for b in blocks or []:
+            t = b.get("type")
+            if t == "image" and _str(b.get("caption")):
+                counters["image"] += 1
+                out.append({"kind": "image", "n": counters["image"],
+                            "caption": _str(b.get("caption"))})
+            elif t == "table":
+                cap = _str(b.get("caption"))
+                if not cap:
+                    meta = b.get("meta") or {}
+                    if isinstance(meta, dict):
+                        note = _str(meta.get("note"))
+                        if note and note != "page-break-before":
+                            cap = note
+                if cap:
+                    counters["table"] += 1
+                    out.append({"kind": "table", "n": counters["table"], "caption": cap})
+            elif t == "chart" and _str(b.get("title")):
+                counters["chart"] += 1
+                out.append({"kind": "chart", "n": counters["chart"],
+                            "caption": _str(b.get("title"))})
+            # Recurse into nested blocks (columns / tabs / accordion).
+            for nested_key in ("columns", "tabs", "items"):
+                inner = b.get(nested_key)
+                if isinstance(inner, list):
+                    for entry in inner:
+                        if isinstance(entry, dict):
+                            walk_blocks(entry.get("blocks") or [])
+                        elif isinstance(entry, list):
+                            walk_blocks(entry)
+
+    def walk_sections(sections: list[dict[str, Any]]) -> None:
+        for s in sections or []:
+            walk_blocks(s.get("blocks") or [])
+            walk_sections(s.get("subsections") or [])
+
+    walk_sections(doc.get("sections") or [])
+    return out
+
+
+def _b_figure_index(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    title = _str(block.get("title")) or "그림 목차"
+    kinds = block.get("kinds") or ["image", "table", "chart"]
+    labels = {"image": "그림", "table": "표", "chart": "차트"}
+
+    p = document.add_paragraph()
+    p.add_run(title).bold = True
+    if not ctx.figure_index:
+        document.add_paragraph("(캡션이 달린 그림 / 표 / 차트가 없습니다)").italic = True
+        return
+    for k in kinds:
+        entries = [e for e in ctx.figure_index if e["kind"] == k]
+        if not entries:
+            continue
+        sp = document.add_paragraph()
+        sp.add_run(f"— {labels[k]} —").bold = True
+        for e in entries:
+            li = document.add_paragraph(style="List Number")
+            li.add_run(f"{labels[k]} {e['n']}: {e['caption']}")
+
+
 def _b_spacer(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     """Spacer — emit empty paragraphs to mimic the FE gap.
     sm=1 empty paragraph, md=2, lg=4."""
@@ -1038,6 +1126,8 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "spreadsheet": _b_spreadsheet,
     # ── newly added (Round 7) ──
     "spacer": _b_spacer,
+    # ── newly added (Round 8) ──
+    "figure-index": _b_figure_index,
 }
 
 

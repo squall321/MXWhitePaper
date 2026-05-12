@@ -260,11 +260,17 @@ a.wiki-missing { color: var(--smsg-link-missing); }
    so navigating across documents starts fresh. */
 .wp-reader-article,
 article {
-  counter-reset: wp-figure;
+  counter-reset: wp-figure wp-table wp-chart;
 }
 
 figure[data-block-type="image"][data-has-caption="true"] {
   counter-increment: wp-figure;
+}
+figure[data-block-type="table"][data-has-caption="true"] {
+  counter-increment: wp-table;
+}
+figure[data-block-type="chart"][data-has-caption="true"] {
+  counter-increment: wp-chart;
 }
 
 figure[data-block-type="image"][data-has-caption="true"] .figure-caption-text::before {
@@ -272,9 +278,19 @@ figure[data-block-type="image"][data-has-caption="true"] .figure-caption-text::b
   font-weight: 600;
   color: var(--smsg-blue-700, #1e3a8a);
 }
+figure[data-block-type="table"][data-has-caption="true"] .figure-caption-text::before {
+  content: "표 " counter(wp-table) ": ";
+  font-weight: 600;
+  color: var(--smsg-blue-700, #1e3a8a);
+}
+figure[data-block-type="chart"][data-has-caption="true"] .figure-caption-text::before {
+  content: "차트 " counter(wp-chart) ": ";
+  font-weight: 600;
+  color: var(--smsg-blue-700, #1e3a8a);
+}
 
 @media print {
-  figure[data-block-type="image"][data-has-caption="true"] {
-    counter-increment: wp-figure;
-  }
+  figure[data-block-type="image"][data-has-caption="true"]  { counter-increment: wp-figure; }
+  figure[data-block-type="table"][data-has-caption="true"]  { counter-increment: wp-table; }
+  figure[data-block-type="chart"][data-has-caption="true"]  { counter-increment: wp-chart; }
 }

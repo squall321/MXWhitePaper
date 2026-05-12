@@ -217,7 +217,8 @@
         { "$ref": "#/$defs/ImageAnnotationBlock" },
         { "$ref": "#/$defs/SpreadsheetBlock" },
         { "$ref": "#/$defs/BibliographyBlock" },
-        { "$ref": "#/$defs/SpacerBlock" }
+        { "$ref": "#/$defs/SpacerBlock" },
+        { "$ref": "#/$defs/FigureIndexBlock" }
       ]
     },
 
@@ -318,6 +319,7 @@
       "properties": {
         "type":    { "const": "table" },
         "id":      { "$ref": "#/$defs/Ulid" },
+        "caption": { "type": "string", "maxLength": 500, "description": "Optional caption rendered below the table; participates in auto-numbering ('표 N: ...')." },
         "headers": { "type": "array", "items": { "type": "string" } },
         "rows":    { "type": "array", "items": { "type": "array", "items": { "type": "string" } } },
         "cells": {
@@ -741,6 +743,27 @@
           }
         },
         "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "FigureIndexBlock": {
+      "type": "object",
+      "required": ["type", "id"],
+      "additionalProperties": false,
+      "description": "Auto-generated table of figures (그림/표/차트 목차). The renderer walks the document and lists every captioned image, table (with caption), and chart (with title), each linked to its anchor. `kinds` controls which lists to render.",
+      "properties": {
+        "type":  { "const": "figure-index" },
+        "id":    { "$ref": "#/$defs/Ulid" },
+        "title": { "type": "string", "default": "그림 목차" },
+        "kinds": {
+          "type": "array",
+          "description": "Which figure types to include — 'image' (그림), 'table' (표), 'chart' (차트). Order in this array determines section order. Omit for all three.",
+          "items": { "enum": ["image", "table", "chart"] },
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "meta":  { "$ref": "#/$defs/BlockMeta" }
       }
     },
 

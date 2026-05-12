@@ -741,11 +741,23 @@ def _b_image(slide: Any, frame: Any, block: dict[str, Any], ctx: _Ctx, depth: in
     top = _next_shape_top(slide)
     width = Inches(8)
     try:
-        slide.shapes.add_picture(io.BytesIO(blob), left, top, width=width)
+        pic = slide.shapes.add_picture(io.BytesIO(blob), left, top, width=width)
     except Exception:
         return _emit_link_block(
             frame, "🖼 ", caption or image_id or "image", f"image:{image_id}", depth
         )
+
+    # Hyperlink — make the image clickable to navigate to block.link
+    # when the slide is opened in PowerPoint / Keynote.
+    link = _str(block.get("link"))
+    if link:
+        target = link if link.startswith(("http://", "https://")) else f"/docs/{link.lstrip('/')}"
+        try:
+            pic.click_action.hyperlink.address = target
+        except Exception:
+            # python-pptx older builds don't support this; non-fatal.
+            pass
+
     if caption:
         p = _next_paragraph(frame)
         p.level = depth
