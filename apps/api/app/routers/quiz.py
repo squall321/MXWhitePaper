@@ -27,6 +27,53 @@ from app.repos import document_repo
 router = APIRouter(prefix="/api/v1/quiz", tags=["quiz"])
 
 
+@router.get("/definitions")
+async def list_quiz_definitions(
+    s: AsyncSession = Depends(get_db),
+) -> dict:
+    rows = (await s.execute(text(
+        "SELECT id, title, description, passing_score, max_attempts "
+        "FROM quiz_definitions ORDER BY id"
+    ))).mappings().all()
+    return envelope(
+        data=[dict(r) for r in rows],
+        meta={"total": len(rows), "source": "quiz_definitions"},
+    )
+
+
+@router.get("/definitions/{quiz_id:path}")
+async def get_quiz_definition(
+    quiz_id: str,
+    s: AsyncSession = Depends(get_db),
+) -> dict:
+    row = (await s.execute(
+        text("SELECT id, title, description, passing_score, max_attempts "
+             "FROM quiz_definitions WHERE id = :id"),
+        {"id": quiz_id},
+    )).mappings().first()
+    if not row:
+        raise NotFound(f"quiz definition not found: {quiz_id}")
+    qs = (await s.execute(
+        text("SELECT question_id, kind, label, options, correct, explanation, points "
+             "FROM quiz_questions WHERE quiz_id = :id ORDER BY sort_order"),
+        {"id": quiz_id},
+    )).mappings().all()
+    return envelope(
+        data={
+            **dict(row),
+            "questions": [
+                {
+                    "id": q["question_id"], "kind": q["kind"], "label": q["label"],
+                    "options": q["options"], "correct": q["correct"],
+                    "explanation": q["explanation"], "points": q["points"],
+                }
+                for q in qs
+            ],
+        },
+        meta={"source": "quiz_definitions"},
+    )
+
+
 class QuizValidationError(APIError):
     code = "VALIDATION_ERROR"
     http_status = 422

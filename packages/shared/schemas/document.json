@@ -57,6 +57,11 @@
       "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
       "description": "Crockford base32 ULID"
     },
+    "ImageRef": {
+      "type": "string",
+      "pattern": "^(?:[0-9A-HJKMNP-TV-Z]{26}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+      "description": "FK to images.id — accepts ULID (legacy seed data) or UUID (uploaded images)"
+    },
     "Slug": {
       "type": "string",
       "pattern": "^[a-z0-9\\uAC00-\\uD7A3][a-z0-9\\uAC00-\\uD7A3-]{0,99}$",
@@ -574,7 +579,7 @@
       "properties": {
         "type":    { "const": "image" },
         "id":      { "$ref": "#/$defs/Ulid" },
-        "imageId": { "$ref": "#/$defs/Ulid", "description": "FK to images table" },
+        "imageId": { "$ref": "#/$defs/ImageRef", "description": "FK to images.id (ULID or UUID)" },
         "caption": { "type": "string", "maxLength": 500 },
         "alt":     { "type": "string", "maxLength": 200 },
         "width":   { "enum": ["sm", "md", "lg", "full"], "default": "md" },
@@ -598,7 +603,7 @@
             "required": ["imageId"],
             "additionalProperties": false,
             "properties": {
-              "imageId": { "$ref": "#/$defs/Ulid" },
+              "imageId": { "$ref": "#/$defs/ImageRef" },
               "caption": { "type": "string", "maxLength": 500 },
               "alt":     { "type": "string", "maxLength": 200 }
             }

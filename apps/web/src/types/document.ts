@@ -46,6 +46,10 @@ export type Block =
   | ImageAnnotationBlock
   | SpreadsheetBlock
   | BibliographyBlock
+/**
+ * FK to images.id — accepts ULID (legacy seed data) or UUID (uploaded images)
+ */
+export type ImageRef = string
 export type WhiteboardElement =
   | {
       kind: 'stroke'
@@ -523,7 +527,7 @@ export interface ImageBlock {
   type: 'image'
   id: Ulid
   /**
-   * Crockford base32 ULID
+   * FK to images.id (ULID or UUID)
    */
   imageId: string
   caption?: string
@@ -544,12 +548,12 @@ export interface GalleryBlock {
    */
   items: [
     {
-      imageId: Ulid
+      imageId: ImageRef
       caption?: string
       alt?: string
     },
     ...{
-      imageId: Ulid
+      imageId: ImageRef
       caption?: string
       alt?: string
     }[]

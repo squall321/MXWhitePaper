@@ -171,6 +171,13 @@ async def main() -> None:
     except Exception as e:  # noqa: BLE001
         print(f"⚠ launch facts seed skipped: {e}")
 
+    # Form / quiz canonical definitions lifted from sample 11 / 13.
+    try:
+        from app.scripts import seed_form_quiz_defs
+        await seed_form_quiz_defs._amain()
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠ form/quiz defs seed skipped: {e}")
+
     print("✓ seed complete")
 
 

@@ -16,6 +16,16 @@ class Ulid(RootModel[str]):
     """
 
 
+class ImageRef(RootModel[str]):
+    root: str = Field(
+        ...,
+        pattern='^(?:[0-9A-HJKMNP-TV-Z]{26}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$',
+    )
+    """
+    FK to images.id — accepts ULID (legacy seed data) or UUID (uploaded images)
+    """
+
+
 class Slug(RootModel[str]):
     root: str = Field(
         ..., pattern='^[a-z0-9\\uAC00-\\uD7A3][a-z0-9\\uAC00-\\uD7A3-]{0,99}$'
@@ -691,9 +701,9 @@ class ImageBlock(BaseModel):
     )
     type: Literal['image']
     id: Ulid
-    image_id: Ulid = Field(..., alias='imageId')
+    image_id: ImageRef = Field(..., alias='imageId')
     """
-    FK to images table
+    FK to images.id (ULID or UUID)
     """
     caption: str | None = Field(None, max_length=500)
     alt: str | None = Field(None, max_length=200)
@@ -714,7 +724,7 @@ class Item1(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    image_id: Ulid = Field(..., alias='imageId')
+    image_id: ImageRef = Field(..., alias='imageId')
     caption: str | None = Field(None, max_length=500)
     alt: str | None = Field(None, max_length=200)
 

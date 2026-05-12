@@ -10509,6 +10509,75 @@
         ]
       }
     },
+    "/api/v1/forms/definitions": {
+      "get": {
+        "description": "Catalog of canonical form definitions (seeded from sample blocks\ninto the form_definitions table).",
+        "operationId": "list_form_definitions_api_v1_forms_definitions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Form Definitions Api V1 Forms Definitions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Form Definitions",
+        "tags": [
+          "forms"
+        ]
+      }
+    },
+    "/api/v1/forms/definitions/{form_id}": {
+      "get": {
+        "description": "Single form definition + its fields.",
+        "operationId": "get_form_definition_api_v1_forms_definitions__form_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "form_id",
+            "required": true,
+            "schema": {
+              "title": "Form Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Form Definition Api V1 Forms Definitions  Form Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Form Definition",
+        "tags": [
+          "forms"
+        ]
+      }
+    },
     "/api/v1/forms/{slug}/{block_id}/aggregate": {
       "get": {
         "operationId": "aggregate_api_v1_forms__slug___block_id__aggregate_get",
@@ -12912,6 +12981,73 @@
         "summary": "presence SSE stream (reader+)",
         "tags": [
           "presence"
+        ]
+      }
+    },
+    "/api/v1/quiz/definitions": {
+      "get": {
+        "operationId": "list_quiz_definitions_api_v1_quiz_definitions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Quiz Definitions Api V1 Quiz Definitions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Quiz Definitions",
+        "tags": [
+          "quiz"
+        ]
+      }
+    },
+    "/api/v1/quiz/definitions/{quiz_id}": {
+      "get": {
+        "operationId": "get_quiz_definition_api_v1_quiz_definitions__quiz_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "quiz_id",
+            "required": true,
+            "schema": {
+              "title": "Quiz Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Quiz Definition Api V1 Quiz Definitions  Quiz Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Quiz Definition",
+        "tags": [
+          "quiz"
         ]
       }
     },

@@ -27,6 +27,61 @@ from app.repos import document_repo
 
 router = APIRouter(prefix="/api/v1/forms", tags=["forms"])
 
+
+@router.get("/definitions")
+async def list_form_definitions(
+    s: AsyncSession = Depends(get_db),
+) -> dict:
+    """Catalog of canonical form definitions (seeded from sample blocks
+    into the form_definitions table)."""
+    rows = (await s.execute(text(
+        "SELECT id, title, description, submit_label, thanks_text, max_attempts "
+        "FROM form_definitions ORDER BY id"
+    ))).mappings().all()
+    out = []
+    for r in rows:
+        out.append({
+            "id": r["id"], "title": r["title"], "description": r["description"],
+            "submit_label": r["submit_label"], "thanks_text": r["thanks_text"],
+            "max_attempts": r["max_attempts"],
+        })
+    return envelope(data=out, meta={"total": len(out), "source": "form_definitions"})
+
+
+@router.get("/definitions/{form_id:path}")
+async def get_form_definition(
+    form_id: str,
+    s: AsyncSession = Depends(get_db),
+) -> dict:
+    """Single form definition + its fields."""
+    import json as _json
+    row = (await s.execute(
+        text("SELECT id, title, description, submit_label, thanks_text, max_attempts "
+             "FROM form_definitions WHERE id = :id"),
+        {"id": form_id},
+    )).mappings().first()
+    if not row:
+        raise NotFound(f"form definition not found: {form_id}")
+    fields = (await s.execute(
+        text("SELECT question_id, kind, label, required, placeholder, options "
+             "FROM form_fields WHERE form_id = :id ORDER BY sort_order"),
+        {"id": form_id},
+    )).mappings().all()
+    return envelope(
+        data={
+            **{k: row[k] for k in row.keys()},
+            "questions": [
+                {
+                    "id": f["question_id"], "kind": f["kind"], "label": f["label"],
+                    "required": bool(f["required"]), "placeholder": f["placeholder"],
+                    "options": f["options"],  # asyncpg returns parsed JSON for JSONB
+                }
+                for f in fields
+            ],
+        },
+        meta={"source": "form_definitions"},
+    )
+
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
