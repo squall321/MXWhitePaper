@@ -134,6 +134,7 @@ MXWP_PROXY="${HTTPS_PROXY:-${HTTP_PROXY:-${MXWP_FALLBACK_PROXY:-http://168.219.6
 # in. `COREPACK_ENABLE_STRICT=0` covers older corepack versions.
 start_instance "$INST_WEB" "$WEB_SIF" \
   --bind "$REPO_ROOT:/workspace" \
+  --bind /tmp:/tmp \
   --env "VITE_API_URL=/api/v1" \
   --env "HTTP_PROXY=${MXWP_PROXY}" \
   --env "HTTPS_PROXY=${MXWP_PROXY}" \

@@ -19,6 +19,7 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
+    allowedHosts: true,
     proxy: {
       // Apptainer host network: BE listens on the host's loopback port 8800.
       // We hard-code the target — earlier versions allowed
