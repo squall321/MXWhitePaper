@@ -168,7 +168,8 @@ start_instance "$INST_WEB" "$WEB_SIF" \
   --env "NO_PROXY=localhost,127.0.0.1,::1" \
   "${COREPACK_NET_ARGS[@]}" \
   --env "COREPACK_ENABLE_STRICT=0" \
-  --env "COREPACK_ENABLE_DOWNLOAD_PROMPT=0"
+  --env "COREPACK_ENABLE_DOWNLOAD_PROMPT=0" \
+  --env "NODE_TLS_REJECT_UNAUTHORIZED=${MXWP_NODE_TLS_VERIFY:-0}"
 
 echo
 echo "✓ stack started"
