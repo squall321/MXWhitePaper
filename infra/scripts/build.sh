@@ -16,7 +16,22 @@ build_or_pull() {
       "$APPTAINER" build --force "$sif" "$def"
     else
       echo "→ pull  $(basename "$sif") from $src"
-      "$APPTAINER" pull  --force "$sif" "$src"
+      if ! "$APPTAINER" pull --force "$sif" "$src"; then
+        echo
+        echo "✗ pull failed for $(basename "$sif")"
+        echo "  Probable cause: corporate firewall blocking docker.io / registry-1.docker.io."
+        echo
+        echo "  Options:"
+        echo "    a) Transfer pre-built .sif files from another machine:"
+        echo "         scp <other-host>:.../infra/apptainer/*.sif $APPT_DIR/"
+        echo "         then re-run this script (existing files are skipped)."
+        echo "    b) Run with proxy env preserved:"
+        echo "         sudo -E HTTPS_PROXY=http://<proxy>:<port> $0"
+        echo "         (apptainer reads HTTPS_PROXY for OCI pulls, but sudo strips env by default)"
+        echo "    c) Use a corporate Docker Hub mirror — replace docker:// URLs above"
+        echo "       with the mirror, e.g. docker://nexus.corp/dockerhub-proxy/<image>:<tag>"
+        exit 1
+      fi
     fi
   else
     echo "✓ skip  $(basename "$sif") (exists)"
