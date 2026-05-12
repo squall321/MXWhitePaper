@@ -13,6 +13,10 @@ from app.core.db import session_scope
 
 PROGRAM = "galaxy-flip-2026"
 
+# Multiple launch programs. Each gets the same TASKS / TIMELINE / FORECAST
+# shape but different values — demonstrates `program_slug` partitioning.
+PROGRAMS = ["galaxy-flip-2026", "galaxy-watch-2026", "galaxy-buds-2026"]
+
 
 TASKS = [
     # (task, start, end, progress%, owner, sort)
@@ -55,49 +59,53 @@ FORECAST = [
 ]
 
 
+async def _seed_program(s, program: str, scale: float) -> None:
+    """Insert TASKS / TIMELINE / FORECAST for one program, multiplying
+    numeric values by `scale` so each program has distinct numbers."""
+    await s.execute(text("DELETE FROM launch_tasks WHERE program_slug = :p"), {"p": program})
+    for task, sd, ed, pct, owner, sort in TASKS:
+        await s.execute(
+            text("""
+                INSERT INTO launch_tasks
+                  (program_slug, task, start_date, end_date, progress_pct, owner, sort_order)
+                VALUES (:p, :task, :sd, :ed, :pct, :owner, :sort)
+            """),
+            {"p": program, "task": task, "sd": sd, "ed": ed,
+             "pct": min(100.0, pct * scale), "owner": owner, "sort": sort},
+        )
+
+    await s.execute(text("DELETE FROM launch_timeline WHERE program_slug = :p"), {"p": program})
+    for week, activity, owner, deliverable, sort in TIMELINE:
+        await s.execute(
+            text("""
+                INSERT INTO launch_timeline
+                  (program_slug, week_label, activity, owner, deliverable, sort_order)
+                VALUES (:p, :w, :a, :o, :d, :sort)
+            """),
+            {"p": program, "w": week, "a": activity,
+             "o": owner, "d": deliverable, "sort": sort},
+        )
+
+    await s.execute(text("DELETE FROM demand_forecast WHERE program_slug = :p"), {"p": program})
+    for q, scen, units in FORECAST:
+        await s.execute(
+            text("""
+                INSERT INTO demand_forecast (program_slug, quarter, scenario, units)
+                VALUES (:p, :q, :s, :u)
+            """),
+            {"p": program, "q": q, "s": scen, "u": round(units * scale, 1)},
+        )
+
+
 async def _amain() -> int:
+    # Each program a different scale so totals differ across products.
+    scales = {"galaxy-flip-2026": 1.0, "galaxy-watch-2026": 0.6, "galaxy-buds-2026": 1.4}
     async with session_scope() as s:
-        # tasks
-        await s.execute(text("DELETE FROM launch_tasks WHERE program_slug = :p"),
-                        {"p": PROGRAM})
-        for task, sd, ed, pct, owner, sort in TASKS:
-            await s.execute(
-                text("""
-                    INSERT INTO launch_tasks
-                      (program_slug, task, start_date, end_date, progress_pct, owner, sort_order)
-                    VALUES (:p, :task, :sd, :ed, :pct, :owner, :sort)
-                """),
-                {"p": PROGRAM, "task": task, "sd": sd, "ed": ed,
-                 "pct": pct, "owner": owner, "sort": sort},
-            )
-
-        # timeline
-        await s.execute(text("DELETE FROM launch_timeline WHERE program_slug = :p"),
-                        {"p": PROGRAM})
-        for week, activity, owner, deliverable, sort in TIMELINE:
-            await s.execute(
-                text("""
-                    INSERT INTO launch_timeline
-                      (program_slug, week_label, activity, owner, deliverable, sort_order)
-                    VALUES (:p, :w, :a, :o, :d, :sort)
-                """),
-                {"p": PROGRAM, "w": week, "a": activity,
-                 "o": owner, "d": deliverable, "sort": sort},
-            )
-
-        # forecast
-        await s.execute(text("DELETE FROM demand_forecast WHERE program_slug = :p"),
-                        {"p": PROGRAM})
-        for q, scen, units in FORECAST:
-            await s.execute(
-                text("""
-                    INSERT INTO demand_forecast (program_slug, quarter, scenario, units)
-                    VALUES (:p, :q, :s, :u)
-                """),
-                {"p": PROGRAM, "q": q, "s": scen, "u": units},
-            )
+        for prog in PROGRAMS:
+            await _seed_program(s, prog, scales.get(prog, 1.0))
         await s.commit()
-    print(f"✓ launch facts seeded: {len(TASKS)} tasks, {len(TIMELINE)} timeline, {len(FORECAST)} forecast rows")
+    print(f"✓ launch facts seeded: {len(PROGRAMS)} programs × "
+          f"({len(TASKS)} tasks + {len(TIMELINE)} timeline + {len(FORECAST)} forecast)")
     return 0
 
 
