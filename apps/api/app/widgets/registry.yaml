@@ -1,23 +1,76 @@
-# MX White Paper — Widget Catalog (Sprint 6 stub)
+# MX White Paper — Widget Catalog
 # DocumentJSON v1.0 의 data-source block 이 참조하는 widget 정의.
+# 모든 위젯은 alembic 0040 fact tables (sales_daily / region_metrics /
+# kpi_snapshots) 에서 실시간 SQL 로 데이터를 조회한다. 하드코딩 mock 없음.
+#
+# 새 위젯 추가:
+#   1) 이 파일에 entry 추가
+#   2) app/routers/widgets.py 에 handler 라우트 추가 (또는 generic kpi/{key} 사용)
+#   3) seed_widget_facts.py 에 데이터 추가 (필요 시)
 widgets:
+  # ── KPI snapshots ────────────────────────────────────────────────
   - id: kpi.finance-daily
     name: 재무 일일 KPI
-    endpoint: /api/v1/widgets/kpi/finance-daily
+    endpoint: /api/v1/widgets/kpi-finance-daily-summary
     render: kpi-cards
+    refreshInterval: 300
+    description: 재무팀 일일 매출/지출 — kpi_snapshots 의 finance.daily.* 키 2개.
+
+  - id: kpi.month-end-progress
+    name: 월결산 진행률 KPI
+    endpoint: /api/v1/widgets/kpi/finance.month-end-progress.percent
+    render: kpi-cards
+    refreshInterval: 600
+    description: kpi_snapshots 의 finance.month-end-progress.percent 단일 카드.
+
+  - id: kpi.q1-2026-total
+    name: Q1 2026 매출 누적
+    endpoint: /api/v1/widgets/kpi/sales.q1-2026.total
+    render: kpi-cards
+    refreshInterval: 600
+    description: kpi_snapshots 의 sales.q1-2026.total 단일 카드.
+
+  # ── Chart widgets ────────────────────────────────────────────────
+  - id: chart.sales-trend
+    name: 매출 트렌드 (최근 N일)
+    endpoint: /api/v1/widgets/chart/sales-trend
+    render: chart
     refreshInterval: 300
     params:
       - name: team
         kind: string
         default: finance
-    description: 재무팀의 일일 매출/지출 요약 (mock).
-  - id: kpi.month-end-progress
-    name: 월결산 진행률
-    endpoint: /api/v1/widgets/kpi/month-end-progress
+      - name: days
+        kind: integer
+        default: 30
+    description: sales_daily 의 revenue/expense 일별 시계열.
+
+  - id: chart.month-end-progress
+    name: 월결산 5단계 진행률
+    endpoint: /api/v1/widgets/chart/month-end-progress
     render: chart
     refreshInterval: 600
+    description: kpi_snapshots 기준 5단계 (Cutoff / Reconcile / Adjustments / Review / Publish) 진행률.
+
+  # ── Table widgets ────────────────────────────────────────────────
+  - id: table.region-breakdown
+    name: 지역별 매출 분포
+    endpoint: /api/v1/widgets/table/region-breakdown
+    render: table
+    refreshInterval: 1800
     params:
-      - name: team
+      - name: period
         kind: string
-        default: finance
-    description: 월 결산 단계별 진행률 (mock).
+        default: "2026-Q1"
+    description: region_metrics 의 분기별 지역 매출 / QoQ / 비중.
+
+  - id: table.sales-summary
+    name: 팀별 매출 합계 (최근 N일)
+    endpoint: /api/v1/widgets/table/sales-summary
+    render: table
+    refreshInterval: 1800
+    params:
+      - name: days
+        kind: integer
+        default: 30
+    description: sales_daily 를 팀별로 SUM aggregate.

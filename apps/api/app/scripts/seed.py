@@ -146,6 +146,16 @@ async def main() -> None:
         print(f"✓ admin user: {admin}")
         n = await _load_samples(s, admin, org["part"])
         print(f"✓ loaded {n} sample documents")
+
+    # Fact tables that back the widget API (alembic 0040). Skipped on
+    # any error so a missing migration doesn't block the rest of seed.
+    try:
+        from app.scripts import seed_widget_facts
+        await seed_widget_facts._amain()
+        print("✓ widget fact tables seeded")
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠ widget fact seed skipped: {e}")
+
     print("✓ seed complete")
 
 

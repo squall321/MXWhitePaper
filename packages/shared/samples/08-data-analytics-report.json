@@ -35,8 +35,8 @@
         {
           "type": "data-source",
           "id": "01K08D5R0000000000000B0002",
-          "endpoint": "/api/v1/widgets/kpi/finance-daily",
-          "params": { "metric": "revenue", "period": "Q1-2026" },
+          "endpoint": "/api/v1/widgets/kpi-finance-daily-summary",
+          "params": {},
           "render": "kpi-cards",
           "refreshInterval": 120
         },
@@ -44,7 +44,7 @@
           "type": "data-source",
           "id": "01K08D5R0000000000000B0003",
           "endpoint": "/api/v1/widgets/chart/sales-trend",
-          "params": { "granularity": "weekly" },
+          "params": { "team": "finance", "days": 30 },
           "render": "chart",
           "refreshInterval": 300
         },
@@ -52,6 +52,7 @@
           "type": "data-source",
           "id": "01K08D5R0000000000000B0004",
           "endpoint": "/api/v1/widgets/table/region-breakdown",
+          "params": { "period": "2026-Q1" },
           "render": "table"
         },
         {

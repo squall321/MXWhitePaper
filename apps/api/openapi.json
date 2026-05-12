@@ -15505,9 +15505,33 @@
         ]
       }
     },
-    "/api/v1/widgets/kpi/finance-daily": {
+    "/api/v1/widgets/chart/month-end-progress": {
       "get": {
-        "operationId": "get_kpi_finance_daily_api_v1_widgets_kpi_finance_daily_get",
+        "description": "5-stage month-end closing progress derived from the KPI snapshot.",
+        "operationId": "chart_month_end_progress_api_v1_widgets_chart_month_end_progress_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Chart Month End Progress Api V1 Widgets Chart Month End Progress Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Chart Month End Progress",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/chart/sales-trend": {
+      "get": {
+        "operationId": "chart_sales_trend_api_v1_widgets_chart_sales_trend_get",
         "parameters": [
           {
             "in": "query",
@@ -15518,6 +15542,18 @@
               "title": "Team",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 120,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -15526,7 +15562,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Get Kpi Finance Daily Api V1 Widgets Kpi Finance Daily Get",
+                  "title": "Response Chart Sales Trend Api V1 Widgets Chart Sales Trend Get",
                   "type": "object"
                 }
               }
@@ -15544,7 +15580,75 @@
             "description": "Validation Error"
           }
         },
+        "summary": "Chart Sales Trend",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/kpi-finance-daily-summary": {
+      "get": {
+        "operationId": "get_kpi_finance_daily_api_v1_widgets_kpi_finance_daily_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Kpi Finance Daily Api V1 Widgets Kpi Finance Daily Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
         "summary": "Get Kpi Finance Daily",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/kpi/{key}": {
+      "get": {
+        "description": "Returns the most recent snapshot for `key` plus its 7-day trend.\n\n`key` examples:\n  - finance.daily.revenue\n  - finance.month-end-progress.percent\n  - sales.q1-2026.total",
+        "operationId": "get_kpi_api_v1_widgets_kpi__key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Kpi Api V1 Widgets Kpi  Key  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Kpi",
         "tags": [
           "widgets"
         ]
@@ -15568,6 +15672,152 @@
           }
         },
         "summary": "Get Registry",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/table/region-breakdown": {
+      "get": {
+        "operationId": "table_region_breakdown_api_v1_widgets_table_region_breakdown_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "2026-Q1",
+              "title": "Period",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Table Region Breakdown Api V1 Widgets Table Region Breakdown Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Table Region Breakdown",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/table/sales-summary": {
+      "get": {
+        "description": "Per-team aggregate over the last N days.",
+        "operationId": "table_sales_summary_api_v1_widgets_table_sales_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 120,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Table Sales Summary Api V1 Widgets Table Sales Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Table Sales Summary",
+        "tags": [
+          "widgets"
+        ]
+      }
+    },
+    "/api/v1/widgets/{kind}/{widget_id}": {
+      "get": {
+        "operationId": "widget_not_implemented_api_v1_widgets__kind___widget_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "widget_id",
+            "required": true,
+            "schema": {
+              "title": "Widget Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Widget Not Implemented Api V1 Widgets  Kind   Widget Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Widget Not Implemented",
         "tags": [
           "widgets"
         ]

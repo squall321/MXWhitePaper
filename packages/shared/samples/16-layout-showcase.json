@@ -1,0 +1,236 @@
+{
+  "schema_version": "1.0",
+  "id": "9DZ0GKNW00G1H51TEQZ4ZKADYM",
+  "slug": "layout-showcase",
+  "title": "레이아웃 쇼케이스 — 6가지 섹션 레이아웃",
+  "metadata": {
+    "division": "MX",
+    "owners": [
+      "u-anyone"
+    ],
+    "tags": [
+      "샘플",
+      "레이아웃",
+      "디자인"
+    ],
+    "confidentiality": "internal"
+  },
+  "sections": [
+    {
+      "id": "WH322EAH5PHBPNK3433KAK15R5",
+      "number": "1",
+      "level": 1,
+      "title": "stack — 기본 세로 적층",
+      "layout": "stack",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "NKZ7TNE6NPRQN0D0MVTP0SKN84",
+          "text": "가장 흔한 layout. 블록이 위에서 아래로 한 줄씩 쌓인다. 별도 layout 지정이 없으면 모든 섹션의 기본값."
+        },
+        {
+          "type": "callout",
+          "id": "EFYAG5A8KD1QSSZPCMCF841S66",
+          "text": "사용 시점: 일반 매뉴얼, 정책 문서, 회의록 등 시간/순서가 중요한 글.",
+          "variant": "info"
+        },
+        {
+          "type": "list",
+          "id": "P6VQFJ1RHBCNXPPM8FBN0RXE81",
+          "style": "bullet",
+          "items": [
+            "선형 흐름이 명확",
+            "긴 글에 적합",
+            "프린트 친화적"
+          ]
+        }
+      ],
+      "subsections": []
+    },
+    {
+      "id": "KEY2TST26GJPPPG7HH13EE6CP5",
+      "number": "2",
+      "level": 1,
+      "title": "two-col — 두 컬럼 교차 배치",
+      "layout": "two-col",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "8N2HNCXJN18J6P3JRAAAKD00R9",
+          "text": "왼쪽 컬럼: 한쪽에 들어갈 본문. 비교 / 대조에 유용하다."
+        },
+        {
+          "type": "paragraph",
+          "id": "9FQ31YA9BDMB6GSYYW0K6ADGCS",
+          "text": "오른쪽 컬럼: 짝을 이루는 다른 본문. 블록 두 개가 한 쌍."
+        },
+        {
+          "type": "callout",
+          "id": "0HJ872CKZ25R6K9A7BZB8BAA7H",
+          "text": "왼쪽: 장점 정리",
+          "variant": "info"
+        },
+        {
+          "type": "callout",
+          "id": "KXRJ4927V2BSZE6WH7W07A5Y8T",
+          "text": "오른쪽: 단점 / 주의사항",
+          "variant": "warn"
+        }
+      ],
+      "subsections": []
+    },
+    {
+      "id": "B39C91Y0Y2TNQ1W1J34G0HSE7G",
+      "number": "3",
+      "level": 1,
+      "title": "image-left — 이미지 + 본문",
+      "layout": "image-left",
+      "blocks": [
+        {
+          "type": "image",
+          "id": "Y0A6T99Q0BS0G522BEVYRVJ6TZ",
+          "alt": "왼쪽 일러스트",
+          "caption": "왼쪽 영역의 이미지",
+          "imageId": "5KPDBNNHP5CZ7EBMYVY92JEVTD"
+        },
+        {
+          "type": "paragraph",
+          "id": "EJBNE7RGKT5A0M40VS58PTD7Q0",
+          "text": "오른쪽 본문 — 인물 소개, 기능 카드, 제품 설명 등 이미지 + 텍스트가 한 단위인 콘텐츠에 적합."
+        },
+        {
+          "type": "list",
+          "id": "G1MAYMJV3EJGRY1WX0GEX183Z5",
+          "style": "bullet",
+          "items": [
+            "이미지가 시각적 anchor",
+            "본문 흐름 유지",
+            "마케팅 자료 친화적"
+          ]
+        }
+      ],
+      "subsections": []
+    },
+    {
+      "id": "KR7FY2R062KN43G80PG4JRFFRD",
+      "number": "4",
+      "level": 1,
+      "title": "image-right — 본문 + 이미지",
+      "layout": "image-right",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "8V2HX9T9D3947TBKB78TTTPK8D",
+          "text": "왼쪽 본문 — image-left 와 좌우 반전. 본문에서 이미지로 시선이 흐름."
+        },
+        {
+          "type": "image",
+          "id": "XPQHJKNDNYDSX7N8FAMW9E13F8",
+          "alt": "오른쪽 다이어그램",
+          "caption": "오른쪽 영역의 이미지",
+          "imageId": "K04B5JJ7TJX61PN4MMZCYE4EQ9"
+        }
+      ],
+      "subsections": []
+    },
+    {
+      "id": "SECD7GZHJ0NJSAGSMPSGZMF76Y",
+      "number": "5",
+      "level": 1,
+      "title": "title-only — 표지 / 장 구분",
+      "layout": "title-only",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "PPY5M0VCE4ZC9K904JXJ1ZWY5Q",
+          "text": "이 본문은 위키 모드에서는 보이지만 프레젠테이션 모드에서는 layout 이 title-only 로 적용돼 제목만 큰 글씨로 표시된다. 슬라이드 표지나 장 구분 슬라이드 용도."
+        }
+      ],
+      "subsections": []
+    },
+    {
+      "id": "61J62Y8N9KC15DM1RMBZFAR6VX",
+      "number": "6",
+      "level": 1,
+      "title": "full-bleed — 풀 너비 이미지 + 오버레이",
+      "layout": "full-bleed",
+      "blocks": [
+        {
+          "type": "image",
+          "id": "9RXP6MMH7SDJ423Z2W76HTZJHB",
+          "alt": "풀 너비 hero 이미지",
+          "caption": "이 이미지가 섹션 전체 너비로 깔리고 본문이 오버레이",
+          "imageId": "7A6FHRE7H8KQY4MDNA76M6HTMR"
+        },
+        {
+          "type": "paragraph",
+          "id": "0K1XWN4QB1XTJQHHXG9101XPR2",
+          "text": "임팩트 슬라이드 / 표지 / 강조 섹션에 사용. 첫 image block 이 배경이 되고 나머지 블록은 그 위에 겹쳐 표시."
+        },
+        {
+          "type": "callout",
+          "id": "C0V1YJT7NC0Q18QXVJ71F6KF7R",
+          "text": "주의 — 이미지 콘트라스트에 따라 본문 가독성이 달라짐. 어두운 이미지엔 밝은 텍스트 필요.",
+          "variant": "info"
+        }
+      ],
+      "subsections": []
+    },
+    {
+      "id": "TH6JGD20GQX0SDWE385WTCSM9Q",
+      "number": "7",
+      "level": 1,
+      "title": "복합 — 한 문서, 여러 레이아웃",
+      "layout": "stack",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "VK6HZGS2WDWKH9879MQRZ107MC",
+          "text": "위 6개 섹션은 각각 다른 layout 을 사용. 같은 데이터를 어떻게 보여줄지가 layout 값에만 의존하므로, 프레젠테이션 모드에서 자동으로 슬라이드처럼 렌더링됨."
+        },
+        {
+          "type": "table",
+          "id": "ZC688MM7TS87BJ84T46S56YY9X",
+          "headers": [
+            "layout",
+            "위키 모드",
+            "프레젠테이션 모드"
+          ],
+          "rows": [
+            [
+              "stack",
+              "세로 적층",
+              "기본 슬라이드"
+            ],
+            [
+              "two-col",
+              "2단 컬럼",
+              "2단 슬라이드"
+            ],
+            [
+              "image-left",
+              "이미지 좌측",
+              "이미지+텍스트 슬라이드"
+            ],
+            [
+              "image-right",
+              "이미지 우측",
+              "텍스트+이미지 슬라이드"
+            ],
+            [
+              "title-only",
+              "제목만 크게",
+              "표지 슬라이드"
+            ],
+            [
+              "full-bleed",
+              "이미지+오버레이",
+              "임팩트 슬라이드"
+            ]
+          ]
+        }
+      ],
+      "subsections": []
+    }
+  ]
+}
