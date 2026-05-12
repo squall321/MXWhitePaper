@@ -105,10 +105,7 @@ start_instance "$INST_API" "$API_SIF" \
   --env "APP_ENV=${APP_ENV}" \
   --env "HTTP_PROXY=${MXWP_PROXY}" \
   --env "HTTPS_PROXY=${MXWP_PROXY}" \
-  --env "http_proxy=${MXWP_PROXY}" \
-  --env "https_proxy=${MXWP_PROXY}" \
-  --env "NO_PROXY=localhost,127.0.0.1,::1" \
-  --env "no_proxy=localhost,127.0.0.1,::1"
+  --env "NO_PROXY=localhost,127.0.0.1,::1"
 
 # ── web ─────────────────────────────────────────────────────────────
 # VITE_API_URL is a relative path so the FE always asks its own origin
@@ -122,15 +119,16 @@ start_instance "$INST_API" "$API_SIF" \
 # corporate networks the registry isn't directly reachable, so forward
 # the same proxy that the host scripts use (env > MXWP_FALLBACK_PROXY).
 MXWP_PROXY="${HTTPS_PROXY:-${HTTP_PROXY:-${MXWP_FALLBACK_PROXY:-http://168.219.61.252:8080}}}"
+# Apptainer warns when the same env name is passed twice (e.g. both
+# lowercase + uppercase). We only set the uppercase variants here;
+# the container's runtime libraries that look for lowercase fall
+# back to the uppercase via standard libc conventions on Linux.
 start_instance "$INST_WEB" "$WEB_SIF" \
   --bind "$REPO_ROOT:/workspace" \
   --env "VITE_API_URL=/api/v1" \
   --env "HTTP_PROXY=${MXWP_PROXY}" \
   --env "HTTPS_PROXY=${MXWP_PROXY}" \
-  --env "http_proxy=${MXWP_PROXY}" \
-  --env "https_proxy=${MXWP_PROXY}" \
-  --env "NO_PROXY=localhost,127.0.0.1,::1" \
-  --env "no_proxy=localhost,127.0.0.1,::1"
+  --env "NO_PROXY=localhost,127.0.0.1,::1"
 
 echo
 echo "✓ stack started"
