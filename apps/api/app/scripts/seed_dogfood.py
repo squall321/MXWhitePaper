@@ -314,35 +314,68 @@ def _math(rng: random.Random) -> dict[str, Any]:
             "display": "block"}
 
 
+_TABLE_ENDPOINTS = [
+    ("/api/v1/widgets/table/region-breakdown", {"period": "2026-Q1"}),
+    ("/api/v1/widgets/table/sales-summary",    {"days": 30}),
+    ("/api/v1/widgets/launch/galaxy-flip-2026/tasks", {}),
+    ("/api/v1/widgets/launch/galaxy-flip-2026/timeline", {}),
+    ("/api/v1/widgets/launch/galaxy-watch-2026/tasks", {}),
+    ("/api/v1/widgets/launch/galaxy-buds-2026/timeline", {}),
+]
+
+
 def _table(rng: random.Random) -> dict[str, Any]:
-    tpl = rng.choice(TABLE_TEMPLATES)
-    return {"type": "table", "id": _ulid(),
-            "headers": list(tpl["headers"]),
-            "rows": [list(r) for r in tpl["rows"]],
-            "options": {"sortable": True}}
+    endpoint, params = rng.choice(_TABLE_ENDPOINTS)
+    return {
+        "type": "data-source", "id": _ulid(),
+        "endpoint": endpoint,
+        "params": dict(params),
+        "render": "table",
+        "refreshInterval": 600,
+    }
+
+
+
+# Dogfood-time KPI / chart / table blocks now reference real widget
+# endpoints (DB-backed) instead of random inline values. Variety
+# across docs comes from rotating which widget is used. No mock data
+# anywhere — the same fact tables populate every block.
+_KPI_ENDPOINTS = [
+    "/api/v1/widgets/kpi-finance-daily-summary",
+    "/api/v1/widgets/kpi/finance.month-end-progress.percent",
+    "/api/v1/widgets/kpi/sales.q1-2026.total",
+    "/api/v1/widgets/kpi/sales.q1-2026.target-attainment",
+]
+_CHART_ENDPOINTS = [
+    ("/api/v1/widgets/chart/sales-trend", {"team": "finance", "days": 30}),
+    ("/api/v1/widgets/chart/sales-trend", {"team": "sales", "days": 30}),
+    ("/api/v1/widgets/chart/sales-trend", {"team": "engineering", "days": 60}),
+    ("/api/v1/widgets/chart/month-end-progress", {}),
+    ("/api/v1/widgets/launch/galaxy-flip-2026/forecast", {}),
+    ("/api/v1/widgets/launch/galaxy-watch-2026/forecast", {}),
+    ("/api/v1/widgets/launch/galaxy-buds-2026/forecast", {}),
+]
 
 
 def _kpi(rng: random.Random) -> dict[str, Any]:
-    return {"type": "kpi-cards", "id": _ulid(), "items": [
-        {"label": "MTD 매출", "value": f"{rng.randint(80, 130)}억", "delta": "+8%", "trend": "up"},
-        {"label": "결산 일수", "value": round(rng.uniform(3.8, 5.2), 1), "delta": "-0.4", "trend": "down"},
-        {"label": "이상치", "value": rng.randint(0, 3), "trend": "flat"},
-    ]}
+    return {
+        "type": "data-source", "id": _ulid(),
+        "endpoint": rng.choice(_KPI_ENDPOINTS),
+        "params": {},
+        "render": "kpi-cards",
+        "refreshInterval": 300,
+    }
 
 
 def _chart(rng: random.Random) -> dict[str, Any]:
-    chart_type = rng.choice(["line", "bar", "area", "pie"])
-    labels = ["1월", "2월", "3월", "4월", "5월", "6월"]
-    series_count = 1 if chart_type == "pie" else 2
-    series = []
-    for i in range(series_count):
-        series.append({
-            "name": ["실적", "목표", "전년"][i],
-            "values": [round(rng.uniform(50, 150), 1) for _ in labels],
-        })
-    return {"type": "chart", "id": _ulid(), "chartType": chart_type,
-            "title": rng.choice(CHART_TITLES),
-            "data": {"labels": labels, "series": series}}
+    endpoint, params = rng.choice(_CHART_ENDPOINTS)
+    return {
+        "type": "data-source", "id": _ulid(),
+        "endpoint": endpoint,
+        "params": dict(params),
+        "render": "chart",
+        "refreshInterval": 300,
+    }
 
 
 def _flow(rng: random.Random) -> dict[str, Any]:
