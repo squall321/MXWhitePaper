@@ -123,12 +123,24 @@ MXWP_PROXY="${HTTPS_PROXY:-${HTTP_PROXY:-${MXWP_FALLBACK_PROXY:-http://168.219.6
 # lowercase + uppercase). We only set the uppercase variants here;
 # the container's runtime libraries that look for lowercase fall
 # back to the uppercase via standard libc conventions on Linux.
+#
+# Corepack runtime quirk: `corepack prepare pnpm@9.12.0 --activate`
+# baked into web.def caches the pnpm binary in the image, but every
+# `pnpm` call still pings the npm registry to verify the manifest hash.
+# Behind a strict corporate firewall that check times out and the call
+# aborts before our `pnpm install` even starts (corepack.cjs:22089).
+# `COREPACK_ENABLE_NETWORK=0` tells corepack to trust the cached
+# binary and skip the verification — safe because we *just* baked it
+# in. `COREPACK_ENABLE_STRICT=0` covers older corepack versions.
 start_instance "$INST_WEB" "$WEB_SIF" \
   --bind "$REPO_ROOT:/workspace" \
   --env "VITE_API_URL=/api/v1" \
   --env "HTTP_PROXY=${MXWP_PROXY}" \
   --env "HTTPS_PROXY=${MXWP_PROXY}" \
-  --env "NO_PROXY=localhost,127.0.0.1,::1"
+  --env "NO_PROXY=localhost,127.0.0.1,::1" \
+  --env "COREPACK_ENABLE_NETWORK=0" \
+  --env "COREPACK_ENABLE_STRICT=0" \
+  --env "COREPACK_ENABLE_DOWNLOAD_PROMPT=0"
 
 echo
 echo "✓ stack started"
