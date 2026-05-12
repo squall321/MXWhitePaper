@@ -23,10 +23,46 @@ from app.core.db import get_db
 from app.core.errors import APIError
 from app.services import document_service
 from app.services.docx_export import DocxOptions, render_docx
+from app.services.export_artifacts import (
+    get_artifact_bytes,
+    list_artifacts_for,
+    save_artifact,
+)
 from app.services.markdown_export import render_markdown
 from app.services.pptx_export import PptxOptions, render_pptx
 
 router = APIRouter(prefix="/api/v1/exports", tags=["exports"])
+
+
+async def _persist_export(
+    s: AsyncSession,
+    *,
+    doc: dict,
+    fmt: str,
+    file_bytes: bytes,
+    actor_id: str,
+    filename: str,
+) -> dict:
+    """Save the rendered bytes to MinIO + record in export_artifacts.
+    Returns the artifact metadata dict (id, filename, size_bytes, ...).
+    Failure to persist must NOT block the response — return None and let
+    the request still deliver bytes to the user.
+    """
+    try:
+        return await save_artifact(
+            s,
+            doc_id=doc["id"], doc_slug=doc["slug"],
+            doc_version=int(doc.get("version", 1)),
+            fmt=fmt, file_bytes=file_bytes,
+            actor_id=actor_id, filename=filename,
+        )
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning(
+            "export artifact persist failed slug=%s fmt=%s err=%s",
+            doc.get("slug"), fmt, e,
+        )
+        return None  # type: ignore[return-value]
 
 
 class _PdfExportUnavailable(APIError):
@@ -205,16 +241,28 @@ async def export_pptx(
         requester_role=_user.get("role"),
     )
     filename = f"{slug}.pptx"
+
+    artifact = await _persist_export(
+        s, doc=doc, fmt="pptx", file_bytes=pptx_bytes,
+        actor_id=_user.get("id") or _user.get("sub", ""), filename=filename,
+    )
+    if artifact:
+        await s.commit()
+
+    headers = {
+        "Content-Disposition": (
+            f'attachment; filename="{quote(filename)}"; '
+            f"filename*=UTF-8''{quote(filename)}"
+        ),
+        "Cache-Control": "private, no-store",
+    }
+    if artifact:
+        headers["X-Export-Artifact-Id"] = artifact["id"]
+        headers["X-Export-Download-Url"] = f"/api/v1/exports/artifacts/{artifact['id']}"
     return FastAPIResponse(
         content=pptx_bytes,
         media_type=_PPTX_MEDIA_TYPE,
-        headers={
-            "Content-Disposition": (
-                f'attachment; filename="{quote(filename)}"; '
-                f"filename*=UTF-8''{quote(filename)}"
-            ),
-            "Cache-Control": "private, no-store",
-        },
+        headers=headers,
     )
 
 
@@ -278,14 +326,71 @@ async def export_docx(
         requester_role=_user.get("role"),
     )
     filename = f"{slug}.docx"
+
+    # Persist + record (failure tolerated — user still gets the bytes).
+    artifact = await _persist_export(
+        s, doc=doc, fmt="docx", file_bytes=docx_bytes,
+        actor_id=_user.get("id") or _user.get("sub", ""), filename=filename,
+    )
+    if artifact:
+        await s.commit()
+
+    headers = {
+        "Content-Disposition": (
+            f'attachment; filename="{quote(filename)}"; '
+            f"filename*=UTF-8''{quote(filename)}"
+        ),
+        "Cache-Control": "private, no-store",
+    }
+    if artifact:
+        headers["X-Export-Artifact-Id"] = artifact["id"]
+        headers["X-Export-Download-Url"] = f"/api/v1/exports/artifacts/{artifact['id']}"
     return FastAPIResponse(
         content=docx_bytes,
         media_type=_DOCX_MEDIA_TYPE,
+        headers=headers,
+    )
+
+
+# ── Artifact listing + download ─────────────────────────────────────
+
+
+@router.get(
+    "/{slug}/artifacts",
+    summary="이 문서의 과거 export 산출물 목록",
+)
+async def list_export_artifacts(
+    slug: str,
+    fmt: str | None = None,
+    limit: int = 50,
+    s: AsyncSession = Depends(get_db),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    rows = await list_artifacts_for(s, slug=slug, fmt=fmt, limit=limit)
+    return {"data": rows, "meta": {"total": len(rows), "slug": slug, "format": fmt}}
+
+
+@router.get(
+    "/artifacts/{artifact_id}",
+    summary="저장된 export 산출물 다운로드 (binary stream)",
+)
+async def download_export_artifact(
+    artifact_id: str,
+    s: AsyncSession = Depends(get_db),
+    _user: dict = Depends(require_reader),
+) -> FastAPIResponse:
+    info, body = await get_artifact_bytes(s, artifact_id=artifact_id)
+    filename = info["filename"]
+    return FastAPIResponse(
+        content=body,
+        media_type=info["mime_type"],
         headers={
             "Content-Disposition": (
                 f'attachment; filename="{quote(filename)}"; '
                 f"filename*=UTF-8''{quote(filename)}"
             ),
             "Cache-Control": "private, no-store",
+            "X-Export-Artifact-Id": info["id"],
+            "X-Doc-Version-At-Export": str(info["doc_version"]),
         },
     )

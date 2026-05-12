@@ -821,6 +821,162 @@ def _b_bibliography(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
             url_run.italic = True
 
 
+# ── New block handlers (round-trip-safe text rendering for blocks
+# that previously fell through to the unknown-block placeholder).
+# Each one renders a human-readable representation that round-trips
+# through DOCX import as best as possible.
+
+
+def _b_pdf(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    """PDF block — embed as a labeled link + page indicator (DOCX can't
+    embed PDFs natively as inline objects via python-docx)."""
+    file_id = _str(block.get("fileId") or block.get("file_id"))
+    title = _str(block.get("title")) or file_id or "PDF"
+    page = block.get("page")
+    p = document.add_paragraph()
+    run = p.add_run(f"📄 PDF: {title}")
+    run.bold = True
+    if page is not None:
+        p.add_run(f" — page {page}")
+    if file_id:
+        p.add_run(f" (file_id: {file_id})").italic = True
+
+
+def _b_whiteboard(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    """Whiteboard — list strokes / shapes / text labels as a bullet list.
+    Real visual fidelity needs SVG embed which python-docx can't do
+    natively; the text summary still preserves the data."""
+    p = document.add_paragraph()
+    p.add_run("🖍 Whiteboard").bold = True
+    elems = block.get("elements") or []
+    for el in elems:
+        kind = el.get("type") or el.get("kind") or "?"
+        label = el.get("label") or el.get("text") or kind
+        coords = el.get("coords") or el.get("points") or ""
+        item = document.add_paragraph(style="List Bullet")
+        item.add_run(f"{kind}: {label}")
+        if coords:
+            item.add_run(f"  ({coords})").italic = True
+
+
+def _b_form(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    """Form — title + each question on its own line with kind/required."""
+    title = _str(block.get("title")) or "Form"
+    description = _str(block.get("description"))
+    h = document.add_paragraph()
+    h.add_run(f"📝 {title}").bold = True
+    if description:
+        document.add_paragraph(description).italic = True
+    for q in block.get("questions") or []:
+        p = document.add_paragraph(style="List Number")
+        label = _str(q.get("label")) or _str(q.get("id"))
+        kind = _str(q.get("kind")) or "text"
+        required = " *" if q.get("required") else ""
+        p.add_run(f"{label}{required}").bold = True
+        p.add_run(f"  [{kind}]").italic = True
+        opts = q.get("options") or []
+        if isinstance(opts, list) and opts:
+            opts_p = document.add_paragraph()
+            opts_p.add_run("    선택: " + ", ".join(str(o) for o in opts)).italic = True
+
+
+def _b_quiz(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    """Quiz — title + each question with options and (admin only) correct answer."""
+    title = _str(block.get("title")) or "Quiz"
+    h = document.add_paragraph()
+    h.add_run(f"❓ {title}").bold = True
+    passing = block.get("passing_score")
+    if passing is not None:
+        document.add_paragraph(f"통과 점수: {passing}").italic = True
+    for q in block.get("questions") or []:
+        p = document.add_paragraph(style="List Number")
+        label = _str(q.get("label")) or _str(q.get("id"))
+        kind = _str(q.get("kind")) or "single"
+        p.add_run(label).bold = True
+        p.add_run(f"  [{kind}]").italic = True
+        for opt in q.get("options") or []:
+            document.add_paragraph(f"    • {opt}")
+        # Show correct answer only when the requester is an editor/admin.
+        if ctx.requester_role in ("editor", "admin", "owner"):
+            correct = q.get("correct_answer") or q.get("correct")
+            if correct is not None:
+                cp = document.add_paragraph()
+                cp.add_run(f"    정답: {correct}").italic = True
+            expl = _str(q.get("explanation"))
+            if expl:
+                document.add_paragraph(f"    해설: {expl}").italic = True
+
+
+def _b_image_annotation(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    """ImageAnnotation — embed the base image + bullet-list annotations."""
+    image_id = _str(block.get("imageId") or block.get("image_id"))
+    p = document.add_paragraph()
+    p.add_run("✏ Image annotation").bold = True
+    # Try to embed the image if resolver gives us bytes.
+    if image_id and ctx.options.image_resolver:
+        info = ctx.options.image_resolver(image_id)
+        if info and info.get("bytes"):
+            try:
+                from io import BytesIO
+                document.add_picture(BytesIO(info["bytes"]))
+            except Exception:
+                pass
+    for ann in block.get("annotations") or []:
+        kind = ann.get("kind") or ann.get("type") or "marker"
+        label = ann.get("label") or ""
+        coords = ann.get("coords") or ann.get("box") or ann.get("point") or ""
+        item = document.add_paragraph(style="List Bullet")
+        item.add_run(f"{kind}: {label}")
+        if coords:
+            item.add_run(f"  ({coords})").italic = True
+
+
+def _b_spreadsheet(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    """Spreadsheet — render as a native DOCX table. Formula cells show
+    both the formula and (if computed) value via meta."""
+    title = _str(block.get("title"))
+    if title:
+        h = document.add_paragraph()
+        h.add_run(f"⊞ {title}").bold = True
+    cells = block.get("cells") or {}
+    headers = block.get("headers") or []
+    rows = block.get("rows", 0)
+    cols = block.get("cols", 0)
+    if not rows or not cols:
+        # derive from cell keys (e.g. "B2")
+        max_col = max_row = 0
+        for k in cells:
+            if len(k) >= 2 and k[0].isalpha():
+                c = ord(k[0].upper()) - ord("A") + 1
+                try:
+                    r = int(k[1:])
+                except ValueError:
+                    continue
+                max_col = max(max_col, c)
+                max_row = max(max_row, r)
+        rows, cols = max_row, max_col
+    if not rows or not cols:
+        document.add_paragraph("(빈 스프레드시트)").italic = True
+        return
+    table = document.add_table(rows=rows + (1 if headers else 0), cols=cols)
+    table.style = "Light Grid"
+    r0 = 0
+    if headers:
+        for c, h in enumerate(headers[:cols]):
+            table.rows[0].cells[c].text = str(h)
+        r0 = 1
+    for r in range(rows):
+        for c in range(cols):
+            key = f"{chr(ord('A') + c)}{r + 1}"
+            v = cells.get(key)
+            if isinstance(v, dict):
+                # {value: ..., formula: ...} shape
+                text_val = v.get("value", v.get("formula", ""))
+                table.rows[r + r0].cells[c].text = str(text_val)
+            elif v is not None:
+                table.rows[r + r0].cells[c].text = str(v)
+
+
 _BLOCK_HANDLERS: dict[str, Any] = {
     "paragraph": _b_paragraph,
     "heading-4": _b_heading_4,
@@ -849,6 +1005,13 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "dashboard-embed": _b_dashboard_embed,
     "calculator": _b_calculator,
     "bibliography": _b_bibliography,
+    # ── newly added (Round 5) ──
+    "pdf": _b_pdf,
+    "whiteboard": _b_whiteboard,
+    "form": _b_form,
+    "quiz": _b_quiz,
+    "image-annotation": _b_image_annotation,
+    "spreadsheet": _b_spreadsheet,
 }
 
 
