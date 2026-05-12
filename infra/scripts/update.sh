@@ -105,6 +105,23 @@ case "$FORCE_REBUILD" in
   web) NEED_REBUILD_WEB=1 ;;
 esac
 
+# .env is NOT in git, so the diff above doesn't catch its changes.
+# Compare its mtime with the last-restart marker — if .env was
+# touched after the last restart, the running instances are using
+# stale env (typical scenario: user edited POSTGRES_PORT, web→api
+# proxy still hits the old port and alembic fails with
+# ConnectionRefusedError).
+ENV_CHANGED_SINCE_RESTART=0
+ENV_MARK="$REPO_ROOT/infra/.last-restart-mtime"
+if [ -f .env ]; then
+  ENV_MTIME=$(stat -c %Y .env)
+  LAST_MTIME=$(cat "$ENV_MARK" 2>/dev/null || echo 0)
+  if [ "$ENV_MTIME" -gt "$LAST_MTIME" ]; then
+    ENV_CHANGED_SINCE_RESTART=1
+    echo "  .env modified since last restart — will restart"
+  fi
+fi
+
 # ── 3. pnpm install ─────────────────────────────────────────────────
 echo
 if [ "$NEED_PNPM_INSTALL" = 1 ]; then
@@ -156,9 +173,13 @@ fi
 # ── 6. restart ──────────────────────────────────────────────────────
 echo
 if [ "$RESTART" = 1 ]; then
-  if [ "$REBUILT_ANY" = 1 ] || [ -n "$CHANGED" ]; then
+  if [ "$REBUILT_ANY" = 1 ] || [ -n "$CHANGED" ] || [ "$ENV_CHANGED_SINCE_RESTART" = 1 ]; then
     echo "▶ 6/8  restart stack"
-    "$REPO_ROOT/infra/scripts/restart.sh" 2>&1 | sed 's/^/  /' | tail -10
+    # Force restart — apptainer instance start skips already-running
+    # instances and that's exactly what we want to avoid when env changed.
+    "$APPTAINER" instance stop --all >/dev/null 2>&1 || true
+    "$REPO_ROOT/infra/scripts/start.sh" 2>&1 | sed 's/^/  /' | tail -10
+    date +%s > "$ENV_MARK"
   else
     echo "▶ 6/8  restart (skipped — nothing requires it; HMR handles code changes)"
   fi
