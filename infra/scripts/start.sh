@@ -145,6 +145,7 @@ start_instance "$INST_WEB" "$WEB_SIF" \
   --bind "$REPO_ROOT:/workspace" \
   --bind /tmp:/tmp \
   --env "VITE_API_URL=/api/v1" \
+  --env "VITE_PROXY_TARGET=${VITE_PROXY_TARGET:-http://127.0.0.1:${API_PORT}}" \
   --env "HTTP_PROXY=${MXWP_PROXY}" \
   --env "HTTPS_PROXY=${MXWP_PROXY}" \
   --env "NO_PROXY=localhost,127.0.0.1,::1" \

@@ -21,15 +21,13 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: true,
     proxy: {
-      // Apptainer host network: BE listens on the host's loopback port 8800.
-      // We hard-code the target — earlier versions allowed
-      // `process.env.VITE_PROXY_TARGET` to override but stale env values
-      // from previous instance starts (or DNS oddities in the host network
-      // namespace) caused vite to dial random external IPs and time out.
-      // Loopback is always the right answer in this deployment; if a
-      // different port is ever needed, change it here directly.
+      // Default: host loopback. On installs where Apptainer puts each
+      // instance into its own netns, the web container can't reach the
+      // host's 127.0.0.1:8800 — set VITE_PROXY_TARGET in .env (e.g.
+      // http://<server-public-ip>:8800) to bypass loopback and dial the
+      // host's external interface instead.
       '/api': {
-        target: 'http://127.0.0.1:8800',
+        target: process.env.VITE_PROXY_TARGET || 'http://127.0.0.1:8800',
         changeOrigin: true,
         secure: false,
       },
