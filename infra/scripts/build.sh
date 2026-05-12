@@ -8,7 +8,7 @@
 #     1. Inherits HTTP_PROXY / HTTPS_PROXY from the caller (sudo -E or
 #        explicit `--preserve-env=HTTPS_PROXY` works).
 #     2. Falls back to MXWP_FALLBACK_PROXY (default
-#        http://169.219.61.252:8080 — Samsung MX egress) when no env
+#        http://168.219.61.252:8080 — Samsung MX egress) when no env
 #        proxy is set OR when the first pull attempt fails.
 #     3. Pre-staged .sif files in infra/apptainer/ are always honoured
 #        first — no network call at all if the file already exists.
@@ -26,7 +26,7 @@ FORCE=0
 # Proxy: prefer existing env (sudo -E preserves HTTPS_PROXY etc.); fall
 # back to the well-known corporate egress. Apptainer reads the lowercase
 # variants — export both casings so any underlying lib finds them.
-FALLBACK_PROXY="${MXWP_FALLBACK_PROXY:-http://169.219.61.252:8080}"
+FALLBACK_PROXY="${MXWP_FALLBACK_PROXY:-http://168.219.61.252:8080}"
 PROXY_URL="${HTTPS_PROXY:-${HTTP_PROXY:-${https_proxy:-${http_proxy:-}}}}"
 
 if [ -z "$PROXY_URL" ] && [ -n "$FALLBACK_PROXY" ]; then
