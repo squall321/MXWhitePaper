@@ -216,7 +216,8 @@
         { "$ref": "#/$defs/QuizBlock" },
         { "$ref": "#/$defs/ImageAnnotationBlock" },
         { "$ref": "#/$defs/SpreadsheetBlock" },
-        { "$ref": "#/$defs/BibliographyBlock" }
+        { "$ref": "#/$defs/BibliographyBlock" },
+        { "$ref": "#/$defs/SpacerBlock" }
       ]
     },
 
@@ -739,6 +740,19 @@
             }
           }
         },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "SpacerBlock": {
+      "type": "object",
+      "required": ["type", "id"],
+      "additionalProperties": false,
+      "description": "Explicit vertical spacer. Default inter-block spacing is tight (8px). Insert a spacer block to add deliberate breathing room. `size` chooses the gap: sm=16px, md=32px (default), lg=64px.",
+      "properties": {
+        "type": { "const": "spacer" },
+        "id":   { "$ref": "#/$defs/Ulid" },
+        "size": { "enum": ["sm", "md", "lg"], "default": "md" },
         "meta": { "$ref": "#/$defs/BlockMeta" }
       }
     },

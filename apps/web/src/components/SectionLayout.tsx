@@ -24,7 +24,7 @@ export function SectionLayout({
   layout: SectionLayoutKind | undefined
   /** Per-block React node — caller decides on lazy/eager wrapping. */
   renderBlock: (block: Block, index: number) => ReactNode
-  /** Extra wrapper classes (e.g. `mt-3 space-y-4`). Applied to the outer div
+  /** Extra wrapper classes (e.g. `mt-3 space-y-2`). Applied to the outer div
    * regardless of layout so callers can keep their spacing rules consistent. */
   className?: string
 }) {
@@ -53,8 +53,8 @@ export function SectionLayout({
           data-section-layout="two-col"
           className={`${className ?? ''} grid gap-4 md:grid-cols-2`}
         >
-          <div className="space-y-4">{left.map((x) => <div key={x.key}>{x.node}</div>)}</div>
-          <div className="space-y-4">{right.map((x) => <div key={x.key}>{x.node}</div>)}</div>
+          <div className="space-y-2">{left.map((x) => <div key={x.key}>{x.node}</div>)}</div>
+          <div className="space-y-2">{right.map((x) => <div key={x.key}>{x.node}</div>)}</div>
         </div>
       )
     }
@@ -71,7 +71,7 @@ export function SectionLayout({
           <div
             data-section-layout={kind}
             data-fallback="no-image"
-            className={`${className ?? ''} space-y-4`}
+            className={`${className ?? ''} space-y-2`}
           >
             {blocks.map((b, i) => (
               <div key={b.id}>{renderBlock(b, i)}</div>
@@ -84,10 +84,10 @@ export function SectionLayout({
         .filter((_, i) => i !== imgIdx)
         .map((b, i) => ({ node: renderBlock(b, i), key: b.id }))
       const imagePane = (
-        <div className="space-y-4 [&_figure]:m-0">{imageNode}</div>
+        <div className="space-y-2 [&_figure]:m-0">{imageNode}</div>
       )
       const textPane = (
-        <div className="space-y-4">
+        <div className="space-y-2">
           {rest.map((x) => <div key={x.key}>{x.node}</div>)}
         </div>
       )
@@ -115,7 +115,7 @@ export function SectionLayout({
           <div
             data-section-layout="full-bleed"
             data-fallback="no-image"
-            className={`${className ?? ''} space-y-4`}
+            className={`${className ?? ''} space-y-2`}
           >
             {blocks.map((b, i) => (
               <div key={b.id}>{renderBlock(b, i)}</div>
@@ -133,7 +133,7 @@ export function SectionLayout({
             {renderBlock(blocks[imgIdx]!, imgIdx)}
           </div>
           <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/0 via-black/30 to-black/60" />
-          <div className="space-y-4 p-8 text-white [&_p]:text-white [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white">
+          <div className="space-y-2 p-8 text-white [&_p]:text-white [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white">
             {rest.map((b, i) => (
               <div key={b.id}>{renderBlock(b, i)}</div>
             ))}
@@ -147,7 +147,7 @@ export function SectionLayout({
       return (
         <div
           data-section-layout="stack"
-          className={`${className ?? ''} space-y-4`}
+          className={`${className ?? ''} space-y-2`}
         >
           {blocks.map((b, i) => (
             <div key={b.id}>{renderBlock(b, i)}</div>

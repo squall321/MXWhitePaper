@@ -505,6 +505,14 @@ function BlockRendererInner({ block }: { block: Block }) {
       return <SpreadsheetBlockView block={block} />
     case 'bibliography':
       return <BibliographyBlockView block={block} />
+    case 'spacer': {
+      // Deliberate vertical breathing room. Defaults are tight in
+      // SectionLayout (space-y-2 = 8px); spacer block adds 16/32/64px
+      // on top depending on size.
+      const size = (block as { size?: 'sm' | 'md' | 'lg' }).size ?? 'md'
+      const h = size === 'sm' ? 'h-4' : size === 'lg' ? 'h-16' : 'h-8'
+      return <div aria-hidden="true" className={h} data-block-type="spacer" />
+    }
     default:
       return (
         <PlaceholderBlockView

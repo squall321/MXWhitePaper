@@ -931,6 +931,15 @@ def _b_image_annotation(document: Any, block: dict[str, Any], ctx: _Ctx) -> None
             item.add_run(f"  ({coords})").italic = True
 
 
+def _b_spacer(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    """Spacer — emit empty paragraphs to mimic the FE gap.
+    sm=1 empty paragraph, md=2, lg=4."""
+    size = _str(block.get("size")) or "md"
+    count = {"sm": 1, "md": 2, "lg": 4}.get(size, 2)
+    for _ in range(count):
+        document.add_paragraph("")
+
+
 def _b_spreadsheet(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     """Spreadsheet — render as a native DOCX table. Formula cells show
     both the formula and (if computed) value via meta."""
@@ -1012,6 +1021,8 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "quiz": _b_quiz,
     "image-annotation": _b_image_annotation,
     "spreadsheet": _b_spreadsheet,
+    # ── newly added (Round 7) ──
+    "spacer": _b_spacer,
 }
 
 

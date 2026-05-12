@@ -46,6 +46,7 @@ export type Block =
   | ImageAnnotationBlock
   | SpreadsheetBlock
   | BibliographyBlock
+  | SpacerBlock
 /**
  * FK to images.id — accepts ULID (legacy seed data) or UUID (uploaded images)
  */
@@ -854,6 +855,15 @@ export interface BibliographyBlock {
       url?: string
     }[]
   ]
+  meta?: BlockMeta
+}
+/**
+ * Explicit vertical spacer. Default inter-block spacing is tight (8px). Insert a spacer block to add deliberate breathing room. `size` chooses the gap: sm=16px, md=32px (default), lg=64px.
+ */
+export interface SpacerBlock {
+  type: 'spacer'
+  id: Ulid
+  size?: 'sm' | 'md' | 'lg'
   meta?: BlockMeta
 }
 export interface RelatedDoc {

@@ -798,6 +798,26 @@ class Width1(RootModel[float]):
     root: float = Field(..., ge=5.0, le=95.0)
 
 
+class Size(Enum):
+    sm = 'sm'
+    md = 'md'
+    lg = 'lg'
+
+
+class SpacerBlock(BaseModel):
+    """
+    Explicit vertical spacer. Default inter-block spacing is tight (8px). Insert a spacer block to add deliberate breathing room. `size` chooses the gap: sm=16px, md=32px (default), lg=64px.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['spacer']
+    id: Ulid
+    size: Size | None = Size.md
+    meta: BlockMeta | None = None
+
+
 class Render(Enum):
     table = 'table'
     chart = 'chart'
@@ -1405,6 +1425,7 @@ class Block(
         | ImageAnnotationBlock
         | SpreadsheetBlock
         | BibliographyBlock
+        | SpacerBlock
         ,
         Field(discriminator='type'),
     ]
@@ -1444,6 +1465,7 @@ class Block(
         | ImageAnnotationBlock
         | SpreadsheetBlock
         | BibliographyBlock
+        | SpacerBlock
         ,
         Field(discriminator='type'),
     ]
