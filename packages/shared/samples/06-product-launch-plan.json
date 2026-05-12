@@ -156,7 +156,30 @@
           "endpoint": "/api/v1/widgets/launch/galaxy-flip-2026/forecast",
           "params": {},
           "render": "chart",
-          "refreshInterval": 1800
+          "refreshInterval": 1800,
+          "chartOptions": {
+            "chartType": "bar",
+            "options": {
+              "title": {
+                "text": "수요 시나리오 — 분기별 막대차트 (블록 override)"
+              },
+              "color": [
+                "#7c3aed",
+                "#ea580c",
+                "#0d9488"
+              ]
+            },
+            "interactions": {
+              "regions": [
+                {
+                  "label": "런칭 분기",
+                  "xFromIndex": 0,
+                  "xToIndex": 0,
+                  "color": "rgba(220,38,38,0.10)"
+                }
+              ]
+            }
+          }
         },
         {
           "type": "heading-4",

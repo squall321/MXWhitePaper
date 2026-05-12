@@ -740,6 +740,7 @@
       "type": "object",
       "required": ["type", "id", "endpoint", "render"],
       "additionalProperties": false,
+      "description": "Live data block. Widget response shapes the data; render type fixes the renderer. For render=chart, the widget may include chartType / engine / interactions / options inline; chartOptions on the block deep-merges on top so document authors can override per-doc styling without touching the widget.",
       "properties": {
         "type":     { "const": "data-source" },
         "id":       { "$ref": "#/$defs/Ulid" },
@@ -747,6 +748,51 @@
         "params":   { "type": "object" },
         "render":   { "enum": ["table", "chart", "kpi-cards"] },
         "refreshInterval": { "type": "integer", "minimum": 30, "maximum": 3600 },
+        "chartOptions": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per-document chart styling overrides (only for render=chart). Deep-merged ON TOP of widget-provided defaults — set just the fields you want to change.",
+          "properties": {
+            "chartType": { "enum": ["line", "bar", "pie", "area", "radar", "scatter"] },
+            "engine":    { "enum": ["recharts", "echarts"] },
+            "title":     { "type": "string" },
+            "interactions": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "keyPoints": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["label", "xIndex"],
+                    "properties": {
+                      "label":  { "type": "string" },
+                      "xIndex": { "type": "integer", "minimum": 0 },
+                      "color":  { "type": "string" }
+                    }
+                  }
+                },
+                "regions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["label", "xFromIndex", "xToIndex"],
+                    "properties": {
+                      "label":      { "type": "string" },
+                      "xFromIndex": { "type": "integer", "minimum": 0 },
+                      "xToIndex":   { "type": "integer", "minimum": 0 },
+                      "color":      { "type": "string" }
+                    }
+                  }
+                }
+              }
+            },
+            "options": {
+              "type": "object",
+              "description": "Raw ECharts EChartsOption fragment, deep-merged after widget defaults + interactions."
+            }
+          }
+        },
         "meta":     { "$ref": "#/$defs/BlockMeta" }
       }
     },

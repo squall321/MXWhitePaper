@@ -635,6 +635,9 @@ export interface AccordionBlock {
   ]
   meta?: BlockMeta
 }
+/**
+ * Live data block. Widget response shapes the data; render type fixes the renderer. For render=chart, the widget may include chartType / engine / interactions / options inline; chartOptions on the block deep-merges on top so document authors can override per-doc styling without touching the widget.
+ */
 export interface DataSourceBlock {
   type: 'data-source'
   id: Ulid
@@ -642,6 +645,31 @@ export interface DataSourceBlock {
   params?: {}
   render: 'table' | 'chart' | 'kpi-cards'
   refreshInterval?: number
+  /**
+   * Per-document chart styling overrides (only for render=chart). Deep-merged ON TOP of widget-provided defaults — set just the fields you want to change.
+   */
+  chartOptions?: {
+    chartType?: 'line' | 'bar' | 'pie' | 'area' | 'radar' | 'scatter'
+    engine?: 'recharts' | 'echarts'
+    title?: string
+    interactions?: {
+      keyPoints?: {
+        label: string
+        xIndex: number
+        color?: string
+      }[]
+      regions?: {
+        label: string
+        xFromIndex: number
+        xToIndex: number
+        color?: string
+      }[]
+    }
+    /**
+     * Raw ECharts EChartsOption fragment, deep-merged after widget defaults + interactions.
+     */
+    options?: {}
+  }
   meta?: BlockMeta
 }
 export interface DashboardEmbedBlock {

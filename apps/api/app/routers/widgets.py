@@ -166,6 +166,10 @@ async def get_kpi_finance_daily(
 
 
 # ── Chart widgets ───────────────────────────────────────────────────
+# Chart widget responses include chartType / engine / interactions / options
+# alongside the data so the FE renderer has a complete recipe — no separate
+# config block needed. The DataSourceBlock can OVERRIDE any of these via its
+# `chartOptions` field (deep-merged on top of the widget defaults).
 @router.get("/chart/sales-trend")
 async def chart_sales_trend(
     request: Request,
@@ -193,6 +197,19 @@ async def chart_sales_trend(
                     {"name": "revenue", "values": [float(r["revenue"]) for r in rows]},
                     {"name": "expense", "values": [float(r["expense"]) for r in rows]},
                 ],
+                # Widget-provided chart defaults — FE merges with block-level
+                # chartOptions if present.
+                "chartType": "line",
+                "engine":    "echarts",
+                "interactions": {},
+                "options": {
+                    "title":   {"text": f"매출 추세 — {team} (최근 {days}일)", "left": "center", "textStyle": {"fontSize": 14}},
+                    "legend":  {"top": 28},
+                    "tooltip": {"trigger": "axis"},
+                    "color":   ["#1428A0", "#06b6d4"],
+                    "yAxis":   {"axisLabel": {"formatter": "{value}M"}},
+                    "dataZoom": [{"type": "slider", "start": 50, "end": 100, "height": 18}],
+                },
             },
             meta={"team": team, "days": days, "source": "sales_daily", "cached_ttl_sec": _CACHE_TTL_SEC},
         )
@@ -224,6 +241,15 @@ async def chart_month_end_progress(
         data={
             "labels": [s["stage"] for s in stages],
             "series": [{"name": "progress", "values": [round(s["pct"], 1) for s in stages]}],
+            "chartType": "bar",
+            "engine": "echarts",
+            "interactions": {},
+            "options": {
+                "title":   {"text": "월결산 단계별 진행률", "left": "center", "textStyle": {"fontSize": 14}},
+                "tooltip": {"trigger": "axis", "valueFormatter": "(v) => v + '%'"},
+                "color":   ["#16a34a"],
+                "yAxis":   {"max": 100, "axisLabel": {"formatter": "{value}%"}},
+            },
         },
         meta={"overall_percent": overall, "source": "kpi_snapshots"},
     )
@@ -376,6 +402,17 @@ async def launch_forecast(
                 {"name": scen, "values": [by_scenario[scen].get(q, 0.0) for q in quarters]}
                 for scen in sorted(by_scenario.keys())
             ],
+            "chartType": "line",
+            "engine": "echarts",
+            "interactions": {},
+            "options": {
+                "title":   {"text": f"수요 시나리오 — {program}", "left": "center", "textStyle": {"fontSize": 14}},
+                "legend":  {"top": 28},
+                "tooltip": {"trigger": "axis"},
+                "color":   ["#1428A0", "#dc2626", "#16a34a"],  # baseline / bear / bull
+                "yAxis":   {"name": "단위 (천 대)", "axisLabel": {"formatter": "{value}K"}},
+                "smooth":  True,
+            },
         },
         meta={"program": program, "source": "demand_forecast"},
     )

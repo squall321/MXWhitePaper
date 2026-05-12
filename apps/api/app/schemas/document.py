@@ -800,7 +800,42 @@ class Render(Enum):
     kpi_cards = 'kpi-cards'
 
 
+class Engine2(Enum):
+    recharts = 'recharts'
+    echarts = 'echarts'
+
+
+class Interactions1(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    key_points: list[KeyPoint] | None = Field(None, alias='keyPoints')
+    regions: list[Region] | None = None
+
+
+class ChartOptions(BaseModel):
+    """
+    Per-document chart styling overrides (only for render=chart). Deep-merged ON TOP of widget-provided defaults — set just the fields you want to change.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    chart_type: ChartType | None = Field(None, alias='chartType')
+    engine: Engine2 | None = None
+    title: str | None = None
+    interactions: Interactions1 | None = None
+    options: dict[str, Any] | None = None
+    """
+    Raw ECharts EChartsOption fragment, deep-merged after widget defaults + interactions.
+    """
+
+
 class DataSourceBlock(BaseModel):
+    """
+    Live data block. Widget response shapes the data; render type fixes the renderer. For render=chart, the widget may include chartType / engine / interactions / options inline; chartOptions on the block deep-merges on top so document authors can override per-doc styling without touching the widget.
+    """
+
     model_config = ConfigDict(
         extra='forbid',
     )
@@ -810,6 +845,10 @@ class DataSourceBlock(BaseModel):
     params: dict[str, Any] | None = None
     render: Render
     refresh_interval: int | None = Field(None, alias='refreshInterval', ge=30, le=3600)
+    chart_options: ChartOptions | None = Field(None, alias='chartOptions')
+    """
+    Per-document chart styling overrides (only for render=chart). Deep-merged ON TOP of widget-provided defaults — set just the fields you want to change.
+    """
     meta: BlockMeta | None = None
 
 
