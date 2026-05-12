@@ -395,6 +395,21 @@ def _paragraph_style(p: ET.Element) -> str | None:
     return pStyle.get(_q("w", "val"))
 
 
+_FIGURE_PREFIX_RE = re.compile(
+    r"^\s*(?:그림|표|차트|Figure|Table|Chart|Fig\.?)\s*\d+\s*[:.\-]\s*",
+    re.IGNORECASE,
+)
+
+
+def _strip_figure_prefix(caption: str) -> str:
+    """Remove auto-numbering prefix added by exporters ('그림 1: ', '표 N: ',
+    'Figure 3:' etc.) so the round-tripped JSON keeps just the human caption.
+    Exporters add the prefix back via CSS counters / docx counters."""
+    if not caption:
+        return caption
+    return _FIGURE_PREFIX_RE.sub("", caption).strip()
+
+
 def _is_caption(p: ET.Element) -> bool:
     style = _paragraph_style(p) or ""
     # Word default style id 는 'Caption' 또는 'caption' 둘 다 본 적 있음.
@@ -534,9 +549,15 @@ def _paragraph_text(
                 # hyperlink 는 자식이 run 만 있다고 가정하고 직접 _format_run
                 for run in ch.findall(_q("w", "r")):
                     inner_parts.append(_format_run(run, ctx))
-                # drawing 도 hyperlink 안에 들어올 수 있음 — 별도 등록
+                # drawing 도 hyperlink 안에 들어올 수 있음 — 별도 등록 +
+                # URL 을 drawing 에 매핑해서 image 블록 빌더가 picking up
+                # 할 수 있게 ctx 에 보관.
                 for d in ch.iter(_q("w", "drawing")):
                     drawings.append(d)
+                    if url:
+                        if not hasattr(ctx, "drawing_links"):
+                            ctx.drawing_links = {}  # type: ignore[attr-defined]
+                        ctx.drawing_links[id(d)] = url
                 label = "".join(inner_parts)
                 if url and label:
                     parts.append(f"[{label}]({url})")
@@ -823,8 +844,12 @@ def _build_sections(
         if tag == _q("w", "tbl"):
             _flush_list()
             table_block = _build_table_block(node, ctx)
-            # caption 직전 단락이 있으면 사용 (pending_caption 우선)
+            # caption 직전 단락이 있으면 사용 (pending_caption 우선).
+            # 이제는 block.caption 에 저장 (schema 추가됨); 옛 import 결과와
+            # 호환 위해 meta.note 도 함께 채워 둠.
             if pending_caption:
+                cleaned = _strip_figure_prefix(pending_caption)
+                table_block["caption"] = cleaned[:500]
                 table_block.setdefault("meta", {})["note"] = pending_caption
                 pending_caption = None
             else:
@@ -835,6 +860,7 @@ def _build_sections(
                         cap_text, _ = _paragraph_text(nxt, ctx)
                         cap_text = cap_text.strip()
                         if cap_text:
+                            table_block["caption"] = _strip_figure_prefix(cap_text)[:500]
                             table_block.setdefault("meta", {})["note"] = cap_text
                         i += 1  # consume caption
             sec = _current_section(sections, stack)
@@ -980,7 +1006,30 @@ def _build_sections(
                     if cap is not None:
                         i += 1  # consume caption next iteration
             if cap:
-                block["caption"] = cap[:500]
+                block["caption"] = _strip_figure_prefix(cap)[:500]
+
+            # Image hyperlink — two sources:
+            #   1) The drawing was wrapped in <w:hyperlink> (recorded on ctx).
+            #   2) The very next paragraph is the canonical "↗ 링크 열기"
+            #      single-hyperlink paragraph emitted by our DOCX exporter.
+            link_url = (getattr(ctx, "drawing_links", {}) or {}).pop(id(drawing), None)
+            if not link_url and i + 1 < len(children):
+                nxt = children[i + 1]
+                if nxt.tag == _q("w", "p"):
+                    # Inspect for a single hyperlink with our marker text.
+                    hlinks = nxt.findall(_q("w", "hyperlink"))
+                    if len(hlinks) == 1:
+                        rid = hlinks[0].get(_q("r", "id"))
+                        cand = ctx.relationships.get(rid or "")
+                        text_inside = "".join(
+                            _run_text(r) for r in hlinks[0].findall(_q("w", "r"))
+                        ).strip()
+                        if cand and ("↗" in text_inside or "링크" in text_inside or "open" in text_inside.lower()):
+                            link_url = cand
+                            i += 1  # consume that paragraph
+            if link_url:
+                block["link"] = link_url
+
             meta: dict[str, Any] = {}
             if w_px is not None:
                 meta["width"] = w_px
