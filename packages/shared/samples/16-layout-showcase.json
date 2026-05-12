@@ -51,7 +51,7 @@
       "id": "KEY2TST26GJPPPG7HH13EE6CP5",
       "number": "2",
       "level": 1,
-      "title": "two-col — 두 컬럼 교차 배치",
+      "title": "two-col — 두 컬럼 교차 배치 (40/60 비율)",
       "layout": "two-col",
       "blocks": [
         {
@@ -77,13 +77,17 @@
           "variant": "warn"
         }
       ],
-      "subsections": []
+      "subsections": [],
+      "layoutWidths": [
+        40,
+        60
+      ]
     },
     {
       "id": "B39C91Y0Y2TNQ1W1J34G0HSE7G",
       "number": "3",
       "level": 1,
-      "title": "image-left — 이미지 + 본문",
+      "title": "image-left — 이미지 + 본문 (30/70 — 이미지 작게)",
       "layout": "image-left",
       "blocks": [
         {
@@ -109,13 +113,17 @@
           ]
         }
       ],
-      "subsections": []
+      "subsections": [],
+      "layoutWidths": [
+        30,
+        70
+      ]
     },
     {
       "id": "KR7FY2R062KN43G80PG4JRFFRD",
       "number": "4",
       "level": 1,
-      "title": "image-right — 본문 + 이미지",
+      "title": "image-right — 본문 + 이미지 (65/35 — 본문 위주)",
       "layout": "image-right",
       "blocks": [
         {
@@ -131,7 +139,11 @@
           "imageId": "K04B5JJ7TJX61PN4MMZCYE4EQ9"
         }
       ],
-      "subsections": []
+      "subsections": [],
+      "layoutWidths": [
+        65,
+        35
+      ]
     },
     {
       "id": "SECD7GZHJ0NJSAGSMPSGZMF76Y",

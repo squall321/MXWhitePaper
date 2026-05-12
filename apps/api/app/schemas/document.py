@@ -111,6 +111,10 @@ class Layout(Enum):
     full_bleed = 'full-bleed'
 
 
+class LayoutWidth(RootModel[float]):
+    root: float = Field(..., ge=10.0, le=90.0)
+
+
 class Align(Enum):
     left = 'left'
     center = 'center'
@@ -1304,6 +1308,12 @@ class Section(BaseModel):
     layout: Layout | None = None
     """
     Visual layout for this section's blocks. Drives both the wiki view (block arrangement inside the section) and presentation view (slide template). Defaults to 'stack' (existing behaviour: blocks render top-to-bottom). 'two-col' splits blocks alternately into two columns. 'image-left'/'image-right' put the first ImageBlock on one side and remaining blocks on the other. 'title-only' renders just the section heading (PPT cover style). 'full-bleed' uses the first ImageBlock as a full-width background with subsequent blocks overlaid.
+    """
+    layout_widths: list[LayoutWidth] | None = Field(
+        None, alias='layoutWidths', max_length=2, min_length=2
+    )
+    """
+    Per-pane percentage widths for two-pane layouts (two-col / image-left / image-right). Length MUST equal 2 when present, each value 10..90, sum SHOULD equal 100 (FE normalises). Ignored for stack / title-only / full-bleed. Omit for equal 50/50 split.
     """
     blocks: list[Block]
     subsections: list[Section] | None = Field([], validate_default=True)

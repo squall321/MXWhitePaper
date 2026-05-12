@@ -210,6 +210,13 @@ export interface Section {
    * Visual layout for this section's blocks. Drives both the wiki view (block arrangement inside the section) and presentation view (slide template). Defaults to 'stack' (existing behaviour: blocks render top-to-bottom). 'two-col' splits blocks alternately into two columns. 'image-left'/'image-right' put the first ImageBlock on one side and remaining blocks on the other. 'title-only' renders just the section heading (PPT cover style). 'full-bleed' uses the first ImageBlock as a full-width background with subsequent blocks overlaid.
    */
   layout?: 'stack' | 'two-col' | 'image-left' | 'image-right' | 'title-only' | 'full-bleed'
+  /**
+   * Per-pane percentage widths for two-pane layouts (two-col / image-left / image-right). Length MUST equal 2 when present, each value 10..90, sum SHOULD equal 100 (FE normalises). Ignored for stack / title-only / full-bleed. Omit for equal 50/50 split.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  layoutWidths?: [number, number]
   blocks: Block[]
   subsections?: Section[]
 }

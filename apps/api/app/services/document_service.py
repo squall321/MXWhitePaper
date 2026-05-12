@@ -1080,6 +1080,20 @@ async def patch_section(
         else:
             sec["layout"] = patch["layout"]
 
+    # layoutWidths — per-pane percentages for two-pane layouts. Drop the
+    # field if cleared or if layout is reset to a non-two-pane mode so
+    # the JSON stays minimal.
+    if "layoutWidths" in patch:
+        widths = patch["layoutWidths"]
+        if widths is None:
+            sec.pop("layoutWidths", None)
+        elif isinstance(widths, list) and len(widths) == 2:
+            sec["layoutWidths"] = [float(w) for w in widths]
+    # Auto-clear when layout switches to one that doesn't use it.
+    cur_layout = sec.get("layout")
+    if cur_layout in (None, "stack", "title-only", "full-bleed"):
+        sec.pop("layoutWidths", None)
+
     log = normalize_change_log(change_log, default=f"section.patch:{section_id}")
     updated = await _persist_content_change(
         s,
