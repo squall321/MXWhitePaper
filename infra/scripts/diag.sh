@@ -10,9 +10,11 @@ set -u  # NOTE: not -e — keep running through individual failures
 . "$(dirname "$0")/_common.sh"
 
 TAIL_LOGS=0
+TAIL_LINES=80
 for arg in "$@"; do
   case "$arg" in
     --tail-logs) TAIL_LOGS=1 ;;
+    --tail-logs=*) TAIL_LOGS=1; TAIL_LINES="${arg#--tail-logs=}" ;;
     -h|--help) sed -n '2,10p' "$0" | sed 's/^# \?//'; exit 0 ;;
   esac
 done
@@ -152,13 +154,15 @@ print_env "MXWP_APPT_HOST_NET"
 # ── G. Recent logs (optional) ──────────────────────────────────────
 if [ "$TAIL_LOGS" = 1 ]; then
   echo
-  echo "▶ G. Recent log tails (10 lines each)"
+  echo "▶ G. Recent log tails (${TAIL_LINES} lines each)"
+  echo "    full path of each log shown below — use 'cat' or 'less' for more."
   for name in mxwp_api mxwp_web mxwp_meili mxwp_minio mxwp_postgres; do
     for ext in out err; do
       f="$LOG_DIR/${name}.${ext}"
       if [ -s "$f" ]; then
-        echo "  ── $f"
-        tail -10 "$f" | sed 's/^/    /'
+        echo
+        echo "  ── $f  ($(wc -l <"$f") lines total)"
+        tail -n "$TAIL_LINES" "$f" | sed 's/^/    /'
       fi
     done
   done
