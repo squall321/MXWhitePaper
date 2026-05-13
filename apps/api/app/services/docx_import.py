@@ -41,6 +41,23 @@ from typing import Any
 
 import ulid
 
+from app.core.config import get_settings
+
+
+def _default_division() -> str:
+    try:
+        return get_settings().import_default_division or "MX"
+    except Exception:
+        return "MX"
+
+
+def _default_confidentiality() -> str:
+    try:
+        return get_settings().import_default_confidentiality or "internal"
+    except Exception:
+        return "internal"
+
+
 # ── XML 네임스페이스 ─────────────────────────────────────────────────
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -687,7 +704,8 @@ def docx_to_document(
     title: str,
     owner_user_id: str,
     image_uploader: Any | None = None,
-    division: str = "MX",
+    division: str | None = None,
+    confidentiality: str | None = None,
 ) -> dict[str, Any]:
     """Word .docx 바이트 → DocumentJSON v1.0 dict.
 
@@ -779,10 +797,10 @@ def docx_to_document(
         "slug": slug,
         "title": final_title[:200],
         "metadata": {
-            "division": division,
+            "division": division or _default_division(),
             "owners": [owner_user_id],
             "tags": [],
-            "confidentiality": "internal",
+            "confidentiality": confidentiality or _default_confidentiality(),
         },
         "sections": sections,
     }

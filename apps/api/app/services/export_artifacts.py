@@ -33,9 +33,12 @@ _EXTENSION_MIME = {
 
 
 def _bucket() -> str:
+    """Bucket exports live in. Defaults to the files bucket unless a
+    dedicated `MINIO_BUCKET_EXPORTS` env is set, in which case we honour
+    that — useful when ops wants a tighter retention/ACL on rendered
+    artefacts than on user-uploaded attachments."""
     s = get_settings()
-    # Reuse the files bucket — exports are user-generated files.
-    return getattr(s, "minio_bucket_files", None) or s.minio_bucket_files
+    return s.minio_bucket_exports.strip() or s.minio_bucket_files
 
 
 async def save_artifact(

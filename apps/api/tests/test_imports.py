@@ -225,7 +225,7 @@ async def test_import_docx_happy_path() -> None:
 @pytest.mark.asyncio
 async def test_import_docx_rejects_oversize() -> None:
     # 31 MB 의 가짜 zip — 헤더만 PK 로 시작해도 사이즈 체크가 먼저 거부.
-    huge = b"PK\x03\x04" + b"\x00" * (imports_mod.MAX_DOCX_BYTES + 10)
+    huge = b"PK\x03\x04" + b"\x00" * (imports_mod._docx_max_bytes() + 10)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         r = await ac.post(

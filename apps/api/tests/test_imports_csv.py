@@ -60,7 +60,7 @@ async def test_csv_happy_path() -> None:
 
 @pytest.mark.asyncio
 async def test_csv_rejects_oversize() -> None:
-    big = b"slug,title\n" + b"x," + b"a" * (imports_mod.MAX_CSV_BYTES + 10)
+    big = b"slug,title\n" + b"x," + b"a" * (imports_mod._csv_max_bytes() + 10)
     r = await _post_csv(big)
     assert r.status_code == 422, r.text
     assert r.json()["error"]["code"] == "VALIDATION_ERROR"

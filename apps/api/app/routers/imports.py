@@ -43,21 +43,34 @@ from app.services import docx_import, document_service, pptx_import, upload_serv
 router = APIRouter(prefix="/api/v1/imports", tags=["imports"])
 
 
-# ── 30 MB 사이즈 캡 (스트림 read 시 비교) ────────────────────────────
-MAX_DOCX_BYTES = 30 * 1024 * 1024
+def _docx_max_bytes() -> int:
+    return get_settings().docx_import_max_bytes
 
 
-# ── 5/min/user rate-limit (files.py 패턴) ────────────────────────────
+def _pptx_max_bytes() -> int:
+    return get_settings().pptx_import_max_bytes
+
+
+def _csv_max_bytes() -> int:
+    return get_settings().csv_import_max_bytes
+
+
+def _csv_max_rows() -> int:
+    return get_settings().csv_import_max_rows
+
+
+# Rate-limit window is fixed at 60s (per-minute); the per-user count
+# comes from settings so deployments can loosen / tighten without code.
 _RATE_WINDOW_SECONDS = 60.0
-_RATE_LIMIT_PER_WINDOW = 5
 _history: dict[str, list[float]] = {}
 
 
 def _check_rate_limit(user_id: str) -> bool:
     now = time.monotonic()
     cutoff = now - _RATE_WINDOW_SECONDS
+    limit = get_settings().import_rate_limit_per_minute
     hist = [t for t in _history.get(user_id, []) if t >= cutoff]
-    if len(hist) >= _RATE_LIMIT_PER_WINDOW:
+    if len(hist) >= limit:
         _history[user_id] = hist
         return False
     hist.append(now)
@@ -250,15 +263,16 @@ async def import_docx(
     # Stream-read with size cap
     chunks: list[bytes] = []
     total = 0
+    docx_limit = _docx_max_bytes()
     while True:
         chunk = await file.read(64 * 1024)
         if not chunk:
             break
         total += len(chunk)
-        if total > MAX_DOCX_BYTES:
+        if total > docx_limit:
             raise ValidationFailed(
-                f"file exceeds max size ({MAX_DOCX_BYTES} bytes)",
-                details={"limit": MAX_DOCX_BYTES},
+                f"file exceeds max size ({docx_limit} bytes)",
+                details={"limit": docx_limit},
             )
         chunks.append(chunk)
     buf = b"".join(chunks)
@@ -324,7 +338,6 @@ async def import_docx(
 
 
 # ── PowerPoint (.pptx) import ────────────────────────────────────────
-MAX_PPTX_BYTES = 50 * 1024 * 1024  # PPT decks are typically larger than docx
 
 
 @router.post("/pptx")
@@ -360,15 +373,16 @@ async def import_pptx(
 
     chunks: list[bytes] = []
     total = 0
+    pptx_limit = _pptx_max_bytes()
     while True:
         chunk = await file.read(64 * 1024)
         if not chunk:
             break
         total += len(chunk)
-        if total > MAX_PPTX_BYTES:
+        if total > pptx_limit:
             raise ValidationFailed(
-                f"file exceeds max size ({MAX_PPTX_BYTES} bytes)",
-                details={"limit": MAX_PPTX_BYTES},
+                f"file exceeds max size ({pptx_limit} bytes)",
+                details={"limit": pptx_limit},
             )
         chunks.append(chunk)
     buf = b"".join(chunks)
@@ -432,8 +446,6 @@ async def import_pptx(
 
 
 # ── Bulk CSV import ──────────────────────────────────────────────────
-MAX_CSV_BYTES = 5 * 1024 * 1024
-MAX_CSV_ROWS = 500
 _CSV_COLUMNS = (
     "slug", "title", "summary", "division", "team", "group", "part",
     "tags", "owners", "confidentiality", "body",
@@ -489,8 +501,15 @@ def _row_to_documentjson(
     if not title:
         raise ValueError("title is required")
     slug = (row.get("slug") or "").strip().lower() or _slugify_title(title)
-    division = (row.get("division") or "").strip() or "기타"
-    confidentiality = (row.get("confidentiality") or "internal").strip().lower()
+    settings = get_settings()
+    division = (
+        (row.get("division") or "").strip()
+        or settings.import_default_division
+    )
+    confidentiality = (
+        (row.get("confidentiality") or "").strip().lower()
+        or settings.import_default_confidentiality
+    )
     if confidentiality not in _CONFIDENTIALITY_VALUES:
         raise ValueError(
             f"confidentiality must be one of {sorted(_CONFIDENTIALITY_VALUES)}"
@@ -560,15 +579,16 @@ async def import_csv(
 
     chunks: list[bytes] = []
     total = 0
+    csv_limit = _csv_max_bytes()
     while True:
         chunk = await file.read(64 * 1024)
         if not chunk:
             break
         total += len(chunk)
-        if total > MAX_CSV_BYTES:
+        if total > csv_limit:
             raise ValidationFailed(
-                f"file exceeds max size ({MAX_CSV_BYTES} bytes)",
-                details={"limit": MAX_CSV_BYTES},
+                f"file exceeds max size ({csv_limit} bytes)",
+                details={"limit": csv_limit},
             )
         chunks.append(chunk)
     raw = b"".join(chunks)
@@ -595,14 +615,28 @@ async def import_csv(
             details={"missing": missing, "expected": list(_CSV_COLUMNS)},
         )
 
+    # Resolve the default owner email for rows that don't carry an
+    # `owners` column. require_admin guarantees `user` exists; we fall
+    # through to the x_mxwp_user override when explicitly set. Refuse
+    # the import when neither resolves — the previous "admin" string
+    # literal landed inside `metadata.owners` as a non-email and broke
+    # downstream tooling that assumes owner ids are real users.
+    default_owner_email = (x_mxwp_user or "").strip() or (user.get("email") or "").strip()
+    if not default_owner_email:
+        raise ValidationFailed(
+            "no owner email could be resolved from the request",
+            details={"reason": "set X-MXWP-User header or sign in with an email"},
+        )
+
     # Pre-validate ALL rows before creating any.
     parsed_rows: list[tuple[int, dict[str, Any]]] = []
     parse_errors: list[dict[str, Any]] = []
+    row_limit = _csv_max_rows()
     for row_idx, raw_row in enumerate(reader, start=2):  # row 1 = header
-        if len(parsed_rows) + len(parse_errors) >= MAX_CSV_ROWS:
+        if len(parsed_rows) + len(parse_errors) >= row_limit:
             raise ValidationFailed(
-                f"csv exceeds max rows ({MAX_CSV_ROWS})",
-                details={"limit": MAX_CSV_ROWS},
+                f"csv exceeds max rows ({row_limit})",
+                details={"limit": row_limit},
             )
         # pad/truncate to header width
         cells = list(raw_row) + [""] * (len(headers) - len(raw_row))
@@ -613,7 +647,7 @@ async def import_csv(
         try:
             doc = _row_to_documentjson(
                 row_dict,
-                owner_email=(x_mxwp_user or user.get("email") or "admin"),
+                owner_email=default_owner_email,
             )
         except ValueError as e:
             parse_errors.append({

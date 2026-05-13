@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     minio_bucket_images: str = Field(default="mxwp-images")
     minio_bucket_files: str = Field(default="mxwp-files")
     minio_bucket_backups: str = Field(default="mxwp-backups")
+    # Empty string → reuse `minio_bucket_files` for export artifacts. Set
+    # to a dedicated bucket name when you want to ACL them separately
+    # (e.g. shorter retention than user uploads).
+    minio_bucket_exports: str = Field(default="")
 
     # JWT
     jwt_secret: str = Field(default="replace_with_a_long_random_string_at_least_32_chars")
@@ -44,6 +48,21 @@ class Settings(BaseSettings):
     gallery_max_bytes: int = Field(default=100 * 1024 * 1024)
     file_max_bytes: int = Field(default=25 * 1024 * 1024)
     rate_limit_per_minute: int = Field(default=120)
+
+    # Document import caps + rate limit. Tuned per format because pptx
+    # decks are typically ~2-3× the size of equivalent docx reports.
+    docx_import_max_bytes: int = Field(default=30 * 1024 * 1024)
+    pptx_import_max_bytes: int = Field(default=50 * 1024 * 1024)
+    csv_import_max_bytes: int = Field(default=5 * 1024 * 1024)
+    csv_import_max_rows: int = Field(default=500)
+    import_rate_limit_per_minute: int = Field(default=5)
+
+    # Default metadata applied to documents created via import paths
+    # (docx/pptx/csv) when the source has no equivalent field. Tenants
+    # operating on a different default confidentiality posture override
+    # via env.
+    import_default_division: str = Field(default="MX")
+    import_default_confidentiality: str = Field(default="internal")
 
     # AI assist hooks (요약/번역/다듬기/이어쓰기/제목 자동생성).
     # 기본 false — 활성화하면 placeholder 응답이 흘러나간다. 실제 LLM 호출은

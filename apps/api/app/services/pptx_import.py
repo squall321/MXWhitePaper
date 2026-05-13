@@ -38,6 +38,22 @@ import ulid
 from pptx import Presentation
 from pptx.util import Emu
 
+from app.core.config import get_settings
+
+
+def _settings_default_division() -> str:
+    try:
+        return get_settings().import_default_division or "MX"
+    except Exception:
+        return "MX"
+
+
+def _settings_default_confidentiality() -> str:
+    try:
+        return get_settings().import_default_confidentiality or "internal"
+    except Exception:
+        return "internal"
+
 
 # Hex literal for the .pptx zip magic ("PK\x03\x04" — same as .docx, both
 # are Office Open XML packages). We accept either capitalisation just in
@@ -350,16 +366,26 @@ def pptx_to_document(
         sections.append(section)
         summary.sections += 1
 
+    # DocumentJSON v1.0 requires schema_version + id + metadata{division,
+    # owners, tags, confidentiality}. The earlier shape used a typo'd
+    # `schema_ver` key plus an empty metadata, which made every pptx import
+    # fail DocumentJSON validation as soon as the FE tried to persist it.
+    metadata: dict[str, Any] = {
+        "division": _settings_default_division(),
+        "owners": [owner_user_id] if owner_user_id else [],
+        "tags": [],
+        "confidentiality": _settings_default_confidentiality(),
+    }
     doc: dict[str, Any] = {
-        "schema_ver": "1.0.0",
+        "schema_version": "1.0",
+        "id": str(ulid.new()),
         "slug": slug,
-        "title": cover_title or "Untitled",
-        "summary": cover_summary,
-        "metadata": {},
+        "title": (cover_title or "Untitled")[:200],
+        "metadata": metadata,
         "infobox": {},
         "sections": sections,
     }
-    if owner_user_id:
-        doc["metadata"] = {**doc["metadata"], "owners": [owner_user_id]}
+    if cover_summary:
+        doc["summary"] = cover_summary[:500]
 
     return {"document": doc, "summary": summary}
