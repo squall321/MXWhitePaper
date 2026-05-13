@@ -396,7 +396,15 @@ def _paragraph_style(p: ET.Element) -> str | None:
 
 
 _FIGURE_PREFIX_RE = re.compile(
-    r"^\s*(?:그림|표|차트|Figure|Table|Chart|Fig\.?)\s*\d+\s*[:.\-]\s*",
+    r"^\s*(?:그림|표|차트|Figure|Table|Chart|Fig\.?)\s*\d+(?:[-.]\d+)*\s*[:.\-]\s*",
+    re.IGNORECASE,
+)
+
+# Detect caption-like paragraphs by their leading word + numbering even when
+# the Word `Caption` style is missing — common for documents authored by
+# pasting text instead of using Word's "Insert Caption" tool.
+_CAPTION_LIKE_RE = re.compile(
+    r"^\s*(?:그림|표|차트|Figure|Table|Chart|Fig\.?)\s*\d+(?:[-.]\d+)*\s*[:.\-)]?\s*\S",
     re.IGNORECASE,
 )
 
@@ -408,6 +416,47 @@ def _strip_figure_prefix(caption: str) -> str:
     if not caption:
         return caption
     return _FIGURE_PREFIX_RE.sub("", caption).strip()
+
+
+def _looks_like_caption_text(text: str) -> bool:
+    """Heuristic — does the text read like a figure/table caption?
+
+    Used as a fallback when a paragraph that follows a table/image isn't
+    flagged with Word's ``Caption`` style. Captions are short and start
+    with the ``그림 N``/``표 N``/``Figure N`` pattern. Returning True for a
+    body paragraph that happens to begin with ``Figure 1`` is unlikely in
+    practice — captions are rarely longer than 300 chars and the position
+    check (immediately after a figure/table) already gates the call.
+    """
+    if not text or len(text) > 300:
+        return False
+    return bool(_CAPTION_LIKE_RE.match(text))
+
+
+# Dotted-number prefix (e.g. "3.1.2.3 ", "1) ", "2.4: ") — the count of
+# dot-separated tokens implies hierarchy depth. Used both for explicit
+# Heading-styled paragraphs (so we *promote* a Heading-1 styled "3.1.2 Foo"
+# to level 3) and for unstyled paragraphs that read like headings.
+_DOTTED_DEPTH_RE = re.compile(r"^\s*(\d+(?:\.\d+)+)\s*[\.)\:]?\s+\S")
+_SINGLE_NUM_DEPTH_RE = re.compile(r"^\s*(\d+)\s*[\.)\:]\s+\S")
+
+
+def _dotted_depth(text: str) -> int | None:
+    """Depth implied by a leading dotted-number prefix.
+
+    ``"3.1.2.3 Title"`` → 4. ``"1. Title"`` → 1. ``"Title"`` → ``None``.
+    A bare number followed only by whitespace (``"42 cells"``) doesn't
+    count — we require the trailing ``.``/``)``/``:`` separator so prose
+    starting with a number isn't misclassified.
+    """
+    if not text:
+        return None
+    m = _DOTTED_DEPTH_RE.match(text)
+    if m:
+        return len(m.group(1).split("."))
+    if _SINGLE_NUM_DEPTH_RE.match(text):
+        return 1
+    return None
 
 
 def _is_caption(p: ET.Element) -> bool:
@@ -760,35 +809,46 @@ def _ensure_section_path(
 ) -> dict[str, Any]:
     """heading 스택을 갱신하고 새 섹션 dict 를 반환 (현재 활성).
 
-    stack[i] 는 level (i+1) 의 활성 섹션. 없으면 None placeholder 채움.
+    Supports any depth ≥ 1. ``stack[i]`` is the active section at level
+    ``i + 1``. Missing intermediates are auto-filled with empty wrappers
+    (level-1 wrapper "본문", deeper wrappers blank) so e.g. a "3.1.2.3"
+    heading after a top-level "Foreword" still nests correctly even if
+    the doc skipped a level somewhere.
     """
-    # 새로 만들 섹션
+    new_level = max(1, int(new_level))
     new_sec = _new_section(new_level, new_title)
+
     if new_level == 1:
         sections.append(new_sec)
         stack.clear()
         stack.append(new_sec)
-    elif new_level == 2:
-        # level-1 부모가 없으면 자동 생성
-        if not stack or stack[0].get("level") != 1:
-            parent = _new_section(1, "본문")
-            sections.append(parent)
-            stack.clear()
-            stack.append(parent)
-        stack[0]["subsections"].append(new_sec)
-        stack[:] = [stack[0], new_sec]
-    elif new_level == 3:
-        if not stack or stack[0].get("level") != 1:
-            parent1 = _new_section(1, "본문")
-            sections.append(parent1)
-            stack.clear()
-            stack.append(parent1)
-        if len(stack) < 2 or stack[1].get("level") != 2:
-            parent2 = _new_section(2, "")
-            stack[0]["subsections"].append(parent2)
-            stack[:] = [stack[0], parent2]
-        stack[1]["subsections"].append(new_sec)
-        stack[:] = [stack[0], stack[1], new_sec]
+        return new_sec
+
+    # Ensure stack is long enough up to (new_level - 1) with the right
+    # levels at each position. If a level is missing or mismatched,
+    # truncate from there and rebuild with empty wrappers.
+    if not stack or stack[0].get("level") != 1:
+        parent = _new_section(1, "본문")
+        sections.append(parent)
+        stack.clear()
+        stack.append(parent)
+
+    # Truncate any stale deeper entries that don't fit the new path.
+    while len(stack) > new_level - 1:
+        stack.pop()
+
+    # Fill in any missing intermediates.
+    while len(stack) < new_level - 1:
+        intermediate_level = len(stack) + 1
+        intermediate = _new_section(intermediate_level, "")
+        parent_sec = stack[-1]
+        parent_sec.setdefault("subsections", []).append(intermediate)
+        stack.append(intermediate)
+
+    # Attach the new section under the (new_level - 1) parent.
+    parent_sec = stack[-1]
+    parent_sec.setdefault("subsections", []).append(new_sec)
+    stack.append(new_sec)
     return new_sec
 
 
@@ -853,15 +913,22 @@ def _build_sections(
                 table_block.setdefault("meta", {})["note"] = pending_caption
                 pending_caption = None
             else:
-                # 직후 단락이 caption 인지 lookahead
+                # 직후 단락이 caption 인지 lookahead — Caption 스타일 또는
+                # "표/그림 N: …" 처럼 보이는 짧은 단락이면 채택.
                 if i + 1 < len(children) and children[i + 1].tag == _q("w", "p"):
                     nxt = children[i + 1]
-                    if _is_caption(nxt):
-                        cap_text, _ = _paragraph_text(nxt, ctx)
-                        cap_text = cap_text.strip()
-                        if cap_text:
-                            table_block["caption"] = _strip_figure_prefix(cap_text)[:500]
-                            table_block.setdefault("meta", {})["note"] = cap_text
+                    cap_text_candidate, cap_drawings = _paragraph_text(nxt, ctx)
+                    cap_text_candidate = cap_text_candidate.strip()
+                    cap_is_styled = _is_caption(nxt)
+                    cap_is_patternish = (
+                        not cap_drawings
+                        and _looks_like_caption_text(cap_text_candidate)
+                    )
+                    if cap_text_candidate and (cap_is_styled or cap_is_patternish):
+                        table_block["caption"] = _strip_figure_prefix(
+                            cap_text_candidate
+                        )[:500]
+                        table_block.setdefault("meta", {})["note"] = cap_text_candidate
                         i += 1  # consume caption
             sec = _current_section(sections, stack)
             sec["blocks"].append(table_block)
@@ -870,31 +937,65 @@ def _build_sections(
             continue
 
         # ── 단락 ───────────────────────────────────────────
-        # heading 처리 우선
+        # heading 처리 우선 — Heading 스타일 또는 본문에 박힌 "3.1.2.3 …"
+        # 같은 점-숫자 prefix 둘 다 hierarchy 신호로 사용.
         h_level = _heading_level(node)
+        raw_text_for_depth: str | None = None
+        inferred_depth: int | None = None
         if h_level is not None:
+            raw_text_for_depth, _drawings_h = _paragraph_text(node, ctx)
+            raw_text_for_depth = raw_text_for_depth.strip()
+            inferred_depth = _dotted_depth(raw_text_for_depth)
+        treat_as_heading = h_level is not None
+        if not treat_as_heading:
+            # No Heading style — fall back to numbering heuristic. Only
+            # accept when the paragraph has no inline figures and is short
+            # enough to plausibly be a heading. 150 chars upper-bound is a
+            # safety net against numbered body paragraphs being promoted.
+            cand_text, cand_drawings = _paragraph_text(node, ctx)
+            cand_text = cand_text.strip()
+            if (
+                not cand_drawings
+                and cand_text
+                and len(cand_text) <= 150
+                and _list_info(node) is None
+                and _dotted_depth(cand_text) is not None
+            ):
+                raw_text_for_depth = cand_text
+                inferred_depth = _dotted_depth(cand_text)
+                treat_as_heading = True
+
+        if treat_as_heading:
             _flush_list()
-            text, _drawings = _paragraph_text(node, ctx)
+            text = raw_text_for_depth or "(제목 없음)"
             text = text.strip() or "(제목 없음)"
-            # Drop user-typed or flattened auto-numbering ("1.1 ", "Chapter 2: ",
-            # "제 1 장 ") so the BE's automatic dotted-ordinal renumbering
-            # doesn't visually duplicate it ("1.1 1.1 …").
+            # When both style + numbering exist, prefer the deeper signal
+            # (numbering wins because authors often paste headings under a
+            # single uniform Heading-1 style). Cap implausibly deep numbers
+            # (>= 6) to a heading-5 block — DocumentJSON allows it but the
+            # FE caps rendering at h6.
+            effective_level = max(h_level or 0, inferred_depth or 0) or 1
+            if effective_level > 6:
+                effective_level = 6
+            # Drop the leading "1.1 " / "Chapter 1: " prefix so the BE's
+            # automatic dotted-ordinal renumber doesn't duplicate it.
             text = _strip_leading_numbering(text) or text
-            if h_level <= 3:
-                _ensure_section_path(sections, stack, h_level, text)
+            if effective_level <= 3:
+                _ensure_section_path(sections, stack, effective_level, text)
                 ctx.summary.headings += 1
-                if derived_title is None and h_level == 1:
+                if derived_title is None and effective_level == 1:
                     derived_title = text
             else:
-                # heading-4+ → block
-                level_val: Any = 4 if h_level >= 4 else h_level
-                # schema BlockMeta.level 은 2|3|4 만 허용 — heading-4 block 은 4 강제
+                # heading-4..6 → block. BlockMeta.level only allows 2|3|4
+                # so we clamp deeper levels to 4 for the block hint but
+                # the visual cue still reads as a deep heading.
+                meta_level = 4 if effective_level >= 4 else effective_level
                 sec = _current_section(sections, stack)
                 sec["blocks"].append({
                     "type": "heading-4",
                     "id": _new_id(),
                     "title": text[:200],
-                    "meta": {"level": int(level_val) if level_val in (2, 3, 4) else 4},
+                    "meta": {"level": meta_level},
                 })
                 ctx.summary.headings += 1
             pending_caption = None
@@ -909,6 +1010,30 @@ def _build_sections(
                 pending_caption = cap_text
             i += 1
             continue
+
+        # Pattern-based caption fallback (style is missing) — capture as
+        # pending caption ONLY when the next child is a table or a
+        # drawing-bearing paragraph. Otherwise the paragraph stands on its
+        # own as body text (so a sentence that happens to start with
+        # "Figure 1 of three" isn't hijacked).
+        peek_text, peek_drawings = _paragraph_text(node, ctx)
+        peek_text = peek_text.strip()
+        if (
+            peek_text
+            and not peek_drawings
+            and _looks_like_caption_text(peek_text)
+            and i + 1 < len(children)
+        ):
+            nxt = children[i + 1]
+            next_is_figure = False
+            if nxt.tag == _q("w", "tbl"):
+                next_is_figure = True
+            elif nxt.tag == _q("w", "p"):
+                next_is_figure = nxt.find(_q("w", "drawing")) is not None
+            if next_is_figure:
+                pending_caption = peek_text
+                i += 1
+                continue
 
         # list 단락
         list_meta = _list_info(node)
@@ -989,21 +1114,43 @@ def _build_sections(
                     uploaded = ctx.image_uploader(img_bytes, media_path.rsplit("/", 1)[-1])
                 except Exception as e:
                     ctx.summary.warnings.append(f"image upload failed: {e}")
+            image_id = (uploaded or {}).get("image_id")
+            if not image_id:
+                if ctx.image_uploader is None:
+                    # Test / preview mode — no uploader wired. Emit a
+                    # placeholder ULID so the converter is still useful in
+                    # round-trip / fixture flows that don't run the upload
+                    # pipeline.
+                    image_id = _new_id()
+                else:
+                    # Real uploader returned None — the image failed to
+                    # persist (unsupported format, corrupt, MinIO error,
+                    # etc.). Skip rather than emit a dangling ULID that
+                    # would 404 in the FE viewer.
+                    ctx.summary.warnings.append(
+                        f"image skipped (upload returned no id): {media_path}"
+                    )
+                    continue
             w_px, h_px = _drawing_size_px(drawing)
             block: dict[str, Any] = {
                 "type": "image",
                 "id": _new_id(),
-                "imageId": (uploaded or {}).get("image_id") or _new_id(),
+                "imageId": image_id,
             }
-            # caption — pending 우선, 없으면 직후 단락 lookahead
+            # caption — pending 우선, 없으면 직후 단락 lookahead.
+            # Caption 스타일이 누락된 워드 문서에도 대응하기 위해 "그림 N: …"
+            # / "Figure N: …" 패턴까지 폴백으로 인정.
             cap = pending_caption
             pending_caption = None
             if not cap and i + 1 < len(children):
                 nxt = children[i + 1]
-                if nxt.tag == _q("w", "p") and _is_caption(nxt):
-                    c, _ = _paragraph_text(nxt, ctx)
-                    cap = c.strip() or None
-                    if cap is not None:
+                if nxt.tag == _q("w", "p"):
+                    c_text, c_drawings = _paragraph_text(nxt, ctx)
+                    c_text = c_text.strip()
+                    if c_text and not c_drawings and (
+                        _is_caption(nxt) or _looks_like_caption_text(c_text)
+                    ):
+                        cap = c_text
                         i += 1  # consume caption next iteration
             if cap:
                 block["caption"] = _strip_figure_prefix(cap)[:500]

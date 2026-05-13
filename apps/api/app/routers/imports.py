@@ -21,16 +21,20 @@ Rate-limit 은 files.py 의 in-process 패턴을 그대로 따른다 (5/min/user
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import re
 import time
+import zipfile
 from typing import Any
 
 import ulid
 from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import require_admin, require_editor
+from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import APIError, Conflict, ValidationFailed, envelope
 from app.repos import document_repo
@@ -97,21 +101,128 @@ def _derive_slug(filename: str) -> str:
     return base[:100]
 
 
-def _build_image_uploader(s: AsyncSession, actor_id: str):
-    """upload_service 의 helpers 를 inline 호출하는 image_uploader 콜러블 반환.
+_MEDIA_EXT_TO_MIME = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    "bmp": "image/bmp",
+    "tif": "image/tiff",
+    "tiff": "image/tiff",
+    "svg": "image/svg+xml",
+}
 
-    업로드는 docx 파싱 도중 동기 흐름 안에서 일어난다. 비-async 콜러블이
-    필요하므로 기존 finalize_upload (async) 대신 sha256 dedup → Pillow →
-    MinIO put → images row INSERT 를 inline 으로 수행한다. SQLAlchemy
-    AsyncSession 은 sync 컨텍스트에서 사용할 수 없으므로, 이 콜러블은
-    바이트만 처리해 placeholder image_id 를 반환하고 실제 DB 행 작성은
-    별도 await 단계가 필요. 현 구현에선 단순화 — 영속 row 없이
-    `_new_ulid_str()` placeholder 를 imageId 로 삽입한다.
 
-    실제 production 통합은 별도 백그라운드 잡으로 처리하는 것이 안전.
+async def _preprocess_zip_images(
+    s: AsyncSession,
+    buf: bytes,
+    actor_id: str,
+    *,
+    media_prefix: str,
+) -> dict[str, str]:
+    """Extract every `<media_prefix>/...` image from a docx/pptx zip and run
+    the full upload pipeline (sha256 dedup → Pillow → MinIO put → DB INSERT).
+
+    Returns a ``{sha256: ulid}`` lookup the converter's sync image_uploader
+    can hit by hashing the bytes it receives. We commit per-image so a
+    corrupted file doesn't roll back successful uploads.
+
+    Without this pre-pass the importer used to mint placeholder ULIDs that
+    weren't backed by any `images` row, so `useImage` 404'd in the FE and
+    every imported figure rendered as a broken icon.
     """
-    def _uploader(_data: bytes, _filename: str) -> dict[str, Any] | None:
-        return {"image_id": upload_service._new_ulid_str()}
+    out: dict[str, str] = {}
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(buf))
+    except zipfile.BadZipFile:
+        return out
+
+    bucket = get_settings().minio_bucket_images
+    for name in zf.namelist():
+        if not name.startswith(media_prefix):
+            continue
+        try:
+            raw = zf.read(name)
+        except KeyError:
+            continue
+        if not raw:
+            continue
+        sha = hashlib.sha256(raw).hexdigest()
+        if sha in out:
+            continue
+        # Cross-document dedup.
+        try:
+            existing = await upload_service._find_image_by_sha256(s, sha)
+        except Exception:
+            existing = None
+        if existing:
+            out[sha] = existing["ulid"]
+            continue
+
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else "png"
+        mime = _MEDIA_EXT_TO_MIME.get(ext)
+        if mime is None or mime == "image/svg+xml":
+            # Skip SVG / unknown — Pillow can't render SVG and our render
+            # pipeline only ships WebP variants.
+            continue
+
+        try:
+            processed = await run_in_threadpool(
+                upload_service._process_image_bytes, raw
+            )
+        except Exception:
+            continue
+        try:
+            storage_keys = upload_service._put_permanent_objects(
+                bucket,
+                sha,
+                thumb_bytes=processed["thumb_bytes"],
+                view_bytes=processed["view_bytes"],
+                orig_bytes=processed["orig_bytes"],
+            )
+        except Exception:
+            continue
+
+        new_ulid = upload_service._new_ulid_str()
+        try:
+            await upload_service._insert_image(
+                s,
+                new_ulid=new_ulid,
+                sha256=sha,
+                original_name=name.rsplit("/", 1)[-1][:200],
+                mime_type=mime,
+                size_bytes=len(raw),
+                width=processed["width"],
+                height=processed["height"],
+                dominant_color=processed["dominant_color"],
+                storage_keys=storage_keys,
+                uploaded_by=actor_id,
+            )
+            await s.commit()
+        except Exception:
+            await s.rollback()
+            continue
+        out[sha] = new_ulid
+    return out
+
+
+def _build_image_uploader(sha_to_ulid: dict[str, str]):
+    """Return a sync callable docx_import / pptx_import can call per-image.
+
+    Looks the image up by sha256 against the pre-populated map from
+    `_preprocess_zip_images`. Returns None when the bytes aren't recognised
+    — the converter then drops the broken figure (or emits a warning)
+    instead of writing a dangling ULID.
+    """
+    def _uploader(data: bytes, _filename: str) -> dict[str, Any] | None:
+        if not data:
+            return None
+        sha = hashlib.sha256(data).hexdigest()
+        ulid_val = sha_to_ulid.get(sha)
+        if ulid_val:
+            return {"image_id": ulid_val}
+        return None
 
     return _uploader
 
@@ -158,7 +269,10 @@ async def import_docx(
         raise ValidationFailed("zip does not contain word/document.xml")
 
     final_slug = slug or _derive_slug(file.filename or "imported.docx")
-    image_uploader = _build_image_uploader(s, actor)
+    sha_to_ulid = await _preprocess_zip_images(
+        s, buf, actor, media_prefix="word/media/"
+    )
+    image_uploader = _build_image_uploader(sha_to_ulid)
 
     try:
         result = docx_import.docx_to_document(
@@ -265,7 +379,10 @@ async def import_pptx(
         raise ValidationFailed("zip does not contain ppt/presentation.xml")
 
     final_slug = slug or _derive_slug(file.filename or "imported.pptx")
-    image_uploader = _build_image_uploader(s, actor)
+    sha_to_ulid = await _preprocess_zip_images(
+        s, buf, actor, media_prefix="ppt/media/"
+    )
+    image_uploader = _build_image_uploader(sha_to_ulid)
 
     try:
         result = pptx_import.pptx_to_document(

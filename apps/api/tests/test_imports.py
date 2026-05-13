@@ -95,6 +95,79 @@ def test_heading_stack_creates_nested_sections() -> None:
     assert s3["blocks"][0]["text"] == "body inside leaf"
 
 
+def test_dotted_numbering_promotes_section_depth() -> None:
+    """Heading-1 styled "3.1.2.3 Foo" should land at depth 4 (heading-4 block)
+    even though Word's style alone says level 1, because the dotted prefix
+    is the strongest hierarchy signal authors give us."""
+    docx = docx_import.build_minimal_docx(
+        headings=[
+            (1, "1 Overview"),
+            (1, "1.1 Background"),
+            (1, "1.1.1 Detail"),
+            (1, "1.1.1.1 Deep"),
+        ],
+    )
+    result = docx_import.docx_to_document(
+        docx, slug="t", title="", owner_user_id="u"
+    )
+    sections = result["document"]["sections"]
+    # Top-level only contains "Overview"; deeper headings nest under it.
+    assert len(sections) == 1
+    assert sections[0]["title"] == "Overview"
+    s2 = sections[0]["subsections"][0]
+    assert s2["level"] == 2 and s2["title"] == "Background"
+    s3 = s2["subsections"][0]
+    assert s3["level"] == 3 and s3["title"] == "Detail"
+    # depth-4 collapses into a heading-4 block at s3.
+    blocks = s3["blocks"]
+    assert any(
+        b.get("type") == "heading-4" and b.get("title") == "Deep" for b in blocks
+    )
+
+
+def test_unstyled_dotted_heading_detected_as_section() -> None:
+    """A plain (Normal-styled) paragraph that *reads* like "2.1 Foo" should
+    still be promoted to a level-2 section. Authors frequently paste
+    headings without applying Heading styles."""
+    docx = docx_import.build_minimal_docx(
+        headings=[(1, "Top")],
+        paragraphs=[
+            ("2.1 Plain section", None),
+            ("내용 단락", None),
+        ],
+    )
+    result = docx_import.docx_to_document(
+        docx, slug="t", title="", owner_user_id="u"
+    )
+    s1 = result["document"]["sections"][0]
+    s2 = s1["subsections"][0]
+    assert s2["level"] == 2
+    assert s2["title"] == "Plain section"
+    assert s2["blocks"][0]["text"] == "내용 단락"
+
+
+def test_caption_pattern_without_style_attaches_to_table() -> None:
+    """When the caption paragraph lacks Word's `Caption` style but reads
+    like "표 1: …", the importer should still attach it to the preceding
+    table."""
+    docx = docx_import.build_minimal_docx(
+        headings=[(1, "T")],
+        table=[["분기", "매출"], ["Q1", "100"]],
+        # Caption paragraph AFTER the table, no style applied.
+        paragraphs=[("표 1: 분기별 매출 요약", None)],
+    )
+    result = docx_import.docx_to_document(
+        docx, slug="t", title="", owner_user_id="u"
+    )
+    blocks = result["document"]["sections"][0]["blocks"]
+    table_blocks = [b for b in blocks if b["type"] == "table"]
+    assert len(table_blocks) == 1
+    assert table_blocks[0].get("caption") == "분기별 매출 요약"
+    # The caption paragraph must NOT also surface as a standalone paragraph.
+    paragraph_texts = [b.get("text", "") for b in blocks if b["type"] == "paragraph"]
+    assert not any("표 1" in t for t in paragraph_texts)
+
+
 def test_table_with_caption_uses_meta_note() -> None:
     docx = docx_import.build_minimal_docx(
         headings=[(1, "T")],
