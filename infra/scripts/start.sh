@@ -31,6 +31,30 @@ start_instance() {
 # LANG must be set for initdb. /var/run/postgresql is read-only inside the
 # rootless container; redirect the unix-socket dir into PGDATA via env.
 mkdir -p "$DATA_DIR/postgres-run"
+
+# Stale-lock cleanup. When the postgres container exits ungracefully
+# (host reboot, OOM kill, apptainer stop on a busy backend), it leaves
+# behind a unix-socket lock + a postmaster.pid pointing at a PID that
+# is no longer running. The next start then fails with:
+#   FATAL: lock file ".s.PGSQL.5432.lock" already exists
+#   HINT:  Is another postmaster (PID 14) using socket file ...
+# Clean those only when:
+#   1) the mxwp_postgres instance is NOT currently running, AND
+#   2) the file's PID is dead (or the PID is the in-container default 13/14
+#      which never matches anything on the host).
+# Both guards prevent us from killing a live DB.
+if ! instance_running "$INST_POSTGRES"; then
+  for f in "$DATA_DIR/postgres-run/.s.PGSQL.${POSTGRES_PORT}.lock" \
+           "$DATA_DIR/postgres/pgdata/postmaster.pid"; do
+    [ -e "$f" ] || continue
+    pid="$(head -n1 "$f" 2>/dev/null | tr -dc '0-9')"
+    if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+      echo "  → removing stale postgres lock: $(basename "$f") (pid=${pid:-?})"
+      rm -f "$f"
+    fi
+  done
+fi
+
 start_instance "$INST_POSTGRES" "$POSTGRES_SIF" \
   --bind "$DATA_DIR/postgres:/var/lib/postgresql/data" \
   --bind "$DATA_DIR/postgres-run:/var/run/postgresql" \
