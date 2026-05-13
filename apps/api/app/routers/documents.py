@@ -542,6 +542,55 @@ async def restore_document_version(
 
 
 @router.patch(
+    "/{slug}/title",
+    summary="문서 제목/요약 갱신",
+    description=(
+        "문서의 `title` (필수) 과 옵션으로 `summary` 를 갱신한다. "
+        "`If-Match` 필수. payload: `{title: string, summary?: string|null}` — "
+        "`summary` 키가 본문에 포함되면 함께 갱신되며, 빈 문자열/null 이면 summary 필드가 제거된다."
+    ),
+)
+async def patch_title(
+    slug: str,
+    payload: dict[str, Any],
+    response: Response,
+    if_match: str | None = Header(default=None, alias="If-Match"),
+    x_mxwp_user: str | None = Header(default=None, alias="X-MXWP-User"),
+    x_change_log: str | None = Header(default=None, alias="X-MXWP-Change-Log"),
+    s: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_editor),
+) -> dict[str, Any]:
+    actor = await _resolve_actor(s, x_mxwp_user, user)
+    if not isinstance(payload, dict):
+        from app.core.errors import ValidationFailed
+        raise ValidationFailed("payload must be an object")
+    title = payload.get("title")
+    update_summary = "summary" in payload
+    summary = payload.get("summary") if update_summary else None
+    doc = await document_service.patch_title(
+        s,
+        slug=slug,
+        title=title if isinstance(title, str) else "",
+        summary=summary if isinstance(summary, str) or summary is None else None,
+        if_match=if_match,
+        actor_id=actor,
+        change_log=x_change_log,
+        update_summary=update_summary,
+    )
+    etag = document_service.make_etag(doc["id"], doc["version"])
+    response.headers["ETag"] = etag
+    return envelope(
+        data={
+            "slug": doc["slug"],
+            "version": doc["version"],
+            "title": doc["title"],
+            "summary": (doc.get("content_json") or {}).get("summary"),
+        },
+        meta={"etag": etag},
+    )
+
+
+@router.patch(
     "/{slug}/infobox",
     summary="문서 infobox(주요 정보 박스) 갱신",
     description=(

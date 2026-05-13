@@ -9652,6 +9652,111 @@
         ]
       }
     },
+    "/api/v1/documents/{slug}/title": {
+      "patch": {
+        "description": "문서의 `title` (필수) 과 옵션으로 `summary` 를 갱신한다. `If-Match` 필수. payload: `{title: string, summary?: string|null}` — `summary` 키가 본문에 포함되면 함께 갱신되며, 빈 문자열/null 이면 summary 필드가 제거된다.",
+        "operationId": "patch_title_api_v1_documents__slug__title_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-MXWP-Change-Log",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-Change-Log"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Title Api V1 Documents  Slug  Title Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "문서 제목/요약 갱신",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/documents/{slug}/transition": {
       "post": {
         "operationId": "transition_status_api_v1_documents__slug__transition_post",

@@ -34,7 +34,7 @@ import { OfflineBanner } from '@/features/pwa/OfflineBanner'
 import { PresenceAvatars } from '@/features/presence/PresenceAvatars'
 import { BlockPresenceMarker } from '@/features/presence/BlockPresenceMarker'
 import { useAnchorBlockTracker } from '@/features/presence/useAnchorBlockTracker'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { type DocStatus, transitionStatus } from '@/features/approvals/api'
 import { useAuthStore } from '@/features/auth/store'
@@ -46,6 +46,7 @@ import { AckReadButton } from '@/features/read-receipts/AckReadButton'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { toast } from '@/components/ui/Toast'
+import { patchDocumentTitle, isPreconditionFailed } from '@/features/editor/api'
 
 interface WikiArticleProps {
   document: DocumentJSONV10
@@ -120,6 +121,97 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
   // independent of edit permission on a specific doc.
   const canSaveTemplate = userRole === 'editor' || userRole === 'admin'
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
+
+  // Inline doc-title (and summary) edit — editor+ only.
+  const canEditTitle =
+    !!editableSlug && (userRole === 'editor' || userRole === 'admin')
+  const apply = useEditorStore((s) => s.applyServerSnapshot)
+  const setConflict = useEditorStore((s) => s.setConflict)
+  const [titleEditing, setTitleEditing] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(document.title)
+  const [titleSaving, setTitleSaving] = useState(false)
+  const [summaryEditing, setSummaryEditing] = useState(false)
+  const [summaryDraft, setSummaryDraft] = useState(document.summary ?? '')
+  const [summarySaving, setSummarySaving] = useState(false)
+  useEffect(() => {
+    if (!titleEditing) setTitleDraft(document.title)
+  }, [document.title, titleEditing])
+  useEffect(() => {
+    if (!summaryEditing) setSummaryDraft(document.summary ?? '')
+  }, [document.summary, summaryEditing])
+  const saveTitle = async () => {
+    if (!editableSlug || titleSaving) return
+    const next = titleDraft.trim()
+    if (!next) {
+      toast.error('제목은 비울 수 없습니다.')
+      return
+    }
+    if (next === document.title) {
+      setTitleEditing(false)
+      return
+    }
+    const tag = useEditorStore.getState().etag
+    if (!tag) {
+      toast.error('아직 문서가 동기화되지 않았습니다.')
+      return
+    }
+    setTitleSaving(true)
+    try {
+      const res = await patchDocumentTitle(
+        editableSlug,
+        { title: next },
+        tag,
+        '문서 제목 수정',
+      )
+      apply(res.document, res.etag)
+      setTitleEditing(false)
+      toast.success('제목을 수정했습니다.')
+    } catch (err) {
+      if (isPreconditionFailed(err)) {
+        setConflict(null)
+        toast.error('다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요.')
+      } else {
+        toast.error(err instanceof Error ? err.message : '제목 수정 실패')
+      }
+    } finally {
+      setTitleSaving(false)
+    }
+  }
+  const saveSummary = async () => {
+    if (!editableSlug || summarySaving) return
+    const next = summaryDraft.trim()
+    const current = (document.summary ?? '').trim()
+    if (next === current) {
+      setSummaryEditing(false)
+      return
+    }
+    const tag = useEditorStore.getState().etag
+    if (!tag) {
+      toast.error('아직 문서가 동기화되지 않았습니다.')
+      return
+    }
+    setSummarySaving(true)
+    try {
+      const res = await patchDocumentTitle(
+        editableSlug,
+        { title: document.title, summary: next || null },
+        tag,
+        '문서 요약 수정',
+      )
+      apply(res.document, res.etag)
+      setSummaryEditing(false)
+      toast.success('요약을 수정했습니다.')
+    } catch (err) {
+      if (isPreconditionFailed(err)) {
+        setConflict(null)
+        toast.error('다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요.')
+      } else {
+        toast.error(err instanceof Error ? err.message : '요약 수정 실패')
+      }
+    } finally {
+      setSummarySaving(false)
+    }
+  }
 
   // Cycle 8 — quick archive button (editor+ on non-archived docs).
   const navigate = useNavigate()
@@ -216,9 +308,82 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
             <Badge key={t} tone="muted" size="sm">#{t}</Badge>
           ))}
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-smsg-900 sm:text-4xl">
-          {document.title}
-        </h1>
+        {canEditTitle && titleEditing ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              autoFocus
+              type="text"
+              value={titleDraft}
+              maxLength={200}
+              disabled={titleSaving}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void saveTitle()
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setTitleDraft(document.title)
+                  setTitleEditing(false)
+                }
+              }}
+              className="w-full rounded border border-smsg-300 bg-white px-3 py-2 text-3xl font-semibold tracking-tight text-smsg-900 outline-none focus:border-smsg-500 sm:text-4xl"
+              aria-label="문서 제목"
+              data-testid="doc-title-input"
+            />
+            <button
+              type="button"
+              onClick={() => void saveTitle()}
+              disabled={titleSaving}
+              className="rounded bg-smsg-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-smsg-700 disabled:opacity-50"
+              data-testid="doc-title-save"
+            >
+              {titleSaving ? '저장 중…' : '저장'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTitleDraft(document.title)
+                setTitleEditing(false)
+              }}
+              disabled={titleSaving}
+              className="rounded border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              취소
+            </button>
+          </div>
+        ) : (
+          <h1
+            className={
+              'group flex items-center gap-2 text-3xl font-semibold tracking-tight text-smsg-900 sm:text-4xl' +
+              (canEditTitle ? ' cursor-text' : '')
+            }
+            onDoubleClick={() => {
+              if (canEditTitle) {
+                setTitleDraft(document.title)
+                setTitleEditing(true)
+              }
+            }}
+            title={canEditTitle ? '더블 클릭 또는 ✎ 버튼으로 제목 수정' : undefined}
+          >
+            <span>{document.title}</span>
+            {canEditTitle && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTitleDraft(document.title)
+                  setTitleEditing(true)
+                }}
+                className="invisible rounded border border-gray-200 px-1.5 py-0.5 text-xs text-gray-500 hover:bg-gray-50 hover:text-smsg-700 group-hover:visible"
+                aria-label="문서 제목 수정"
+                title="문서 제목 수정"
+                data-testid="doc-title-edit"
+              >
+                ✎
+              </button>
+            )}
+          </h1>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <PresenceAvatars slug={document.slug} />
           {row?.id && (
@@ -270,8 +435,92 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           <ReminderButton slug={document.slug} />
         </div>
         <ReadingTimePill document={document} />
-        {document.summary && (
-          <p className="text-base leading-relaxed text-gray-700">{document.summary}</p>
+        {canEditTitle && summaryEditing ? (
+          <div className="space-y-2">
+            <textarea
+              autoFocus
+              value={summaryDraft}
+              maxLength={500}
+              disabled={summarySaving}
+              onChange={(e) => setSummaryDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setSummaryDraft(document.summary ?? '')
+                  setSummaryEditing(false)
+                } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault()
+                  void saveSummary()
+                }
+              }}
+              rows={3}
+              className="w-full resize-y rounded border border-smsg-300 bg-white px-3 py-2 text-base leading-relaxed text-gray-800 outline-none focus:border-smsg-500"
+              placeholder="문서 요약 (선택)"
+              aria-label="문서 요약"
+              data-testid="doc-summary-input"
+            />
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <button
+                type="button"
+                onClick={() => void saveSummary()}
+                disabled={summarySaving}
+                className="rounded bg-smsg-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-smsg-700 disabled:opacity-50"
+                data-testid="doc-summary-save"
+              >
+                {summarySaving ? '저장 중…' : '저장'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSummaryDraft(document.summary ?? '')
+                  setSummaryEditing(false)
+                }}
+                disabled={summarySaving}
+                className="rounded border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <span>{summaryDraft.length}/500 · ⌘/Ctrl+Enter 저장, Esc 취소</span>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={
+              'group flex items-start gap-2' +
+              (canEditTitle ? ' cursor-text' : '')
+            }
+            onDoubleClick={() => {
+              if (canEditTitle) {
+                setSummaryDraft(document.summary ?? '')
+                setSummaryEditing(true)
+              }
+            }}
+          >
+            {document.summary ? (
+              <p className="flex-1 text-base leading-relaxed text-gray-700">
+                {document.summary}
+              </p>
+            ) : canEditTitle ? (
+              <p className="flex-1 text-sm italic text-gray-400">
+                요약이 없습니다 — ✎ 버튼으로 추가하세요.
+              </p>
+            ) : null}
+            {canEditTitle && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSummaryDraft(document.summary ?? '')
+                  setSummaryEditing(true)
+                }}
+                className="invisible mt-0.5 rounded border border-gray-200 px-1.5 py-0.5 text-xs text-gray-500 hover:bg-gray-50 hover:text-smsg-700 group-hover:visible"
+                aria-label="문서 요약 수정"
+                title="문서 요약 수정"
+                data-testid="doc-summary-edit"
+              >
+                ✎
+              </button>
+            )}
+          </div>
         )}
         <p className="text-xs text-gray-500">
           {path && <span>{path}</span>}

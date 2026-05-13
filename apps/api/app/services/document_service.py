@@ -1439,6 +1439,55 @@ async def reorder_sections(
     )
 
 
+async def patch_title(
+    s: AsyncSession,
+    *,
+    slug: str,
+    title: str,
+    summary: str | None = None,
+    if_match: str | None,
+    actor_id: str,
+    change_log: str | None = None,
+    update_summary: bool = False,
+) -> dict[str, Any]:
+    """문서 title (그리고 옵션으로 summary) 만 갱신한다.
+
+    `update_summary=True` 일 때 summary 도 함께 갱신. 빈 문자열은 summary 필드를 제거.
+    """
+    if not isinstance(title, str):
+        raise ValidationFailed("title must be a string")
+    title = title.strip()
+    if not title:
+        raise ValidationFailed("title must not be empty")
+    if len(title) > 200:
+        raise ValidationFailed("title too long (max 200)")
+
+    existing = await get_document_or_404(s, slug)
+    _check_etag(existing, if_match)
+
+    content = copy.deepcopy(existing["content_json"])
+    content["title"] = title
+    if update_summary:
+        if summary is None or (isinstance(summary, str) and not summary.strip()):
+            content.pop("summary", None)
+        else:
+            s_text = str(summary).strip()
+            if len(s_text) > 500:
+                raise ValidationFailed("summary too long (max 500)")
+            content["summary"] = s_text
+
+    log = normalize_change_log(change_log, default="title.patch")
+    return await _persist_content_change(
+        s,
+        existing=existing,
+        new_content=content,
+        actor_id=actor_id,
+        change_log=log,
+        action="document.title.patch",
+        target_suffix="#title",
+    )
+
+
 async def patch_infobox(
     s: AsyncSession,
     *,

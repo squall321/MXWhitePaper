@@ -106,6 +106,29 @@ export interface SectionOutlineNode {
 }
 
 /**
+ * PATCH /documents/:slug/title — update doc title (and optionally summary).
+ *
+ * Body shape:
+ *   `{ title: string, summary?: string | null }`
+ *
+ * If `summary` key is present, it is updated as well; empty/null removes the
+ * summary field from the document. Returns the fresh full document.
+ */
+export async function patchDocumentTitle(
+  slug: Slug,
+  body: { title: string; summary?: string | null },
+  etag: string,
+  changeLog?: string,
+): Promise<EditorMutationResult> {
+  const res = await apiClient.patch<ApiEnvelope<DocumentJSONV10>>(
+    `/documents/${encodeURIComponent(slug)}/title`,
+    body,
+    { headers: buildHeaders(etag, changeLog) },
+  )
+  return withFullDocFallback(slug, unwrap(res as never))
+}
+
+/**
  * PATCH /documents/:slug/sections/:id
  * Updates a single section; the BE replaces blocks if `blocks` is set.
  */
