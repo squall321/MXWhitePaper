@@ -28,6 +28,7 @@ from .routers.auth import router as auth_router
 from .routers.auth_flows import router as auth_flows_router
 from .routers.automation import router as automation_router
 from .routers.backups import router as backups_router
+from .routers.snapshots import router as snapshots_router
 from .routers.bookmarks import router as bookmarks_router
 from .routers.comments import router_doc as comments_doc_router
 from .routers.comments import router_one as comments_one_router
@@ -576,6 +577,7 @@ def create_app() -> FastAPI:
     app.include_router(webhooks_router)
     # Cycle 0015 — scheduled backups + ad-hoc run-now (admin).
     app.include_router(backups_router)
+    app.include_router(snapshots_router)
     # Cycle 0018 — document subscriptions + digest.
     app.include_router(subscriptions_router)
     # Cycle 0021 — emoji reactions on docs and blocks.

@@ -25,6 +25,12 @@ import {
   patchSchedule,
   runNow,
 } from '@/features/backups/api'
+import {
+  type Snapshot,
+  deleteSnapshot,
+  listSnapshots,
+  snapshotDownloadUrl,
+} from '@/features/snapshots/api'
 
 /**
  * `/admin/backups` — admin operations console for scheduled backups.
@@ -55,7 +61,168 @@ export function BackupAdminPage() {
       <SchedulesSection />
       <RunNowSection />
       <RunsSection />
+      <SnapshotsSection />
     </div>
+  )
+}
+
+function formatBytes(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes)) return '—'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let i = 0
+  let n = bytes
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024
+    i++
+  }
+  return `${n.toFixed(n >= 100 ? 0 : 1)} ${units[i]}`
+}
+
+/**
+ * 전체 서버 스냅샷 — 호스트에서 `infra/scripts/snapshot.sh` 로 생성된
+ * 아카이브 목록. 생성은 API 컨테이너 안에서 `apptainer exec` / `pg_dump`
+ * 접근이 불가능해 호스트 스크립트로만 수행하고, 여기서는 목록/다운로드/
+ * 삭제만 노출한다.
+ */
+function SnapshotsSection() {
+  const queryClient = useQueryClient()
+  const snapshotsQuery = useQuery({
+    queryKey: ['snapshots'],
+    queryFn: listSnapshots,
+    staleTime: 30_000,
+  })
+
+  const deleteM = useMutation({
+    mutationFn: (id: string) => deleteSnapshot(id),
+    onSuccess: () => {
+      toast.success('스냅샷을 삭제했습니다.')
+      queryClient.invalidateQueries({ queryKey: ['snapshots'] })
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : '삭제 실패')
+    },
+  })
+
+  const items = snapshotsQuery.data?.items ?? []
+
+  return (
+    <Card>
+      <header className="mb-3 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-smsg-900">전체 서버 스냅샷</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            PostgreSQL + 모든 MinIO 객체를 단일 .tar.gz 로 묶은 디스크 복구용
+            스냅샷입니다. 위의 예약 백업(문서 콘텐츠만 zip)과는 별개입니다.
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          onClick={() =>
+            queryClient.invalidateQueries({ queryKey: ['snapshots'] })
+          }
+        >
+          새로고침
+        </Button>
+      </header>
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        <strong>생성 방법:</strong> 서버 호스트에서
+        <code className="ml-1 rounded bg-amber-100 px-1 py-0.5 font-mono">
+          ./infra/scripts/snapshot.sh
+        </code>{' '}
+        를 실행하면 새 스냅샷이 생성되고 아래 목록에 나타납니다.{' '}
+        <strong className="ml-2">복원:</strong>
+        <code className="ml-1 rounded bg-amber-100 px-1 py-0.5 font-mono">
+          ./infra/scripts/restore-snapshot.sh &lt;id 또는 latest&gt;
+        </code>
+        . API 컨테이너 내부에서는 pg_dump / apptainer 접근이 막혀 있어 호스트
+        스크립트로만 수행할 수 있습니다.
+      </div>
+      {snapshotsQuery.isLoading && (
+        <p className="mt-3 text-sm text-gray-500">불러오는 중…</p>
+      )}
+      {snapshotsQuery.isError && (
+        <ErrorState
+          title="스냅샷 목록 로드 실패"
+          description={
+            snapshotsQuery.error instanceof Error
+              ? snapshotsQuery.error.message
+              : String(snapshotsQuery.error ?? '')
+          }
+        />
+      )}
+      {snapshotsQuery.data && items.length === 0 && (
+        <p className="mt-3 text-sm italic text-gray-500">
+          아직 생성된 스냅샷이 없습니다.
+        </p>
+      )}
+      {items.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+              <tr>
+                <th className="px-3 py-2">ID</th>
+                <th className="px-3 py-2">생성 시각 (UTC, 초 정밀도)</th>
+                <th className="px-3 py-2">크기</th>
+                <th className="px-3 py-2">MinIO 객체</th>
+                <th className="px-3 py-2">git_rev</th>
+                <th className="px-3 py-2">메모</th>
+                <th className="px-3 py-2 text-right">작업</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {items.map((snap: Snapshot) => {
+                const totalObjects = (snap.schema?.minio_buckets ?? []).reduce(
+                  (sum, b) => sum + (b.object_count || 0),
+                  0,
+                )
+                return (
+                  <tr key={snap.id} data-testid={`snapshot-row-${snap.id}`}>
+                    <td className="px-3 py-2 font-mono text-xs">{snap.id}</td>
+                    <td className="px-3 py-2">{snap.created_at ?? snap.mtime ?? '—'}</td>
+                    <td className="px-3 py-2">{formatBytes(snap.size_bytes)}</td>
+                    <td className="px-3 py-2">
+                      <span className="font-mono">{totalObjects}</span> objects
+                      <span className="ml-1 text-xs text-gray-500">
+                        ({(snap.schema?.minio_buckets ?? []).map((b) => b.name).join(', ') || '—'})
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">{snap.git_rev ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs text-gray-600">
+                      {snap.note || <span className="italic text-gray-400">(없음)</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right space-x-2">
+                      <a
+                        href={snapshotDownloadUrl(snap.id)}
+                        className="rounded border border-smsg-300 px-2 py-1 text-xs text-smsg-700 hover:bg-smsg-50"
+                        download
+                      >
+                        다운로드
+                      </a>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={deleteM.isPending}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `스냅샷 ${snap.id} 를 삭제하시겠습니까?\n복구가 불가능합니다.`,
+                            )
+                          ) {
+                            deleteM.mutate(snap.id)
+                          }
+                        }}
+                      >
+                        삭제
+                      </Button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   )
 }
 

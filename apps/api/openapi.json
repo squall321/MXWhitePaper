@@ -14557,6 +14557,149 @@
         ]
       }
     },
+    "/api/v1/snapshots": {
+      "get": {
+        "description": "`infra/scripts/snapshot.sh` 로 생성된 .tar.gz 아카이브를 최신순으로 반환한다. 각 항목은 manifest.json 의 created_at(초 정밀도), git_rev, 버킷별 객체수/사이즈, sha256 체크섬을 포함한다.",
+        "operationId": "list_snapshots_api_v1_snapshots_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Snapshots Api V1 Snapshots Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "전체 서버 스냅샷 목록",
+        "tags": [
+          "snapshots"
+        ]
+      }
+    },
+    "/api/v1/snapshots/{snapshot_id}": {
+      "delete": {
+        "description": "아카이브와 sidecar .sha256 파일을 함께 제거한다.",
+        "operationId": "delete_snapshot_api_v1_snapshots__snapshot_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "스냅샷 삭제",
+        "tags": [
+          "snapshots"
+        ]
+      },
+      "get": {
+        "operationId": "get_snapshot_api_v1_snapshots__snapshot_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Snapshot Api V1 Snapshots  Snapshot Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "단일 스냅샷 메타 조회",
+        "tags": [
+          "snapshots"
+        ]
+      }
+    },
+    "/api/v1/snapshots/{snapshot_id}/download": {
+      "get": {
+        "description": "전체 스냅샷 아카이브 바이트를 스트리밍한다. 파일 크기는 수십~수백 MB 수준이라 메모리에 통째로 올리지 않고 1 MB 청크로 흘려보낸다.",
+        "operationId": "download_snapshot_api_v1_snapshots__snapshot_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "스냅샷 .tar.gz 다운로드",
+        "tags": [
+          "snapshots"
+        ]
+      }
+    },
     "/api/v1/snippets": {
       "get": {
         "operationId": "list_snippets_api_v1_snippets_get",
