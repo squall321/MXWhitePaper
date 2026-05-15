@@ -1,0 +1,130 @@
+name: llm-docx-toolkit
+
+# Builds the standalone mxwp-validator binary for Linux + Windows on every push
+# to main and on tagged releases. The build script (dist/llm-docx-toolkit/build.py)
+# stages a snapshot of apps/api/app/services/docx_import.py + widget_markers.py
+# and the schema, then runs PyInstaller — so every push that lands a new widget
+# or import-rule change automatically produces a fresh validator binary.
+#
+# Artifacts:
+#   - llm-docx-toolkit-linux   (mxwp-validator-linux + examples + docs)
+#   - llm-docx-toolkit-windows (mxwp-validator-win32.exe + examples + docs)
+#
+# On a tag push (v*), a GitHub Release is created with both bundles attached.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/app/services/docx_import.py'
+      - 'apps/api/app/services/widget_markers.py'
+      - 'packages/shared/schemas/document.json'
+      - 'docs/llm-input-rules.md'
+      - 'dist/llm-docx-toolkit/**'
+      - '.github/workflows/llm-docx-toolkit.yml'
+    tags: ['v*']
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform_tag: linux
+            binary_name: mxwp-validator-linux
+          - os: windows-latest
+            platform_tag: windows
+            binary_name: mxwp-validator-win32.exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install build dependencies
+        working-directory: dist/llm-docx-toolkit
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Refresh llm-input-rules.md from source
+        shell: bash
+        run: |
+          cp docs/llm-input-rules.md dist/llm-docx-toolkit/llm-input-rules.md
+
+      - name: Build standalone binary
+        working-directory: dist/llm-docx-toolkit
+        run: python build.py --clean
+
+      - name: Build example .docx files
+        working-directory: dist/llm-docx-toolkit
+        run: |
+          pip install python-docx
+          # Toolkit-side build_examples.py needs to import the production
+          # docx_export, so we let it discover apps/api on its own path.
+          python examples/build_examples.py
+
+      - name: Smoke test — validator on all 3 examples
+        shell: bash
+        working-directory: dist/llm-docx-toolkit
+        run: |
+          BIN="bin/${{ matrix.binary_name }}"
+          chmod +x "$BIN" 2>/dev/null || true
+          set -e
+          for f in examples/good-example.docx examples/all-widgets.docx examples/bad-example.docx; do
+            echo "--- $f ---"
+            "$BIN" "$f" || code=$?
+            echo "exit=$code"
+          done
+          # The validator must produce a JSON dump for each.
+          for f in examples/good-example.docx examples/all-widgets.docx examples/bad-example.docx; do
+            test -s "${f%.docx}.json" || { echo "missing JSON dump for $f"; exit 1; }
+          done
+
+      - name: Stage release bundle
+        shell: bash
+        working-directory: dist/llm-docx-toolkit
+        run: |
+          BUNDLE="llm-docx-toolkit-${{ matrix.platform_tag }}"
+          rm -rf "_release/${BUNDLE}"
+          mkdir -p "_release/${BUNDLE}"
+          cp -r bin "_release/${BUNDLE}/bin"
+          cp -r examples "_release/${BUNDLE}/examples"
+          cp -r src "_release/${BUNDLE}/src"
+          cp README.md llm-input-rules.md requirements.txt build.py "_release/${BUNDLE}/"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-docx-toolkit-${{ matrix.platform_tag }}
+          path: dist/llm-docx-toolkit/_release/llm-docx-toolkit-${{ matrix.platform_tag }}
+          retention-days: 30
+
+      - name: Pack release archive (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        working-directory: dist/llm-docx-toolkit/_release
+        run: |
+          BUNDLE="llm-docx-toolkit-${{ matrix.platform_tag }}"
+          if [ "${{ matrix.platform_tag }}" = "windows" ]; then
+            python -c "import shutil; shutil.make_archive('${BUNDLE}', 'zip', '${BUNDLE}')"
+          else
+            tar -czf "${BUNDLE}.tar.gz" "${BUNDLE}"
+          fi
+          ls -l
+
+      - name: Attach to GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/llm-docx-toolkit/_release/llm-docx-toolkit-${{ matrix.platform_tag }}.tar.gz
+            dist/llm-docx-toolkit/_release/llm-docx-toolkit-${{ matrix.platform_tag }}.zip
+          fail_on_unmatched_files: false

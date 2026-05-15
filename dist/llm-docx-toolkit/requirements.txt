@@ -1,0 +1,7 @@
+# Runtime — what the validator needs to actually run.
+ulid-py>=1.1
+jsonschema>=4.20
+
+# Build-only — only needed when producing the binary; CI installs these too.
+pyinstaller>=6.0
+python-docx>=1.1   # only the example-builder uses it (see examples/build_examples.py)

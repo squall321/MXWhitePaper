@@ -1,0 +1,10 @@
+# Build outputs — produced by build.py and CI, not committed.
+bin/
+_build/
+_release/
+*.spec
+__pycache__/
+
+# Example outputs — regenerated from build_examples.py during CI.
+examples/*.docx
+examples/*.json

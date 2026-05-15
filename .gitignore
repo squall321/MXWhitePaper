@@ -7,7 +7,13 @@ __pycache__/
 *.pyc
 
 # build outputs
-dist/
+# (The top-level `dist/` was historically a catch-all for Webpack/Vite output;
+# we now have one tracked sub-tree under it, so we ignore only the specific
+# build folders and let the rest fall through.)
+dist/*
+!dist/llm-docx-toolkit/
+apps/web/dist/
+apps/api/dist/
 build/
 *.tsbuildinfo
 .tsbuild-node/
