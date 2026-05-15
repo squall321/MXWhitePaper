@@ -17,6 +17,7 @@ from app.services.widget_markers import (
     _autodetect_gallery,
     _autodetect_gantt,
     _autodetect_kpi_cards,
+    apply_section_column_autodetect,
     apply_widget_autodetect,
 )
 
@@ -700,3 +701,162 @@ def test_autodetect_kpi_cards_extra_columns_ignored() -> None:
     assert item["value"] == "100억"
     assert "note" not in item
     assert "author" not in item
+
+
+# ── Section-level columns auto-detection (G3) ───────────────────────
+
+
+def _para(text: str = "p") -> dict[str, Any]:
+    return {"type": "paragraph", "id": _u(), "text": text}
+
+
+def test_section_column_autodetect_wraps_two_cols() -> None:
+    blocks = [_para("a"), _para("b"), _para("c"), _para("d")]
+    sec = _section(list(blocks))
+    sec["multi_column"] = 2
+    s = _Summary()
+    apply_section_column_autodetect([sec], s)
+    assert "multi_column" not in sec
+    assert len(sec["blocks"]) == 1
+    cb = sec["blocks"][0]
+    assert cb["type"] == "columns"
+    assert len(cb["columns"]) == 2
+    assert cb["columns"][0] == [blocks[0], blocks[1]]
+    assert cb["columns"][1] == [blocks[2], blocks[3]]
+    assert any("2-column section" in w for w in s.warnings)
+
+
+def test_section_column_autodetect_three_cols() -> None:
+    blocks = [_para(str(i)) for i in range(6)]
+    sec = _section(list(blocks))
+    sec["multi_column"] = 3
+    apply_section_column_autodetect([sec], _Summary())
+    cb = sec["blocks"][0]
+    assert cb["type"] == "columns"
+    assert len(cb["columns"]) == 3
+    assert cb["columns"][0] == [blocks[0], blocks[1]]
+    assert cb["columns"][1] == [blocks[2], blocks[3]]
+    assert cb["columns"][2] == [blocks[4], blocks[5]]
+
+
+def test_section_column_autodetect_uneven_distribution() -> None:
+    # 3 blocks, N=2 → per_col = ceil(3/2) = 2 → col0 has 2, col1 has 1.
+    blocks = [_para("a"), _para("b"), _para("c")]
+    sec = _section(list(blocks))
+    sec["multi_column"] = 2
+    apply_section_column_autodetect([sec], _Summary())
+    cb = sec["blocks"][0]
+    assert cb["type"] == "columns"
+    assert len(cb["columns"]) == 2
+    assert cb["columns"][0] == [blocks[0], blocks[1]]
+    assert cb["columns"][1] == [blocks[2]]
+
+
+def test_section_column_autodetect_too_few_blocks_skips() -> None:
+    # 1 block, N=4 → per_col=1 → only col0 is non-empty → < 2 chunks → skip.
+    only = _para("solo")
+    sec = _section([only])
+    sec["multi_column"] = 4
+    s = _Summary()
+    apply_section_column_autodetect([sec], s)
+    assert "multi_column" not in sec
+    assert sec["blocks"] == [only]
+    assert not any("column section" in w for w in s.warnings)
+
+
+def test_section_column_autodetect_no_multi_column_unchanged() -> None:
+    blocks = [_para("a"), _para("b")]
+    sec = _section(list(blocks))
+    # No `multi_column` key.
+    s = _Summary()
+    apply_section_column_autodetect([sec], s)
+    assert sec["blocks"] == blocks
+    assert s.warnings == []
+
+
+def test_section_column_autodetect_recurses_subsections() -> None:
+    inner_blocks = [_para("a"), _para("b"), _para("c"), _para("d")]
+    inner = _section(list(inner_blocks))
+    inner["multi_column"] = 2
+    outer = _section([])
+    outer["subsections"] = [inner]
+    apply_section_column_autodetect([outer], _Summary())
+    assert "multi_column" not in inner
+    assert len(inner["blocks"]) == 1
+    cb = inner["blocks"][0]
+    assert cb["type"] == "columns"
+    assert len(cb["columns"]) == 2
+
+
+def _build_docx_with_cols(num_cols: int, body_inner: str) -> bytes:
+    """Construct a minimal .docx whose body ends with
+    ``<w:sectPr><w:cols w:num="N"/></w:sectPr>``. ``body_inner`` is the
+    raw XML for the body's content paragraphs/tables.
+    """
+    import io as _io
+    import zipfile as _zip
+
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        f'<w:body>{body_inner}'
+        f'<w:sectPr><w:cols w:num="{num_cols}"/></w:sectPr>'
+        '</w:body></w:document>'
+    )
+    rels_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '</Relationships>'
+    )
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/word/document.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        '</Types>'
+    )
+    package_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+        'Target="word/document.xml"/>'
+        '</Relationships>'
+    )
+    out = _io.BytesIO()
+    with _zip.ZipFile(out, "w", _zip.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", content_types)
+        zf.writestr("_rels/.rels", package_rels)
+        zf.writestr("word/document.xml", document_xml)
+        zf.writestr("word/_rels/document.xml.rels", rels_xml)
+    return out.getvalue()
+
+
+def test_docx_import_autodetects_columns_from_sectpr_cols() -> None:
+    """End-to-end: a docx whose body's <w:sectPr> carries <w:cols w:num="2"/>
+    yields a top-level section whose blocks are wrapped in a ColumnsBlock.
+    """
+    # 4 plain paragraphs → with N=2, expect a columns block with 2 columns
+    # of 2 paragraphs each.
+    body_inner = "".join(
+        f'<w:p><w:r><w:t xml:space="preserve">{txt}</w:t></w:r></w:p>'
+        for txt in ("alpha", "beta", "gamma", "delta")
+    )
+    blob = _build_docx_with_cols(2, body_inner)
+    result = docx_to_document(blob, slug="cols", title="T", owner_user_id=_u())
+    sections = result["document"].get("sections") or []
+    assert sections, "no sections produced"
+    top = sections[0]
+    assert "multi_column" not in top
+    assert len(top["blocks"]) == 1
+    cb = top["blocks"][0]
+    assert cb["type"] == "columns"
+    assert len(cb["columns"]) == 2
+    # Each column should hold 2 paragraph blocks.
+    for col in cb["columns"]:
+        assert len(col) == 2
+        for b in col:
+            assert b["type"] == "paragraph"

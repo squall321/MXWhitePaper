@@ -69,15 +69,23 @@ def test_select_versions_keeps_head_and_v1() -> None:
 
 
 def test_select_versions_compacts_old_per_day() -> None:
-    # 25시간 ~ 7일 전 같은 날에 두 개 → 그 날의 최신 1개만 keep
-    base = datetime.now(timezone.utc) - timedelta(days=2)
+    # 25시간 ~ 7일 전 같은 calendar day 안에 두 개 → 그 날의 최신 1개만 keep.
+    # Anchor on the *date* boundary (midday of `now - 2days`) so adding 2h
+    # stays inside the same date — the prior test used `now - 2days` which
+    # could cross midnight depending on the wall-clock hour at test time.
+    now = datetime.now(timezone.utc)
+    two_days_ago = (now - timedelta(days=2)).date()
+    base = datetime(
+        two_days_ago.year, two_days_ago.month, two_days_ago.day,
+        12, 0, 0, tzinfo=timezone.utc,
+    )
     versions = [
         _mk_version("v1", 1, hours_ago=10000),  # always-keep
         {"id": "older", "version": 5,  "edited_at": base},
         {"id": "newer", "version": 6,  "edited_at": base + timedelta(hours=2)},
-        {"id": "head",  "version": 7,  "edited_at": datetime.now(timezone.utc)},
+        {"id": "head",  "version": 7,  "edited_at": now},
     ]
-    keep = _select_versions_to_keep(versions, now=datetime.now(timezone.utc))
+    keep = _select_versions_to_keep(versions, now=now)
     assert "head" in keep
     assert "newer" in keep
     assert "older" not in keep

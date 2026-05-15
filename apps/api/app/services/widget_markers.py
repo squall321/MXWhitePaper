@@ -421,10 +421,22 @@ def _convert_gantt(
     )
 
 
+def _looks_like_annotation_table(target: dict[str, Any]) -> bool:
+    """Return True if ``target`` is a TableBlock whose first column header
+    is ``kind`` (case-insensitive) — the shape ``_b_image_annotation``
+    emits when no image bytes survive the round-trip."""
+    if target.get("type") != "table":
+        return False
+    headers = target.get("headers") or []
+    if not headers:
+        return False
+    return str(headers[0]).strip().lower() == "kind"
+
+
 def _convert_image_annotation(
     _variant: str | None,
     targets: list[dict[str, Any]],
-    _summary: _SummaryLike,
+    summary: _SummaryLike,
 ) -> tuple[dict[str, Any], int] | None:
     """``Widget: image-annotation`` + ImageBlock (+ optional TableBlock) →
     ImageAnnotationBlock.
@@ -433,19 +445,39 @@ def _convert_image_annotation(
     callout annotations over the image. Field name asymmetry: ImageBlock
     carries ``imageId`` (camelCase) while ImageAnnotationBlock stores it as
     ``image_id`` (snake_case) — keep that conversion in mind when editing.
+
+    Round-trip fallback: if no resolver supplied bytes during export, the
+    ImageBlock degrades to a text-fallback paragraph. We then accept a
+    direct ``marker → annotation-table`` pair (the export still emits the
+    table) and mint a placeholder ``image_id`` so the widget block survives.
     """
     if not targets:
         return None
     img = targets[0]
-    if img.get("type") != "image":
+
+    image_id: str
+    table_idx: int | None  # index into targets for the optional annotation table
+    n_consumed: int
+    if img.get("type") == "image":
+        image_id = str(img.get("imageId") or "")
+        table_idx = 1 if len(targets) >= 2 and targets[1].get("type") == "table" else None
+        n_consumed = 1
+    elif _looks_like_annotation_table(img):
+        # Image lost on export (no resolver / no bytes). Mint a placeholder.
+        image_id = _new_id()
+        table_idx = 0
+        n_consumed = 1
+        summary.warnings.append(
+            "image-annotation: image bytes missing on round-trip — "
+            "placeholder image_id minted"
+        )
+    else:
         return None
-    image_id = str(img.get("imageId") or "")
 
     annotations: list[dict[str, Any]] = []
-    n_consumed = 1
 
-    if len(targets) >= 2 and targets[1].get("type") == "table":
-        table = targets[1]
+    if table_idx is not None and table_idx < len(targets) and targets[table_idx].get("type") == "table":
+        table = targets[table_idx]
         headers = table.get("headers") or []
         rows = table.get("rows") or []
         headers_lc = [str(h).strip().lower() for h in headers]
@@ -531,7 +563,8 @@ def _convert_image_annotation(
                     })
 
             if annotations:
-                n_consumed = 2
+                # Bump consumption to include the annotation table.
+                n_consumed = table_idx + 1
 
     return (
         {
@@ -1664,3 +1697,52 @@ def _autodetect_rewrite(
         i += n_consumed
     blocks.clear()
     blocks.extend(out)
+
+
+def apply_section_column_autodetect(
+    sections: list[dict[str, Any]],
+    summary: _SummaryLike,
+) -> None:
+    """Phase 3 — section-level autodetect.
+
+    Walks every section / subsection in place. If ``section["multi_column"]``
+    is set (populated by ``docx_import._parse_sect_cols`` when the source
+    Word document carries ``<w:cols w:num="N"/>`` for N in 2..4), wraps the
+    section's blocks into a single ColumnsBlock that holds N evenly-split
+    columns.
+
+    Idempotent: subsequent runs see no ``multi_column`` key (we pop it
+    after consuming) and skip. Marker-processed widgets inside the
+    section are preserved as columns content (this pass doesn't inspect
+    block types — it just regroups whatever is already there).
+    """
+    for sec in sections:
+        n = sec.get("multi_column")
+        if isinstance(n, int) and 2 <= n <= 4:
+            blocks = sec.get("blocks") or []
+            if blocks:
+                # Split blocks evenly across N columns, in order.
+                # blocks[0..per_col] → col 0, blocks[per_col..2*per_col] → col 1, ...
+                per_col = max(1, (len(blocks) + n - 1) // n)
+                columns_arr: list[list[dict[str, Any]]] = []
+                for i in range(n):
+                    chunk = blocks[i * per_col : (i + 1) * per_col]
+                    if chunk:
+                        columns_arr.append(chunk)
+                # Schema requires minItems=2, maxItems=4 — short-circuit if
+                # we ended up with <2 non-empty chunks (rare; very few blocks).
+                if len(columns_arr) >= 2:
+                    columns_block = {
+                        "type": "columns",
+                        "id": _new_id(),
+                        "columns": columns_arr,
+                    }
+                    sec["blocks"] = [columns_block]
+                    summary.warnings.append(
+                        f"auto-detected {n}-column section from <w:cols> hint"
+                    )
+            sec.pop("multi_column", None)
+        # Recurse into subsections regardless of whether this level fired.
+        subs = sec.get("subsections") or []
+        if subs:
+            apply_section_column_autodetect(subs, summary)

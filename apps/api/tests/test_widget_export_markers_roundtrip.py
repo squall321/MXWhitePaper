@@ -226,26 +226,43 @@ def test_roundtrip_whiteboard_drops_to_paragraphs_with_warning() -> None:
 # ── 6. image-annotation ──────────────────────────────────────────────
 
 
-@pytest.mark.skip(
-    reason=(
-        "image-annotation needs an ImageBlock target that survives docx "
-        "round-trip with a stable imageId. Without an image_resolver / "
-        "image_uploader pipeline the placeholder image is lost on export, "
-        "so the marker's first target after import is not an ImageBlock."
-    )
-)
 def test_roundtrip_preserves_image_annotation() -> None:
+    """Without an image_resolver the placeholder image degrades to a text
+    fallback paragraph on export, so the importer cannot rebuild the
+    ImageBlock. ``_b_image_annotation`` still emits an annotation table
+    (kind / x / y / from_x / from_y / to_x / to_y / w / h / text / color
+    headers); ``_convert_image_annotation`` recognises that table as the
+    first target, mints a placeholder ``image_id`` (warning logged), and
+    rebuilds the ImageAnnotationBlock with annotations intact."""
     blocks = [
         {
             "type": "image-annotation",
             "id": _u(),
             "image_id": _u(),
-            "annotations": [],
+            "annotations": [
+                {
+                    "kind": "arrow",
+                    "id": "a1",
+                    "from": {"x": 0.1, "y": 0.1},
+                    "to": {"x": 0.5, "y": 0.5},
+                    "color": "#dc2626",
+                },
+            ],
         }
     ]
     r = _roundtrip(blocks)
     annos = [b for b in r["blocks"] if b.get("type") == "image-annotation"]
-    assert annos
+    assert annos, [b.get("type") for b in r["blocks"]]
+    block = annos[0]
+    # image_id is re-minted (placeholder) but the block type survives.
+    assert block.get("image_id")
+    # Arrow annotation survived the table round-trip.
+    arrows = [a for a in block.get("annotations") or [] if a.get("kind") == "arrow"]
+    assert arrows, block.get("annotations")
+    assert arrows[0]["from"]["x"] == 0.1
+    assert arrows[0]["to"]["y"] == 0.5
+    # Audit trail: warning emitted about placeholder image.
+    assert any("placeholder image_id" in w for w in r["warnings"])
 
 
 # ── 7. flow ──────────────────────────────────────────────────────────

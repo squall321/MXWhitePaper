@@ -8,3 +8,4 @@
 | widget-export-markers (Cycle X — 4 renderer marker emit + 9 docx widget rework for lossless round-trip + 3 missing functions filled) | 96% | 2026-05-15 | [widget-export-markers/](widget-export-markers/) |
 | widget-phase3-autodetect (Cycle Y — marker-less auto-detection: callout/kpi-cards/gallery/gantt) | 100% | 2026-05-15 | [widget-phase3-autodetect/](widget-phase3-autodetect/) |
 | web-cell-edit (Cycle Z — TableBlock 의 mixed-cell 풀 인-셀 편집: paragraph/list/image + 모드 토글) | 100% | 2026-05-15 | [web-cell-edit/](web-cell-edit/) |
+| widget-polish-batch (5 follow-up 통합: image picker / image-annotation roundtrip / inline format / drag-drop / columns autodetect + pre-existing maintenance fix) | 100% | 2026-05-15 | [widget-polish-batch/](widget-polish-batch/) |

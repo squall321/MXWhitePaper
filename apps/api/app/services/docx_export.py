@@ -1166,30 +1166,71 @@ def _b_quiz(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
 
 
 def _b_image_annotation(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
-    """ImageAnnotation — embed the base image + bullet-list annotations."""
+    """ImageAnnotation — emit marker + ImageBlock-shaped picture (or text
+    fallback paragraph) + annotation table that ``_convert_image_annotation``
+    can parse. Decoration paragraph comes AFTER so the importer sees a
+    clean ``marker → image → table`` sequence (chart/gantt pattern)."""
     marker = emit_marker_text(block)
     if marker:
         document.add_paragraph(marker)
     image_id = _str(block.get("imageId") or block.get("image_id"))
-    p = document.add_paragraph()
-    p.add_run("✏ Image annotation").bold = True
-    # Try to embed the image if resolver gives us bytes.
-    if image_id and ctx.options.image_resolver:
-        info = ctx.options.image_resolver(image_id)
-        if info and info.get("bytes"):
-            try:
-                from io import BytesIO
-                document.add_picture(BytesIO(info["bytes"]))
-            except Exception:
-                pass
-    for ann in block.get("annotations") or []:
-        kind = ann.get("kind") or ann.get("type") or "marker"
-        label = ann.get("label") or ""
-        coords = ann.get("coords") or ann.get("box") or ann.get("point") or ""
-        item = document.add_paragraph(style="List Bullet")
-        item.add_run(f"{kind}: {label}")
-        if coords:
-            item.add_run(f"  ({coords})").italic = True
+    caption = _str(block.get("caption"))
+    # Embed the base image via _b_image — but ONLY when the resolver
+    # actually returns bytes. Without bytes _b_image would emit a "🖼 …"
+    # text-fallback paragraph that the importer wraps in italic, breaking
+    # the ``marker → image → table`` lookup chain. Skipping the call lets
+    # the annotation table become the marker's first target so the
+    # importer's table-only fallback path kicks in.
+    resolver = ctx.opts.image_resolver
+    has_image_bytes = False
+    if resolver and image_id:
+        try:
+            info = resolver(image_id)
+            has_image_bytes = bool(info and info.get("bytes"))
+        except Exception:
+            has_image_bytes = False
+    if has_image_bytes:
+        image_block = {"type": "image", "imageId": image_id, "caption": caption}
+        _b_image(document, image_block, ctx)
+    # Annotation table — columns match _convert_image_annotation's _col()
+    # aliases. Headers are NOT bold so import doesn't markdown-wrap them.
+    annotations = block.get("annotations") or []
+    if annotations:
+        headers = [
+            "kind", "x", "y", "from_x", "from_y", "to_x", "to_y",
+            "w", "h", "text", "color",
+        ]
+        table = document.add_table(rows=1 + len(annotations), cols=len(headers))
+        table.style = "Table Grid"
+        hdr = table.rows[0].cells
+        for c, h in enumerate(headers):
+            hdr[c].text = h
+        for r, ann in enumerate(annotations, start=1):
+            row = table.rows[r].cells
+            kind = _str(ann.get("kind") or ann.get("type"))
+            row[0].text = kind
+            row[10].text = _str(ann.get("color"))
+            if kind == "arrow":
+                frm = ann.get("from") or {}
+                to = ann.get("to") or {}
+                row[3].text = _str(frm.get("x"))
+                row[4].text = _str(frm.get("y"))
+                row[5].text = _str(to.get("x"))
+                row[6].text = _str(to.get("y"))
+            elif kind == "rect":
+                row[1].text = _str(ann.get("x"))
+                row[2].text = _str(ann.get("y"))
+                row[7].text = _str(ann.get("w"))
+                row[8].text = _str(ann.get("h"))
+            elif kind == "callout":
+                row[1].text = _str(ann.get("x"))
+                row[2].text = _str(ann.get("y"))
+                row[9].text = _str(ann.get("text"))
+    # Decoration AFTER so it doesn't interfere with marker → target lookup.
+    deco = document.add_paragraph()
+    run = deco.add_run(f"[image-annotation — {len(annotations)}개 마크업]")
+    run.italic = True
+    run.font.size = Pt(9)
 
 
 def _precompute_figure_index(doc: dict[str, Any]) -> list[dict[str, Any]]:

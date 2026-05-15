@@ -960,6 +960,16 @@ def docx_to_document(
     # 1b) 본문 children 을 순회하며 섹션 트리 + 블록 빌드
     sections, derived_title = _build_sections(body, ctx)
 
+    # 1b') Word's document-wide multi-column ("단") setting lives in the
+    #     body-level <w:sectPr>'s <w:cols w:num="N"/>. When N in 2..4 we
+    #     tag each top-level DocumentJSON section with `multi_column=N`
+    #     so the Phase 3 section-column autodetect post-pass can wrap
+    #     each section's blocks in a ColumnsBlock.
+    body_sect_cols = _parse_sect_cols(body.find(_q("w", "sectPr")))
+    if body_sect_cols is not None:
+        for sec in sections:
+            sec["multi_column"] = body_sect_cols
+
     # 1c) TOC verification runs AFTER the walk so we can compare against
     #     the *resulting* heading tree.
     if verify_toc and detection is not None and detection.found:
@@ -994,6 +1004,12 @@ def docx_to_document(
     #     marked single-cell tables, etc.). Runs AFTER apply_widget_markers
     #     so anything marker-handled is already widget-typed and skipped.
     _wm.apply_widget_autodetect(sections, ctx.summary)
+    # 2f) Phase 3 — section-level columns autodetect. Consumes the
+    #     `multi_column` hint planted in step 1b' by reading <w:cols w:num>
+    #     from the body's sectPr. Runs LAST so any marker-driven or
+    #     block-autodetected widgets inside the section are preserved as
+    #     ColumnsBlock content.
+    _wm.apply_section_column_autodetect(sections, ctx.summary)
 
     # 3) 섹션이 비어 있으면 default level-1 wrapper 1개 생성 (DocumentJSON
     #    스키마는 sections 가 비어 있으면 안 되는 건 아니지만, 빈 문서는
@@ -1098,6 +1114,28 @@ def _current_section(
         sections.append(sec)
         stack.append(sec)
     return stack[-1]
+
+
+def _parse_sect_cols(sect_pr_elem: ET.Element | None) -> int | None:
+    """Return the column count from a sectPr element (Word's "단" feature).
+
+    Reads `<w:cols w:num="N"/>` and returns N when 2 <= N <= 4, else None.
+    Used by docx_to_document() to surface multi-column section hints to
+    the Phase 3 widget autodetect post-pass.
+    """
+    if sect_pr_elem is None:
+        return None
+    cols = sect_pr_elem.find(_q("w", "cols"))
+    if cols is None:
+        return None
+    num_attr = cols.get(_q("w", "num"))
+    if not num_attr:
+        return None
+    try:
+        n = int(num_attr)
+    except ValueError:
+        return None
+    return n if 2 <= n <= 4 else None
 
 
 def _build_sections(

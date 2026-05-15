@@ -100,7 +100,7 @@ docx_to_document(buf, slug, title, owner_user_id, image_uploader, ...)
 | `gallery` | 2 | `_convert_gallery` | 다음 연속 이미지 → GalleryBlock |
 | `doc-link` † | 2 | `_convert_doc_link` | 다음 단락 (slug 또는 `/docs/<slug>` URL) → DocLinkCardBlock |
 | `glossary` † | 2 | `_convert_glossary` | 다음 단락 → GlossaryRefBlock |
-| `image-annotation` | 2 | `_convert_image_annotation` | 다음 이미지 + 표 (x, y, label) → ImageAnnotationBlock |
+| `image-annotation` | 2 | `_convert_image_annotation` | 다음 이미지 + 표 (kind/x/y/from_*/to_*/w/h/text/color) → ImageAnnotationBlock. 이미지가 round-trip 중 소실되면 표만 첫 target 으로 받고 placeholder image_id 발급 (warning) |
 | `iframe` | 2 | `_convert_iframe` | 다음 URL 단락 (text가 http(s):// 로 시작) → IframeBlock |
 | `video` | 2 | `_convert_video` | 다음 URL 단락 (host 로 provider 추론) → VideoBlock |
 | `file` | 2 | `_convert_file` | 다음 하이퍼링크 단락 → FileBlock (fileId placeholder) |
@@ -121,12 +121,18 @@ skip — 이중 변환 없음.
 | `_autodetect_gantt` | 헤더 `name`/`task`/`작업`/`이름` + `start`/`시작` + `end`/`종료` (옵션 `progress`) | GanttBlock |
 | `_autodetect_gallery` | 연속 3개 이상 ImageBlock | GalleryBlock (layout=grid) |
 
-False positive 회피: 신호 없는 1×1 표 / 5+행 KPI 표 / chart-style 헤더 (`Month/Revenue`) / 2-image 시퀀스 등은 변환 안 함.
+블록-레벨 dispatcher 직후 별도 sibling 함수 [[src/app/services/widget_markers.py#apply_section_column_autodetect]] 가 한 번 더 돈다. 이건 블록 모양이 아니라 **섹션 메타**에서 신호를 읽는다:
+
+| 인식기 | 트리거 | 출력 |
+|---|---|---|
+| `apply_section_column_autodetect` | docx body 의 `<w:sectPr><w:cols w:num="N"/></w:sectPr>` (N ∈ 2..4) — [[src/app/services/docx_import.py#_parse_sect_cols]] 가 `section["multi_column"]=N` 으로 surface | 섹션의 blocks 전체를 N 등분해서 단일 ColumnsBlock 으로 wrap (마커-처리 / 블록-autodetect 결과 위젯도 보존) |
+
+False positive 회피: 신호 없는 1×1 표 / 5+행 KPI 표 / chart-style 헤더 (`Month/Revenue`) / 2-image 시퀀스 등은 변환 안 함. 2-column 인지 일반 2-column 표인지 구별이 어려운 `columns` 는 **블록-레벨 autodetect 에서 의도적으로 제외** — 사용자가 Word "단" 으로 명시한 `<w:cols>` 만 신호로 사용.
 
 자동 인식된 블록의 audit trail 은 `summary.warnings` 에 `"auto-detected <type> from ..."` 형태로 기록.
 `BlockMeta` schema 가 `additionalProperties: false` 라 `meta.auto_detected` 필드 사용 불가 — warnings 만이 audit 채널.
 
-테스트: [[src/tests/test_widget_autodetect.py]] — 36 케이스 (4 인식기 × 단위 + 가드 + DOCX 통합).
+테스트: [[src/tests/test_widget_autodetect.py]] — 43 케이스 (4 블록-레벨 인식기 + section-column 7 케이스 + 가드 + DOCX 통합).
 
 † 마커 이름과 스키마 타입이 다름: `doc-link` → DocLinkCardBlock (`doc-link-card`),
 `glossary` → GlossaryRefBlock (`glossary-ref`). 마커 텍스트는 사용자 친화적
