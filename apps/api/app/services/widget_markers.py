@@ -1203,3 +1203,464 @@ def _rewrite_blocks(
     # Mutate the original list in place so callers can keep their reference.
     blocks.clear()
     blocks.extend(out)
+
+
+# ── Phase 3: marker-less auto-detection ───────────────────────────────
+
+
+_CALLOUT_EMOJI_VARIANT: dict[str, str] = {
+    "⚠️": "warn", "⚠": "warn",
+    "❗": "warn", "❕": "warn",
+    "🚨": "danger", "🛑": "danger",
+    "ℹ️": "info", "ℹ": "info",
+    "💡": "tip",
+    "✅": "tip",
+}
+
+_CALLOUT_LABEL_VARIANT: dict[str, str] = {
+    "[정보]": "info", "[INFO]": "info",
+    "[주의]": "warn", "[경고]": "warn", "[WARN]": "warn",
+    "[위험]": "danger", "[DANGER]": "danger",
+    "[팁]": "tip", "[TIP]": "tip",
+}
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int] | None:
+    s = hex_color.strip().lstrip("#")
+    if len(s) == 3:
+        s = "".join(c * 2 for c in s)
+    if len(s) != 6:
+        return None
+    try:
+        return int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
+    except ValueError:
+        return None
+
+
+def _strip_markdown_emphasis(s: str) -> str:
+    """Strip a single layer of surrounding markdown emphasis wrappers
+    (`***…***`, `**…**`, `__…__`, `*…*`, `_…_`). Round-trip through
+    docx/pptx can wrap bolded cell text — header/cell matching needs the
+    bare token. Idempotent for non-wrapped input.
+    """
+    stripped = s
+    for opener, closer in (("***", "***"), ("**", "**"), ("__", "__"), ("*", "*"), ("_", "_")):
+        if (
+            len(stripped) >= len(opener) + len(closer)
+            and stripped.startswith(opener)
+            and stripped.endswith(closer)
+        ):
+            stripped = stripped[len(opener) : len(stripped) - len(closer)].strip()
+            break
+    return stripped
+
+
+def _variant_from_bg(bg: str | None) -> str | None:
+    if not isinstance(bg, str):
+        return None
+    rgb = _hex_to_rgb(bg)
+    if not rgb:
+        return None
+    r, g, b = rgb
+    # Red-dominant → danger or warn
+    if r > 200 and r - g > 50 and r - b > 50:
+        return "danger"
+    if r > g + 30 and r > b + 30:
+        return "warn"
+    # Yellow / green → tip
+    if g > 150 and r > 150 and b < 150:
+        return "tip"
+    if g > r and g > b:
+        return "tip"
+    # Otherwise (cool / neutral) → info
+    return "info"
+
+
+def _autodetect_callout(
+    block: dict[str, Any],
+    _blocks_after: list[dict[str, Any]],
+    summary: _SummaryLike,
+) -> ConverterResult | None:
+    """Detect a single-cell color/emoji/label-marked table as a callout.
+
+    Strict triggers (any ONE is enough):
+      - cell has a `bg` hex color (table emit gave it a fill).
+      - cell text starts with an alert emoji.
+      - cell text starts with `[정보]` / `[주의]` / `[경고]` / `[위험]` / `[팁]`
+        (case-insensitive on the ASCII variants).
+
+    Without one of these signals, returns None — plain 1x1 tables stay
+    plain tables.
+    """
+    if block.get("type") != "table":
+        return None
+
+    # Locate the lone cell: either via `cells` sparse mode or via headers/rows.
+    cell_text: str = ""
+    cell_bg: str | None = None
+    if isinstance(block.get("cells"), list) and block["cells"]:
+        cells = block["cells"]
+        if len(cells) != 1:
+            return None
+        c = cells[0] or {}
+        if c.get("rowSpan", 1) != 1 or c.get("colSpan", 1) != 1:
+            return None
+        cell_text = str(c.get("text") or "").strip()
+        bg = c.get("bg")
+        cell_bg = bg if isinstance(bg, str) else None
+    else:
+        headers = block.get("headers") or []
+        rows = block.get("rows") or []
+        # Two acceptable 1x1 shapes: (a) headers=[], rows=[[x]] from the
+        # legacy emitter, or (b) headers=[x], rows=[] which is what DOCX
+        # import produces when the table has exactly one cell (importer
+        # promotes the first row to <th>).
+        if len(headers) == 1 and not rows:
+            cell_text = str(headers[0] or "").strip()
+        elif not headers and len(rows) == 1:
+            first_row = rows[0] if isinstance(rows[0], list) else []
+            if len(first_row) != 1:
+                return None
+            cell_text = str(first_row[0] or "").strip()
+        else:
+            return None
+
+    if not cell_text and cell_bg is None:
+        return None
+
+    # Strip surrounding markdown-bold (`**…**`) and italics (`*…*` / `_…_`)
+    # introduced by docx_import when a table cell is bolded (header row).
+    # Otherwise the emoji prefix check below would miss `**⚠️ test**`.
+    cell_text = _strip_markdown_emphasis(cell_text)
+
+    # Emoji prefix?
+    variant: str | None = None
+    cleaned_text = cell_text
+    for emoji_key, v in _CALLOUT_EMOJI_VARIANT.items():
+        if cell_text.startswith(emoji_key):
+            variant = v
+            cleaned_text = cell_text[len(emoji_key):].lstrip()
+            break
+
+    # Label prefix?
+    if variant is None:
+        upper = cell_text.upper()
+        for label_key, v in _CALLOUT_LABEL_VARIANT.items():
+            if cell_text.startswith(label_key) or upper.startswith(label_key.upper()):
+                variant = v
+                cleaned_text = cell_text[len(label_key):].lstrip()
+                break
+
+    # Background color?
+    if variant is None and cell_bg is not None:
+        variant = _variant_from_bg(cell_bg)
+
+    if variant is None:
+        # No strong signal → don't trigger.
+        return None
+
+    text = cleaned_text or cell_text
+    if not text:
+        return None
+
+    summary.warnings.append(
+        f"auto-detected callout (variant={variant}) from single-cell table"
+    )
+
+    # NOTE: schema's BlockMeta has `additionalProperties: false`, so we cannot
+    # stash an `auto_detected` flag in `meta`. The warning above is the audit
+    # trail; the callout looks identical to a marker-driven one downstream.
+    return (
+        {
+            "type": "callout",
+            "id": _new_id(),
+            "variant": variant,
+            "text": text,
+        },
+        1,
+    )
+
+
+def _autodetect_kpi_cards(
+    block: dict[str, Any],
+    _blocks_after: list[dict[str, Any]],
+    summary: _SummaryLike,
+) -> ConverterResult | None:
+    """Detect a table with `label`/`value` headers (and optionally
+    `delta`/`trend`) as a KpiCardsBlock — only when no marker has
+    already converted it. Strict header match: case-insensitive equality
+    on the column names, with the round-trip-induced markdown bold
+    wrapping (`**label**`) tolerated.
+    """
+    if block.get("type") != "table":
+        return None
+    headers = block.get("headers") or []
+    rows = block.get("rows") or []
+    if not headers:
+        return None
+    # `_convert_kpi_cards` caps at 4 items; 5+ rows means this is something
+    # else (a regular table). 0 rows means nothing to show.
+    if len(rows) < 1 or len(rows) > 4:
+        return None
+
+    headers_lc = [_strip_markdown_emphasis(str(h)).strip().lower() for h in headers]
+
+    def _col(name: str) -> int | None:
+        try:
+            return headers_lc.index(name)
+        except ValueError:
+            return None
+
+    label_i = _col("label")
+    value_i = _col("value")
+    if label_i is None or value_i is None:
+        return None
+    delta_i = _col("delta")
+    trend_i = _col("trend")
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        cells = list(row) if isinstance(row, list) else []
+
+        def _cell(i: int | None) -> str:
+            if i is None or i >= len(cells):
+                return ""
+            return str(cells[i] or "").strip()
+
+        item: dict[str, Any] = {
+            "label": _cell(label_i),
+            "value": _cell(value_i),
+        }
+        d = _cell(delta_i)
+        t = _cell(trend_i)
+        if d:
+            item["delta"] = d
+        if t:
+            item["trend"] = t
+        items.append(item)
+
+    if not items:
+        return None
+
+    summary.warnings.append(
+        f"auto-detected kpi-cards from N-row table with label/value headers (N={len(items)})"
+    )
+
+    return (
+        {
+            "type": "kpi-cards",
+            "id": _new_id(),
+            "items": items,
+        },
+        1,
+    )
+
+
+def _autodetect_gallery(
+    block: dict[str, Any],
+    blocks_after: list[dict[str, Any]],
+    summary: _SummaryLike,
+) -> ConverterResult | None:
+    """Detect 3 or more consecutive ImageBlock blocks as a gallery.
+
+    Triggers when ``block`` is an image and ``blocks_after`` begins with at
+    least 2 more image blocks (so total >= 3). Walks ``blocks_after``
+    greedily, collecting consecutive images and stopping at the first
+    non-image.
+
+    Why 3+, not 2+: 2 consecutive images is too common (e.g. two figures
+    side-by-side) to be a confident "gallery" signal. 3+ is a strong
+    "this is a collection" cue, so 2-image sequences stay as individual
+    ImageBlocks to avoid false positives.
+    """
+    if block.get("type") != "image":
+        return None
+
+    consumed: list[dict[str, Any]] = [block]
+    for nxt in blocks_after:
+        if nxt.get("type") != "image":
+            break
+        consumed.append(nxt)
+
+    if len(consumed) < 3:
+        return None
+
+    items: list[dict[str, Any]] = []
+    for img in consumed:
+        item: dict[str, Any] = {"imageId": str(img.get("imageId") or "")}
+        caption = img.get("caption")
+        if isinstance(caption, str) and caption:
+            item["caption"] = caption
+        alt = img.get("alt")
+        if isinstance(alt, str) and alt:
+            item["alt"] = alt
+        items.append(item)
+
+    n_consumed = len(consumed)
+    summary.warnings.append(
+        f"auto-detected gallery from {n_consumed} consecutive images"
+    )
+    # NOTE: schema's BlockMeta has `additionalProperties: false`, so we cannot
+    # stash an `auto_detected` flag in `meta`. The warning above is the audit
+    # trail; the gallery looks identical to a marker-driven one downstream.
+    return (
+        {
+            "type": "gallery",
+            "id": _new_id(),
+            "layout": "grid",
+            "items": items,
+        },
+        n_consumed,
+    )
+
+
+def _autodetect_gantt(
+    block: dict[str, Any],
+    _blocks_after: list[dict[str, Any]],
+    summary: _SummaryLike,
+) -> ConverterResult | None:
+    """Detect a table with ``name``/``task``/``작업`` + ``start``/``시작`` +
+    ``end``/``종료`` headers as a GanttBlock.
+
+    All three of name/start/end MUST be present (case-insensitive, with
+    ``**…**`` bold wrapping from docx/pptx round-trip tolerated). Optional
+    ``progress`` column gets parsed as 0-100 float (``"50%"`` or ``"50"``).
+    Without all three required columns this is just a regular table.
+    """
+    if block.get("type") != "table":
+        return None
+    headers = block.get("headers") or []
+    rows = block.get("rows") or []
+    if not headers or not rows:
+        return None
+
+    headers_lc = [
+        _strip_markdown_emphasis(str(h)).strip().lower() for h in headers
+    ]
+
+    def _col(aliases: set[str]) -> int | None:
+        for i, h in enumerate(headers_lc):
+            if h in aliases:
+                return i
+        return None
+
+    name_i = _col(_GANTT_NAME_HEADERS)
+    start_i = _col(_GANTT_START_HEADERS)
+    end_i = _col(_GANTT_END_HEADERS)
+    if name_i is None or start_i is None or end_i is None:
+        return None
+    progress_i = _col(_GANTT_PROGRESS_HEADERS)
+
+    tasks: list[dict[str, Any]] = []
+    for row in rows:
+        cells = list(row) if isinstance(row, list) else []
+
+        def _cell(i: int | None) -> str:
+            if i is None or i >= len(cells):
+                return ""
+            return str(cells[i] or "").strip()
+
+        name = _cell(name_i)
+        if not name:
+            continue
+        task: dict[str, Any] = {
+            "name": name,
+            "start": _cell(start_i),
+            "end": _cell(end_i),
+        }
+        if progress_i is not None:
+            raw = _cell(progress_i)
+            if raw:
+                s = raw.rstrip("%").strip()
+                try:
+                    p = float(s)
+                except ValueError:
+                    p = None
+                if p is not None and 0 <= p <= 100:
+                    task["progress"] = p
+        tasks.append(task)
+
+    if not tasks:
+        return None
+
+    summary.warnings.append(
+        f"auto-detected gantt from {len(tasks)}-task table with name/start/end headers"
+    )
+    return (
+        {
+            "type": "gantt",
+            "id": _new_id(),
+            "tasks": tasks,
+        },
+        1,
+    )
+
+
+# Each auto-detector: (block, blocks_after, summary) -> (widget, n_consumed) | None
+# Mirrors the marker converter signature but works on plain blocks (no
+# marker paragraph to consume). n_consumed >= 1 = how many blocks the
+# detector swallowed (1 = block alone; N = block + N-1 of blocks_after).
+AutoDetectorFn = Callable[
+    [dict[str, Any], list[dict[str, Any]], _SummaryLike],
+    ConverterResult | None,
+]
+
+# Order matters: most-specific signal first, broadest last. Stop at the
+# first match.
+WIDGET_AUTODETECTORS: list[tuple[str, AutoDetectorFn]] = [
+    # Most specific signals first. callout requires colour/emoji/label;
+    # kpi-cards + gantt require exact header matches; gallery requires
+    # 3+ consecutive images. None of these overlap so order within this
+    # cluster is mostly aesthetic.
+    ("callout", _autodetect_callout),
+    ("kpi-cards", _autodetect_kpi_cards),
+    ("gantt", _autodetect_gantt),
+    ("gallery", _autodetect_gallery),
+]
+
+
+def apply_widget_autodetect(
+    sections: list[dict[str, Any]],
+    summary: _SummaryLike,
+) -> None:
+    """Phase 3 post-pass. Run AFTER apply_widget_markers. Walks every
+    section/subsection in place. Each auto-detector inspects a block plus
+    the following blocks and may rewrite them into a widget.
+    """
+    for sec in sections:
+        _autodetect_rewrite(sec.get("blocks") or [], summary)
+        subs = sec.get("subsections") or []
+        if subs:
+            apply_widget_autodetect(subs, summary)
+
+
+def _autodetect_rewrite(
+    blocks: list[dict[str, Any]],
+    summary: _SummaryLike,
+) -> None:
+    if not blocks:
+        return
+    out: list[dict[str, Any]] = []
+    i = 0
+    while i < len(blocks):
+        block = blocks[i]
+        result: ConverterResult | None = None
+        for _name, fn in WIDGET_AUTODETECTORS:
+            r = fn(block, blocks[i + 1:], summary)
+            if r is not None:
+                result = r
+                break
+        if result is None:
+            out.append(block)
+            i += 1
+            continue
+        widget, n_consumed = result
+        if n_consumed < 1:
+            # Defensive: autodetect must consume at least the current block.
+            out.append(block)
+            i += 1
+            continue
+        out.append(widget)
+        i += n_consumed
+    blocks.clear()
+    blocks.extend(out)

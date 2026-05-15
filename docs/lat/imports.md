@@ -107,6 +107,27 @@ docx_to_document(buf, slug, title, owner_user_id, image_uploader, ...)
 | `pdf` | 2 | `_convert_pdf` | 다음 하이퍼링크 단락 → PdfBlock (file_id placeholder) |
 | `whiteboard` | 2 | `_convert_whiteboard` | 항상 None — 다음 이미지 보존 fallback |
 
+### Widget auto-detect post-pass (Phase 3)
+
+`apply_widget_markers` 직후 [[src/app/services/widget_markers.py#apply_widget_autodetect]]
+가 한 번 더 본문을 훑어, **마커 없는** 블록이라도 컨텐츠 모양만으로 위젯을
+추론한다. 마커-처리된 블록은 이미 위젯 타입이라 type 검사로 자연스럽게
+skip — 이중 변환 없음.
+
+| 인식기 | 트리거 | 출력 |
+|---|---|---|
+| `_autodetect_callout` | 1×1 표 + (배경색 OR 알림 이모지 ⚠️🚨ℹ️💡✅ OR 라벨 `[정보]`/`[주의]`/`[경고]`/`[위험]`/`[팁]`) | CalloutBlock (variant 추론) |
+| `_autodetect_kpi_cards` | 헤더 `label`+`value` (옵션 `delta`/`trend`), 행 1~4개 | KpiCardsBlock |
+| `_autodetect_gantt` | 헤더 `name`/`task`/`작업`/`이름` + `start`/`시작` + `end`/`종료` (옵션 `progress`) | GanttBlock |
+| `_autodetect_gallery` | 연속 3개 이상 ImageBlock | GalleryBlock (layout=grid) |
+
+False positive 회피: 신호 없는 1×1 표 / 5+행 KPI 표 / chart-style 헤더 (`Month/Revenue`) / 2-image 시퀀스 등은 변환 안 함.
+
+자동 인식된 블록의 audit trail 은 `summary.warnings` 에 `"auto-detected <type> from ..."` 형태로 기록.
+`BlockMeta` schema 가 `additionalProperties: false` 라 `meta.auto_detected` 필드 사용 불가 — warnings 만이 audit 채널.
+
+테스트: [[src/tests/test_widget_autodetect.py]] — 36 케이스 (4 인식기 × 단위 + 가드 + DOCX 통합).
+
 † 마커 이름과 스키마 타입이 다름: `doc-link` → DocLinkCardBlock (`doc-link-card`),
 `glossary` → GlossaryRefBlock (`glossary-ref`). 마커 텍스트는 사용자 친화적
 짧은 이름을 그대로 받는다.

@@ -990,6 +990,10 @@ def docx_to_document(
     #     쌍을 callout/kpi-cards/… 로 rewrite. 마커가 없는 문서는 영향 없음.
     from . import widget_markers as _wm
     _wm.apply_widget_markers(sections, ctx.summary)
+    # 2e) Phase 3 — marker-less auto-detection (callout from color/emoji/label
+    #     marked single-cell tables, etc.). Runs AFTER apply_widget_markers
+    #     so anything marker-handled is already widget-typed and skipped.
+    _wm.apply_widget_autodetect(sections, ctx.summary)
 
     # 3) 섹션이 비어 있으면 default level-1 wrapper 1개 생성 (DocumentJSON
     #    스키마는 sections 가 비어 있으면 안 되는 건 아니지만, 빈 문서는

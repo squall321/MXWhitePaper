@@ -371,6 +371,9 @@ def pptx_to_document(
     # 마커와 target 이 같은 슬라이드 안에 있어야 인식.
     from . import widget_markers as _wm
     _wm.apply_widget_markers(sections, summary)
+    # Phase 3 — marker-less auto-detection. Runs AFTER apply_widget_markers
+    # so already-converted widgets aren't re-processed.
+    _wm.apply_widget_autodetect(sections, summary)
 
     # DocumentJSON v1.0 requires schema_version + id + metadata{division,
     # owners, tags, confidentiality}. The earlier shape used a typo'd
