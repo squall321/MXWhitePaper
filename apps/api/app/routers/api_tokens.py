@@ -10,9 +10,12 @@ token* 을 관리한다. 토큰 형식은 `mxwp_` + 26자 base32. 평문 토큰�
   - DELETE /me/api-tokens/:id           owner   — soft revoke (revoked_at = NOW)
   - POST   /me/api-tokens/:id/rotate    owner   — revoke 후 같은 name/scopes 로 재발급
 
-Scopes 는 ['read', 'write', 'admin'] 의 부분집합으로 저장만 한다 (v1 enforcement
-deferred). 미들웨어에서의 scope 체크는 추후 작업 — 우선은 토큰의 user role 이
-그대로 적용된다.
+Scopes 는 ['read', 'write', 'admin'] 의 부분집합으로 저장된다. Cycle 0024
+부터 `app.services.api_token_scopes.check_scope()` 가 verb-vs-scope 체크를
+auth 미들웨어에서 강제 — `read` 토큰은 GET/HEAD 만, `write` 는 body 동사,
+`admin` 은 `/admin/*` 포함 와일드카드. `/me/*` 는 token 이 자기 자신 자원을
+다루므로 scope 무관 허용.
+
 """
 from __future__ import annotations
 
