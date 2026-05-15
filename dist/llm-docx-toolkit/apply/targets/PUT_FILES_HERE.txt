@@ -1,0 +1,11 @@
+Drop your .docx (and optional .html) files here, then double-click
+apply-rules.bat in the parent folder.
+
+The script will:
+  1. Open each file through Word COM (which silently strips most DRM /
+     IRM-by-policy as part of the Save round-trip).
+  2. Apply MXWhitePaper input rules — see ../README.md.
+  3. Run mxwp-validator-win32.exe on each result.
+  4. Write format_report.csv next to your files.
+
+You can delete this placeholder file once you've put real files here.

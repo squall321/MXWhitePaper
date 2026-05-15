@@ -20,7 +20,7 @@ on:
       - 'apps/api/app/services/widget_markers.py'
       - 'packages/shared/schemas/document.json'
       - 'docs/llm-input-rules.md'
-      - 'dist/llm-docx-toolkit/**'
+      - 'dist/llm-docx-toolkit/**'  # includes apply/ scripts
       - '.github/workflows/llm-docx-toolkit.yml'
     tags: ['v*']
   workflow_dispatch: {}
@@ -99,6 +99,12 @@ jobs:
           cp -r examples "_release/${BUNDLE}/examples"
           cp -r src "_release/${BUNDLE}/src"
           cp README.md llm-input-rules.md requirements.txt build.py "_release/${BUNDLE}/"
+          # Windows automation kit — only meaningful for the Windows bundle
+          # (PowerShell + Word COM is Windows-only), but we ship it on Linux
+          # too in case admins want to inspect / patch the .ps1.
+          if [ -d "apply" ]; then
+            cp -r apply "_release/${BUNDLE}/apply"
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
