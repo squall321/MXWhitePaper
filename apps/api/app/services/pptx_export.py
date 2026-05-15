@@ -38,6 +38,7 @@ from pptx.enum.text import PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
 from app.services.variables import walk_doc_substitute
+from app.services.widget_markers import emit_marker_text
 
 
 # ── Tunables ─────────────────────────────────────────────────────────
@@ -740,6 +741,13 @@ def _b_kpi_cards(slide: Any, _frame: Any, block: dict[str, Any], _ctx: _Ctx, _de
 
 
 def _b_chart(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
     chart_type = _str(block.get("chartType") or block.get("chart_type")).lower()
     title = _str(block.get("title"))
     data = block.get("data") or {}
@@ -785,6 +793,13 @@ def _b_chart(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: i
 
 
 def _b_gantt(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
     tasks = block.get("tasks") or []
     if not tasks:
         return False
@@ -806,6 +821,13 @@ def _b_gantt(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: i
 
 
 def _b_flow(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
     engine = _str(block.get("engine")) or "mermaid"
     source = _str(block.get("source"))
     p = _next_paragraph(frame)
@@ -826,6 +848,13 @@ def _b_flow(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: in
 
 
 def _b_org_chart(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
     root = block.get("root") or {}
 
     def render_node(node: dict[str, Any], cur_depth: int) -> None:
@@ -855,12 +884,26 @@ def _b_org_chart(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, dept
 
 
 def _b_iframe(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
     src = _str(block.get("src"))
     title = _str(block.get("title")) or src
     return _emit_link_block(frame, "[iframe] ", title, src, depth)
 
 
 def _b_video(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
     url = _str(block.get("url"))
     title = _str(block.get("title")) or url
     return _emit_link_block(frame, "🎬 ", title, url, depth)
@@ -930,6 +973,13 @@ def _b_gallery(slide: Any, frame: Any, block: dict[str, Any], ctx: _Ctx, depth: 
 
 
 def _b_file(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
     file_id = _str(block.get("fileId") or block.get("file_id"))
     name = _str(block.get("name")) or file_id or "file"
     href = f"/api/v1/files/{file_id}/download" if file_id else ""
@@ -939,6 +989,13 @@ def _b_file(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: in
 def _b_doc_link_card(
     slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int
 ) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
     slug = _str(block.get("slug"))
     title = _str(block.get("title")) or slug
     return _emit_link_block(frame, "📄 ", title, f"/docs/{slug}" if slug else "", depth)
@@ -947,6 +1004,13 @@ def _b_doc_link_card(
 def _b_glossary_ref(
     slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int
 ) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
     term = _str(block.get("term"))
     if not term:
         return False
@@ -970,6 +1034,13 @@ def _b_columns(slide: Any, frame: Any, block: dict[str, Any], ctx: _Ctx, depth: 
 
 
 def _b_tabs(slide: Any, frame: Any, block: dict[str, Any], ctx: _Ctx, depth: int) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
     tabs = block.get("tabs") or []
     emitted = False
     for tab in tabs:
@@ -988,6 +1059,13 @@ def _b_tabs(slide: Any, frame: Any, block: dict[str, Any], ctx: _Ctx, depth: int
 
 
 def _b_accordion(slide: Any, frame: Any, block: dict[str, Any], ctx: _Ctx, depth: int) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
     items = block.get("items") or []
     emitted = False
     for it in items:
@@ -1051,6 +1129,94 @@ def _b_calculator(
     return True
 
 
+def _b_pdf(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
+    file_id = _str(block.get("fileId") or block.get("file_id"))
+    title = _str(block.get("title")) or file_id or "PDF"
+    page = block.get("page")
+    body = f"📕 PDF: {title}"
+    if page is not None:
+        body += f" (page {page})"
+    p = _next_paragraph(frame)
+    p.level = depth
+    run = p.add_run()
+    run.text = body
+    run.font.size = Pt(13)
+    return True
+
+
+def _b_whiteboard(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
+    viewbox = block.get("viewbox") or {}
+    w = viewbox.get("w") if isinstance(viewbox, dict) else None
+    h = viewbox.get("h") if isinstance(viewbox, dict) else None
+    elements = block.get("elements") or []
+    size = f"{w}×{h}" if (w is not None and h is not None) else "?"
+    body = f"🖼 Whiteboard ({size}, {len(elements)} elements)"
+    p = _next_paragraph(frame)
+    p.level = depth
+    run = p.add_run()
+    run.text = body
+    run.font.size = Pt(13)
+    return True
+
+
+def _b_image_annotation(
+    slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int
+) -> bool:
+    marker = emit_marker_text(block)
+    if marker:
+        mp = _next_paragraph(frame)
+        mp.level = depth
+        mrun = mp.add_run()
+        mrun.text = marker
+        mrun.font.size = Pt(12)
+    image_id = _str(block.get("imageId") or block.get("image_id"))
+    caption = _str(block.get("caption")) or image_id or "image"
+    p = _next_paragraph(frame)
+    p.level = depth
+    run = p.add_run()
+    run.text = f"🖼 Annotated image: {caption}"
+    run.font.size = Pt(13)
+    for ann in block.get("annotations") or []:
+        kind = _str(ann.get("kind")) or "marker"
+        if kind == "arrow":
+            frm = ann.get("from") or {}
+            to = ann.get("to") or {}
+            label = _str(ann.get("label"))
+            summary = f"• arrow ({frm.get('x')},{frm.get('y')}) → ({to.get('x')},{to.get('y')})"
+            if label:
+                summary += f": {label}"
+        elif kind == "rect":
+            label = _str(ann.get("label"))
+            summary = f"• rect ({ann.get('x')},{ann.get('y')}, {ann.get('w')}×{ann.get('h')})"
+            if label:
+                summary += f": {label}"
+        elif kind == "callout":
+            text = _str(ann.get("text"))
+            summary = f"• callout ({ann.get('x')},{ann.get('y')}): {text}"
+        else:
+            summary = f"• {kind}"
+        ap = _next_paragraph(frame)
+        ap.level = depth + 1
+        run = ap.add_run()
+        run.text = summary
+        run.font.size = Pt(11)
+    return True
+
+
 def _b_unknown(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
     btype = _str(block.get("type"))
     p = _next_paragraph(frame)
@@ -1089,6 +1255,9 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "data-source": _b_data_source,
     "dashboard-embed": _b_dashboard_embed,
     "calculator": _b_calculator,
+    "pdf": _b_pdf,
+    "whiteboard": _b_whiteboard,
+    "image-annotation": _b_image_annotation,
 }
 
 

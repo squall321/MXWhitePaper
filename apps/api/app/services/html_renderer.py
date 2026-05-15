@@ -29,6 +29,7 @@ from typing import Any
 
 from app.services.css_sanitizer import sanitize_css
 from app.services.variables import walk_doc_substitute
+from app.services.widget_markers import emit_marker_text
 
 
 # ── Options ──────────────────────────────────────────────────────────
@@ -541,6 +542,8 @@ def _b_kpi_cards(block: dict[str, Any], _ctx: _Ctx) -> str:
 
 
 def _b_chart(block: dict[str, Any], _ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
     title = _str(block.get("title"))
     data = block.get("data") or {}
     labels = data.get("labels") or []
@@ -565,6 +568,7 @@ def _b_chart(block: dict[str, Any], _ctx: _Ctx) -> str:
     body += "</tbody>"
     chart_type = html.escape(_str(block.get("chartType") or block.get("chart_type") or ""))
     return (
+        f"{marker_html}"
         f'<div class="b-chart" data-chart-type="{chart_type}">'
         f"{title_html}"
         f'<table class="chart-data">{head}{body}</table>'
@@ -574,6 +578,8 @@ def _b_chart(block: dict[str, Any], _ctx: _Ctx) -> str:
 
 
 def _b_gantt(block: dict[str, Any], _ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
     tasks = block.get("tasks") or []
     head = "<thead><tr><th>이름</th><th>시작</th><th>종료</th><th>진행</th></tr></thead>"
     rows: list[str] = []
@@ -587,17 +593,24 @@ def _b_gantt(block: dict[str, Any], _ctx: _Ctx) -> str:
             "</tr>"
         )
     return (
+        f"{marker_html}"
         f'<table class="b-gantt">{head}<tbody>{"".join(rows)}</tbody></table>'
     )
 
 
 def _b_flow(block: dict[str, Any], ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
     engine = _str(block.get("engine")) or "mermaid"
     source = _str(block.get("source"))
     if engine == "mermaid" and ctx.opts.mermaid_cdn:
         ctx.used_mermaid = True
-        return f'<pre class="b-flow mermaid">{html.escape(source)}</pre>'
+        return (
+            f"{marker_html}"
+            f'<pre class="b-flow mermaid">{html.escape(source)}</pre>'
+        )
     return (
+        f"{marker_html}"
         f'<div class="b-flow b-flow-{html.escape(engine)}">'
         f'<div class="flow-note">[{html.escape(engine)} 다이어그램 원본 — '
         f"동적 렌더 비활성화 시 텍스트로만 보존]</div>"
@@ -607,6 +620,8 @@ def _b_flow(block: dict[str, Any], ctx: _Ctx) -> str:
 
 
 def _b_org_chart(block: dict[str, Any], _ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
     root = block.get("root") or {}
 
     def render_node(node: dict[str, Any]) -> str:
@@ -619,14 +634,20 @@ def _b_org_chart(block: dict[str, Any], _ctx: _Ctx) -> str:
         kids = "".join(render_node(c) for c in children)
         return f"<li><span>{label}{role_html}</span><ul>{kids}</ul></li>"
 
-    return f'<div class="b-org-chart"><ul>{render_node(root)}</ul></div>'
+    return (
+        f"{marker_html}"
+        f'<div class="b-org-chart"><ul>{render_node(root)}</ul></div>'
+    )
 
 
 def _b_iframe(block: dict[str, Any], _ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
     src = _str(block.get("src"))
     title = _str(block.get("title"))
     height = block.get("height") or 480
     return (
+        f"{marker_html}"
         f'<div class="b-iframe">'
         f'<iframe src="{html.escape(src)}" '
         f'title="{html.escape(title)}" '
@@ -637,18 +658,22 @@ def _b_iframe(block: dict[str, Any], _ctx: _Ctx) -> str:
 
 
 def _b_video(block: dict[str, Any], _ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
     url = _str(block.get("url"))
     title = _str(block.get("title"))
     provider = _str(block.get("provider")) or "intra"
     if provider in ("youtube", "vimeo"):
         # external embed is acceptable since the source was whitelisted server-side.
         return (
+            f"{marker_html}"
             f'<div class="b-video b-video-{html.escape(provider)}">'
             f'<a href="{html.escape(url)}" target="_blank" rel="noopener">'
             f'{html.escape(title or url)}</a>'
             f"</div>"
         )
     return (
+        f"{marker_html}"
         f'<div class="b-video b-video-intra">'
         f'<video controls preload="metadata" src="{html.escape(url)}"></video>'
         f'<div class="video-caption">{html.escape(title)}</div>'
@@ -708,11 +733,14 @@ def _b_gallery(block: dict[str, Any], ctx: _Ctx) -> str:
 
 
 def _b_file(block: dict[str, Any], _ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
     name = html.escape(_str(block.get("name")))
     size = block.get("size")
     mime = html.escape(_str(block.get("mime")))
     size_str = _human_size(size) if isinstance(size, int) else ""
     return (
+        f"{marker_html}"
         f'<div class="b-file">'
         f'<span class="file-icon">📎</span>'
         f'<span class="file-name">{name}</span> '
@@ -722,6 +750,8 @@ def _b_file(block: dict[str, Any], _ctx: _Ctx) -> str:
 
 
 def _b_doc_link_card(block: dict[str, Any], _ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
     slug = _str(block.get("slug"))
     show_summary = bool(block.get("showSummary") or block.get("show_summary"))
     summary_html = (
@@ -730,6 +760,7 @@ def _b_doc_link_card(block: dict[str, Any], _ctx: _Ctx) -> str:
         else ""
     )
     return (
+        f"{marker_html}"
         f'<a class="b-doc-link-card" href="/docs/{html.escape(slug)}">'
         f'<span class="doc-link-slug">/{html.escape(slug)}</span>'
         f"{summary_html}</a>"
@@ -737,8 +768,11 @@ def _b_doc_link_card(block: dict[str, Any], _ctx: _Ctx) -> str:
 
 
 def _b_glossary_ref(block: dict[str, Any], _ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
     term = html.escape(_str(block.get("term")))
     return (
+        f"{marker_html}"
         f'<span class="b-glossary-ref" title="용어">{term}</span>'
     )
 
@@ -758,6 +792,8 @@ def _b_columns(block: dict[str, Any], ctx: _Ctx) -> str:
 
 def _b_tabs(block: dict[str, Any], ctx: _Ctx) -> str:
     """Tabs flatten to <details> blocks for static HTML — first one is open."""
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
     tabs = block.get("tabs") or []
     parts: list[str] = []
     for i, tab in enumerate(tabs):
@@ -768,10 +804,12 @@ def _b_tabs(block: dict[str, Any], ctx: _Ctx) -> str:
             f'<details class="tab"{opened}>'
             f"<summary>{label}</summary>{inner}</details>"
         )
-    return f'<div class="b-tabs">{"".join(parts)}</div>'
+    return f'{marker_html}<div class="b-tabs">{"".join(parts)}</div>'
 
 
 def _b_accordion(block: dict[str, Any], ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
     items = block.get("items") or []
     parts: list[str] = []
     for it in items:
@@ -781,7 +819,7 @@ def _b_accordion(block: dict[str, Any], ctx: _Ctx) -> str:
             f'<details class="acc-item">'
             f"<summary>{label}</summary>{inner}</details>"
         )
-    return f'<div class="b-accordion">{"".join(parts)}</div>'
+    return f'{marker_html}<div class="b-accordion">{"".join(parts)}</div>'
 
 
 def _b_data_source(block: dict[str, Any], _ctx: _Ctx) -> str:
@@ -823,6 +861,70 @@ def _b_calculator(block: dict[str, Any], _ctx: _Ctx) -> str:
     )
 
 
+def _b_pdf(block: dict[str, Any], _ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
+    file_id = _str(block.get("fileId") or block.get("file_id"))
+    title = _str(block.get("title")) or file_id or "PDF"
+    page = block.get("page")
+    page_suffix = f" (page {html.escape(_str(page))})" if page is not None else ""
+    return (
+        f"{marker_html}"
+        f'<div class="b-pdf widget-pdf">📕 PDF: {html.escape(title)}{page_suffix}</div>'
+    )
+
+
+def _b_whiteboard(block: dict[str, Any], _ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
+    viewbox = block.get("viewbox") or {}
+    w = viewbox.get("w") if isinstance(viewbox, dict) else None
+    h = viewbox.get("h") if isinstance(viewbox, dict) else None
+    elements = block.get("elements") or []
+    size = f"{w}×{h}" if (w is not None and h is not None) else "?"
+    return (
+        f"{marker_html}"
+        f'<div class="b-whiteboard widget-whiteboard">'
+        f"🖼 Whiteboard ({html.escape(size)}, {len(elements)} elements)"
+        f"</div>"
+    )
+
+
+def _b_image_annotation(block: dict[str, Any], _ctx: _Ctx) -> str:
+    marker = emit_marker_text(block)
+    marker_html = f"<!-- {marker} -->\n" if marker else ""
+    image_id = _str(block.get("imageId") or block.get("image_id"))
+    caption = _str(block.get("caption")) or image_id or "image"
+    items: list[str] = []
+    for ann in block.get("annotations") or []:
+        kind = _str(ann.get("kind")) or "marker"
+        if kind == "arrow":
+            frm = ann.get("from") or {}
+            to = ann.get("to") or {}
+            label = _str(ann.get("label"))
+            summary = f"arrow ({frm.get('x')},{frm.get('y')}) → ({to.get('x')},{to.get('y')})"
+            if label:
+                summary += f": {label}"
+        elif kind == "rect":
+            label = _str(ann.get("label"))
+            summary = f"rect ({ann.get('x')},{ann.get('y')}, {ann.get('w')}×{ann.get('h')})"
+            if label:
+                summary += f": {label}"
+        elif kind == "callout":
+            text = _str(ann.get("text"))
+            summary = f"callout ({ann.get('x')},{ann.get('y')}): {text}"
+        else:
+            summary = kind
+        items.append(f"<li>{html.escape(summary)}</li>")
+    items_html = f"<ul>{''.join(items)}</ul>" if items else ""
+    return (
+        f"{marker_html}"
+        f'<div class="b-image-annotation widget-image-annotation">'
+        f"🖼 Annotated image: {html.escape(caption)}{items_html}"
+        f"</div>"
+    )
+
+
 _BLOCK_HANDLERS: dict[str, Any] = {
     "paragraph": _b_paragraph,
     "heading-4": _b_heading_4,
@@ -850,6 +952,9 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "data-source": _b_data_source,
     "dashboard-embed": _b_dashboard_embed,
     "calculator": _b_calculator,
+    "pdf": _b_pdf,
+    "whiteboard": _b_whiteboard,
+    "image-annotation": _b_image_annotation,
 }
 
 

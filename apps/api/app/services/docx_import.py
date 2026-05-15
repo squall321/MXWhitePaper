@@ -432,6 +432,41 @@ def _paragraph_style(p: ET.Element) -> str | None:
     return pStyle.get(_q("w", "val"))
 
 
+# Code blocks are emitted by docx_export with a paragraph-level shading
+# fill of F1F5F9 (`_CODE_SHADING`). Callouts also shade their paragraphs
+# but use different fill colors AND a `<w:pBdr>` left border, so the
+# combination of THIS fill color WITHOUT a border identifies a code
+# paragraph unambiguously.
+_CODE_PARAGRAPH_FILL = "F1F5F9"
+
+
+def _is_code_paragraph(p: ET.Element) -> bool:
+    pPr = p.find(_q("w", "pPr"))
+    if pPr is None:
+        return False
+    shd = pPr.find(_q("w", "shd"))
+    if shd is None:
+        return False
+    fill = (shd.get(_q("w", "fill")) or "").upper()
+    if fill != _CODE_PARAGRAPH_FILL:
+        return False
+    # Callout paragraphs carry a left border; code paragraphs do not.
+    if pPr.find(_q("w", "pBdr")) is not None:
+        return False
+    return True
+
+
+def _code_paragraph_text(p: ET.Element) -> str:
+    """Concatenate direct child run text, treating `<w:br>` as `\\n` so the
+    multi-line code body is reconstructed verbatim. Hyperlinks/drawings are
+    ignored (a shaded code paragraph emitted by `_b_code`/`_b_flow` never
+    contains them)."""
+    parts: list[str] = []
+    for run in p.findall(_q("w", "r")):
+        parts.append(_run_text(run))
+    return "".join(parts)
+
+
 _FIGURE_PREFIX_RE = re.compile(
     r"^\s*(?:그림|표|차트|Figure|Table|Chart|Fig\.?)\s*\d+(?:[-.]\d+)*\s*[:.\-]\s*",
     re.IGNORECASE,
@@ -1265,6 +1300,22 @@ def _build_sections(
                 "meta": {"note": "page-break-before"},
             })
             ctx.summary.paragraphs += 1
+            i += 1
+            continue
+
+        # 코드 블록 — `_b_code` / `_b_flow` 가 emit 한 shading=F1F5F9 단락 식별.
+        # `apply_widget_markers` 가 `Widget: flow` 마커의 target 으로 type:"code"
+        # 를 요구하므로 여기서 복구해 줘야 round-trip 이 살아난다.
+        if _is_code_paragraph(node):
+            code_text = _code_paragraph_text(node)
+            sec = _current_section(sections, stack)
+            sec["blocks"].append({
+                "type": "code",
+                "id": _new_id(),
+                "code": code_text,
+            })
+            ctx.summary.code_blocks += 1
+            pending_caption = None
             i += 1
             continue
 

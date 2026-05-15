@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.variables import walk_doc_substitute
+from app.services.widget_markers import emit_marker_text
 
 
 # ── Public entry ─────────────────────────────────────────────────────
@@ -369,11 +370,14 @@ def _b_kpi_cards(block: dict[str, Any]) -> str:
 
 def _b_chart(block: dict[str, Any]) -> str:
     """Charts → underlying data as a GFM table + caption."""
+    marker = emit_marker_text(block)
     title = _str(block.get("title"))
     data = block.get("data") or {}
     labels = data.get("labels") or []
     series = data.get("series") or []
     parts: list[str] = []
+    if marker:
+        parts.append(marker)
     if title:
         parts.append(f"**{title}**")
     if not labels and not series:
@@ -397,9 +401,11 @@ def _b_chart(block: dict[str, Any]) -> str:
 
 def _b_gantt(block: dict[str, Any]) -> str:
     """Gantt → mermaid fenced block (renders in GitHub & most viewers)."""
+    marker = emit_marker_text(block)
+    marker_prefix = f"{marker}\n\n" if marker else ""
     tasks = block.get("tasks") or []
     if not tasks:
-        return "> 📊 Gantt (편집기에서 보기)"
+        return f"{marker_prefix}> 📊 Gantt (편집기에서 보기)"
     lines = ["```mermaid", "gantt", "    dateFormat YYYY-MM-DD", "    title 일정"]
     for t in tasks:
         name = _str(t.get("name")) or "task"
@@ -407,17 +413,20 @@ def _b_gantt(block: dict[str, Any]) -> str:
         end = _str(t.get("end")) or start
         lines.append(f"    {name} :{start}, {end}")
     lines.append("```")
-    return "\n".join(lines)
+    return f"{marker_prefix}" + "\n".join(lines)
 
 
 def _b_flow(block: dict[str, Any]) -> str:
+    marker = emit_marker_text(block)
+    marker_prefix = f"{marker}\n\n" if marker else ""
     engine = _str(block.get("engine")) or "mermaid"
     source = _str(block.get("source"))
     lang = "mermaid" if engine == "mermaid" else engine
-    return f"```{lang}\n{source}\n```"
+    return f"{marker_prefix}```{lang}\n{source}\n```"
 
 
 def _b_org_chart(block: dict[str, Any]) -> str:
+    marker = emit_marker_text(block)
     root = block.get("root") or {}
 
     def render_node(node: dict[str, Any], depth: int = 0) -> list[str]:
@@ -430,20 +439,28 @@ def _b_org_chart(block: dict[str, Any]) -> str:
             out.extend(render_node(child, depth + 1))
         return out
 
-    lines = render_node(root)
+    lines: list[str] = []
+    if marker:
+        lines.append(marker)
+        lines.append("")
+    lines.extend(render_node(root))
     return "\n".join(lines)
 
 
 def _b_iframe(block: dict[str, Any]) -> str:
+    marker = emit_marker_text(block)
+    marker_prefix = f"{marker}\n\n" if marker else ""
     src = _str(block.get("src"))
     title = _str(block.get("title")) or src
-    return f"[{title}]({src})"
+    return f"{marker_prefix}[{title}]({src})"
 
 
 def _b_video(block: dict[str, Any]) -> str:
+    marker = emit_marker_text(block)
+    marker_prefix = f"{marker}\n\n" if marker else ""
     url = _str(block.get("url"))
     title = _str(block.get("title")) or url
-    return f"🎬 [{title}]({url})"
+    return f"{marker_prefix}🎬 [{title}]({url})"
 
 
 def _b_image(block: dict[str, Any]) -> str:
@@ -471,20 +488,26 @@ def _b_gallery(block: dict[str, Any]) -> str:
 
 
 def _b_file(block: dict[str, Any]) -> str:
+    marker = emit_marker_text(block)
+    marker_prefix = f"{marker}\n\n" if marker else ""
     file_id = _str(block.get("fileId") or block.get("file_id"))
     name = _str(block.get("name")) or file_id or "file"
-    return f"[{name}](/api/v1/files/{file_id}/download)"
+    return f"{marker_prefix}[{name}](/api/v1/files/{file_id}/download)"
 
 
 def _b_doc_link_card(block: dict[str, Any]) -> str:
+    marker = emit_marker_text(block)
+    marker_prefix = f"{marker}\n\n" if marker else ""
     slug = _str(block.get("slug"))
     title = _str(block.get("title")) or slug
-    return f"[{title}](/docs/{slug})"
+    return f"{marker_prefix}[{title}](/docs/{slug})"
 
 
 def _b_glossary_ref(block: dict[str, Any]) -> str:
+    marker = emit_marker_text(block)
+    marker_prefix = f"{marker}\n\n" if marker else ""
     term = _str(block.get("term"))
-    return f"_{term}_"
+    return f"{marker_prefix}_{term}_"
 
 
 def _b_columns(block: dict[str, Any]) -> str:
@@ -501,8 +524,11 @@ def _b_columns(block: dict[str, Any]) -> str:
 
 
 def _b_tabs(block: dict[str, Any]) -> str:
+    marker = emit_marker_text(block)
     tabs = block.get("tabs") or []
     parts: list[str] = []
+    if marker:
+        parts.append(marker)
     for tab in tabs:
         label = _str(tab.get("label"))
         inner_blocks = tab.get("blocks") or []
@@ -512,8 +538,11 @@ def _b_tabs(block: dict[str, Any]) -> str:
 
 
 def _b_accordion(block: dict[str, Any]) -> str:
+    marker = emit_marker_text(block)
     items = block.get("items") or []
     parts: list[str] = []
+    if marker:
+        parts.append(marker)
     for it in items:
         label = _str(it.get("label"))
         inner_blocks = it.get("blocks") or []
@@ -567,6 +596,56 @@ def _b_calculator(block: dict[str, Any]) -> str:
     return "\n\n".join(parts)
 
 
+def _b_pdf(block: dict[str, Any]) -> str:
+    marker = emit_marker_text(block)
+    marker_prefix = f"{marker}\n\n" if marker else ""
+    file_id = _str(block.get("fileId") or block.get("file_id"))
+    title = _str(block.get("title")) or file_id or "PDF"
+    page = block.get("page")
+    page_suffix = f" (page {page})" if page is not None else ""
+    return f"{marker_prefix}📕 **PDF**: {title}{page_suffix}"
+
+
+def _b_whiteboard(block: dict[str, Any]) -> str:
+    marker = emit_marker_text(block)
+    marker_prefix = f"{marker}\n\n" if marker else ""
+    viewbox = block.get("viewbox") or {}
+    w = viewbox.get("w") if isinstance(viewbox, dict) else None
+    h = viewbox.get("h") if isinstance(viewbox, dict) else None
+    elements = block.get("elements") or []
+    size = f"{w}×{h}" if (w is not None and h is not None) else "?"
+    return f"{marker_prefix}🖼 **Whiteboard** ({size}, {len(elements)} elements)"
+
+
+def _b_image_annotation(block: dict[str, Any]) -> str:
+    marker = emit_marker_text(block)
+    marker_prefix = f"{marker}\n\n" if marker else ""
+    image_id = _str(block.get("imageId") or block.get("image_id"))
+    caption = _str(block.get("caption")) or image_id or "image"
+    lines = [f"{marker_prefix}🖼 **Annotated image**: {caption}"]
+    for ann in block.get("annotations") or []:
+        kind = _str(ann.get("kind")) or "marker"
+        if kind == "arrow":
+            frm = ann.get("from") or {}
+            to = ann.get("to") or {}
+            label = _str(ann.get("label"))
+            summary = f"arrow ({frm.get('x')},{frm.get('y')}) → ({to.get('x')},{to.get('y')})"
+            if label:
+                summary += f": {label}"
+        elif kind == "rect":
+            label = _str(ann.get("label"))
+            summary = f"rect ({ann.get('x')},{ann.get('y')}, {ann.get('w')}×{ann.get('h')})"
+            if label:
+                summary += f": {label}"
+        elif kind == "callout":
+            text = _str(ann.get("text"))
+            summary = f"callout ({ann.get('x')},{ann.get('y')}): {text}"
+        else:
+            summary = kind
+        lines.append(f"- {summary}")
+    return "\n".join(lines)
+
+
 _BLOCK_HANDLERS: dict[str, Any] = {
     "paragraph": _b_paragraph,
     "heading-4": _b_heading_4,
@@ -594,6 +673,9 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "data-source": _b_data_source,
     "dashboard-embed": _b_dashboard_embed,
     "calculator": _b_calculator,
+    "pdf": _b_pdf,
+    "whiteboard": _b_whiteboard,
+    "image-annotation": _b_image_annotation,
 }
 
 

@@ -52,6 +52,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
+from app.services.widget_markers import emit_marker_text
+
 
 # ── Tunables ─────────────────────────────────────────────────────────
 
@@ -652,107 +654,177 @@ def _b_kpi_cards(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
 
 
 def _b_chart(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     title = _str(block.get("title"))
     chart_type = _str(block.get("chartType") or block.get("chart_type"))
     data = block.get("data") or {}
     labels = data.get("labels") or []
     series = data.get("series") or []
-    p = document.add_paragraph()
+    # Marker must be IMMEDIATELY followed by the table — that is what
+    # `_convert_chart` expects (headers=[label, series1, ..., seriesN] and
+    # rows=[label, v1, ..., vN]). Decoration paragraphs come AFTER the table.
+    # Header runs are NOT bold here: the importer would otherwise wrap them
+    # in markdown ``**…**`` and the round-trip series name would mismatch.
+    if labels or series:
+        headers = ["", *[_str(sd.get("name")) for sd in series]]
+        n_cols = len(headers)
+        table = document.add_table(rows=1 + len(labels), cols=n_cols)
+        table.style = "Table Grid"
+        hdr = table.rows[0].cells
+        for c, h in enumerate(headers):
+            hdr[c].text = h
+        for r, label in enumerate(labels, start=1):
+            row = table.rows[r].cells
+            row[0].text = _str(label)
+            for c, sd in enumerate(series, start=1):
+                values = sd.get("values") or []
+                v = values[r - 1] if r - 1 < len(values) else ""
+                row[c].text = _str(v)
+    # Decoration paragraph for human readability (importer skips it).
+    deco = document.add_paragraph()
     if title:
         ctx.chart_counter += 1
-        prefix = p.add_run(f"차트 {ctx.chart_counter}: ")
+        prefix = deco.add_run(f"차트 {ctx.chart_counter}: ")
         prefix.bold = True
-    run = p.add_run(f"[{chart_type or 'chart'}] {title}".strip() if title else f"[차트] {chart_type or 'chart'}")
-    run.bold = True
-    if not (labels or series):
-        return
-    # Render data as a small docx Table for fidelity.
-    headers = ["계열", *[_str(label) for label in labels]]
-    table = document.add_table(rows=1 + len(series), cols=len(headers))
-    table.style = "Table Grid"
-    hdr = table.rows[0].cells
-    for c, h in enumerate(headers):
-        hdr[c].text = ""
-        run = hdr[c].paragraphs[0].add_run(h)
-        run.bold = True
-    for r, sd in enumerate(series, start=1):
-        row = table.rows[r].cells
-        row[0].text = _str(sd.get("name"))
-        values = sd.get("values") or []
-        for c, v in enumerate(values, start=1):
-            if c < len(headers):
-                row[c].text = _str(v)
-    note_p = document.add_paragraph()
-    run = note_p.add_run("[차트 — DOCX export 는 데이터 표로만 보존]")
+    deco_text = (
+        f"[chart: {chart_type or 'bar'}] {title}".strip()
+        if title
+        else f"[chart: {chart_type or 'bar'}]"
+    )
+    run = deco.add_run(deco_text)
     run.italic = True
     run.font.size = Pt(9)
 
 
 def _b_gantt(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     tasks = block.get("tasks") or []
-    p = document.add_paragraph()
-    run = p.add_run("[Gantt]")
-    run.bold = True
-    if not tasks:
-        return
-    for t in tasks:
-        sub = document.add_paragraph(style="List Bullet")
-        run = sub.add_run(
-            f"{_str(t.get('name'))} : {_str(t.get('start'))} → {_str(t.get('end'))}"
-        )
-        run.font.size = Pt(11)
+    # Marker must be immediately followed by the table — `_convert_gantt`
+    # looks for name/start/end columns. Decoration paragraph goes AFTER.
+    # Header runs are NOT bold so import doesn't wrap them in markdown
+    # (the converter matches header aliases by case-folded substring).
+    if tasks:
+        headers = ["Task", "Start", "End", "Progress"]
+        table = document.add_table(rows=1 + len(tasks), cols=len(headers))
+        table.style = "Table Grid"
+        hdr = table.rows[0].cells
+        for c, h in enumerate(headers):
+            hdr[c].text = h
+        for r, t in enumerate(tasks, start=1):
+            row = table.rows[r].cells
+            row[0].text = _str(t.get("name"))
+            row[1].text = _str(t.get("start"))
+            row[2].text = _str(t.get("end"))
+            progress = t.get("progress")
+            row[3].text = _str(progress) if progress is not None else ""
+    deco = document.add_paragraph()
+    run = deco.add_run(f"[Gantt — {len(tasks)}개 작업]")
+    run.italic = True
+    run.font.size = Pt(9)
 
 
 def _b_flow(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     engine = _str(block.get("engine")) or "mermaid"
     source = _str(block.get("source"))
-    p = document.add_paragraph()
-    run = p.add_run(f"[{engine} 다이어그램]")
-    run.bold = True
+    # Marker must be IMMEDIATELY followed by a code block — `_convert_flow`
+    # requires `target.type == "code"`. Match the exact emit pattern used by
+    # `_b_code` (paragraph shading + Consolas runs); docx_import recognises
+    # that as a code block via paragraph shading detection.
     if source:
         code_p = document.add_paragraph()
         _set_paragraph_shading(code_p, _CODE_SHADING)
         for i, line in enumerate(source.splitlines() or [""]):
             if i > 0:
                 code_p.add_run().add_break()
-            r = code_p.add_run(line)
+            r = code_p.add_run(line or " ")
             r.font.name = "Consolas"
             r.font.size = Pt(10)
+    # Decoration AFTER the code block — italic, small, for humans only.
+    deco = document.add_paragraph()
+    run = deco.add_run(f"[flow: {engine}]")
+    run.italic = True
+    run.font.size = Pt(9)
 
 
 def _b_org_chart(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     root = block.get("root") or {}
-    if not root:
-        return
-    p = document.add_paragraph()
-    run = p.add_run("[조직도]")
-    run.bold = True
+    # Flatten the tree depth-first into (name, parent_name) pairs.
+    rows: list[tuple[str, str]] = []
 
-    def render_node(node: dict[str, Any], depth: int) -> None:
+    def walk(node: dict[str, Any], parent_label: str) -> None:
         label = _str(node.get("label"))
-        role = _str(node.get("role"))
-        line = f"{label} — {role}" if role else label
-        if not line:
+        if not label:
             return
-        sub = document.add_paragraph(style="List Bullet")
-        sub.paragraph_format.left_indent = Inches(0.25 * depth)
-        sub.add_run(line)
+        rows.append((label, parent_label))
         for child in node.get("children") or []:
-            render_node(child, depth + 1)
+            walk(child, label)
 
-    render_node(root, 0)
+    if root:
+        walk(root, "")
+
+    # Marker must be immediately followed by a `name|parent` table —
+    # `_convert_org_chart`'s table branch matches on those headers. Header
+    # runs are NOT bold (avoids markdown wrapping on import).
+    if rows:
+        headers = ["name", "parent"]
+        table = document.add_table(rows=1 + len(rows), cols=len(headers))
+        table.style = "Table Grid"
+        hdr = table.rows[0].cells
+        for c, h in enumerate(headers):
+            hdr[c].text = h
+        for r, (name, parent) in enumerate(rows, start=1):
+            row = table.rows[r].cells
+            row[0].text = name
+            row[1].text = parent
+    deco = document.add_paragraph()
+    run = deco.add_run(f"[조직도 — {len(rows)}명]")
+    run.italic = True
+    run.font.size = Pt(9)
 
 
 def _b_iframe(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     src = _str(block.get("src"))
-    title = _str(block.get("title")) or src or "iframe"
-    _emit_link_paragraph(document, "[iframe] ", title, src)
+    title = _str(block.get("title"))
+    # `_convert_iframe` checks `paragraph.text.startswith("http")`. Emit the
+    # URL as bare paragraph text (no hyperlink wrapping — the importer
+    # would turn that into `[url](url)`, breaking the prefix check).
+    document.add_paragraph(src)
+    # Decoration paragraph AFTER the URL — readability hint for humans.
+    if title or src:
+        deco = document.add_paragraph()
+        run = deco.add_run(f"[iframe — {title or src}]")
+        run.italic = True
+        run.font.size = Pt(9)
 
 
 def _b_video(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     url = _str(block.get("url"))
-    title = _str(block.get("title")) or url or "video"
-    _emit_link_paragraph(document, "🎬 ", title, url)
+    title = _str(block.get("title"))
+    # Same shape as iframe — bare URL paragraph so `_convert_video`'s
+    # `startswith("http")` check passes and `urlparse(url).hostname` can
+    # detect the provider.
+    document.add_paragraph(url)
+    if title or url:
+        deco = document.add_paragraph()
+        run = deco.add_run(f"[video — {title or url}]")
+        run.italic = True
+        run.font.size = Pt(9)
 
 
 def _b_image(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
@@ -837,6 +909,9 @@ def _b_gallery(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
 
 
 def _b_file(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     file_id = _str(block.get("fileId") or block.get("file_id"))
     name = _str(block.get("name")) or file_id or "file"
     href = f"/api/v1/files/{file_id}/download" if file_id else ""
@@ -844,17 +919,28 @@ def _b_file(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
 
 
 def _b_doc_link_card(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     slug = _str(block.get("slug"))
-    title = _str(block.get("title")) or slug
-    p = document.add_paragraph()
-    p.add_run("📄 ")
+    title = _str(block.get("title"))
+    # `_convert_doc_link` accepts either a bare slug or a `/docs/<slug>`
+    # path (it splits on `/` and takes the last segment, then matches the
+    # Slug regex). Emit the slug as bare paragraph text — no decoration in
+    # the URL line.
     if slug:
-        _add_hyperlink(p, f"/docs/{slug}", title or slug)
-    else:
-        p.add_run(title)
+        document.add_paragraph(slug)
+    if title or slug:
+        deco = document.add_paragraph()
+        run = deco.add_run(f"[doc-link — {title or slug}]")
+        run.italic = True
+        run.font.size = Pt(9)
 
 
 def _b_glossary_ref(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     term = _str(block.get("term"))
     definition = _str(block.get("definition"))
     if not term:
@@ -875,25 +961,41 @@ def _b_columns(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
 
 
 def _b_tabs(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     tabs = block.get("tabs") or []
     for tab in tabs:
         label = _str(tab.get("label"))
         if label:
-            p = document.add_paragraph()
-            run = p.add_run(f"▸ {label}")
-            run.bold = True
+            # Real Heading 4 — round-trips as a heading-4 block, which is
+            # what ``_convert_tabs`` needs to start a tab section.
+            try:
+                document.add_heading(label, level=4)
+            except KeyError:
+                p = document.add_paragraph()
+                run = p.add_run(label)
+                run.bold = True
         for inner in tab.get("blocks") or []:
             _render_block(document, inner, ctx)
 
 
 def _b_accordion(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     items = block.get("items") or []
     for it in items:
         label = _str(it.get("label"))
         if label:
-            p = document.add_paragraph()
-            run = p.add_run(f"▾ {label}")
-            run.bold = True
+            # Real Heading 4 — round-trips as a heading-4 block, which is
+            # what ``_convert_accordion`` needs to start an item.
+            try:
+                document.add_heading(label, level=4)
+            except KeyError:
+                p = document.add_paragraph()
+                run = p.add_run(label)
+                run.bold = True
         for inner in it.get("blocks") or []:
             _render_block(document, inner, ctx)
 
@@ -975,6 +1077,9 @@ def _b_bibliography(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
 def _b_pdf(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     """PDF block — embed as a labeled link + page indicator (DOCX can't
     embed PDFs natively as inline objects via python-docx)."""
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     file_id = _str(block.get("fileId") or block.get("file_id"))
     title = _str(block.get("title")) or file_id or "PDF"
     page = block.get("page")
@@ -991,6 +1096,9 @@ def _b_whiteboard(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     """Whiteboard — list strokes / shapes / text labels as a bullet list.
     Real visual fidelity needs SVG embed which python-docx can't do
     natively; the text summary still preserves the data."""
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     p = document.add_paragraph()
     p.add_run("🖍 Whiteboard").bold = True
     elems = block.get("elements") or []
@@ -1054,6 +1162,9 @@ def _b_quiz(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
 
 def _b_image_annotation(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     """ImageAnnotation — embed the base image + bullet-list annotations."""
+    marker = emit_marker_text(block)
+    if marker:
+        document.add_paragraph(marker)
     image_id = _str(block.get("imageId") or block.get("image_id"))
     p = document.add_paragraph()
     p.add_run("✏ Image annotation").bold = True

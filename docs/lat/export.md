@@ -131,10 +131,10 @@ pptx 는 슬라이드의 좁은 면적 때문에 큰 표를 자동 축소 — `_
 | Block | docx | pptx | html | md |
 |---|---|---|---|---|
 | `math` | OMML 직조 | 텍스트 fallback | KaTeX inline | `$$ … $$` |
-| `chart` | 이미지로 변환 후 add_picture | 동일 | `<canvas>` + chart.js JSON | mermaid fenced |
-| `gantt` | 표로 평탄화 | 표 | 커스텀 SVG | mermaid `gantt` |
+| `chart` | marker + 데이터 표 (round-trip) | 동일 | `<canvas>` + chart.js JSON | mermaid fenced |
+| `gantt` | marker + Task/Start/End/Progress 표 | 표 | 커스텀 SVG | mermaid `gantt` |
 | `flow` | 텍스트 평탄화 | 텍스트 | mermaid | mermaid `flowchart` |
-| `org-chart` | 텍스트 평탄화 | 텍스트 | mermaid | mermaid `graph TD` |
+| `org-chart` | marker + name/parent 표 | 텍스트 | mermaid | mermaid `graph TD` |
 
 차트는 본문에 SVG 가 직접 박히지 않고 미리 렌더된 PNG 가 storage 에서
 온다 — `chart.imageId` 가 가리키는 [[storage]] 의 이미지 사용.

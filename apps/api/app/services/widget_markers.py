@@ -61,6 +61,57 @@ def parse_marker(text: str) -> tuple[str, str | None] | None:
     return widget_type, variant
 
 
+# ── Export-side marker emission ───────────────────────────────────────
+
+_EXPORT_MARKER_TYPES: frozenset[str] = frozenset({
+    # Necessary markers — docx/pptx can't natively express these
+    "iframe", "video", "file", "pdf", "whiteboard", "image-annotation",
+    "flow", "chart", "gantt", "org-chart",
+    # Identification markers — natural representation is ambiguous on import
+    "tabs", "accordion", "doc-link-card", "glossary-ref",
+})
+
+# Block schema `type` → marker dispatcher key. The widget marker grammar
+# uses friendly short names (doc-link, glossary) whereas the schema's
+# actual `type` const is `doc-link-card` / `glossary-ref`.
+_SCHEMA_TYPE_TO_MARKER_KEY: dict[str, str] = {
+    "doc-link-card": "doc-link",
+    "glossary-ref": "glossary",
+}
+
+
+def emit_marker_text(block: dict[str, Any]) -> str | None:
+    """Return ``"Widget: <type> (variant)"`` for the widget block types
+    that need an export-side marker prepend. Returns ``None`` for plain
+    blocks (paragraph/heading-4/table/...) and for the 4 auto-detected
+    widgets (callout / kpi-cards / gallery / columns) that import can
+    recognise without a marker.
+
+    The reverse of :func:`parse_marker` — re-emits the marker text the
+    importer would recognise.
+    """
+    if not isinstance(block, dict):
+        return None
+    t = block.get("type")
+    if t not in _EXPORT_MARKER_TYPES:
+        return None
+    marker_key = _SCHEMA_TYPE_TO_MARKER_KEY.get(t, t)
+
+    variant: str | None = None
+    if t == "chart":
+        ct = block.get("chartType")
+        if isinstance(ct, str) and ct in _ALLOWED_CHART_TYPES:
+            variant = ct
+    # (Other widgets don't carry a marker-relevant variant: callout's
+    # variant is handled by `_convert_callout`'s import fallback, gallery's
+    # layout is preserved via DocumentJSON proper since gallery is in the
+    # auto-detect opt-out list.)
+
+    if variant:
+        return f"Widget: {marker_key} ({variant})"
+    return f"Widget: {marker_key}"
+
+
 # ── Phase 1 converters ───────────────────────────────────────────────
 
 

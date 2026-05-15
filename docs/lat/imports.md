@@ -98,11 +98,11 @@ docx_to_document(buf, slug, title, owner_user_id, image_uploader, ...)
 | `tabs` | 2 | `_convert_tabs` | 다음 heading-4 시리즈 + 본문 → TabsBlock |
 | `accordion` | 2 | `_convert_accordion` | 다음 heading-4 시리즈 + 본문 → AccordionBlock |
 | `gallery` | 2 | `_convert_gallery` | 다음 연속 이미지 → GalleryBlock |
-| `doc-link` † | 2 | `_convert_doc_link` | 다음 위키링크 단락 → DocLinkCardBlock |
+| `doc-link` † | 2 | `_convert_doc_link` | 다음 단락 (slug 또는 `/docs/<slug>` URL) → DocLinkCardBlock |
 | `glossary` † | 2 | `_convert_glossary` | 다음 단락 → GlossaryRefBlock |
 | `image-annotation` | 2 | `_convert_image_annotation` | 다음 이미지 + 표 (x, y, label) → ImageAnnotationBlock |
-| `iframe` | 2 | `_convert_iframe` | 다음 하이퍼링크 단락 → IframeBlock |
-| `video` | 2 | `_convert_video` | 다음 하이퍼링크 단락 → VideoBlock |
+| `iframe` | 2 | `_convert_iframe` | 다음 URL 단락 (text가 http(s):// 로 시작) → IframeBlock |
+| `video` | 2 | `_convert_video` | 다음 URL 단락 (host 로 provider 추론) → VideoBlock |
 | `file` | 2 | `_convert_file` | 다음 하이퍼링크 단락 → FileBlock (fileId placeholder) |
 | `pdf` | 2 | `_convert_pdf` | 다음 하이퍼링크 단락 → PdfBlock (file_id placeholder) |
 | `whiteboard` | 2 | `_convert_whiteboard` | 항상 None — 다음 이미지 보존 fallback |
