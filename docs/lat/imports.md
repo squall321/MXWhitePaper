@@ -86,20 +86,43 @@ docx_to_document(buf, slug, title, owner_user_id, image_uploader, ...)
 규칙: 단락 텍스트가 `^(Widget|위젯):\s*<type>\s*(\(<variant>\))?$` 매치하면
 *다음* 블록과 묶여 위젯 블록으로 rewrite.
 
-| 위젯 타입 | Phase 1 변환 함수 | 동작 |
-|---|---|---|
-| `callout` | `_convert_callout` | 다음 단락 → CalloutBlock (variant: info/warn/danger/tip) |
-| `kpi-cards` | `_convert_kpi_cards` | 다음 표 → KpiCardsBlock (헤더 label/value/delta?/trend?) |
-| `chart`, `gantt`, `flow`, `org-chart`, `columns`, `tabs`, `accordion`, `gallery`, `doc-link`, `glossary`, `image-annotation`, `iframe`, `video`, `file`, `pdf`, `whiteboard` | `None` (Phase 2 hook) | 마커 paragraph 만 소비 + warning + target 블록은 평소대로 emit |
+| 위젯 타입 | Phase | 변환 함수 | 동작 |
+|---|---|---|---|
+| `callout` | 1 | `_convert_callout` | 다음 단락 → CalloutBlock (variant: info/warn/danger/tip) |
+| `kpi-cards` | 1 | `_convert_kpi_cards` | 다음 표 → KpiCardsBlock (헤더 label/value/delta?/trend?) |
+| `chart` | 2 | `_convert_chart` | 다음 표 (categories, series N개) → ChartBlock |
+| `gantt` | 2 | `_convert_gantt` | 다음 표 (Task, Start, End, Owner?, Progress?) → GanttBlock |
+| `flow` | 2 | `_convert_flow` | 다음 code block (mermaid DSL) → FlowBlock |
+| `org-chart` | 2 | `_convert_org_chart` | 다음 들여쓰기 목록 → OrgChartBlock |
+| `columns` | 2 | `_convert_columns` | 다음 표 (N 컬럼 = N 단) → ColumnsBlock |
+| `tabs` | 2 | `_convert_tabs` | 다음 heading-4 시리즈 + 본문 → TabsBlock |
+| `accordion` | 2 | `_convert_accordion` | 다음 heading-4 시리즈 + 본문 → AccordionBlock |
+| `gallery` | 2 | `_convert_gallery` | 다음 연속 이미지 → GalleryBlock |
+| `doc-link` † | 2 | `_convert_doc_link` | 다음 위키링크 단락 → DocLinkCardBlock |
+| `glossary` † | 2 | `_convert_glossary` | 다음 단락 → GlossaryRefBlock |
+| `image-annotation` | 2 | `_convert_image_annotation` | 다음 이미지 + 표 (x, y, label) → ImageAnnotationBlock |
+| `iframe` | 2 | `_convert_iframe` | 다음 하이퍼링크 단락 → IframeBlock |
+| `video` | 2 | `_convert_video` | 다음 하이퍼링크 단락 → VideoBlock |
+| `file` | 2 | `_convert_file` | 다음 하이퍼링크 단락 → FileBlock (fileId placeholder) |
+| `pdf` | 2 | `_convert_pdf` | 다음 하이퍼링크 단락 → PdfBlock (file_id placeholder) |
+| `whiteboard` | 2 | `_convert_whiteboard` | 항상 None — 다음 이미지 보존 fallback |
+
+† 마커 이름과 스키마 타입이 다름: `doc-link` → DocLinkCardBlock (`doc-link-card`),
+`glossary` → GlossaryRefBlock (`glossary-ref`). 마커 텍스트는 사용자 친화적
+짧은 이름을 그대로 받는다.
+
+`file` / `pdf` 의 fileId 는 실제 파일 업로드가 아닌 **placeholder** — import 후
+에디터에서 첨부 파일을 다시 연결해야 한다. `whiteboard` 는 마커 뒤 이미지를
+보존하는 fallback 만 수행 (변환 함수가 None 반환).
 
 미지원 위젯 타입 (dispatcher 미등록) 은 marker 텍스트가 보존됨 (false
 positive 회피). 변환 실패 (잘못된 target 타입 / 누락 헤더) 시도 marker +
 target 둘 다 보존 — 정보 손실 0.
 
-마커 없는 문서는 영향 없음 — 778 회귀 테스트 통과.
+마커 없는 문서는 영향 없음 — 835 회귀 테스트 통과 (Phase 2 완료 후).
 
-테스트: [[src/tests/test_widget_markers.py]] — 15 케이스 (regex, dispatcher,
-recursion, docx 라운드트립, 마커 미존재 가드).
+테스트: [[src/tests/test_widget_markers.py]] — 72 케이스 (regex, dispatcher,
+recursion, 16 위젯 converter 별 단위 + 음성 케이스, docx 라운드트립, 마커 미존재 가드).
 
 LLM 작성 가이드: [[docs/llm-document-formats.md]] 의 "Phase 1 위젯 마커 룰" 참고.
 

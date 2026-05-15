@@ -24,6 +24,45 @@ type SparseCell = NonNullable<TableBlock['cells']>[number]
 type SortState = { col: number; dir: 'asc' | 'desc' } | null
 
 /**
+ * Render a sparse cell's content. Mixed-content cells (with `blocks`) lay
+ * out paragraph/image/list inline; plain cells fall back to the existing
+ * inline-markup renderer. Restricted to the three block types allowed by
+ * the `CellBlock` union — anything else is silently skipped.
+ */
+function renderCellContent(cell: SparseCell) {
+  if (cell.blocks && cell.blocks.length > 0) {
+    return (
+      <div className="cell-blocks space-y-1">
+        {cell.blocks.map((b, idx) => {
+          if (b.type === 'paragraph') return <p key={idx}>{b.text}</p>
+          if (b.type === 'image')
+            return (
+              <img
+                key={idx}
+                src={`/api/v1/images/${b.imageId}/view`}
+                alt={b.alt ?? ''}
+                className="h-auto max-w-full"
+              />
+            )
+          if (b.type === 'list') {
+            const Tag = b.style === 'number' ? 'ol' : 'ul'
+            return (
+              <Tag key={idx} className="ml-4">
+                {b.items.map((it, i) => (
+                  <li key={i}>{it}</li>
+                ))}
+              </Tag>
+            )
+          }
+          return null
+        })}
+      </div>
+    )
+  }
+  return <Inline text={cell.text ?? ''} />
+}
+
+/**
  * Compose Tailwind classes for a single body/header cell, accounting for
  * column defaults (align/dtype) and per-cell sparse overrides (align/bg/
  * bold/color). Returns both className and inline style — `style` is only
@@ -235,7 +274,7 @@ function SparseTableBody({
                     className={`${cls} whitespace-nowrap`}
                     style={cellStyle(cell.bg, cell.color)}
                   >
-                    <Inline text={cell.text ?? ''} />
+                    {renderCellContent(cell)}
                   </th>
                 )
               })}
@@ -267,7 +306,9 @@ function SparseTableBody({
                     className={`${cls} align-top`}
                     style={cellStyle(cell.bg, cell.color)}
                   >
-                    {col?.dtype && col.dtype !== 'text' && col.dtype !== 'date' ? (
+                    {cell.blocks ? (
+                      renderCellContent(cell)
+                    ) : col?.dtype && col.dtype !== 'text' && col.dtype !== 'date' ? (
                       <span>{formatted}</span>
                     ) : (
                       <Inline text={formatted} />

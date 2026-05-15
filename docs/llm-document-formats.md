@@ -372,6 +372,8 @@ block API 를 직접 호출하는 게 정답.** 가이드: `docs/llm-widgets-via
 > `iframe`, `video`, `file`, `pdf`, `whiteboard`) 도 마커는 인식되므로 미리
 > 박아두면 후속 import 부터 자동 변환됨.
 
+> **Phase 2 구현 완료 (2026-05-15)**: 위 청사진의 14 위젯 (chart / gantt / flow / org-chart / columns / tabs / accordion / gallery / doc-link / glossary / image-annotation / iframe / video / file / pdf / whiteboard) 모두 실제 변환기 구현. file / pdf 는 fileId placeholder, whiteboard 는 이미지 보존 fallback.
+
 #### 1) 통일 룰
 
 **"직전 단락이 `Widget: <type>` 또는 `위젯: <type>` 패턴이면 다음 블록을

@@ -359,6 +359,19 @@ def _bool_form(value: str | None, default: bool) -> bool:
     return value.strip().lower() in ("1", "true", "yes", "y", "on")
 
 
+def _safe_header_value(s: str, max_bytes: int = 7000) -> str:
+    """Truncate a string to fit a response header.
+
+    Cuts on UTF-8 codepoint boundary so multibyte chars (Korean/CJK) never
+    get split, and strips CR/LF to prevent header injection.
+    """
+    cleaned = s.replace("\r", " ").replace("\n", " ")
+    encoded = cleaned.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return cleaned
+    return encoded[:max_bytes].decode("utf-8", errors="ignore")
+
+
 @router.post(
     "/docx/roundtrip",
     summary="Word → DocumentJSON → Word 라운드트립 (문서 본문 영속 없음)",
@@ -473,9 +486,9 @@ async def roundtrip_docx_endpoint(
     # individual header size around 8 KB so we keep this concise (no
     # blocks/payload — just counters + lists of titles).
     import json as _json
-    headers["X-MXWP-Roundtrip-Summary"] = _json.dumps(
-        summary, ensure_ascii=False, separators=(",", ":"),
-    )[:7000]
+    headers["X-MXWP-Roundtrip-Summary"] = _safe_header_value(
+        _json.dumps(summary, ensure_ascii=False, separators=(",", ":")),
+    )
     return Response(
         content=out_bytes,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",

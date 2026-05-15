@@ -95,11 +95,21 @@ export function mergeWith(
   const upperLeft = anchor.r < neighbor.r || anchor.c < neighbor.c ? anchor : neighbor
   const otherText = upperLeft === anchor ? neighbor.text : anchor.text
   const newText = combineText(upperLeft.text ?? '', otherText ?? '')
-  const merged: SparseCell = {
-    r: r0,
-    c: c0,
-    text: newText,
-  }
+  // Mixed-content (`blocks`) wins over plain text on merge — if either side
+  // has rich content, concatenate the blocks arrays (upper-left first) so
+  // nothing is silently dropped. Otherwise fall back to text-merge.
+  const anchorBlocks = anchor.blocks
+  const neighborBlocks = neighbor.blocks
+  const newBlocks: SparseCell['blocks'] | undefined =
+    anchorBlocks || neighborBlocks
+      ? ([
+          ...(upperLeft === anchor ? (anchorBlocks ?? []) : (neighborBlocks ?? [])),
+          ...(upperLeft === anchor ? (neighborBlocks ?? []) : (anchorBlocks ?? [])),
+        ] as SparseCell['blocks'])
+      : undefined
+  const merged: SparseCell = newBlocks && newBlocks.length > 0
+    ? { r: r0, c: c0, blocks: newBlocks }
+    : { r: r0, c: c0, text: newText }
   if (r1 - r0 > 1) merged.rowSpan = r1 - r0
   if (c1 - c0 > 1) merged.colSpan = c1 - c0
   if (upperLeft.header) merged.header = true
@@ -178,6 +188,10 @@ export function cellsToFlat(
   const grid: string[][] = Array.from({ length: maxR + 1 }, () =>
     Array(maxC + 1).fill(''),
   )
+  // Mixed-content cells (`blocks`) collapse to '' here — flat mode is a
+  // headers/rows string grid by definition and can't hold rich content.
+  // This is a deliberate lossy fallback used by "표 평탄화"; rich content
+  // must be edited in sparse mode.
   for (const cell of cells) grid[cell.r]![cell.c] = cell.text ?? ''
   return { headers: grid[0] ?? [], rows: grid.slice(1) }
 }
