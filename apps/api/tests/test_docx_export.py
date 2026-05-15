@@ -357,3 +357,90 @@ async def test_export_docx_endpoint_rejects_missing_slug() -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         r = await ac.post("/api/v1/exports/docx", json={})
     assert r.status_code == 422
+
+
+# ── {{var}} substitution parity with markdown / html / pptx ─────────
+
+
+def test_renderer_substitutes_variable_tokens_in_paragraphs() -> None:
+    """docx export should resolve `{{var}}` tokens just like the other
+    three renderers. Without this the docx leg of round-trip emitted
+    literal `{{name}}` tokens — a regression caught only by manual
+    inspection.
+    """
+    doc = _doc(
+        blocks=[
+            {
+                "type": "paragraph",
+                "id": "01P000000000000000000000A1",
+                "text": "안녕하세요 {{user}}",
+            }
+        ],
+        variables={"user": "Park"},
+    )
+    out = render_docx(doc)
+    text = _all_text(Document(io.BytesIO(out)))
+    assert "안녕하세요 Park" in text
+    assert "{{user}}" not in text
+
+
+def test_renderer_substitutes_section_titles() -> None:
+    doc = _doc(variables={"section_title": "본문"})
+    doc["sections"][0]["title"] = "{{section_title|기본}}"
+    out = render_docx(doc)
+    text = _all_text(Document(io.BytesIO(out)))
+    assert "본문" in text
+    assert "{{section_title" not in text
+
+
+def test_renderer_substitutes_fallback_when_variable_missing() -> None:
+    doc = _doc(
+        blocks=[
+            {
+                "type": "paragraph",
+                "id": "01P000000000000000000000A2",
+                "text": "오늘은 {{date|TBD}}.",
+            }
+        ],
+        variables={},
+    )
+    out = render_docx(doc)
+    text = _all_text(Document(io.BytesIO(out)))
+    assert "오늘은 TBD." in text
+
+
+def test_renderer_leaves_unfilled_tokens_literal() -> None:
+    """Unfilled tokens with no fallback are preserved as `{{name}}` —
+    matches the helper's contract so the user sees what's missing.
+    """
+    doc = _doc(
+        blocks=[
+            {
+                "type": "paragraph",
+                "id": "01P000000000000000000000A3",
+                "text": "값: {{missing}}",
+            }
+        ],
+        variables={},
+    )
+    out = render_docx(doc)
+    text = _all_text(Document(io.BytesIO(out)))
+    assert "{{missing}}" in text
+
+
+def test_renderer_skips_substitution_inside_code_blocks() -> None:
+    doc = _doc(
+        blocks=[
+            {
+                "type": "code",
+                "id": "01C000000000000000000000A4",
+                "language": "python",
+                "code": "secret = {{secret}}",
+            }
+        ],
+        variables={"secret": "topsecret"},
+    )
+    out = render_docx(doc)
+    text = _all_text(Document(io.BytesIO(out)))
+    assert "{{secret}}" in text
+    assert "topsecret" not in text

@@ -52,6 +52,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
+from app.services.variables import walk_doc_substitute
 from app.services.widget_markers import emit_marker_text
 
 
@@ -121,6 +122,10 @@ def render_docx(
         from .document_service import scrub_for_response
 
         doc = scrub_for_response(doc, role=requester_role)
+    # Substitute `{{var}}` tokens before walking the tree so every block
+    # sees the resolved text. Mirrors markdown_export / html_renderer /
+    # pptx_export. Code blocks are skipped inside the helper.
+    doc = walk_doc_substitute(doc, doc.get("variables"))
     document = Document()
     ctx = _Ctx(document=document, opts=opts, footnotes=_collect_footnotes(doc), requester_role=requester_role)
     ctx.figure_index = _precompute_figure_index(doc)
