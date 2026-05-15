@@ -1,19 +1,23 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import type { TableBlock, Slug } from '@/types/document'
+import type { CellBlock, TableBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { useT } from '@/lib/i18n'
 import {
   cellsToFlat,
   csOf,
+  demoteToText,
+  demoteWouldLoseData,
   findNeighbor,
   flatToCells,
   isAllUnitCells,
   mergeWith,
+  promoteToBlocks,
   rsOf,
   splitMerge,
   type SparseCell,
 } from './tableCells'
+import { CellBlockEditor } from './CellBlockEditor'
 import { TableOptionsPanel } from './TableOptionsPanel'
 import { ColumnHeaderMenu } from './ColumnHeaderMenu'
 import { CellStyleToolbar } from './CellStyleToolbar'
@@ -245,6 +249,41 @@ export function TableBlockEditor({ slug, block }: Props) {
       })
       schedule({ ...local, cells: next })
     }
+    // Mixed-content writes from <CellBlockEditor>. When the user empties
+    // the blocks array we flip back to a text cell (text='') so the cell
+    // stays well-formed (schema requires exactly one of text / blocks).
+    const setCellBlocks = (idx: number, blocks: CellBlock[]) => {
+      const next = cells.map((cell, i) => {
+        if (i !== idx) return cell
+        if (blocks.length === 0) {
+          const { blocks: _b, ...rest } = cell
+          void _b
+          return { ...rest, text: '' }
+        }
+        const { text: _t, ...rest } = cell
+        void _t
+        return { ...rest, blocks: blocks as NonNullable<SparseCell['blocks']> }
+      })
+      schedule({ ...local, cells: next })
+    }
+    // Per-cell toggle between text and blocks modes. Demoting a cell that
+    // contains an image asks the user to confirm because the image ref is
+    // lost (text demote drops image blocks).
+    const toggleCellMode = (idx: number) => {
+      const target = cells[idx]
+      if (!target) return
+      let nextCell: SparseCell
+      if (target.blocks && target.blocks.length > 0) {
+        if (demoteWouldLoseData(target)) {
+          if (!window.confirm('이 셀의 이미지가 사라집니다. 진행할까요?')) return
+        }
+        nextCell = demoteToText(target)
+      } else {
+        nextCell = promoteToBlocks(target)
+      }
+      const next = cells.map((c, i) => (i === idx ? nextCell : c))
+      schedule({ ...local, cells: next })
+    }
     const onMerge = (anchor: SparseCell, side: 'left' | 'right' | 'up' | 'down') => {
       const next = mergeWith(cells, anchor, side)
       if (!next) return // no neighbour available
@@ -305,15 +344,22 @@ export function TableBlockEditor({ slug, block }: Props) {
                           }`}
                           scope={isHeaderRow(r) ? 'col' : undefined}
                         >
-                          <input
-                            type="text"
-                            value={cell.text}
-                            onChange={(e) => setCellText(idx, e.target.value)}
-                            aria-label={t('editor.table.cellLabel', { r: cell.r + 1, c: cell.c + 1 })}
-                            className={`w-full rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none ${
-                              isHeaderRow(r) ? 'font-semibold text-smsg-900' : ''
-                            }`}
-                          />
+                          {cell.blocks && cell.blocks.length > 0 ? (
+                            <CellBlockEditor
+                              blocks={cell.blocks}
+                              onChange={(next) => setCellBlocks(idx, next)}
+                            />
+                          ) : (
+                            <input
+                              type="text"
+                              value={cell.text ?? ''}
+                              onChange={(e) => setCellText(idx, e.target.value)}
+                              aria-label={t('editor.table.cellLabel', { r: cell.r + 1, c: cell.c + 1 })}
+                              className={`w-full rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none ${
+                                isHeaderRow(r) ? 'font-semibold text-smsg-900' : ''
+                              }`}
+                            />
+                          )}
                           {(csOf(cell) > 1 || rsOf(cell) > 1) && (
                             <span
                               aria-hidden="true"
@@ -332,6 +378,7 @@ export function TableBlockEditor({ slug, block }: Props) {
                             onMerge={onMerge}
                             onSplit={onSplit}
                             onStyle={(patch) => setCellStyle(idx, patch)}
+                            onToggleMode={() => toggleCellMode(idx)}
                             t={t}
                           />
                         </Tag>
@@ -583,6 +630,7 @@ function CellActions({
   onMerge,
   onSplit,
   onStyle,
+  onToggleMode,
   t,
 }: {
   cell: SparseCell
@@ -590,6 +638,7 @@ function CellActions({
   onMerge: (cell: SparseCell, side: 'left' | 'right' | 'up' | 'down') => void
   onSplit: (cell: SparseCell) => void
   onStyle: (patch: Partial<SparseCell>) => void
+  onToggleMode: () => void
   t: (key: string, vars?: Record<string, string | number>) => string
 }) {
   const canLeft = !!findNeighbor(cells, cell, 'left')
@@ -597,6 +646,7 @@ function CellActions({
   const canUp = !!findNeighbor(cells, cell, 'up')
   const canDown = !!findNeighbor(cells, cell, 'down')
   const canSplit = csOf(cell) > 1 || rsOf(cell) > 1
+  const isBlocksMode = !!(cell.blocks && cell.blocks.length > 0)
   return (
     <div
       data-cell-actions
@@ -632,6 +682,15 @@ function CellActions({
         disabled={!canSplit}
         onClick={() => onSplit(cell)}
       />
+      <button
+        type="button"
+        onClick={onToggleMode}
+        title={isBlocksMode ? '텍스트로 변환' : '풍부한 편집으로'}
+        aria-label={isBlocksMode ? '텍스트로 변환' : '풍부한 편집으로'}
+        className="pointer-events-auto text-xs px-1 hover:bg-gray-100 rounded"
+      >
+        {isBlocksMode ? '¶' : '¶+'}
+      </button>
       <CellStyleToolbar cell={cell} onChange={onStyle} />
     </div>
   )

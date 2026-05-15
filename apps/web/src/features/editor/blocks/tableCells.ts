@@ -13,8 +13,11 @@
  * Merges only happen between *anchor* cells; covered slots have no entry.
  */
 import type { TableBlock } from '@/types/document'
+import { ulid } from '@/features/editor/ulid'
 
 export type SparseCell = NonNullable<TableBlock['cells']>[number]
+type CellBlocks = NonNullable<SparseCell['blocks']>
+type CellBlock = CellBlocks[number]
 
 export function rsOf(cell: SparseCell): number {
   return Math.max(1, cell.rowSpan ?? 1)
@@ -203,4 +206,45 @@ export function cellsToFlat(
  */
 export function isAllUnitCells(cells: readonly SparseCell[]): boolean {
   return cells.every((c) => rsOf(c) === 1 && csOf(c) === 1)
+}
+
+/**
+ * Promote a text-only cell to a single-paragraph blocks cell. The original
+ * text becomes the paragraph's text (empty string is fine — the paragraph
+ * is still well-formed and editable). No-op when the cell is already in
+ * blocks mode.
+ */
+export function promoteToBlocks(cell: SparseCell): SparseCell {
+  if (cell.blocks && cell.blocks.length > 0) return cell
+  const paragraph: CellBlock = { type: 'paragraph', id: ulid(), text: cell.text ?? '' }
+  const { text: _text, ...rest } = cell
+  void _text
+  return { ...rest, blocks: [paragraph] as CellBlocks }
+}
+
+/**
+ * Demote a blocks cell back to plain text. Paragraph text and list items
+ * are joined with newlines; image blocks are LOST (caller should call
+ * `demoteWouldLoseData` first and confirm with the user when true).
+ */
+export function demoteToText(cell: SparseCell): SparseCell {
+  if (!cell.blocks || cell.blocks.length === 0) return cell
+  const lines: string[] = []
+  for (const b of cell.blocks) {
+    if (b.type === 'paragraph') lines.push(b.text)
+    else if (b.type === 'list') lines.push(...b.items)
+    // image blocks dropped — caller should have warned via demoteWouldLoseData
+  }
+  const { blocks: _blocks, ...rest } = cell
+  void _blocks
+  return { ...rest, text: lines.join('\n') }
+}
+
+/**
+ * True when demoting `cell` to text would silently drop data (i.e. it
+ * contains an image block). Used by the editor to gate a confirm modal.
+ */
+export function demoteWouldLoseData(cell: SparseCell): boolean {
+  if (!cell.blocks) return false
+  return cell.blocks.some((b) => b.type === 'image')
 }
