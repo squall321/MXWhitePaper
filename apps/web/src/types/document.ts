@@ -49,6 +49,10 @@ export type Block =
   | SpacerBlock
   | FigureIndexBlock
 /**
+ * Block subset allowed inside a TableBlock cell's `blocks` array. Intentionally narrow to keep table cell rendering tractable — only paragraph/image/list.
+ */
+export type CellBlock = ParagraphBlock | ImageBlock | ListBlock
+/**
  * FK to images.id — accepts ULID (legacy seed data) or UUID (uploaded images)
  */
 export type ImageRef = string
@@ -314,14 +318,20 @@ export interface TableBlock {
   headers: string[]
   rows: string[][]
   /**
-   * Optional sparse cell list for tables with merged or styled cells (DOCX gridSpan/vMerge round-trip + per-cell style overrides). When present, the renderer ignores headers/rows and lays out from this list. Each cell occupies (r..r+rowSpan-1) × (c..c+colSpan-1); covered slots have no entry. r/c are 0-indexed; the first row of a header-mode table is the header row.
+   * Optional sparse cell list for tables with merged or styled cells (DOCX gridSpan/vMerge round-trip + per-cell style overrides). When present, the renderer ignores headers/rows and lays out from this list. Each cell occupies (r..r+rowSpan-1) × (c..c+colSpan-1); covered slots have no entry. r/c are 0-indexed; the first row of a header-mode table is the header row. A cell carries content via either `text` (plain string, the common case) or `blocks` (mixed content — paragraph/image/list). Exactly one of the two MUST be set; empty cell ⇒ text=''.
    */
   cells?: {
     r: number
     c: number
     rowSpan?: number
     colSpan?: number
-    text: string
+    text?: string
+    /**
+     * Mixed-content cell payload. When present, renderers ignore `text` and lay out these blocks inside the cell. Restricted to paragraph/image/list to keep cell layout tractable — tables-in-tables and callouts-in-cells are intentionally out of scope.
+     *
+     * @minItems 1
+     */
+    blocks?: [CellBlock, ...CellBlock[]]
     /**
      * True for header-row cells (rendered as <th>).
      */
@@ -408,6 +418,22 @@ export interface TableBlock {
      */
     borderStyle?: 'none' | 'horizontal' | 'all'
   }
+  meta?: BlockMeta
+}
+export interface ImageBlock {
+  type: 'image'
+  id: Ulid
+  /**
+   * FK to images.id (ULID or UUID)
+   */
+  imageId: string
+  caption?: string
+  alt?: string
+  width?: 'sm' | 'md' | 'lg' | 'full'
+  /**
+   * 외부 URL 또는 위키 slug
+   */
+  link?: string
   meta?: BlockMeta
 }
 export interface KpiCardsBlock {
@@ -534,22 +560,6 @@ export interface VideoBlock {
   url: string
   title?: string
   provider?: 'intra' | 'youtube' | 'vimeo'
-  meta?: BlockMeta
-}
-export interface ImageBlock {
-  type: 'image'
-  id: Ulid
-  /**
-   * FK to images.id (ULID or UUID)
-   */
-  imageId: string
-  caption?: string
-  alt?: string
-  width?: 'sm' | 'md' | 'lg' | 'full'
-  /**
-   * 외부 URL 또는 위키 slug
-   */
-  link?: string
   meta?: BlockMeta
 }
 export interface GalleryBlock {

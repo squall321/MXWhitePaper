@@ -413,6 +413,10 @@ def _b_math(block: dict[str, Any], ctx: _Ctx) -> str:
 
 
 def _b_table(block: dict[str, Any], _ctx: _Ctx) -> str:
+    cells = block.get("cells")
+    if isinstance(cells, list) and cells:
+        return _b_table_sparse_html(block, cells, _ctx)
+
     headers = block.get("headers") or []
     rows = block.get("rows") or []
     head = (
@@ -429,6 +433,90 @@ def _b_table(block: dict[str, Any], _ctx: _Ctx) -> str:
         )
     body += "</tbody>"
     return f'<table class="b-table">{head}{body}</table>'
+
+
+def _b_table_sparse_html(
+    block: dict[str, Any],
+    cells: list[dict[str, Any]],
+    _ctx: _Ctx,
+) -> str:
+    """Render sparse-cell table to HTML; mixed-content (`blocks`) becomes
+    a sequence of `<p>` / `<img>` / `<ul>` inside `<td>`."""
+    if not cells:
+        return ""
+    max_r = max(int(c.get("r") or 0) for c in cells)
+    max_c = max(int(c.get("c") or 0) for c in cells)
+    cols = max_c + 1
+    # Build grid + track covered slots (rowSpan/colSpan suppress neighbors).
+    by_pos: dict[tuple[int, int], dict[str, Any]] = {}
+    covered: set[tuple[int, int]] = set()
+    for cell in cells:
+        r = int(cell.get("r") or 0)
+        c = int(cell.get("c") or 0)
+        by_pos[(r, c)] = cell
+        rs = int(cell.get("rowSpan") or 1)
+        cs = int(cell.get("colSpan") or 1)
+        for dr in range(rs):
+            for dc in range(cs):
+                if dr or dc:
+                    covered.add((r + dr, c + dc))
+
+    rows_html: list[str] = []
+    for r in range(max_r + 1):
+        row_html: list[str] = []
+        any_header = False
+        for c in range(cols):
+            if (r, c) in covered:
+                continue
+            cell = by_pos.get((r, c))
+            if cell is None:
+                row_html.append("<td></td>")
+                continue
+            tag = "th" if cell.get("header") else "td"
+            if cell.get("header"):
+                any_header = True
+            attrs = []
+            rs = int(cell.get("rowSpan") or 1)
+            cs = int(cell.get("colSpan") or 1)
+            if rs > 1:
+                attrs.append(f'rowspan="{rs}"')
+            if cs > 1:
+                attrs.append(f'colspan="{cs}"')
+            if cell.get("align"):
+                attrs.append(f'style="text-align: {html.escape(_str(cell["align"]))}"')
+            attr_str = (" " + " ".join(attrs)) if attrs else ""
+            inner = _render_cell_html(cell, _ctx)
+            row_html.append(f"<{tag}{attr_str}>{inner}</{tag}>")
+        if any_header:
+            rows_html.append("<thead><tr>" + "".join(row_html) + "</tr></thead>")
+        else:
+            rows_html.append("<tr>" + "".join(row_html) + "</tr>")
+    return f'<table class="b-table">{"".join(rows_html)}</table>'
+
+
+def _render_cell_html(cell: dict[str, Any], _ctx: _Ctx) -> str:
+    blocks = cell.get("blocks")
+    if isinstance(blocks, list) and blocks:
+        parts: list[str] = []
+        for b in blocks:
+            if not isinstance(b, dict):
+                continue
+            t = b.get("type")
+            if t == "paragraph":
+                parts.append(f"<p>{_render_inline(_str(b.get('text')))}</p>")
+            elif t == "image":
+                alt = html.escape(_str(b.get("caption")) or "")
+                img_id = html.escape(_str(b.get("imageId")))
+                parts.append(f'<img alt="{alt}" data-image-id="{img_id}">')
+            elif t == "list":
+                tag = "ol" if b.get("style") == "number" else "ul"
+                items = b.get("items") or []
+                lis = "".join(
+                    f"<li>{_render_inline(_str(it))}</li>" for it in items
+                )
+                parts.append(f"<{tag}>{lis}</{tag}>")
+        return "".join(parts)
+    return _render_inline(_str(cell.get("text") or ""))
 
 
 def _b_kpi_cards(block: dict[str, Any], _ctx: _Ctx) -> str:

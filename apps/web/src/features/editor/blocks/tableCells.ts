@@ -94,7 +94,7 @@ export function mergeWith(
   // and header flag should live after the merge.
   const upperLeft = anchor.r < neighbor.r || anchor.c < neighbor.c ? anchor : neighbor
   const otherText = upperLeft === anchor ? neighbor.text : anchor.text
-  const newText = combineText(upperLeft.text, otherText)
+  const newText = combineText(upperLeft.text ?? '', otherText ?? '')
   const merged: SparseCell = {
     r: r0,
     c: c0,
@@ -178,7 +178,7 @@ export function cellsToFlat(
   const grid: string[][] = Array.from({ length: maxR + 1 }, () =>
     Array(maxC + 1).fill(''),
   )
-  for (const cell of cells) grid[cell.r]![cell.c] = cell.text
+  for (const cell of cells) grid[cell.r]![cell.c] = cell.text ?? ''
   return { headers: grid[0] ?? [], rows: grid.slice(1) }
 }
 

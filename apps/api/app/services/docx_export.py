@@ -479,12 +479,16 @@ def _emit_table_cells(
     for cell in cells:
         r = int(cell.get("r", 0))
         c = int(cell.get("c", 0))
-        text = _str(cell.get("text"))
         is_header = bool(cell.get("header"))
         try:
             tc = table.rows[r].cells[c]
         except IndexError:
             continue
+        blocks = cell.get("blocks")
+        if isinstance(blocks, list) and blocks:
+            _emit_cell_blocks(tc, blocks, ctx, is_header=is_header)
+            continue
+        text = _str(cell.get("text"))
         tc.text = ""
         p = tc.paragraphs[0]
         if is_header:
@@ -508,6 +512,112 @@ def _emit_table_cells(
             anchor.merge(far)
         except IndexError:
             continue
+
+
+def _emit_cell_blocks(
+    tc: Any,
+    blocks: list[Any],
+    ctx: _Ctx,
+    *,
+    is_header: bool,
+) -> None:
+    """Render paragraph/image/list blocks into a python-docx table cell.
+
+    python-docx table cells always start with one empty paragraph; the first
+    rendered block writes into it, subsequent blocks append new paragraphs.
+    """
+    tc.text = ""
+    first = True
+
+    def _next_paragraph() -> Any:
+        nonlocal first
+        if first:
+            first = False
+            return tc.paragraphs[0]
+        return tc.add_paragraph()
+
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        btype = block.get("type")
+        if btype == "paragraph":
+            text = _str(block.get("text"))
+            p = _next_paragraph()
+            if is_header:
+                run = p.add_run(text)
+                run.bold = True
+            else:
+                _emit_inline_runs(p, text, ctx)
+        elif btype == "image":
+            image_id = _str(block.get("imageId") or block.get("image_id"))
+            caption = _str(block.get("caption"))
+            meta = block.get("meta") or {}
+            width_px: int | None = None
+            height_px: int | None = None
+            if isinstance(meta, dict):
+                try:
+                    if meta.get("width"):
+                        width_px = int(meta["width"])
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    if meta.get("height"):
+                        height_px = int(meta["height"])
+                except (TypeError, ValueError):
+                    pass
+            resolver = ctx.opts.image_resolver
+            info: dict[str, Any] | None = None
+            if resolver and image_id:
+                try:
+                    info = resolver(image_id)
+                except Exception:
+                    info = None
+            blob = info.get("bytes") if info else None
+            p = _next_paragraph()
+            if not blob:
+                run = p.add_run(f"🖼 {caption or image_id or 'image'}")
+                run.italic = True
+                continue
+            run = p.add_run()
+            try:
+                kwargs: dict[str, Any] = {}
+                if width_px:
+                    kwargs["width"] = Inches(width_px / 96)
+                if height_px and not width_px:
+                    kwargs["height"] = Inches(height_px / 96)
+                run.add_picture(io.BytesIO(blob), **kwargs)
+            except Exception:
+                run.text = f"🖼 {caption or image_id or 'image'}"
+                run.italic = True
+        elif btype == "list":
+            style = _str(block.get("style")) or "bullet"
+            items = block.get("items") or []
+            num_idx = 0
+            for item in items:
+                if isinstance(item, dict):
+                    text = _str(item.get("text"))
+                    depth = int(item.get("depth") or 0)
+                else:
+                    text = _str(item)
+                    depth = 0
+                if not text and depth == 0:
+                    continue
+                p = _next_paragraph()
+                if depth > 0:
+                    p.paragraph_format.left_indent = Inches(0.2 * depth)
+                if style == "number":
+                    num_idx += 1
+                    prefix = f"{num_idx}. "
+                elif style == "check":
+                    prefix = "☐ "
+                else:
+                    prefix = "• "
+                p.add_run(prefix)
+                _emit_inline_runs(p, text, ctx)
+
+    if first:
+        # No supported block rendered — leave a single empty paragraph.
+        tc.paragraphs[0].text = ""
 
 
 def _b_kpi_cards(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:

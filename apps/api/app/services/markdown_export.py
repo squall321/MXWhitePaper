@@ -271,6 +271,12 @@ def _b_math(block: dict[str, Any]) -> str:
 
 
 def _b_table(block: dict[str, Any]) -> str:
+    # Prefer sparse-cell mode when present — it carries merged cells and
+    # mixed-content (paragraph/image/list) which `headers`/`rows` can't.
+    cells = block.get("cells")
+    if isinstance(cells, list) and cells:
+        return _b_table_sparse(block, cells)
+
     headers = block.get("headers") or []
     rows = block.get("rows") or []
     if not headers and not rows:
@@ -283,12 +289,64 @@ def _b_table(block: dict[str, Any]) -> str:
     sep_line = "| " + " | ".join("---" for _ in headers) + " |"
     body_lines = []
     for r in rows:
-        cells = [_escape_table_cell(_convert_inline(_str(c))) for c in r]
+        row_cells = [_escape_table_cell(_convert_inline(_str(c))) for c in r]
         # pad short rows to header length
-        while len(cells) < len(headers):
-            cells.append("")
-        body_lines.append("| " + " | ".join(cells) + " |")
+        while len(row_cells) < len(headers):
+            row_cells.append("")
+        body_lines.append("| " + " | ".join(row_cells) + " |")
     return "\n".join([head_line, sep_line, *body_lines])
+
+
+def _b_table_sparse(block: dict[str, Any], cells: list[dict[str, Any]]) -> str:
+    """Render a sparse-cell table to GFM. Mixed-content cells (blocks) are
+    flattened to inline markdown since GFM tables can't hold block elements.
+    Merged cells lose their span info in markdown — best-effort flattening."""
+    if not cells:
+        return ""
+    max_r = max(int(c.get("r") or 0) for c in cells)
+    max_c = max(int(c.get("c") or 0) for c in cells)
+    cols = max_c + 1
+    grid: list[list[str]] = [["" for _ in range(cols)] for _ in range(max_r + 1)]
+    is_header = [False] * (max_r + 1)
+    for cell in cells:
+        r = int(cell.get("r") or 0)
+        c = int(cell.get("c") or 0)
+        grid[r][c] = _escape_table_cell(_flatten_cell_md(cell))
+        if cell.get("header"):
+            is_header[r] = True
+    # Header row: first row marked header, or row 0 by convention.
+    header_idx = next((i for i, h in enumerate(is_header) if h), 0)
+    head_line = "| " + " | ".join(grid[header_idx]) + " |"
+    sep_line = "| " + " | ".join("---" for _ in range(cols)) + " |"
+    body_lines = [
+        "| " + " | ".join(grid[i]) + " |"
+        for i in range(max_r + 1)
+        if i != header_idx
+    ]
+    return "\n".join([head_line, sep_line, *body_lines])
+
+
+def _flatten_cell_md(cell: dict[str, Any]) -> str:
+    """Inline-markdown view of a cell — `text` if present, else `blocks`
+    flattened (paragraph → text, image → `![](id)`, list → joined items)."""
+    blocks = cell.get("blocks")
+    if isinstance(blocks, list) and blocks:
+        parts: list[str] = []
+        for b in blocks:
+            if not isinstance(b, dict):
+                continue
+            t = b.get("type")
+            if t == "paragraph":
+                parts.append(_convert_inline(_str(b.get("text"))))
+            elif t == "image":
+                alt = _str(b.get("caption")) or "image"
+                img_id = _str(b.get("imageId"))
+                parts.append(f"![{alt}]({img_id})")
+            elif t == "list":
+                items = b.get("items") or []
+                parts.append(", ".join(_convert_inline(_str(it)) for it in items))
+        return " ".join(p for p in parts if p)
+    return _convert_inline(_str(cell.get("text") or ""))
 
 
 def _b_kpi_cards(block: dict[str, Any]) -> str:

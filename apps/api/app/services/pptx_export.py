@@ -520,6 +520,9 @@ def _b_math(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: in
 
 
 def _b_table(slide: Any, _frame: Any, block: dict[str, Any], _ctx: _Ctx, _depth: int) -> bool:
+    cells = block.get("cells")
+    if isinstance(cells, list) and cells:
+        return _emit_table_sparse(slide, cells)
     headers = block.get("headers") or []
     rows = block.get("rows") or []
     if not headers and not rows:
@@ -552,6 +555,147 @@ def _b_table(slide: Any, _frame: Any, block: dict[str, Any], _ctx: _Ctx, _depth:
                 for run in para.runs:
                     run.font.size = Pt(11)
     return True
+
+
+def _emit_table_sparse(slide: Any, cells: list[Any]) -> bool:
+    """Render sparse `cells` list into a python-pptx table.
+
+    python-pptx table cells are text-only frames — image blocks inside a cell
+    cannot embed a real picture, so we fall back to a textual marker
+    (``[image: <caption|id>]``) to preserve information for the viewer.
+    Merges (rowSpan/colSpan) are applied via ``cell.merge(other)``.
+    """
+    if not cells:
+        return False
+    max_r = 0
+    max_c = 0
+    for cell in cells:
+        if not isinstance(cell, dict):
+            continue
+        r_end = int(cell.get("r", 0)) + max(1, int(cell.get("rowSpan") or 1)) - 1
+        c_end = int(cell.get("c", 0)) + max(1, int(cell.get("colSpan") or 1)) - 1
+        max_r = max(max_r, r_end)
+        max_c = max(max_c, c_end)
+    n_rows = max_r + 1
+    n_cols = max_c + 1
+    if n_rows == 0 or n_cols == 0:
+        return False
+    left = _BODY_LEFT
+    top = _next_shape_top(slide)
+    width = _BODY_WIDTH
+    height = Inches(min(0.4 * n_rows + 0.4, 5.2))
+    shape = slide.shapes.add_table(n_rows, n_cols, left, top, width, height)
+    table = shape.table
+
+    for cell in cells:
+        if not isinstance(cell, dict):
+            continue
+        r = int(cell.get("r", 0))
+        c = int(cell.get("c", 0))
+        is_header = bool(cell.get("header"))
+        try:
+            tc = table.cell(r, c)
+        except (IndexError, ValueError):
+            continue
+        blocks = cell.get("blocks")
+        if isinstance(blocks, list) and blocks:
+            _fill_cell_blocks_pptx(tc, blocks, is_header=is_header)
+        else:
+            text = _str(cell.get("text"))
+            tc.text = text
+            for para in tc.text_frame.paragraphs:
+                for run in para.runs:
+                    run.font.size = Pt(12 if is_header else 11)
+                    if is_header:
+                        run.font.bold = True
+
+    for cell in cells:
+        if not isinstance(cell, dict):
+            continue
+        r = int(cell.get("r", 0))
+        c = int(cell.get("c", 0))
+        rs = max(1, int(cell.get("rowSpan") or 1))
+        cs = max(1, int(cell.get("colSpan") or 1))
+        if rs == 1 and cs == 1:
+            continue
+        try:
+            anchor = table.cell(r, c)
+            far = table.cell(r + rs - 1, c + cs - 1)
+            anchor.merge(far)
+        except (IndexError, ValueError):
+            continue
+    return True
+
+
+def _fill_cell_blocks_pptx(tc: Any, blocks: list[Any], *, is_header: bool) -> None:
+    """Flatten paragraph/image/list blocks into a python-pptx cell text frame.
+
+    The cell starts with one default empty paragraph; we reuse it for the
+    first line and append new paragraphs afterwards. Image blocks render as
+    ``[image: caption]`` text markers because python-pptx table cells cannot
+    host a picture shape.
+    """
+    tf = tc.text_frame
+    tf.word_wrap = True
+    base_size = Pt(12 if is_header else 11)
+    first = True
+
+    def _next_para() -> Any:
+        nonlocal first
+        if first:
+            first = False
+            return tf.paragraphs[0]
+        return tf.add_paragraph()
+
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        btype = block.get("type")
+        if btype == "paragraph":
+            text = _str(block.get("text"))
+            p = _next_para()
+            _emit_inline_runs(p, text, base_size=base_size)
+            if is_header:
+                for run in p.runs:
+                    run.font.bold = True
+        elif btype == "image":
+            caption = _str(block.get("caption"))
+            image_id = _str(block.get("imageId") or block.get("image_id"))
+            label = caption or image_id or "image"
+            p = _next_para()
+            run = p.add_run()
+            run.text = f"[image: {label}]"
+            run.font.size = base_size
+            run.font.italic = True
+        elif btype == "list":
+            style = _str(block.get("style")) or "bullet"
+            items = block.get("items") or []
+            num_idx = 0
+            for item in items:
+                if isinstance(item, dict):
+                    text = _str(item.get("text"))
+                    depth = int(item.get("depth") or 0)
+                else:
+                    text = _str(item)
+                    depth = 0
+                if not text and depth == 0:
+                    continue
+                p = _next_para()
+                if style == "number":
+                    num_idx += 1
+                    prefix = f"{num_idx}. "
+                elif style == "check":
+                    prefix = "☐ "
+                else:
+                    prefix = "• "
+                indent = "  " * depth
+                run = p.add_run()
+                run.text = f"{indent}{prefix}"
+                run.font.size = base_size
+                _emit_inline_runs(p, text, base_size=base_size)
+
+    if first:
+        tf.paragraphs[0].text = ""
 
 
 def _b_kpi_cards(slide: Any, _frame: Any, block: dict[str, Any], _ctx: _Ctx, _depth: int) -> bool:

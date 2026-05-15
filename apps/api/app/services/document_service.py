@@ -259,6 +259,7 @@ def validate_documentjson(payload: dict[str, Any]) -> dict[str, Any]:
     promote_inline_headings(dumped)
     renumber_sections(dumped)
     _normalise_columns_widths(dumped)
+    _normalise_table_cells(dumped)
     return dumped
 
 
@@ -299,6 +300,59 @@ def _normalise_columns_widths(content: dict[str, Any]) -> None:
                     )
                 blk["widths"] = _renorm(widths)
             for col in cols:
+                if isinstance(col, list):
+                    for child in col:
+                        _walk_block(child)
+        elif t == "tabs":
+            for tab in blk.get("tabs") or []:
+                for child in (tab or {}).get("blocks") or []:
+                    _walk_block(child)
+        elif t == "accordion":
+            for item in blk.get("items") or []:
+                for child in (item or {}).get("blocks") or []:
+                    _walk_block(child)
+
+    def _walk_section(sec: dict[str, Any]) -> None:
+        for blk in sec.get("blocks") or []:
+            _walk_block(blk)
+        for sub in sec.get("subsections") or []:
+            _walk_section(sub)
+
+    for sec in content.get("sections") or []:
+        if isinstance(sec, dict):
+            _walk_section(sec)
+
+
+def _normalise_table_cells(content: dict[str, Any]) -> None:
+    """Walk every TableBlock cell and enforce the text-OR-blocks contract.
+
+    The pydantic schema permits both fields to be present (or both absent)
+    so it can stay backward-compatible; the runtime contract is stricter:
+    each cell carries content via exactly one channel. Rules applied in place:
+      * blocks non-empty ⇒ drop text (blocks win)
+      * neither set      ⇒ text = "" (empty cell)
+    """
+
+    def _normalise_cell(cell: Any) -> None:
+        if not isinstance(cell, dict):
+            return
+        blocks = cell.get("blocks")
+        has_blocks = isinstance(blocks, list) and len(blocks) > 0
+        if has_blocks:
+            cell.pop("text", None)
+            return
+        if cell.get("text") is None:
+            cell["text"] = ""
+
+    def _walk_block(blk: Any) -> None:
+        if not isinstance(blk, dict):
+            return
+        t = blk.get("type")
+        if t == "table":
+            for cell in blk.get("cells") or []:
+                _normalise_cell(cell)
+        elif t == "columns":
+            for col in blk.get("columns") or []:
                 if isinstance(col, list):
                     for child in col:
                         _walk_block(child)

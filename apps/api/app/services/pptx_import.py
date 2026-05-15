@@ -366,6 +366,12 @@ def pptx_to_document(
         sections.append(section)
         summary.sections += 1
 
+    # Widget marker post-pass — `Widget: <type>` paragraph + next block
+    # 쌍을 callout/kpi-cards/… 로 rewrite. 슬라이드 내부에서 작동하므로
+    # 마커와 target 이 같은 슬라이드 안에 있어야 인식.
+    from . import widget_markers as _wm
+    _wm.apply_widget_markers(sections, summary)
+
     # DocumentJSON v1.0 requires schema_version + id + metadata{division,
     # owners, tags, confidentiality}. The earlier shape used a typo'd
     # `schema_ver` key plus an empty metadata, which made every pptx import

@@ -98,6 +98,18 @@ class ImportSummary:
     endnotes: int = 0
     bibliography_entries: int = 0
     warnings: list[str] = field(default_factory=list)
+    # Round-trip / TOC analytics. Populated by `docx_to_document` when
+    # a manual TOC is detected in the source. Empty in the common case.
+    toc_found: bool = False
+    toc_method: str = ""  # space-separated set of fired methods: e.g. "A" / "B C" / "D"
+    toc_weak: bool = False
+    toc_entries: list[dict[str, Any]] = field(default_factory=list)
+    toc_missing: list[str] = field(default_factory=list)
+    toc_extra: list[str] = field(default_factory=list)
+    # Roundtrip mode only: captured `image_id -> {bytes, mime}` so a
+    # subsequent export can re-embed the same image bytes without a
+    # MinIO round trip. Empty unless `roundtrip_mode=True` is passed.
+    captured_images: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -116,6 +128,14 @@ class _ImportContext:
     # to them.
     footnote_order: dict[str, int] = field(default_factory=dict)
     endnote_order: dict[str, int] = field(default_factory=dict)
+    # Set of element `id()`s belonging to a detected manual TOC. The
+    # body walker treats these paragraphs as if they don't exist
+    # (they're stripped from the resulting DocumentJSON because our
+    # exporter regenerates the TOC automatically). Empty unless TOC
+    # detection ran AND fired.
+    toc_skip_ids: set[int] = field(default_factory=set)
+    # Roundtrip mode flag (see ImportSummary.captured_images).
+    roundtrip_mode: bool = False
 
 
 # ── docx zip 핸들링 ──────────────────────────────────────────────────
@@ -663,6 +683,115 @@ def _table_cell_text(tc: ET.Element, ctx: _ImportContext) -> str:
     return "\n".join(chunks).strip()
 
 
+def _table_cell_content(
+    tc: ET.Element, ctx: _ImportContext
+) -> dict[str, Any]:
+    """Return either ``{"text": str}`` or ``{"blocks": [...]}`` for a cell.
+
+    Plain text-only cells take the fast path so existing fixtures aren't
+    rewritten. As soon as a cell contains a ``<w:drawing>`` (image) we fall
+    into mixed-content mode and emit a ``blocks`` list of paragraph + image
+    block dicts — the same shape DocumentJSON's TableBlock cell schema
+    accepts. This keeps Korean corporate-style tables (logo + caption,
+    photo grid cells) intact through import.
+    """
+    paragraphs = tc.findall(_q("w", "p"))
+    parsed: list[tuple[str, list[ET.Element]]] = []
+    has_drawings = False
+    for p in paragraphs:
+        text, drawings = _paragraph_text(p, ctx)
+        if drawings:
+            has_drawings = True
+        parsed.append((text, drawings))
+
+    if not has_drawings:
+        return {"text": "\n".join(t for t, _ in parsed).strip()}
+
+    blocks: list[dict[str, Any]] = []
+    for text, drawings in parsed:
+        for drawing in drawings:
+            img_block = _image_block_from_drawing(drawing, ctx)
+            if img_block is not None:
+                blocks.append(img_block)
+        clean = text.strip()
+        if clean:
+            blocks.append({
+                "type": "paragraph",
+                "id": _new_id(),
+                "text": text,
+            })
+
+    if not blocks:
+        return {"text": ""}
+    return {"blocks": blocks}
+
+
+def _image_block_from_drawing(
+    drawing: ET.Element, ctx: _ImportContext
+) -> dict[str, Any] | None:
+    """Convert a ``<w:drawing>`` into an ImageBlock dict (or None on miss).
+
+    Mirrors the upload/dedup/roundtrip-capture logic of the main body
+    loop so that table-cell images participate in MinIO dedup and
+    round-trip image preservation just like top-level figures.
+    """
+    target = _drawing_image_target(drawing, ctx.relationships)
+    if not target:
+        return None
+    media_path = target if target.startswith("word/") else f"word/{target}"
+    img_bytes = ctx.media.get(media_path)
+    if not img_bytes:
+        ctx.summary.warnings.append(f"image missing: {media_path}")
+        return None
+    uploaded: dict[str, Any] | None = None
+    if ctx.image_uploader is not None:
+        try:
+            uploaded = ctx.image_uploader(img_bytes, media_path.rsplit("/", 1)[-1])
+        except Exception as e:
+            ctx.summary.warnings.append(f"image upload failed: {e}")
+    image_id = (uploaded or {}).get("image_id")
+    if not image_id:
+        if ctx.image_uploader is None:
+            image_id = _new_id()
+        else:
+            ctx.summary.warnings.append(
+                f"image skipped (upload returned no id): {media_path}"
+            )
+            return None
+    if ctx.roundtrip_mode:
+        ext = media_path.rsplit(".", 1)[-1].lower() if "." in media_path else "png"
+        mime = {
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "gif": "image/gif",
+            "webp": "image/webp",
+            "bmp": "image/bmp",
+            "tif": "image/tiff",
+            "tiff": "image/tiff",
+        }.get(ext, "image/png")
+        ctx.summary.captured_images[image_id] = {
+            "bytes": img_bytes,
+            "mime": mime,
+            "source": media_path,
+        }
+    w_px, h_px = _drawing_size_px(drawing)
+    block: dict[str, Any] = {
+        "type": "image",
+        "id": _new_id(),
+        "imageId": image_id,
+    }
+    meta: dict[str, Any] = {}
+    if w_px:
+        meta["width"] = w_px
+    if h_px:
+        meta["height"] = h_px
+    if meta:
+        block["meta"] = meta
+    ctx.summary.images += 1
+    return block
+
+
 # ── 이미지 처리 ──────────────────────────────────────────────────────
 def _drawing_image_target(drawing: ET.Element, rels: dict[str, str]) -> str | None:
     """drawing 안의 a:blip r:embed → 미디어 경로(media/imageN.png 등)."""
@@ -706,6 +835,10 @@ def docx_to_document(
     image_uploader: Any | None = None,
     division: str | None = None,
     confidentiality: str | None = None,
+    strip_toc: bool = False,
+    verify_toc: bool = False,
+    aggressive_toc: bool = False,
+    roundtrip_mode: bool = False,
 ) -> dict[str, Any]:
     """Word .docx 바이트 → DocumentJSON v1.0 dict.
 
@@ -718,6 +851,15 @@ def docx_to_document(
             반환은 `{"image_id": str, ...}` 형태. None 이면 이미지가 placeholder
             로만 들어감 (테스트용).
         division: metadata.division (default "MX")
+        strip_toc: True 면 본문에 박혀있던 수동 TOC 단락을 결과에서 제거.
+            (FE/Exporter 가 자동 TOC 를 다시 그리므로 중복 방지.)
+        verify_toc: True 면 TOC 항목 vs 본문 헤딩을 비교해 warning 을
+            ``summary.toc_missing`` / ``toc_extra`` 에 채운다.
+        aggressive_toc: True 면 휴리스틱 D ("목차" 헤딩 + leader-dot
+            단락 패턴) 를 함께 사용. 오탐 위험이 있어 기본 off.
+        roundtrip_mode: True 면 본문에서 발견한 모든 이미지의 (id, bytes,
+            mime) 트리플을 ``summary.captured_images`` 에 보관한다. 호출자가
+            docx_export 의 image_resolver 로 그대로 다시 박을 수 있다.
 
     Returns:
         DocumentJSON v1.0 dict. 호출자가 Pydantic 검증 후 응답.
@@ -745,6 +887,7 @@ def docx_to_document(
         summary=summary,
         footnotes_xml=footnotes_xml,
         endnotes_xml=endnotes_xml,
+        roundtrip_mode=roundtrip_mode,
     )
 
     try:
@@ -756,8 +899,40 @@ def docx_to_document(
     if body is None:
         raise ValueError("document.xml has no <w:body>")
 
-    # 1) 본문 children 을 순회하며 섹션 트리 + 블록 빌드
+    # 1a) TOC detection — A/B/C always run, D opt-in. The detected
+    #     paragraph element-ids feed back into the walker so they're
+    #     skipped (we don't emit blocks for the TOC contents).
+    detection = None
+    if strip_toc or verify_toc:
+        from . import toc_extract as _toc
+        detection = _toc.detect_toc(body, aggressive=aggressive_toc)
+        if detection.found:
+            summary.toc_found = True
+            summary.toc_method = " ".join(sorted(detection.methods_fired))
+            summary.toc_weak = detection.weak
+            summary.toc_entries = [
+                {
+                    "title": e.title,
+                    "page_hint": e.page_hint,
+                    "level": e.level,
+                    "source": e.source,
+                }
+                for e in detection.entries
+            ]
+        if strip_toc and detection.found:
+            ctx.toc_skip_ids = detection.skip_elem_ids
+
+    # 1b) 본문 children 을 순회하며 섹션 트리 + 블록 빌드
     sections, derived_title = _build_sections(body, ctx)
+
+    # 1c) TOC verification runs AFTER the walk so we can compare against
+    #     the *resulting* heading tree.
+    if verify_toc and detection is not None and detection.found:
+        from . import toc_extract as _toc
+        check = _toc.verify_toc(detection.entries, sections)
+        summary.toc_missing = check.missing
+        summary.toc_extra = check.extra
+        summary.warnings.extend(_toc.format_warnings(check))
 
     # 2) 각주 섹션 (있을 때만)
     if footnotes_xml:
@@ -775,6 +950,11 @@ def docx_to_document(
     #     plain paragraphs 를 BibliographyBlock 으로 모은다. heuristics 는
     #     보수적 — 매칭되는 헤더만 변환하고 본문 그대로 유지.
     _convert_references_sections(sections, ctx)
+
+    # 2d) Widget marker post-pass — `Widget: <type>` paragraph + next block
+    #     쌍을 callout/kpi-cards/… 로 rewrite. 마커가 없는 문서는 영향 없음.
+    from . import widget_markers as _wm
+    _wm.apply_widget_markers(sections, ctx.summary)
 
     # 3) 섹션이 비어 있으면 default level-1 wrapper 1개 생성 (DocumentJSON
     #    스키마는 sections 가 비어 있으면 안 되는 건 아니지만, 빈 문서는
@@ -917,6 +1097,13 @@ def _build_sections(
     while i < len(children):
         node = children[i]
         tag = node.tag
+
+        # Skip paragraphs that belong to a detected manual TOC. They
+        # don't become blocks (the exporter regenerates the TOC) but we
+        # still consume them so the walker stays in sync.
+        if ctx.toc_skip_ids and id(node) in ctx.toc_skip_ids:
+            i += 1
+            continue
 
         # ── 표 ─────────────────────────────────────────────
         if tag == _q("w", "tbl"):
@@ -1135,10 +1322,11 @@ def _build_sections(
             image_id = (uploaded or {}).get("image_id")
             if not image_id:
                 if ctx.image_uploader is None:
-                    # Test / preview mode — no uploader wired. Emit a
-                    # placeholder ULID so the converter is still useful in
-                    # round-trip / fixture flows that don't run the upload
-                    # pipeline.
+                    # Test / preview / roundtrip mode — no MinIO uploader
+                    # wired. Emit a placeholder ULID so the converter is
+                    # still useful in fixture flows. In roundtrip mode we
+                    # also cache (image_id → bytes) below so the exporter
+                    # can re-embed the same image without any storage.
                     image_id = _new_id()
                 else:
                     # Real uploader returned None — the image failed to
@@ -1149,6 +1337,27 @@ def _build_sections(
                         f"image skipped (upload returned no id): {media_path}"
                     )
                     continue
+            # Round-trip capture: keep the raw image bytes so a
+            # subsequent docx_export.render_docx call can re-embed the
+            # picture via an in-memory image_resolver — no MinIO round
+            # trip required and no images table row needed.
+            if ctx.roundtrip_mode:
+                ext = media_path.rsplit(".", 1)[-1].lower() if "." in media_path else "png"
+                mime = {
+                    "png": "image/png",
+                    "jpg": "image/jpeg",
+                    "jpeg": "image/jpeg",
+                    "gif": "image/gif",
+                    "webp": "image/webp",
+                    "bmp": "image/bmp",
+                    "tif": "image/tiff",
+                    "tiff": "image/tiff",
+                }.get(ext, "image/png")
+                ctx.summary.captured_images[image_id] = {
+                    "bytes": img_bytes,
+                    "mime": mime,
+                    "source": media_path,
+                }
             w_px, h_px = _drawing_size_px(drawing)
             block: dict[str, Any] = {
                 "type": "image",
@@ -1248,6 +1457,7 @@ def _build_table_block(tbl: ET.Element, ctx: _ImportContext) -> dict[str, Any]:
     # First pass: pull text + per-tc merge attributes for every row.
     raw_rows: list[list[dict[str, Any]]] = []
     has_merge = False
+    has_mixed = False  # any cell needs the blocks shape
     for tr in tr_list:
         row_cells: list[dict[str, Any]] = []
         for tc in tr.findall(_q("w", "tc")):
@@ -1267,12 +1477,24 @@ def _build_table_block(tbl: ET.Element, ctx: _ImportContext) -> dict[str, Any]:
                     v_merge = "restart" if raw_v == "restart" else "continue"
             if grid_span > 1 or v_merge is not None:
                 has_merge = True
-            row_cells.append({
-                "text": _table_cell_text(tc, ctx),
+            content = _table_cell_content(tc, ctx)
+            entry: dict[str, Any] = {
                 "gridSpan": grid_span,
                 "vMerge": v_merge,
-            })
+            }
+            if "blocks" in content:
+                entry["blocks"] = content["blocks"]
+                entry["text"] = ""  # flat fallback (used by legacy headers/rows)
+                has_mixed = True
+            else:
+                entry["text"] = content.get("text", "")
+            row_cells.append(entry)
         raw_rows.append(row_cells)
+
+    # Mixed-content cells force the sparse `cells` shape so the schema's
+    # one-of contract (text OR blocks) stays observable for the FE/renderers.
+    if has_mixed:
+        has_merge = True
 
     if not has_merge:
         # Fast path — emit the legacy headers/rows shape.
@@ -1331,8 +1553,12 @@ def _build_table_block(tbl: ET.Element, ctx: _ImportContext) -> dict[str, Any]:
             entry: dict[str, Any] = {
                 "r": r_idx,
                 "c": col,
-                "text": text,
             }
+            cell_blocks = cell.get("blocks")
+            if isinstance(cell_blocks, list) and cell_blocks:
+                entry["blocks"] = cell_blocks
+            else:
+                entry["text"] = text
             if grid_span > 1:
                 entry["colSpan"] = grid_span
             anchors[anchor_key] = entry

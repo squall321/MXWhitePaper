@@ -235,7 +235,7 @@ function SparseTableBody({
                     className={`${cls} whitespace-nowrap`}
                     style={cellStyle(cell.bg, cell.color)}
                   >
-                    <Inline text={cell.text} />
+                    <Inline text={cell.text ?? ''} />
                   </th>
                 )
               })}
@@ -257,7 +257,7 @@ function SparseTableBody({
             >
               {(byRow.get(r) ?? []).map((cell, i) => {
                 const col = columns[cell.c]
-                const formatted = formatCellByDtype(cell.text, col)
+                const formatted = formatCellByDtype(cell.text ?? '', col)
                 const cls = cellClass(col, cell, density, border, false)
                 return (
                   <td

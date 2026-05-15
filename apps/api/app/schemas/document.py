@@ -297,37 +297,6 @@ class Align1(Enum):
     right = 'right'
 
 
-class Cell(BaseModel):
-    model_config = ConfigDict(
-        extra='forbid',
-    )
-    r: int = Field(..., ge=0)
-    c: int = Field(..., ge=0)
-    row_span: int | None = Field(None, alias='rowSpan', ge=1)
-    col_span: int | None = Field(None, alias='colSpan', ge=1)
-    text: str
-    header: bool | None = None
-    """
-    True for header-row cells (rendered as <th>).
-    """
-    align: Align1 | None = None
-    """
-    Per-cell horizontal alignment override (wins over column default).
-    """
-    bg: str | None = Field(None, pattern='^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
-    """
-    Cell background color (CSS hex).
-    """
-    bold: bool | None = None
-    """
-    Bold text in this cell.
-    """
-    color: str | None = Field(None, pattern='^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
-    """
-    Cell text color (CSS hex).
-    """
-
-
 class Align2(Enum):
     """
     Default cell alignment for this column. dtype=number|percent|currency auto-defaults to right when align is unset.
@@ -452,38 +421,6 @@ class Options(BaseModel):
     """
     Cell border style. Default 'horizontal'.
     """
-
-
-class TableBlock(BaseModel):
-    """
-    Table block. Two layout modes: flat (`headers` + `rows`, the common case) and sparse (`cells`, used whenever cells are merged or styled per-cell). The renderer prefers `cells` when present. Optional `columns` carries per-column metadata (width / align / dtype / format) that applies to BOTH modes — column index is well-defined in either layout.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid',
-    )
-    type: Literal['table']
-    id: Ulid
-    caption: str | None = Field(None, max_length=500)
-    """
-    Optional caption rendered below the table; participates in auto-numbering ('표 N: ...').
-    """
-    headers: list[str]
-    rows: list[list[str]]
-    cells: list[Cell] | None = None
-    """
-    Optional sparse cell list for tables with merged or styled cells (DOCX gridSpan/vMerge round-trip + per-cell style overrides). When present, the renderer ignores headers/rows and lays out from this list. Each cell occupies (r..r+rowSpan-1) × (c..c+colSpan-1); covered slots have no entry. r/c are 0-indexed; the first row of a header-mode table is the header row.
-    """
-    columns: list[Column] | None = None
-    """
-    Optional per-column metadata. Index matches column index in both flat and sparse layouts. Missing entries fall back to defaults (left-align, text dtype, auto width).
-    """
-    footer: Footer | None = None
-    """
-    Optional footer row showing per-column aggregates. Computed at render time from `rows` (flat mode) — sparse mode is skipped because merged-cell semantics make column-wise sums ambiguous.
-    """
-    options: Options | None = None
-    meta: BlockMeta | None = None
 
 
 class Trend(Enum):
@@ -1231,6 +1168,80 @@ class Infobox(RootModel[dict[str, str | list[str] | InfoboxRich | list[InfoboxRi
     """
 
     root: dict[str, str | list[str] | InfoboxRich | list[InfoboxRich]]
+
+
+class CellBlock(RootModel[ParagraphBlock | ImageBlock | ListBlock]):
+    root: ParagraphBlock | ImageBlock | ListBlock
+    """
+    Block subset allowed inside a TableBlock cell's `blocks` array. Intentionally narrow to keep table cell rendering tractable — only paragraph/image/list.
+    """
+
+
+class Cell(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    r: int = Field(..., ge=0)
+    c: int = Field(..., ge=0)
+    row_span: int | None = Field(None, alias='rowSpan', ge=1)
+    col_span: int | None = Field(None, alias='colSpan', ge=1)
+    text: str | None = None
+    blocks: list[CellBlock] | None = Field(None, min_length=1)
+    """
+    Mixed-content cell payload. When present, renderers ignore `text` and lay out these blocks inside the cell. Restricted to paragraph/image/list to keep cell layout tractable — tables-in-tables and callouts-in-cells are intentionally out of scope.
+    """
+    header: bool | None = None
+    """
+    True for header-row cells (rendered as <th>).
+    """
+    align: Align1 | None = None
+    """
+    Per-cell horizontal alignment override (wins over column default).
+    """
+    bg: str | None = Field(None, pattern='^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+    """
+    Cell background color (CSS hex).
+    """
+    bold: bool | None = None
+    """
+    Bold text in this cell.
+    """
+    color: str | None = Field(None, pattern='^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+    """
+    Cell text color (CSS hex).
+    """
+
+
+class TableBlock(BaseModel):
+    """
+    Table block. Two layout modes: flat (`headers` + `rows`, the common case) and sparse (`cells`, used whenever cells are merged or styled per-cell). The renderer prefers `cells` when present. Optional `columns` carries per-column metadata (width / align / dtype / format) that applies to BOTH modes — column index is well-defined in either layout.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['table']
+    id: Ulid
+    caption: str | None = Field(None, max_length=500)
+    """
+    Optional caption rendered below the table; participates in auto-numbering ('표 N: ...').
+    """
+    headers: list[str]
+    rows: list[list[str]]
+    cells: list[Cell] | None = None
+    """
+    Optional sparse cell list for tables with merged or styled cells (DOCX gridSpan/vMerge round-trip + per-cell style overrides). When present, the renderer ignores headers/rows and lays out from this list. Each cell occupies (r..r+rowSpan-1) × (c..c+colSpan-1); covered slots have no entry. r/c are 0-indexed; the first row of a header-mode table is the header row. A cell carries content via either `text` (plain string, the common case) or `blocks` (mixed content — paragraph/image/list). Exactly one of the two MUST be set; empty cell ⇒ text=''.
+    """
+    columns: list[Column] | None = None
+    """
+    Optional per-column metadata. Index matches column index in both flat and sparse layouts. Missing entries fall back to defaults (left-align, text dtype, auto width).
+    """
+    footer: Footer | None = None
+    """
+    Optional footer row showing per-column aggregates. Computed at render time from `rows` (flat mode) — sparse mode is skipped because merged-cell semantics make column-wise sums ambiguous.
+    """
+    options: Options | None = None
+    meta: BlockMeta | None = None
 
 
 class OrgChartBlock(BaseModel):
