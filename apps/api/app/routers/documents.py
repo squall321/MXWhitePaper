@@ -470,7 +470,12 @@ async def get_backlinks(
     )
 
 
-# ── Versions (Sprint 1 deferred) ────────────────────────────────────
+# ── Versions ──────────────────────────────────────────────────────────
+# Sprint 1: list + get. Sprint 4: restore (below). Diff is computed
+# client-side by `<VersionDiffPage>` via two `getVersion()` fetches +
+# `diffDocument()` — no BE diff endpoint needed. Delete is intentionally
+# absent: versions are immutable audit history, retention is handled by
+# the platform retention policy rather than per-row deletion.
 @router.get("/{slug}/versions", summary="문서 버전 목록 (최신순)")
 async def list_document_versions(
     slug: str,
