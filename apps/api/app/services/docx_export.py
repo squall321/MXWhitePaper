@@ -348,6 +348,13 @@ def _b_callout(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     text = _str(block.get("text"))
     if not (title or text):
         return
+    # Hidden marker — round-trip identifier. Invisible in Word; importer
+    # detects via run.font.hidden.
+    marker = emit_marker_text(block)
+    if marker:
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     bg, border = _CALLOUT_COLORS.get(variant, _CALLOUT_COLORS["info"])
     p = document.add_paragraph()
     _set_paragraph_shading(p, bg)
@@ -631,37 +638,51 @@ def _b_kpi_cards(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
     items = block.get("items") or []
     if not items:
         return
+
+    # Hidden marker — round-trip identifier.
+    marker = emit_marker_text(block)
+    if marker:
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
+
+    # Converter-compatible table: header row label/value/delta/trend,
+    # one row per item. Replaces the previous 2×2 dashboard layout —
+    # the trade-off is intentional: lossless round-trip > aesthetic.
     grid = items[:4]
-    # 2x2 table with merged cells per KPI: label small, value big.
-    n_rows = (len(grid) + 1) // 2
-    table = document.add_table(rows=n_rows, cols=2)
+    has_delta = any(_str(it.get("delta")) for it in grid)
+    has_trend = any(_str(it.get("trend")) for it in grid)
+    headers = ["label", "value"]
+    if has_delta:
+        headers.append("delta")
+    if has_trend:
+        headers.append("trend")
+    n_cols = len(headers)
+    table = document.add_table(rows=1 + len(grid), cols=n_cols)
     table.style = "Table Grid"
-    for i, it in enumerate(grid):
-        r = i // 2
-        c = i % 2
-        cell = table.rows[r].cells[c]
+    hdr_cells = table.rows[0].cells
+    for c, h in enumerate(headers):
+        cell = hdr_cells[c]
         cell.text = ""
-        label_p = cell.paragraphs[0]
-        run = label_p.add_run(_str(it.get("label")))
-        run.font.size = Pt(10)
-        value_p = cell.add_paragraph()
-        run = value_p.add_run(_str(it.get("value")))
-        run.bold = True
-        run.font.size = Pt(18)
-        delta = _str(it.get("delta"))
-        trend = _str(it.get("trend"))
-        if delta or trend:
-            d_p = cell.add_paragraph()
-            run = d_p.add_run(
-                f"{delta} ({trend})" if delta and trend else delta or trend
-            )
-            run.font.size = Pt(9)
+        # Plain-text headers (not bold) so import doesn't markdown-wrap
+        # them as `**label**` and break converter matching.
+        cell.paragraphs[0].add_run(h)
+    for r_idx, it in enumerate(grid, start=1):
+        row = table.rows[r_idx].cells
+        row[0].text = _str(it.get("label"))
+        row[1].text = _str(it.get("value"))
+        if has_delta:
+            row[headers.index("delta")].text = _str(it.get("delta"))
+        if has_trend:
+            row[headers.index("trend")].text = _str(it.get("trend"))
 
 
 def _b_chart(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     title = _str(block.get("title"))
     chart_type = _str(block.get("chartType") or block.get("chart_type"))
     data = block.get("data") or {}
@@ -706,7 +727,9 @@ def _b_chart(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
 def _b_gantt(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     tasks = block.get("tasks") or []
     # Marker must be immediately followed by the table — `_convert_gantt`
     # looks for name/start/end columns. Decoration paragraph goes AFTER.
@@ -735,7 +758,9 @@ def _b_gantt(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
 def _b_flow(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     engine = _str(block.get("engine")) or "mermaid"
     source = _str(block.get("source"))
     # Marker must be IMMEDIATELY followed by a code block — `_convert_flow`
@@ -761,7 +786,9 @@ def _b_flow(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
 def _b_org_chart(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     root = block.get("root") or {}
     # Flatten the tree depth-first into (name, parent_name) pairs.
     rows: list[tuple[str, str]] = []
@@ -800,7 +827,9 @@ def _b_org_chart(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
 def _b_iframe(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     src = _str(block.get("src"))
     title = _str(block.get("title"))
     # `_convert_iframe` checks `paragraph.text.startswith("http")`. Emit the
@@ -818,7 +847,9 @@ def _b_iframe(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
 def _b_video(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     url = _str(block.get("url"))
     title = _str(block.get("title"))
     # Same shape as iframe — bare URL paragraph so `_convert_video`'s
@@ -903,6 +934,15 @@ def _b_gallery(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     items = block.get("items") or []
     if not items:
         return
+    # Hidden marker — round-trip identifier. Layout encoded as variant
+    # ("carousel" only; "grid" is the default). When image_resolver is wired
+    # and >=3 images survive, `_autodetect_gallery` would also catch this;
+    # the marker provides robustness when bytes are unavailable.
+    marker = emit_marker_text(block)
+    if marker:
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     for it in items:
         single = {
             "type": "image",
@@ -916,7 +956,9 @@ def _b_gallery(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
 def _b_file(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     file_id = _str(block.get("fileId") or block.get("file_id"))
     name = _str(block.get("name")) or file_id or "file"
     href = f"/api/v1/files/{file_id}/download" if file_id else ""
@@ -926,7 +968,9 @@ def _b_file(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
 def _b_doc_link_card(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     slug = _str(block.get("slug"))
     title = _str(block.get("title"))
     # `_convert_doc_link` accepts either a bare slug or a `/docs/<slug>`
@@ -945,7 +989,9 @@ def _b_doc_link_card(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
 def _b_glossary_ref(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     term = _str(block.get("term"))
     definition = _str(block.get("definition"))
     if not term:
@@ -960,15 +1006,71 @@ def _b_glossary_ref(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
 
 def _b_columns(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     columns = block.get("columns") or []
+    if not columns:
+        return
+    n = len(columns)
+
+    # Hidden marker — round-trip identifier with variant=N (column count).
+    # ``emit_marker_text`` encodes N in the variant when 2 ≤ N ≤ 4.
+    if 2 <= n <= 4:
+        marker = emit_marker_text(block)
+        if marker:
+            mp = document.add_paragraph()
+            mr = mp.add_run(marker)
+            mr.font.hidden = True
+        # Emit a single 1-row × N-col table whose cells carry each column's
+        # blocks via ``_emit_cell_blocks`` (paragraph / image / list survive
+        # faithfully; other block types degrade to a text paragraph because
+        # docx table cells have the same CellBlock restriction on import).
+        # ``_convert_columns`` recognises this shape and rebuilds the
+        # ColumnsBlock from the table's cells.
+        table = document.add_table(rows=1, cols=n)
+        table.style = "Table Grid"
+        for c_idx, col in enumerate(columns):
+            tc = table.rows[0].cells[c_idx]
+            cell_blocks = _columns_cell_blocks(col)
+            _emit_cell_blocks(tc, cell_blocks, ctx, is_header=False)
+        return
+
+    # Fallback: column count is outside the schema's 2..4 — just flatten.
     for col in columns:
         for inner in col:
             _render_block(document, inner, ctx)
 
 
+def _columns_cell_blocks(col: Any) -> list[dict[str, Any]]:
+    """Adapt a column's blocks (any Block type) to the cell-block subset
+    ``_emit_cell_blocks`` understands (paragraph / image / list).
+
+    Unsupported block types are flattened to a paragraph carrying their text
+    representation so no content is silently dropped. Empty columns become a
+    single empty paragraph (CellBlock requires at least one block).
+    """
+    if not isinstance(col, list):
+        return [{"type": "paragraph", "text": ""}]
+    out: list[dict[str, Any]] = []
+    for blk in col:
+        if not isinstance(blk, dict):
+            continue
+        t = blk.get("type")
+        if t in {"paragraph", "image", "list"}:
+            out.append(blk)
+            continue
+        # Best-effort text fallback for block types the cell renderer
+        # doesn't support natively.
+        text = _str(blk.get("text") or blk.get("title") or blk.get("caption") or "")
+        out.append({"type": "paragraph", "text": text})
+    if not out:
+        out.append({"type": "paragraph", "text": ""})
+    return out
+
+
 def _b_tabs(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     tabs = block.get("tabs") or []
     for tab in tabs:
         label = _str(tab.get("label"))
@@ -988,7 +1090,9 @@ def _b_tabs(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
 def _b_accordion(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     items = block.get("items") or []
     for it in items:
         label = _str(it.get("label"))
@@ -1084,7 +1188,9 @@ def _b_pdf(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     embed PDFs natively as inline objects via python-docx)."""
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     file_id = _str(block.get("fileId") or block.get("file_id"))
     title = _str(block.get("title")) or file_id or "PDF"
     page = block.get("page")
@@ -1103,7 +1209,9 @@ def _b_whiteboard(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     natively; the text summary still preserves the data."""
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     p = document.add_paragraph()
     p.add_run("🖍 Whiteboard").bold = True
     elems = block.get("elements") or []
@@ -1172,7 +1280,9 @@ def _b_image_annotation(document: Any, block: dict[str, Any], ctx: _Ctx) -> None
     clean ``marker → image → table`` sequence (chart/gantt pattern)."""
     marker = emit_marker_text(block)
     if marker:
-        document.add_paragraph(marker)
+        mp = document.add_paragraph()
+        mr = mp.add_run(marker)
+        mr.font.hidden = True
     image_id = _str(block.get("imageId") or block.get("image_id"))
     caption = _str(block.get("caption"))
     # Embed the base image via _b_image — but ONLY when the resolver

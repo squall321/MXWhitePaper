@@ -201,12 +201,12 @@ def test_roundtrip_preserves_pdf_block_with_placeholder_file_id() -> None:
 # ── 5. whiteboard ────────────────────────────────────────────────────
 
 
-def test_roundtrip_whiteboard_drops_to_paragraphs_with_warning() -> None:
-    """``_convert_whiteboard`` always returns None — docx cannot express
-    strokes. Per the dispatcher's "None means marker dropped, targets
-    preserved" rule, the marker paragraph is consumed (with a warning)
-    and the ``🖍 Whiteboard`` label paragraph survives as plain text.
-    No WhiteboardBlock is reconstructed."""
+def test_roundtrip_whiteboard_emits_placeholder_block() -> None:
+    """New policy: ``_convert_whiteboard`` emits a placeholder WhiteboardBlock
+    (empty elements + safe viewbox) instead of dropping. Strokes data is
+    irrecoverable on docx round-trip — that's a docx limitation — but the
+    widget identity (type=whiteboard) survives. A warning is logged so
+    downstream code can flag the lossy conversion."""
     blocks = [
         {
             "type": "whiteboard",
@@ -217,10 +217,9 @@ def test_roundtrip_whiteboard_drops_to_paragraphs_with_warning() -> None:
     ]
     r = _roundtrip(blocks)
     whiteboards = [b for b in r["blocks"] if b.get("type") == "whiteboard"]
-    assert not whiteboards, "whiteboard cannot round-trip through docx"
-    assert any("whiteboard marker" in w for w in r["warnings"])
-    text = _all_text(r["blocks"])
-    assert "Whiteboard" in text
+    assert whiteboards, "WhiteboardBlock should round-trip via placeholder emit"
+    assert whiteboards[0]["elements"] == []
+    assert any("whiteboard" in w for w in r["warnings"])
 
 
 # ── 6. image-annotation ──────────────────────────────────────────────

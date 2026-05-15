@@ -131,10 +131,25 @@ pptx 는 슬라이드의 좁은 면적 때문에 큰 표를 자동 축소 — `_
 | Block | docx | pptx | html | md |
 |---|---|---|---|---|
 | `math` | OMML 직조 | 텍스트 fallback | KaTeX inline | `$$ … $$` |
-| `chart` | marker + 데이터 표 (round-trip) | 동일 | `<canvas>` + chart.js JSON | mermaid fenced |
-| `gantt` | marker + Task/Start/End/Progress 표 | 표 | 커스텀 SVG | mermaid `gantt` |
-| `flow` | 텍스트 평탄화 | 텍스트 | mermaid | mermaid `flowchart` |
-| `org-chart` | marker + name/parent 표 | 텍스트 | mermaid | mermaid `graph TD` |
+| `chart` | hidden marker + 데이터 표 (round-trip) | marker text | `<canvas>` + chart.js JSON | mermaid fenced |
+| `gantt` | hidden marker + Task/Start/End/Progress 표 | 표 | 커스텀 SVG | mermaid `gantt` |
+| `flow` | hidden marker + code block (mermaid DSL) | 텍스트 | mermaid | mermaid `flowchart` |
+| `org-chart` | hidden marker + name/parent 표 | 텍스트 | mermaid | mermaid `graph TD` |
+
+## Widget hidden marker policy ★
+
+docx export 시 18 위젯 모두 `Widget: <type> (variant)` 마커를 **hidden text**
+로 emit (`<w:r><w:rPr><w:vanish/></w:rPr><w:t>…</w:t></w:r>`). Word 정상 보기/
+인쇄 시 invisible. import 측 [[src/app/services/widget_markers.py#parse_marker]]
+가 hidden 여부 무관하게 텍스트만 매칭 → round-trip 정확.
+
+설정: [[src/app/services/widget_markers.py#_EXPORT_MARKER_TYPES]] 18 entries.
+variant 분기: chart (chartType) / gallery (carousel 만) / columns (count N) /
+callout (info/warn/danger/tip).
+
+3계층 round-trip 가드: marker → autodetect (외부 LLM docx 의 첫 입력 대비) →
+placeholder-on-failure (image bytes 등이 사라져도 widget identity 보존,
+n_consumed=0 marker-only path). 검증: `/tmp/smoke_all_widgets.py` 가 18/18 OK.
 
 차트는 본문에 SVG 가 직접 박히지 않고 미리 렌더된 PNG 가 storage 에서
 온다 — `chart.imageId` 가 가리키는 [[storage]] 의 이미지 사용.

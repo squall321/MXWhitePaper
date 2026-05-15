@@ -69,6 +69,11 @@ _EXPORT_MARKER_TYPES: frozenset[str] = frozenset({
     "flow", "chart", "gantt", "org-chart",
     # Identification markers — natural representation is ambiguous on import
     "tabs", "accordion", "doc-link-card", "glossary-ref",
+    # Round-trip identifiers — visible body forms (color box / 2x2 grid /
+    # multi-column / image series) are not self-identifying on re-import,
+    # so we emit hidden markers and let autodetect serve as the fallback
+    # for external (LLM-authored) docx that doesn't carry the marker.
+    "callout", "kpi-cards", "columns", "gallery",
 })
 
 # Block schema `type` → marker dispatcher key. The widget marker grammar
@@ -83,9 +88,11 @@ _SCHEMA_TYPE_TO_MARKER_KEY: dict[str, str] = {
 def emit_marker_text(block: dict[str, Any]) -> str | None:
     """Return ``"Widget: <type> (variant)"`` for the widget block types
     that need an export-side marker prepend. Returns ``None`` for plain
-    blocks (paragraph/heading-4/table/...) and for the 4 auto-detected
-    widgets (callout / kpi-cards / gallery / columns) that import can
-    recognise without a marker.
+    blocks (paragraph/heading-4/table/...). Every widget in DocumentJSON
+    emits a marker; docx_export now writes them as hidden text (run.font.hidden)
+    so they're invisible in normal Word view but the importer detects them
+    via ``parse_marker``. autodetect serves as the fallback for external
+    (LLM-authored) docx that doesn't carry the marker.
 
     The reverse of :func:`parse_marker` — re-emits the marker text the
     importer would recognise.
@@ -102,14 +109,38 @@ def emit_marker_text(block: dict[str, Any]) -> str | None:
         ct = block.get("chartType")
         if isinstance(ct, str) and ct in _ALLOWED_CHART_TYPES:
             variant = ct
+    elif t == "gallery":
+        layout = block.get("layout")
+        # Only emit a variant when non-default ("grid" is implied).
+        if isinstance(layout, str) and layout == "carousel":
+            variant = "carousel"
+    elif t == "columns":
+        # Encode column count as variant so importer's _convert_columns can
+        # validate the docx table shape (1 row × N cols) without guessing.
+        cols = block.get("columns")
+        if isinstance(cols, list) and 2 <= len(cols) <= 4:
+            variant = str(len(cols))
+    elif t == "callout":
+        v = block.get("variant")
+        if isinstance(v, str) and v in _ALLOWED_CALLOUT_VARIANTS:
+            variant = v
     # (Other widgets don't carry a marker-relevant variant: callout's
-    # variant is handled by `_convert_callout`'s import fallback, gallery's
-    # layout is preserved via DocumentJSON proper since gallery is in the
-    # auto-detect opt-out list.)
+    # variant is handled by `_convert_callout`'s import fallback.)
 
     if variant:
         return f"Widget: {marker_key} ({variant})"
     return f"Widget: {marker_key}"
+
+
+def emit_hidden_marker_text(block: dict[str, Any]) -> str | None:
+    """Same as :func:`emit_marker_text` but intended for *hidden* text emit.
+
+    Identical return value; the helper exists as a documentation hook so
+    callers in docx_export know they must apply ``run.font.hidden = True``.
+    When the marker should be visible (e.g., for human-readable debugging
+    exports later), call :func:`emit_marker_text` instead.
+    """
+    return emit_marker_text(block)
 
 
 # ── Phase 1 converters ───────────────────────────────────────────────
@@ -472,7 +503,17 @@ def _convert_image_annotation(
             "placeholder image_id minted"
         )
     else:
-        return None
+        # Neither image nor annotation-table found right after the marker.
+        # Round-trip case with no annotations + no image bytes: emit a
+        # placeholder ImageAnnotationBlock with empty annotations so the
+        # widget identity survives. Consume 0 — marker only.
+        image_id = _new_id()
+        table_idx = None
+        n_consumed = 0
+        summary.warnings.append(
+            "image-annotation marker: neither image nor annotation table "
+            "found on round-trip — placeholder block emitted (annotations lost)"
+        )
 
     annotations: list[dict[str, Any]] = []
 
@@ -580,14 +621,14 @@ def _convert_image_annotation(
 def _convert_gallery(
     variant: str | None,
     targets: list[dict[str, Any]],
-    _summary: _SummaryLike,
+    summary: _SummaryLike,
 ) -> tuple[dict[str, Any], int] | None:
     """``Widget: gallery`` (또는 ``Widget: gallery (carousel)``) + 연속된
     ImageBlock N 개 → GalleryBlock.
 
     Multi-block consumer: ``targets`` 앞쪽에서 image 가 연속되는 만큼 소비.
-    image 가 0 개면 None (정보 손실 0 룰). 1 개여도 gallery 로 변환 — schema
-    minItems=1 을 만족하며 marker 의 의도를 존중한다.
+    image 가 0 개여도 marker 의 의도를 존중해 placeholder item 한 개로 gallery
+    를 만든다 (round-trip 시 image bytes 가 사라지는 경우의 lossless guarantee).
     """
     items: list[dict[str, Any]] = []
     n_consumed = 0
@@ -605,7 +646,17 @@ def _convert_gallery(
         items.append(item)
         n_consumed += 1
     if n_consumed == 0:
-        return None
+        # Marker present but no image survived round-trip — emit a
+        # placeholder GalleryBlock so the widget identity isn't lost.
+        # Schema requires items minItems=1, so we mint one placeholder
+        # imageId and log a warning. Consume 0 *targets* — marker alone
+        # is enough.
+        items = [{"imageId": _new_id()}]
+        summary.warnings.append(
+            "gallery marker: image bytes missing on round-trip — "
+            "placeholder gallery emitted (no real images linked)"
+        )
+        n_consumed = 0  # Don't swallow the following non-image content.
     layout = "carousel" if (variant or "").lower() == "carousel" else "grid"
     return (
         {
@@ -614,7 +665,7 @@ def _convert_gallery(
             "layout": layout,
             "items": items,
         },
-        n_consumed,
+        n_consumed,  # 0 in placeholder path; dispatcher's i += 1 + 0 advances past marker only.
     )
 
 
@@ -969,18 +1020,27 @@ def _convert_whiteboard(
     _targets: list[dict[str, Any]],
     summary: _SummaryLike,
 ) -> tuple[dict[str, Any], int] | None:
-    """``Widget: whiteboard`` — 항상 변환 실패.
+    """``Widget: whiteboard`` — placeholder whiteboard.
 
     Whiteboard 는 strokes/shapes/text 의 vector 표현인데 docx/pptx 에선
-    이를 표현할 수가 없다 (이미지로 평탄화되거나 누락). 충실한 round-trip 이
-    불가하므로 변환을 시도하지 않고, marker + 원본 target (보통 이미지) 모두
-    보존하는 정보 손실 0 경로로 위임한다.
+    이를 표현할 수가 없다. 그러나 marker 가 있으면 widget identity 는 보존돼야
+    하므로 빈 elements 의 placeholder WhiteboardBlock 을 emit. round-trip 시
+    strokes 데이터는 손실되지만 widget 타입은 유지. consume 0 → marker 만
+    소비하고 후속 target (보통 이미지) 은 그대로 보존.
     """
     summary.warnings.append(
         "whiteboard marker: docx/pptx cannot express whiteboard strokes; "
-        "original image preserved"
+        "placeholder whiteboard emitted (elements lost)"
     )
-    return None
+    return (
+        {
+            "type": "whiteboard",
+            "id": _new_id(),
+            "viewbox": {"w": 1000, "h": 600},  # schema-default safe size
+            "elements": [],
+        },
+        0,
+    )
 
 
 _COLUMNS_SIMPLE_TYPES = {"paragraph", "image", "list", "table"}
@@ -991,11 +1051,18 @@ def _convert_columns(
     targets: list[dict[str, Any]],
     _summary: _SummaryLike,
 ) -> tuple[dict[str, Any], int] | None:
-    """``Widget: columns`` 또는 ``Widget: columns (2|3|4)`` + N 개의 단순 블록 → ColumnsBlock.
+    """``Widget: columns`` 또는 ``Widget: columns (2|3|4)`` + target(s) → ColumnsBlock.
 
-    "단순 블록" = paragraph / image / list / table. 다른 위젯 블록을 만나면
-    그 자리에서 수집을 멈춘다. 실제 수집된 개수가 2 미만이면 None (schema
-    minItems=2). 각 컬럼은 single-element array.
+    두 가지 target shape 를 받는다:
+
+    1. **Table-as-columns** (export-side hidden-marker round-trip 경로) — 첫
+       target 이 1-row × N-col TableBlock (cells 의 모든 anchor 가 ``r == 0``,
+       2..4 개) 이면 그 표가 곧 N 단이다. 각 셀의 ``blocks`` (또는 fallback
+       ``text``) 가 해당 단의 blocks 가 된다. 1 target consumed.
+    2. **N 개의 단순 블록** (LLM-authored 경로) — paragraph / image / list /
+       table 을 marker 뒤로 최대 N 개 모은다. 각 단은 단일-원소 배열.
+
+    실제 수집된 단 개수가 2 미만이면 None (schema minItems=2).
     """
     v = (variant or "").strip()
     if v in {"2", "3", "4"}:
@@ -1003,6 +1070,20 @@ def _convert_columns(
     else:
         n = 2
 
+    # Shape 1 — single TableBlock representing the whole columns grid.
+    if targets and isinstance(targets[0], dict) and targets[0].get("type") == "table":
+        cols = _columns_from_table(targets[0])
+        if cols is not None and 2 <= len(cols) <= 4:
+            return (
+                {
+                    "type": "columns",
+                    "id": _new_id(),
+                    "columns": cols,
+                },
+                1,
+            )
+
+    # Shape 2 — legacy: N consecutive simple blocks.
     collected: list[dict[str, Any]] = []
     for t in targets:
         if t.get("type") not in _COLUMNS_SIMPLE_TYPES:
@@ -1022,6 +1103,66 @@ def _convert_columns(
         },
         len(collected),
     )
+
+
+def _columns_from_table(tbl: dict[str, Any]) -> list[list[dict[str, Any]]] | None:
+    """Try to interpret a TableBlock as a single-row columns grid.
+
+    Returns ``[[blocks], [blocks], ...]`` when the table is 1 logical row ×
+    2..4 columns; otherwise ``None``.
+
+    Each cell's ``blocks`` (mixed-content shape) is taken verbatim. If a cell
+    has only flat ``text``, a single paragraph block is synthesised so the
+    column always has at least one renderable block.
+    """
+    cells = tbl.get("cells")
+    if not isinstance(cells, list) or not cells:
+        # Fall back to legacy headers/rows shape: must be 1 row of headers
+        # only (no body rows) for the columns interpretation to make sense.
+        headers = tbl.get("headers") or []
+        rows = tbl.get("rows") or []
+        if rows or not headers:
+            return None
+        if not (2 <= len(headers) <= 4):
+            return None
+        return [
+            [{"type": "paragraph", "id": _new_id(), "text": str(h)}]
+            for h in headers
+        ]
+
+    # Sparse cells layout — every anchor must live on row 0 (single-row table)
+    # and column indices must cover 0..N-1 without gaps.
+    by_c: dict[int, dict[str, Any]] = {}
+    for c in cells:
+        if not isinstance(c, dict):
+            return None
+        if int(c.get("r", -1)) != 0:
+            return None
+        if int(c.get("rowSpan") or 1) != 1:
+            return None
+        ci = int(c.get("c", -1))
+        if ci < 0 or ci in by_c:
+            return None
+        by_c[ci] = c
+
+    n_cols = len(by_c)
+    if not (2 <= n_cols <= 4):
+        return None
+    if sorted(by_c.keys()) != list(range(n_cols)):
+        return None
+
+    cols_out: list[list[dict[str, Any]]] = []
+    for i in range(n_cols):
+        cell = by_c[i]
+        cell_blocks = cell.get("blocks")
+        if isinstance(cell_blocks, list) and cell_blocks:
+            cols_out.append(list(cell_blocks))
+        else:
+            text = str(cell.get("text") or "")
+            cols_out.append(
+                [{"type": "paragraph", "id": _new_id(), "text": text}]
+            )
+    return cols_out
 
 
 def _convert_tabs(
@@ -1225,12 +1366,16 @@ def _rewrite_blocks(
             i += 1
             continue
         widget, n_consumed = result
-        if n_consumed < 1:
-            # Defensive: a converter that returns a widget must consume at
-            # least the first target. Treat as conversion failure.
+        if n_consumed < 0:
+            # Defensive: negative consumption is undefined. Treat as failure.
             out.append(block)
             i += 1
             continue
+        # n_consumed == 0 is a valid "marker-only" path: the converter
+        # produced the widget without needing a target (e.g., gallery with
+        # no surviving images on round-trip; a placeholder widget is still
+        # better than losing the widget identity). The marker is consumed
+        # but subsequent blocks are preserved.
         out.append(widget)
         i += 1 + n_consumed
     # Mutate the original list in place so callers can keep their reference.
@@ -1311,6 +1456,86 @@ def _variant_from_bg(bg: str | None) -> str | None:
 
 def _autodetect_callout(
     block: dict[str, Any],
+    blocks_after: list[dict[str, Any]],
+    summary: _SummaryLike,
+) -> ConverterResult | None:
+    """Detect a callout from either:
+      - a single-cell color/emoji/label-marked table, or
+      - a paragraph with a `<w:shd>` background fill AND emoji/label prefix
+        (strict — see ``_autodetect_callout_from_paragraph``).
+    """
+    if block.get("type") == "table":
+        return _autodetect_callout_from_table(block, blocks_after, summary)
+    if block.get("type") == "paragraph":
+        return _autodetect_callout_from_paragraph(block, summary)
+    return None
+
+
+def _autodetect_callout_from_paragraph(
+    block: dict[str, Any],
+    summary: _SummaryLike,
+) -> ConverterResult | None:
+    """Detect a shaded paragraph (Word's ``<w:shd>`` on ``pPr``) carrying
+    an alert emoji or bracket label as a CalloutBlock.
+
+    STRICT trigger — BOTH must be present:
+      1. Paragraph has a non-empty ``__paragraph_bg__`` hex (transient
+         field set by ``docx_import`` when ``<w:shd w:fill="…"/>`` is
+         present on the paragraph's ``pPr``).
+      2. Text starts with an alert emoji (``⚠️🚨ℹ️💡✅``…) OR a bracket
+         label (``[주의]``/``[INFO]``/…).
+
+    Why BOTH: a plain "⚠️ note" sentence in body text is common and
+    must NOT become a callout. Shading alone is also insufficient —
+    Word users shade paragraphs for emphasis, banner headings, etc.
+    Requiring shading + explicit alert prefix avoids both classes of
+    false positive.
+    """
+    text = str(block.get("text") or "").strip()
+    if not text:
+        return None
+    bg = block.get("__paragraph_bg__")
+    has_bg = isinstance(bg, str) and bg.startswith("#")
+    if not has_bg:
+        return None
+
+    text_unwrapped = _strip_markdown_emphasis(text)
+
+    variant: str | None = None
+    cleaned_text = text_unwrapped
+    for emoji_key, v in _CALLOUT_EMOJI_VARIANT.items():
+        if text_unwrapped.startswith(emoji_key):
+            variant = v
+            cleaned_text = text_unwrapped[len(emoji_key):].lstrip()
+            break
+
+    if variant is None:
+        upper = text_unwrapped.upper()
+        for label_key, v in _CALLOUT_LABEL_VARIANT.items():
+            if text_unwrapped.startswith(label_key) or upper.startswith(label_key.upper()):
+                variant = v
+                cleaned_text = text_unwrapped[len(label_key):].lstrip()
+                break
+
+    if variant is None:
+        return None
+
+    summary.warnings.append(
+        f"auto-detected callout (variant={variant}) from shaded paragraph"
+    )
+    return (
+        {
+            "type": "callout",
+            "id": _new_id(),
+            "variant": variant,
+            "text": cleaned_text or text,
+        },
+        1,
+    )
+
+
+def _autodetect_callout_from_table(
+    block: dict[str, Any],
     _blocks_after: list[dict[str, Any]],
     summary: _SummaryLike,
 ) -> ConverterResult | None:
@@ -1325,9 +1550,6 @@ def _autodetect_callout(
     Without one of these signals, returns None — plain 1x1 tables stay
     plain tables.
     """
-    if block.get("type") != "table":
-        return None
-
     # Locate the lone cell: either via `cells` sparse mode or via headers/rows.
     cell_text: str = ""
     cell_bg: str | None = None
@@ -1655,6 +1877,7 @@ WIDGET_AUTODETECTORS: list[tuple[str, AutoDetectorFn]] = [
 def apply_widget_autodetect(
     sections: list[dict[str, Any]],
     summary: _SummaryLike,
+    _is_recursive: bool = False,
 ) -> None:
     """Phase 3 post-pass. Run AFTER apply_widget_markers. Walks every
     section/subsection in place. Each auto-detector inspects a block plus
@@ -1664,7 +1887,26 @@ def apply_widget_autodetect(
         _autodetect_rewrite(sec.get("blocks") or [], summary)
         subs = sec.get("subsections") or []
         if subs:
-            apply_widget_autodetect(subs, summary)
+            apply_widget_autodetect(subs, summary, _is_recursive=True)
+    # Strip transient hints injected by docx_import (e.g. __paragraph_bg__)
+    # so downstream schema validation doesn't reject them. Run once at the
+    # top-level invocation to walk every depth exactly one time.
+    if not _is_recursive:
+        _strip_transient_fields(sections)
+
+
+def _strip_transient_fields(sections: list[dict[str, Any]]) -> None:
+    """Remove non-schema transient hints (e.g., ``__paragraph_bg__``) added by
+    docx_import for autodetect's benefit. Called after autodetect runs so
+    schema validation downstream doesn't trip on the extra fields.
+    """
+    for sec in sections:
+        for b in sec.get("blocks") or []:
+            if isinstance(b, dict):
+                b.pop("__paragraph_bg__", None)
+        subs = sec.get("subsections") or []
+        if subs:
+            _strip_transient_fields(subs)
 
 
 def _autodetect_rewrite(

@@ -880,7 +880,12 @@ def test_image_annotation_marker_with_rect_and_callout() -> None:
     assert "callout" in kinds
 
 
-def test_image_annotation_marker_non_image_target_returns_none() -> None:
+def test_image_annotation_marker_non_image_target_emits_placeholder() -> None:
+    """New policy: if neither image nor annotation table is found right
+    after the marker, emit a placeholder ImageAnnotationBlock (empty
+    annotations, fresh image_id) so the widget identity survives the
+    round-trip. The marker is consumed (n_consumed=0); subsequent blocks
+    are preserved untouched."""
     summary = _Summary()
     sections = [{
         "id": _u(),
@@ -895,8 +900,11 @@ def test_image_annotation_marker_non_image_target_returns_none() -> None:
     apply_widget_markers(sections, summary)
     blocks = sections[0]["blocks"]
     assert len(blocks) == 2
-    assert blocks[0]["type"] == "paragraph"
+    assert blocks[0]["type"] == "image-annotation"
+    assert blocks[0]["annotations"] == []
     assert blocks[1]["type"] == "paragraph"
+    assert blocks[1]["text"] == "not an image"
+    assert any("placeholder" in w for w in summary.warnings)
 
 
 def test_image_annotation_marker_image_plus_unparseable_table_consumes_only_image() -> None:
@@ -950,7 +958,10 @@ def _run_converter(
     if result is None:
         return [_para(marker_text), *targets], summary
     widget, n = result
-    assert n >= 1
+    # New policy: n >= 0. n == 0 means the converter emitted a widget without
+    # consuming any target (placeholder path for gallery/whiteboard/image-
+    # annotation when image bytes are absent). n >= 1 = standard path.
+    assert n >= 0
     return [widget, *targets[n:]], summary
 
 
@@ -1049,7 +1060,12 @@ def test_pdf_marker_emits_placeholder_with_warning() -> None:
     assert "doc.pdf" in summary.warnings[0]
 
 
-def test_whiteboard_marker_returns_none_preserves_image_and_marker() -> None:
+def test_whiteboard_marker_emits_placeholder_preserves_following_image() -> None:
+    """New policy: whiteboard converter emits a placeholder WhiteboardBlock
+    (empty elements, schema-safe viewbox) with n_consumed=0. The marker
+    is consumed but the following target (image) is preserved as a regular
+    block. WhiteboardBlock identity survives even though strokes data is
+    irrecoverable on docx round-trip."""
     image = _image()
     blocks, summary = _run_converter(
         _convert_whiteboard,
@@ -1057,10 +1073,10 @@ def test_whiteboard_marker_returns_none_preserves_image_and_marker() -> None:
         [image],
     )
     assert len(blocks) == 2
-    assert blocks[0]["type"] == "paragraph"
+    assert blocks[0]["type"] == "whiteboard"
+    assert blocks[0]["elements"] == []
     assert blocks[1]["type"] == "image"
-    assert summary.warnings
-    assert "whiteboard" in summary.warnings[0]
+    assert any("whiteboard" in w for w in summary.warnings)
 
 
 # ── gallery converter (multi-block; dispatcher hookup pending main-thread) ──
@@ -1107,15 +1123,20 @@ def test_gallery_marker_with_carousel_variant() -> None:
     assert len(blocks[0]["items"]) == 2
 
 
-def test_gallery_marker_no_image_returns_none_preserves_marker() -> None:
-    blocks, _ = _run_converter(
+def test_gallery_marker_no_image_emits_placeholder_preserves_following() -> None:
+    """New policy: gallery converter emits a placeholder gallery (one
+    minted imageId) with n_consumed=0 when no image follows the marker.
+    Marker consumed; subsequent non-image block preserved."""
+    blocks, summary = _run_converter(
         _convert_gallery,
         "Widget: gallery",
         [_para("not an image")],
     )
     assert len(blocks) == 2
-    assert blocks[0]["type"] == "paragraph"
+    assert blocks[0]["type"] == "gallery"
+    assert len(blocks[0]["items"]) == 1
     assert blocks[1]["type"] == "paragraph"
+    assert any("placeholder" in w for w in summary.warnings)
 
 
 def test_gallery_marker_copies_caption_and_alt() -> None:

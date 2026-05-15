@@ -860,3 +860,58 @@ def test_docx_import_autodetects_columns_from_sectpr_cols() -> None:
         assert len(col) == 2
         for b in col:
             assert b["type"] == "paragraph"
+
+
+# ── Shaded-paragraph callout autodetect (marker-less) ────────────────
+
+
+def test_autodetect_callout_from_shaded_paragraph_with_emoji() -> None:
+    sec = _section([{
+        "type": "paragraph", "id": _u(), "text": "⚠️ 작업 중지 금지",
+        "__paragraph_bg__": "#FFF0F0",
+    }])
+    apply_widget_autodetect([sec], _Summary())
+    b = sec["blocks"][0]
+    assert b["type"] == "callout"
+    assert b["variant"] == "warn"
+    assert b["text"] == "작업 중지 금지"
+
+
+def test_autodetect_callout_from_shaded_paragraph_with_label() -> None:
+    sec = _section([{
+        "type": "paragraph", "id": _u(), "text": "[주의] 내용",
+        "__paragraph_bg__": "#FFE0E0",
+    }])
+    apply_widget_autodetect([sec], _Summary())
+    b = sec["blocks"][0]
+    assert b["type"] == "callout"
+    assert b["variant"] == "warn"
+
+
+def test_autodetect_callout_skips_shaded_paragraph_without_signal() -> None:
+    # Shaded paragraph WITHOUT emoji/label → not a callout.
+    sec = _section([{
+        "type": "paragraph", "id": _u(), "text": "그냥 색칠된 단락",
+        "__paragraph_bg__": "#FFE0E0",
+    }])
+    apply_widget_autodetect([sec], _Summary())
+    assert sec["blocks"][0]["type"] == "paragraph"
+
+
+def test_autodetect_callout_skips_paragraph_emoji_without_shading() -> None:
+    # Emoji without BG color → not strict enough.
+    sec = _section([{
+        "type": "paragraph", "id": _u(), "text": "⚠️ 그냥 텍스트"
+    }])
+    apply_widget_autodetect([sec], _Summary())
+    assert sec["blocks"][0]["type"] == "paragraph"
+
+
+def test_autodetect_transient_paragraph_bg_field_is_stripped() -> None:
+    sec = _section([{
+        "type": "paragraph", "id": _u(), "text": "그냥 단락",
+        "__paragraph_bg__": "#FFFFFF",
+    }])
+    apply_widget_autodetect([sec], _Summary())
+    # The transient field should be removed after the pass.
+    assert "__paragraph_bg__" not in sec["blocks"][0]

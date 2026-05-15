@@ -97,15 +97,15 @@ docx_to_document(buf, slug, title, owner_user_id, image_uploader, ...)
 | `columns` | 2 | `_convert_columns` | 다음 표 (N 컬럼 = N 단) → ColumnsBlock |
 | `tabs` | 2 | `_convert_tabs` | 다음 heading-4 시리즈 + 본문 → TabsBlock |
 | `accordion` | 2 | `_convert_accordion` | 다음 heading-4 시리즈 + 본문 → AccordionBlock |
-| `gallery` | 2 | `_convert_gallery` | 다음 연속 이미지 → GalleryBlock |
+| `gallery` | 2 | `_convert_gallery` | 다음 연속 이미지 → GalleryBlock. 이미지가 round-trip 중 소실되면 placeholder item 1개로 GalleryBlock 만들고 warning. consume 0 → 후속 paragraph 보존. |
 | `doc-link` † | 2 | `_convert_doc_link` | 다음 단락 (slug 또는 `/docs/<slug>` URL) → DocLinkCardBlock |
 | `glossary` † | 2 | `_convert_glossary` | 다음 단락 → GlossaryRefBlock |
-| `image-annotation` | 2 | `_convert_image_annotation` | 다음 이미지 + 표 (kind/x/y/from_*/to_*/w/h/text/color) → ImageAnnotationBlock. 이미지가 round-trip 중 소실되면 표만 첫 target 으로 받고 placeholder image_id 발급 (warning) |
+| `image-annotation` | 2 | `_convert_image_annotation` | 다음 이미지 + 표 (kind/x/y/from_*/to_*/w/h/text/color) → ImageAnnotationBlock. 이미지 소실 + 표만 → placeholder image_id 발급 (warning). 둘 다 없으면 → placeholder block emit (empty annotations + new image_id) consume 0 |
 | `iframe` | 2 | `_convert_iframe` | 다음 URL 단락 (text가 http(s):// 로 시작) → IframeBlock |
 | `video` | 2 | `_convert_video` | 다음 URL 단락 (host 로 provider 추론) → VideoBlock |
 | `file` | 2 | `_convert_file` | 다음 하이퍼링크 단락 → FileBlock (fileId placeholder) |
 | `pdf` | 2 | `_convert_pdf` | 다음 하이퍼링크 단락 → PdfBlock (file_id placeholder) |
-| `whiteboard` | 2 | `_convert_whiteboard` | 항상 None — 다음 이미지 보존 fallback |
+| `whiteboard` | 2 | `_convert_whiteboard` | placeholder WhiteboardBlock (빈 elements + viewbox 1000×600). docx 가 strokes 표현 불가 → strokes 데이터 손실, 그러나 widget identity 는 보존. consume 0 → marker 만 소비, 후속 target 보존. |
 
 ### Widget auto-detect post-pass (Phase 3)
 
@@ -116,7 +116,7 @@ skip — 이중 변환 없음.
 
 | 인식기 | 트리거 | 출력 |
 |---|---|---|
-| `_autodetect_callout` | 1×1 표 + (배경색 OR 알림 이모지 ⚠️🚨ℹ️💡✅ OR 라벨 `[정보]`/`[주의]`/`[경고]`/`[위험]`/`[팁]`) | CalloutBlock (variant 추론) |
+| `_autodetect_callout` | (a) 1×1 표 + (배경색 OR 알림 이모지 ⚠️🚨ℹ️💡✅ OR 라벨 `[정보]`/`[주의]`/`[경고]`/`[위험]`/`[팁]`) — `_autodetect_callout_from_table`; **또는** (b) 단락 + `<w:shd w:fill="…"/>` 음영 **AND** (알림 이모지 OR 라벨) — `_autodetect_callout_from_paragraph` (둘 다 strict: 음영 + 이모지/라벨 양쪽 필요) | CalloutBlock (variant 추론) |
 | `_autodetect_kpi_cards` | 헤더 `label`+`value` (옵션 `delta`/`trend`), 행 1~4개 | KpiCardsBlock |
 | `_autodetect_gantt` | 헤더 `name`/`task`/`작업`/`이름` + `start`/`시작` + `end`/`종료` (옵션 `progress`) | GanttBlock |
 | `_autodetect_gallery` | 연속 3개 이상 ImageBlock | GalleryBlock (layout=grid) |

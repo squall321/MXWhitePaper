@@ -1511,11 +1511,24 @@ def _build_sections(
         # 텍스트 단락 (이미지가 없거나, 이미지 외 텍스트가 있는 경우)
         if text:
             sec = _current_section(sections, stack)
-            sec["blocks"].append({
+            para_block: dict[str, Any] = {
                 "type": "paragraph",
                 "id": _new_id(),
                 "text": text,
-            })
+            }
+            # Transient field for marker-less callout autodetect: capture
+            # `<w:shd w:fill="…">` on the paragraph's pPr so widget_markers
+            # can recognise LLM/human-authored "shaded paragraph" callouts.
+            # Stripped before schema validation by `_strip_transient_fields`
+            # in widget_markers.py.
+            pPr = node.find(_q("w", "pPr"))
+            if pPr is not None:
+                shd = pPr.find(_q("w", "shd"))
+                if shd is not None:
+                    fill = shd.get(_q("w", "fill"))
+                    if isinstance(fill, str) and fill and fill.lower() != "auto":
+                        para_block["__paragraph_bg__"] = f"#{fill.upper()}"
+            sec["blocks"].append(para_block)
             ctx.summary.paragraphs += 1
             pending_caption = None
         i += 1
