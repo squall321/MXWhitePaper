@@ -12,7 +12,7 @@
 | Method | Path | 인증 | 비고 |
 |---|---|---|---|
 | POST | `/api/v1/imports/docx` | editor+ | DocumentJSON 반환 → FE 가 별도 `POST /documents` 호출해 저장 |
-| POST | `/api/v1/imports/docx/roundtrip` | editor+ | .docx 바이트 반환 (Content-Disposition: `<name>.normalized.docx`). DB/MinIO 무접근 |
+| POST | `/api/v1/imports/docx/roundtrip` | editor+ | .docx 바이트 반환 (Content-Disposition: `<name>.normalized.docx`). 문서 본문/이미지 영속 없음 — MinIO/Meilisearch 미접근, DB 는 `audit_log` 한 줄만 best-effort insert |
 | POST | `/api/v1/imports/pptx` | editor+ | DocumentJSON 반환 |
 | POST | `/api/v1/imports/csv` | admin | 즉시 일괄 영속화 — 행 1 개당 문서 1 개 |
 
@@ -147,7 +147,7 @@ buf (bytes)
 docx_to_document(roundtrip_mode=True, image_uploader=None)
   │
   ├─ TOC 검출/스트립 (옵션)
-  ├─ 이미지 바이트를 summary.captured_images 에 보존 (DB/MinIO 무접근)
+  ├─ 이미지 바이트를 summary.captured_images 에 보존 (MinIO 미접근, 메모리만)
   ▼
 DocumentJSON + summary.captured_images
   │

@@ -229,6 +229,54 @@
         "title": "Body_import_pptx_api_v1_imports_pptx_post",
         "type": "object"
       },
+      "Body_roundtrip_docx_endpoint_api_v1_imports_docx_roundtrip_post": {
+        "properties": {
+          "aggressive_toc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aggressive Toc"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "원본 .docx 파일",
+            "title": "File",
+            "type": "string"
+          },
+          "strip_toc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strip Toc"
+          },
+          "verify_toc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verify Toc"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_roundtrip_docx_endpoint_api_v1_imports_docx_roundtrip_post",
+        "type": "object"
+      },
       "BookmarkIn": {
         "properties": {
           "document_id": {
@@ -11571,6 +11619,64 @@
           }
         },
         "summary": "Import Docx",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/imports/docx/roundtrip": {
+      "post": {
+        "description": "업로드한 .docx 를 사내 표준 양식으로 변환만 해서 다시 .docx 로 돌려준다. 문서 본문/이미지는 어디에도 저장하지 않으며 (MinIO/Meilisearch 미접근), DB 에는 `audit_log` 한 줄만 best-effort 로 기록한다. 응답 헤더에 변환 통계가 담긴다. 원본의 수동 목차(`목차`/`차례`/`TOC1` 등)는 옵션에 따라 검출/검증/제거된다 — Exporter 가 자동 TOC 를 재생성하므로 중복을 막기 위함.",
+        "operationId": "roundtrip_docx_endpoint_api_v1_imports_docx_roundtrip_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_roundtrip_docx_endpoint_api_v1_imports_docx_roundtrip_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Word → DocumentJSON → Word 라운드트립 (문서 본문 영속 없음)",
         "tags": [
           "imports"
         ]

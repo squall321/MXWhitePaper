@@ -42,6 +42,10 @@ dev = [
   "datamodel-code-generator>=0.26",
 ]
 
+[project.scripts]
+# 서버사이드 일괄 정규화 CLI — `mxwp-roundtrip --input ... --output ...`
+mxwp-roundtrip = "app.cli.roundtrip:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

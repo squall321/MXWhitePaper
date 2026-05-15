@@ -31,6 +31,7 @@ from typing import Any
 import ulid
 from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import require_admin, require_editor
@@ -38,7 +39,13 @@ from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import APIError, Conflict, ValidationFailed, envelope
 from app.repos import document_repo
-from app.services import docx_import, document_service, pptx_import, upload_service
+from app.services import (
+    docx_import,
+    document_service,
+    pptx_import,
+    upload_service,
+)
+from app.services.docx_roundtrip import roundtrip_docx
 
 router = APIRouter(prefix="/api/v1/imports", tags=["imports"])
 
@@ -334,6 +341,145 @@ async def import_docx(
     return envelope(
         data={"document": document, "summary": summary_dict},
         meta={"slug": final_slug},
+    )
+
+
+# ── docx round-trip ──────────────────────────────────────────────────
+
+
+def _bool_form(value: str | None, default: bool) -> bool:
+    """Coerce a multipart form string ('1'/'true'/'on'/...) to a bool.
+
+    Multipart form fields arrive as strings — pydantic's bool coercion
+    is FastAPI-internal and inconsistent for `Form()`, so we do it here
+    once and reuse across roundtrip params.
+    """
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+@router.post(
+    "/docx/roundtrip",
+    summary="Word → DocumentJSON → Word 라운드트립 (문서 본문 영속 없음)",
+    description=(
+        "업로드한 .docx 를 사내 표준 양식으로 변환만 해서 다시 .docx 로 돌려준다. "
+        "문서 본문/이미지는 어디에도 저장하지 않으며 (MinIO/Meilisearch 미접근), "
+        "DB 에는 `audit_log` 한 줄만 best-effort 로 기록한다. "
+        "응답 헤더에 변환 통계가 담긴다. "
+        "원본의 수동 목차(`목차`/`차례`/`TOC1` 등)는 옵션에 따라 검출/검증/제거된다 — "
+        "Exporter 가 자동 TOC 를 재생성하므로 중복을 막기 위함."
+    ),
+)
+async def roundtrip_docx_endpoint(
+    file: UploadFile = File(..., description="원본 .docx 파일"),
+    strip_toc: str | None = Form(default=None),
+    verify_toc: str | None = Form(default=None),
+    aggressive_toc: str | None = Form(default=None),
+    x_mxwp_user: str | None = Header(default=None, alias="X-MXWP-User"),
+    s: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_editor),
+) -> Response:
+    actor = await _resolve_actor(s, x_mxwp_user, user)
+    if not _check_rate_limit(actor):
+        raise _RateLimited()
+
+    fname = (file.filename or "").lower()
+    if not fname.endswith(".docx"):
+        raise ValidationFailed(
+            "filename must end with .docx",
+            details={"got": file.filename},
+        )
+
+    chunks: list[bytes] = []
+    total = 0
+    docx_limit = _docx_max_bytes()
+    while True:
+        chunk = await file.read(64 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > docx_limit:
+            raise ValidationFailed(
+                f"file exceeds max size ({docx_limit} bytes)",
+                details={"limit": docx_limit},
+            )
+        chunks.append(chunk)
+    buf = b"".join(chunks)
+
+    if not docx_import.is_docx_zip_magic(buf):
+        raise ValidationFailed("file is not a valid zip (.docx must be PK zip)")
+    if not docx_import.is_docx_content(buf):
+        raise ValidationFailed("zip does not contain word/document.xml")
+
+    opts = {
+        "strip_toc": _bool_form(strip_toc, default=True),
+        "verify_toc": _bool_form(verify_toc, default=True),
+        "aggressive_toc": _bool_form(aggressive_toc, default=False),
+    }
+
+    # The roundtrip itself is CPU-bound (XML parse + Pillow-free docx
+    # render). Run it in the thread pool so the event loop stays free
+    # for other requests on the same worker.
+    try:
+        out_bytes, summary = await run_in_threadpool(
+            roundtrip_docx,
+            buf,
+            **opts,
+        )
+    except ValueError as e:
+        raise ValidationFailed(str(e)) from e
+
+    # best-effort audit (no DB rollback if this fails)
+    try:
+        await document_repo.insert_audit(
+            s, user_id=actor, action="docx.roundtrip",
+            target=f"file:{file.filename}",
+            payload={
+                "input_bytes": total,
+                "output_bytes": len(out_bytes),
+                "sections": summary.get("sections", 0),
+                "images": summary.get("images", 0),
+                "tables": summary.get("tables", 0),
+                "toc_found": summary.get("toc_found", False),
+                "toc_missing": len(summary.get("toc_missing") or []),
+                **opts,
+            },
+        )
+        await s.commit()
+    except Exception:
+        await s.rollback()
+
+    # Build response. Headers carry counters; full summary goes in a
+    # `X-MXWP-Roundtrip-Summary` JSON header so callers can opt-in to
+    # the full picture without a second round-trip.
+    base_name = (file.filename or "document").rsplit(".", 1)[0]
+    headers = {
+        "Content-Disposition": (
+            f'attachment; filename="{base_name}.normalized.docx"'
+        ),
+        "X-MXWP-Roundtrip-Sections": str(summary.get("sections", 0)),
+        "X-MXWP-Roundtrip-Images": str(summary.get("images", 0)),
+        "X-MXWP-Roundtrip-Tables": str(summary.get("tables", 0)),
+        "X-MXWP-Roundtrip-Toc-Found": "true" if summary.get("toc_found") else "false",
+        "X-MXWP-Roundtrip-Toc-Entries": str(len(summary.get("toc_entries") or [])),
+        "X-MXWP-Roundtrip-Toc-Missing": str(len(summary.get("toc_missing") or [])),
+        "X-MXWP-Roundtrip-Toc-Extra": str(len(summary.get("toc_extra") or [])),
+        "X-MXWP-Roundtrip-Toc-Method": summary.get("toc_method") or "",
+        "X-MXWP-Roundtrip-Toc-Heuristic": "weak" if summary.get("toc_weak") else "strong",
+        "X-MXWP-Roundtrip-Warnings": str(len(summary.get("warnings") or [])),
+    }
+    # Stash the full JSON summary in a custom header. Browsers cap
+    # individual header size around 8 KB so we keep this concise (no
+    # blocks/payload — just counters + lists of titles).
+    import json as _json
+    headers["X-MXWP-Roundtrip-Summary"] = _json.dumps(
+        summary, ensure_ascii=False, separators=(",", ":"),
+    )[:7000]
+    return Response(
+        content=out_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers=headers,
     )
 
 
