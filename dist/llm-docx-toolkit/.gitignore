@@ -17,3 +17,6 @@ rag/embeddings.npz
 rag/embeddings.jsonl
 rag/openai_embeddings.npz
 rag/openai_embeddings.jsonl
+
+# pytest run cache (per-tree, never committed).
+.pytest_cache/

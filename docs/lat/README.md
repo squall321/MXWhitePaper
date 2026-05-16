@@ -42,6 +42,14 @@ Read 하는 패턴을 피한다.
 | [snapshots](snapshots.md) | PostgreSQL + MinIO 시점 백업/복원 | `app/services/snapshots.py`, `app/routers/snapshots.py`, `infra/scripts/snapshot.sh`, `infra/scripts/restore-snapshot.sh` |
 | [core](core.md) | 인증 (`require_role`), 에러 envelope, 설정 (pydantic-settings) | `app/core/auth.py`, `app/core/errors.py`, `app/core/config.py`, `app/core/db.py` |
 
+> 백엔드 외부 도구 — LLM 이 docx 룰을 따라 작성하도록 돕는 standalone toolkit
+> (validator + RAG CLI + MCP 서버) 은 별도 트리에서 산다:
+> [`dist/llm-docx-toolkit/README.md`](../../dist/llm-docx-toolkit/README.md).
+> 이 도구가 `widget_markers.py` / `docx_import.py` / `document.json` 등의
+> *읽기-사본* 을 만들기 때문에 해당 파일이 바뀌면 `dist/llm-docx-toolkit/rag/`
+> 의 인덱스도 자동 재생성된다 (4계층 drift 가드 — CI / paths filter /
+> pre-commit hook / 런타임 stale check).
+
 ## 노드 간 의존 흐름
 
 ```text
