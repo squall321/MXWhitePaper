@@ -196,11 +196,16 @@ jobs:
           chmod +x "$BIN" 2>/dev/null || true
           set -e
           "$BIN" --version
-          # bm25 has no external deps and ships with the binary's data files,
-          # so we can run a real query without hitting the network.
-          "$BIN" index --backend bm25 --rebuild
-          "$BIN" query --backend bm25 "차트"
-          "$BIN" check
+          # The binary ships chunks.jsonl + index.lock; index needs to write
+          # bm25.json into the rag/ that lives next to the binary (the bundled
+          # rag/ inside _MEIPASS is read-only). --rebuild would re-run the
+          # chunker, which can't see apps/api/ from inside the frozen binary —
+          # skip it; the bundled chunks are already authoritative.
+          mkdir -p _smoketest_rag
+          cp rag/chunks.jsonl rag/index.lock _smoketest_rag/
+          "$BIN" index --backend bm25 --rag-dir _smoketest_rag
+          "$BIN" query --backend bm25 --rag-dir _smoketest_rag "차트"
+          "$BIN" check --rag-dir _smoketest_rag
 
       - name: Smoke test — mxwp-mcp launches
         shell: bash
