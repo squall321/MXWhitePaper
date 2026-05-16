@@ -18,3 +18,8 @@ openai>=1.40
 
 # MCP server — Anthropic's official Python SDK, stdio transport.
 mcp>=1.0
+
+# Test-only — CI runs the rag/ + mcp/ test suites before building binaries.
+# Not consumed by the runtime binaries themselves.
+pytest>=8.0
+pytest-asyncio>=0.23

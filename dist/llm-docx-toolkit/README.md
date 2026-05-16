@@ -9,18 +9,27 @@
 llm-docx-toolkit/
 ├── README.md                   ← 이 문서
 ├── llm-input-rules.md          ← LLM 에게 줄 명세서 (18 위젯 형태/실수/체크리스트)
+├── llm-system-prompt.md        ← LLM 에게 직접 주입할 시스템 프롬프트
 ├── bin/
-│   ├── mxwp-validator-linux*           ← Linux 단일 실행 파일 (PyInstaller)
-│   └── mxwp-validator-win32.exe        ← Windows 단일 실행 파일
+│   ├── mxwp-validator-{linux,win32.exe}   ← .docx → DocumentJSON 검증
+│   ├── mxwp-rules-{linux,win32.exe}       ← RAG CLI (query / index / check)
+│   └── mxwp-mcp-{linux,win32.exe}         ← MCP stdio 서버
 ├── examples/
 │   ├── good-example.docx       ← 룰을 따른 모범 예시 (15 위젯)
 │   ├── all-widgets.docx        ← 18 위젯 전부
 │   ├── bad-example.docx        ← 흔한 실수 모음
 │   └── build_examples.py       ← 예제 재생성 스크립트
+├── rag/                        ← 3-backend 검색 (BM25 / sentence-transformer / OpenAI)
+│   ├── README.md
+│   ├── chunks.jsonl            ← 120-chunk 결정론적 코퍼스 (커밋됨)
+│   └── index.lock              ← source hash manifest (4계층 동기화의 진실원)
+├── mcp/                        ← MCP 서버 (Claude Desktop + Claude Code 양쪽 호환)
+│   ├── server.py
+│   └── example-claude-{desktop,code}.json
 ├── src/
-│   ├── validate.py             ← CLI 소스 (PyInstaller 엔트리)
+│   ├── validate.py             ← validator CLI 소스 (PyInstaller 엔트리)
 │   └── _settings_stub.py       ← 서버 설정 stub
-├── build.py                    ← 로컬 빌드 스크립트
+├── build.py                    ← 로컬 빌드 스크립트 (3 바이너리 모두)
 └── requirements.txt
 ```
 
@@ -50,7 +59,63 @@ bin\mxwp-validator-win32.exe examples\good-example.docx
 - `2` — docx 파싱 실패 (파일이 손상됐거나 .docx 가 아님)
 - `3` — 사용법 / I/O 오류
 
-## LLM 에게 어떻게 시키나
+## RAG 툴킷 — LLM 이 룰을 *질의* 하면서 작성
+
+규칙 전문을 매번 통째로 붙여넣는 대신, LLM 이 필요한 룰만 골라 가져가도록
+RAG (Retrieval-Augmented Generation) 인덱스를 제공합니다.
+
+### CLI
+
+```bash
+./bin/mxwp-rules-linux query "callout 만드는 법" --backend bm25
+./bin/mxwp-rules-linux query --backend st "차트 데이터 표 어떻게"   # 기본 = st
+./bin/mxwp-rules-linux index --backend st --rebuild                 # 인덱스 재생성
+./bin/mxwp-rules-linux check                                        # lock 무결성
+```
+
+3개 backend:
+- `bm25` — 키워드 (한국어 토크나이저 포함), 의존성 없음, 즉시 사용 가능
+- `st` (기본) — `intfloat/multilingual-e5-small`, 첫 실행 시 ~120MB 모델을
+  `~/.cache/huggingface` 에 자동 다운로드
+- `openai` — `text-embedding-3-small`, `OPENAI_API_KEY` 필요
+
+### MCP 서버
+
+Claude Desktop / Claude Code 에 stdio MCP 로 붙여 LLM 이 직접 룰을 질의:
+
+```jsonc
+// ~/Library/Application Support/Claude/claude_desktop_config.json
+{
+  "mcpServers": {
+    "mxwp-rag": {
+      "command": "/absolute/path/to/bin/mxwp-mcp-linux",
+      "args": ["--rag-dir", "/absolute/path/to/rag"]
+    }
+  }
+}
+```
+
+자세한 예시는 `mcp/example-claude-desktop.json` / `mcp/example-claude-code.json`.
+
+서버가 노출하는 primitive:
+- tool `query_rules(query, k, backend)` — top-k 검색
+- resource `rag://chunks/{id}` — 단일 청크 원문
+- prompt `mxwp_system_prompt` — `llm-system-prompt.md` 전체
+
+### 4계층 drift 방지
+
+위젯/import 룰이 바뀌면 RAG 인덱스도 자동 함께 갱신되도록 4단계로 보호:
+
+1. **CI rebuild + lock check** — workflow 가 `chunks.jsonl` 을 재생성하고
+   commit 된 lock 과 byte-단위 비교 (timestamp 만 `jq` 로 제외). 다르면 빌드 실패.
+2. **Path filter** — `widget_markers.py` / `docx_import.py` / `document.json` /
+   `llm-input-rules.md` / `dist/llm-docx-toolkit/**` 변경에만 워크플로우 발화.
+3. **Pre-commit hook** — 위 5개 중 하나라도 staged 면 `chunker.py --check` 가
+   돌아 lock drift 시 커밋 차단.
+4. **Runtime stale check** — `mxwp-rules check` + `mxwp-validator` 가 내부
+   index.lock 의 `chunks_sha256` 와 live `chunks.jsonl` SHA 비교. 불일치 시 경고.
+
+## LLM 에게 어떻게 시키나 (전통 방식)
 
 1. `llm-input-rules.md` 를 ChatGPT / Claude / Gemini 의 system prompt 또는
    첫 메시지에 통째로 붙여넣기.
