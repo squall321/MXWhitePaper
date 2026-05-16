@@ -61,7 +61,18 @@ jobs:
 
       - name: Build standalone binary
         working-directory: dist/llm-docx-toolkit
-        run: python build.py --clean
+        shell: bash
+        run: |
+          set -x
+          python --version
+          python -c "import sys; print('exe=', sys.executable)"
+          python -c "import PyInstaller; print('PyInstaller', PyInstaller.__version__)"
+          python -c "import ulid; print('ulid file=', ulid.__file__, 'has new=', hasattr(ulid, 'new'))" || echo "ULID IMPORT FAILED"
+          python -c "import jsonschema; print('jsonschema', jsonschema.__version__)"
+          ls -la
+          python build.py --clean 2>&1 | tee build.log
+          echo "=== build.log tail ==="
+          tail -40 build.log || true
 
       - name: Build example .docx files
         working-directory: dist/llm-docx-toolkit
