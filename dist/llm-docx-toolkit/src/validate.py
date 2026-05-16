@@ -47,6 +47,40 @@ import docx_import as _docx_import  # type: ignore[import-not-found]
 SCHEMA_FILENAME = "document.schema.json"
 
 
+def _check_index_lock_freshness() -> str | None:
+    """Returns a warning message if the bundled index.lock looks stale,
+    None otherwise. The frozen binary has no access to the source repo,
+    so this can only catch the case where chunks.jsonl was tampered with
+    after the lock was written. Drift between the binary and the live
+    MXWhitePaper repo is caught at build-time (see chunker --check)."""
+    try:
+        from rag._lock import hash_file, read_lock  # type: ignore[import-not-found]
+    except ImportError:
+        return None  # rag module not in this build
+    here = Path(__file__).resolve().parent
+    candidates: list[Path] = []
+    meipass = getattr(sys, "_MEIPASS", "")
+    if meipass:
+        candidates.append(Path(meipass) / "rag")
+    candidates.append(here.parent / "rag")
+    for candidate in candidates:
+        lock_path = candidate / "index.lock"
+        chunks_path = candidate / "chunks.jsonl"
+        if lock_path.exists() and chunks_path.exists():
+            lock = read_lock(lock_path)
+            if not lock:
+                return None
+            expected = lock.get("chunks_sha256")
+            actual = hash_file(chunks_path)
+            if expected and expected != actual:
+                return (
+                    f"index.lock chunks_sha256 mismatch: "
+                    f"expected {expected[:8]}..., got {actual[:8]}..."
+                )
+            return None
+    return None
+
+
 # ── pretty-print helpers ────────────────────────────────────────────
 
 
@@ -174,6 +208,10 @@ def _import_docx(buf: bytes, slug: str) -> dict[str, Any]:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
+    stale = _check_index_lock_freshness()
+    if stale:
+        print(_warn(f"RAG index appears stale: {stale}"), file=sys.stderr)
+
     in_path = Path(args.input).expanduser()
     if not in_path.exists():
         print(_err(f"input file not found: {in_path}"), file=sys.stderr)

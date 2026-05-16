@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "mxwp-rag": {
+      "command": "/absolute/path/to/llm-docx-toolkit/bin/mxwp-mcp",
+      "args": [
+        "--rag-dir",
+        "/absolute/path/to/llm-docx-toolkit/rag",
+        "--system-prompt",
+        "/absolute/path/to/llm-docx-toolkit/llm-system-prompt.md"
+      ],
+      "env": {}
+    }
+  }
+}

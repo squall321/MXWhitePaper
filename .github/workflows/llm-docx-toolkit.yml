@@ -1,14 +1,20 @@
 name: llm-docx-toolkit
 
-# Builds the standalone mxwp-validator binary for Linux + Windows on every push
-# to main and on tagged releases. The build script (dist/llm-docx-toolkit/build.py)
-# stages a snapshot of apps/api/app/services/docx_import.py + widget_markers.py
-# and the schema, then runs PyInstaller — so every push that lands a new widget
-# or import-rule change automatically produces a fresh validator binary.
+# Builds three standalone binaries for Linux + Windows on every push to main
+# and on tagged releases:
+#   - mxwp-validator : .docx → DocumentJSON validator
+#   - mxwp-rules     : RAG CLI (query / index / check)
+#   - mxwp-mcp       : MCP stdio server
+#
+# Also enforces Layer 1 of the 4-layer RAG sync guarantee: a CI step
+# regenerates rag/chunks.jsonl + rag/index.lock and fails the build if the
+# regenerated lock differs from what was committed. This means any widget /
+# import-rule change forces the contributor to re-run the chunker locally
+# and commit the refreshed index, keeping the LLM context in sync.
 #
 # Artifacts:
-#   - llm-docx-toolkit-linux   (mxwp-validator-linux + examples + docs)
-#   - llm-docx-toolkit-windows (mxwp-validator-win32.exe + examples + docs)
+#   - llm-docx-toolkit-linux   (all 3 binaries + examples + docs)
+#   - llm-docx-toolkit-windows (all 3 binaries + examples + docs)
 #
 # On a tag push (v*), a GitHub Release is created with both bundles attached.
 
@@ -20,14 +26,68 @@ on:
       - 'apps/api/app/services/widget_markers.py'
       - 'packages/shared/schemas/document.json'
       - 'docs/llm-input-rules.md'
-      - 'dist/llm-docx-toolkit/**'  # includes apply/ scripts
+      - 'dist/llm-docx-toolkit/**'
       - '.github/workflows/llm-docx-toolkit.yml'
     tags: ['v*']
   workflow_dispatch: {}
 
 jobs:
+  # ── Layer 1: RAG index lock verification (Linux-only, fast) ────────
+  # Runs once before the build matrix. If it fails, the matrix never starts
+  # — saves CI minutes when a contributor forgot to re-run the chunker.
+  rag-lock-verify:
+    name: rag lock verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Refresh llm-input-rules.md from source
+        run: cp docs/llm-input-rules.md dist/llm-docx-toolkit/llm-input-rules.md
+
+      - name: Regenerate chunks + lock
+        working-directory: dist/llm-docx-toolkit
+        run: |
+          python3 rag/chunker.py
+          echo "--- regenerated index.lock ---"
+          cat rag/index.lock
+
+      - name: Fail if regenerated lock differs from committed one
+        run: |
+          # chunks.jsonl is deterministic byte-for-byte; index.lock only
+          # changes in `generated_at` between runs — compare it with that
+          # field stripped via jq so unrelated timestamps don't false-alarm.
+          if ! git diff --quiet -- dist/llm-docx-toolkit/rag/chunks.jsonl; then
+            echo "✗ RAG chunks drift detected."
+            git --no-pager diff -- dist/llm-docx-toolkit/rag/chunks.jsonl | head -80
+            echo ""
+            echo "Run locally:"
+            echo "  python3 dist/llm-docx-toolkit/rag/chunker.py"
+            echo "  git add dist/llm-docx-toolkit/rag/index.lock dist/llm-docx-toolkit/rag/chunks.jsonl"
+            exit 1
+          fi
+          jq 'del(.generated_at)' dist/llm-docx-toolkit/rag/index.lock > /tmp/lock.regen.json
+          git show HEAD:dist/llm-docx-toolkit/rag/index.lock \
+            | jq 'del(.generated_at)' > /tmp/lock.head.json
+          if ! diff -q /tmp/lock.head.json /tmp/lock.regen.json >/dev/null; then
+            echo "✗ RAG index.lock drift detected (ignoring generated_at)."
+            diff /tmp/lock.head.json /tmp/lock.regen.json | head -80
+            echo ""
+            echo "Run locally:"
+            echo "  python3 dist/llm-docx-toolkit/rag/chunker.py"
+            echo "  git add dist/llm-docx-toolkit/rag/index.lock dist/llm-docx-toolkit/rag/chunks.jsonl"
+            exit 1
+          fi
+          echo "✓ RAG index lock matches HEAD (ignoring generated_at)."
+
+  # ── Build matrix (Linux + Windows) ─────────────────────────────────
   build:
     name: ${{ matrix.os }}
+    needs: rag-lock-verify
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -35,10 +95,10 @@ jobs:
         include:
           - os: ubuntu-latest
             platform_tag: linux
-            binary_name: mxwp-validator-linux
+            ext: ''
           - os: windows-latest
             platform_tag: windows
-            binary_name: mxwp-validator-win32.exe
+            ext: '.exe'
     steps:
       - uses: actions/checkout@v4
 
@@ -56,24 +116,40 @@ jobs:
 
       - name: Refresh llm-input-rules.md from source
         shell: bash
-        run: |
-          cp docs/llm-input-rules.md dist/llm-docx-toolkit/llm-input-rules.md
+        run: cp docs/llm-input-rules.md dist/llm-docx-toolkit/llm-input-rules.md
 
-      - name: Build standalone binary
+      # The CI-side regenerate has already been done & checked; we just need
+      # the artifacts in place for the rules + mcp builds.
+      - name: Ensure rag/ index exists
+        working-directory: dist/llm-docx-toolkit
+        shell: bash
+        run: python3 rag/chunker.py --rebuild
+
+      - name: Run toolkit test suites
         working-directory: dist/llm-docx-toolkit
         shell: bash
         run: |
-          set +e   # don't bail on the diagnostic block; we want the log either way
+          # Skip slow ST model download in CI by default; bm25 + openai-mocked
+          # cover the surface area we care about for build-time verification.
+          python3 -m pytest rag/tests/ mcp/tests/ -v -m "not slow"
+
+      - name: Build all three binaries
+        working-directory: dist/llm-docx-toolkit
+        shell: bash
+        run: |
+          set +e
           {
             echo "=== preflight ==="
             python --version
             python -c "import sys; print('exe=', sys.executable)"
             python -c "import PyInstaller; print('PyInstaller', PyInstaller.__version__)"
-            python -c "import ulid; print('ulid module=', ulid.__file__); print('has new:', hasattr(ulid, 'new')); print('has ULID:', hasattr(ulid, 'ULID'))"
+            python -c "import ulid; print('ulid module=', ulid.__file__)"
             python -c "import jsonschema; print('jsonschema', jsonschema.__version__)"
+            python -c "import mcp; print('mcp', mcp.__version__ if hasattr(mcp, '__version__') else '?')"
+            python -c "import numpy; print('numpy', numpy.__version__)"
             echo "=== folder listing ==="
             ls -la
-            echo "=== build.py run ==="
+            echo "=== build.py --target all ==="
             python build.py --clean
             echo "=== exit: $? ==="
           } 2>&1 | tee build.log
@@ -94,15 +170,13 @@ jobs:
         working-directory: dist/llm-docx-toolkit
         run: |
           pip install python-docx
-          # Toolkit-side build_examples.py needs to import the production
-          # docx_export, so we let it discover apps/api on its own path.
           python examples/build_examples.py
 
       - name: Smoke test — validator on all 3 examples
         shell: bash
         working-directory: dist/llm-docx-toolkit
         run: |
-          BIN="bin/${{ matrix.binary_name }}"
+          BIN="bin/mxwp-validator-${{ matrix.platform_tag == 'linux' && 'linux' || 'win32' }}${{ matrix.ext }}"
           chmod +x "$BIN" 2>/dev/null || true
           set -e
           for f in examples/good-example.docx examples/all-widgets.docx examples/bad-example.docx; do
@@ -110,10 +184,32 @@ jobs:
             "$BIN" "$f" || code=$?
             echo "exit=$code"
           done
-          # The validator must produce a JSON dump for each.
           for f in examples/good-example.docx examples/all-widgets.docx examples/bad-example.docx; do
             test -s "${f%.docx}.json" || { echo "missing JSON dump for $f"; exit 1; }
           done
+
+      - name: Smoke test — mxwp-rules query + check
+        shell: bash
+        working-directory: dist/llm-docx-toolkit
+        run: |
+          BIN="bin/mxwp-rules-${{ matrix.platform_tag == 'linux' && 'linux' || 'win32' }}${{ matrix.ext }}"
+          chmod +x "$BIN" 2>/dev/null || true
+          set -e
+          "$BIN" --version
+          # bm25 has no external deps and ships with the binary's data files,
+          # so we can run a real query without hitting the network.
+          "$BIN" index --backend bm25 --rebuild
+          "$BIN" query --backend bm25 "차트"
+          "$BIN" check
+
+      - name: Smoke test — mxwp-mcp launches
+        shell: bash
+        working-directory: dist/llm-docx-toolkit
+        run: |
+          BIN="bin/mxwp-mcp-${{ matrix.platform_tag == 'linux' && 'linux' || 'win32' }}${{ matrix.ext }}"
+          chmod +x "$BIN" 2>/dev/null || true
+          set -e
+          "$BIN" --version
 
       - name: Stage release bundle
         shell: bash
@@ -125,13 +221,15 @@ jobs:
           cp -r bin "_release/${BUNDLE}/bin"
           cp -r examples "_release/${BUNDLE}/examples"
           cp -r src "_release/${BUNDLE}/src"
-          cp README.md llm-input-rules.md requirements.txt build.py "_release/${BUNDLE}/"
-          # Windows automation kit — only meaningful for the Windows bundle
-          # (PowerShell + Word COM is Windows-only), but we ship it on Linux
-          # too in case admins want to inspect / patch the .ps1.
+          cp -r rag "_release/${BUNDLE}/rag"
+          cp -r mcp "_release/${BUNDLE}/mcp"
+          cp README.md llm-input-rules.md llm-system-prompt.md requirements.txt build.py "_release/${BUNDLE}/"
           if [ -d "apply" ]; then
             cp -r apply "_release/${BUNDLE}/apply"
           fi
+          # Strip pyc + caches before zipping.
+          find "_release/${BUNDLE}" -type d -name __pycache__ -prune -exec rm -rf {} +
+          find "_release/${BUNDLE}" -type d -name '.pytest_cache' -prune -exec rm -rf {} +
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

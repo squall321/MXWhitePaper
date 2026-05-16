@@ -5,3 +5,16 @@ jsonschema>=4.20
 # Build-only — only needed when producing the binary; CI installs these too.
 pyinstaller>=6.0
 python-docx>=1.1   # only the example-builder uses it (see examples/build_examples.py)
+
+# RAG ST backend — sentence-transformer retrieval (default backend).
+# Lazy-downloads multilingual-e5-small (~120MB) into ~/.cache/huggingface
+# on first use; the model is NOT bundled into the PyInstaller binary.
+# Multilingual was picked over MiniLM because the rule corpus is Korean.
+sentence-transformers>=2.7
+numpy>=1.26
+
+# RAG OpenAI backend — only needed when --backend openai is used.
+openai>=1.40
+
+# MCP server — Anthropic's official Python SDK, stdio transport.
+mcp>=1.0

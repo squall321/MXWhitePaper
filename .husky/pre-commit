@@ -32,3 +32,19 @@ elif command -v python3 >/dev/null 2>&1 && python3 -c "import fastapi" 2>/dev/nu
 else
   echo "⚠ python3 + fastapi not available locally — skipping OpenAPI drift check (CI will catch it)."
 fi
+
+# 3) RAG index drift guard — if any tracked widget/rule source is staged,
+# verify dist/llm-docx-toolkit/rag/index.lock is up to date with the
+# current source hashes. Skip silently if chunker.py isn't available
+# (e.g. shallow worktree, contributor without the toolkit).
+STAGED_RAG_SOURCES=$(git diff --cached --name-only | grep -E '^(apps/api/app/services/(docx_import|widget_markers)\.py|packages/shared/schemas/document\.json|docs/llm-input-rules\.md|dist/llm-docx-toolkit/llm-system-prompt\.md)$' || true)
+if [ -n "$STAGED_RAG_SOURCES" ] && [ -f "$ROOT/dist/llm-docx-toolkit/rag/chunker.py" ] && [ -f "$ROOT/dist/llm-docx-toolkit/rag/index.lock" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    if ! python3 "$ROOT/dist/llm-docx-toolkit/rag/chunker.py" --check >/dev/null 2>&1; then
+      echo "✗ RAG index is out of date. Run: python3 dist/llm-docx-toolkit/rag/chunker.py && git add dist/llm-docx-toolkit/rag/index.lock dist/llm-docx-toolkit/rag/chunks.jsonl"
+      exit 1
+    fi
+  else
+    echo "⚠ python3 unavailable — skipping RAG index drift check (CI will catch it)."
+  fi
+fi
