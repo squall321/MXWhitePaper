@@ -228,7 +228,7 @@ jobs:
           cp -r src "_release/${BUNDLE}/src"
           cp -r rag "_release/${BUNDLE}/rag"
           cp -r mcp "_release/${BUNDLE}/mcp"
-          cp README.md llm-input-rules.md llm-system-prompt.md requirements.txt build.py "_release/${BUNDLE}/"
+          cp HANDOFF.md README.md llm-input-rules.md llm-system-prompt.md requirements.txt build.py "_release/${BUNDLE}/"
           if [ -d "apply" ]; then
             cp -r apply "_release/${BUNDLE}/apply"
           fi
