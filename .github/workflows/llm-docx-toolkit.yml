@@ -123,7 +123,7 @@ jobs:
       - name: Ensure rag/ index exists
         working-directory: dist/llm-docx-toolkit
         shell: bash
-        run: python3 rag/chunker.py --rebuild
+        run: python3 rag/chunker.py
 
       - name: Run toolkit test suites
         working-directory: dist/llm-docx-toolkit
