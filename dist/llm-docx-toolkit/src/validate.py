@@ -28,6 +28,16 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+# Windows console default is cp1252; force UTF-8 so glyphs in our human
+# report (check marks, arrows) don't crash with UnicodeEncodeError.
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
 # Local toolkit modules (sibling files under PyInstaller's resource dir).
 # The PyInstaller spec adds the src/ folder to sys.path so these imports
 # work whether we're running from source or from the frozen binary.

@@ -24,10 +24,21 @@ CI cross-platform builds are handled by GitHub Actions on `ubuntu-latest` and
 from __future__ import annotations
 
 import argparse
+import io
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+# Windows' default console encoding (cp1252) can't print non-ASCII glyphs
+# like the U+2713 check mark. Force UTF-8 on stdout/stderr so the build
+# script behaves identically on Linux and Windows CI runners.
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+# Also tell any subprocess we spawn to do the same.
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
 
 HERE = Path(__file__).resolve().parent
@@ -232,7 +243,7 @@ def main() -> int:
         if dst.exists():
             shutil.rmtree(dst)
         shutil.move(str(src_artefact), str(dst))
-        print(f"\n✓ produced folder: {dst}")
+        print(f"\n[OK] produced folder: {dst}")
     else:
         exe_suffix = ".exe" if sys.platform == "win32" else ""
         src_artefact = work_dir / "dist" / f"mxwp-validator{exe_suffix}"
@@ -240,7 +251,7 @@ def main() -> int:
         if dst.exists():
             dst.unlink()
         shutil.move(str(src_artefact), str(dst))
-        print(f"\n✓ produced binary: {dst}")
+        print(f"\n[OK] produced binary: {dst}")
 
     print("\nQuick sanity:", flush=True)
     try:
