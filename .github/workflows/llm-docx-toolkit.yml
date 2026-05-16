@@ -63,16 +63,32 @@ jobs:
         working-directory: dist/llm-docx-toolkit
         shell: bash
         run: |
-          set -x
-          python --version
-          python -c "import sys; print('exe=', sys.executable)"
-          python -c "import PyInstaller; print('PyInstaller', PyInstaller.__version__)"
-          python -c "import ulid; print('ulid file=', ulid.__file__, 'has new=', hasattr(ulid, 'new'))" || echo "ULID IMPORT FAILED"
-          python -c "import jsonschema; print('jsonschema', jsonschema.__version__)"
-          ls -la
-          python build.py --clean 2>&1 | tee build.log
-          echo "=== build.log tail ==="
-          tail -40 build.log || true
+          set +e   # don't bail on the diagnostic block; we want the log either way
+          {
+            echo "=== preflight ==="
+            python --version
+            python -c "import sys; print('exe=', sys.executable)"
+            python -c "import PyInstaller; print('PyInstaller', PyInstaller.__version__)"
+            python -c "import ulid; print('ulid module=', ulid.__file__); print('has new:', hasattr(ulid, 'new')); print('has ULID:', hasattr(ulid, 'ULID'))"
+            python -c "import jsonschema; print('jsonschema', jsonschema.__version__)"
+            echo "=== folder listing ==="
+            ls -la
+            echo "=== build.py run ==="
+            python build.py --clean
+            echo "=== exit: $? ==="
+          } 2>&1 | tee build.log
+          BUILD_EC=${PIPESTATUS[0]}
+          echo "build pipeline exit code: $BUILD_EC"
+          exit $BUILD_EC
+
+      - name: Upload build log on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.platform_tag }}
+          path: dist/llm-docx-toolkit/build.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Build example .docx files
         working-directory: dist/llm-docx-toolkit
