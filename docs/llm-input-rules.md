@@ -106,6 +106,80 @@ markdown 마커 (`**bold**`, `*italic*`, `[text](url)`) 도 인식.
 - 셀 안에 paragraph / image / list 혼합 가능 (mixed-cell).
 - **셀 안에 표 / 위젯 직접 금지**.
 
+### 2.9 spreadsheet (편집 가능한 표)
+
+- 사용자가 사이트에서 직접 셀 값을 수정할 수 있는 *살아있는* 표. `table` 과
+  다른 점: docx import 가 만들지 않으며 사이트 에디터에서 직접 추가.
+- LLM 이 docx 로 작성 시: 일반 `table` 로 만들고 메타에 *"사이트에서 spreadsheet
+  로 전환하세요"* 한 줄 주석을 본문에 남기는 정도가 안전. spreadsheet 자체는
+  docx 본문에서 표현이 모호.
+- 필수: `cols` (1-26), `rows` (1-200), `cells` 배열.
+- 권장: 가능하면 `table` 로 두고 사이트에서 변환.
+
+### 2.10 spacer (여백)
+
+- 본문 흐름에 일부러 공백을 더 줄 때. 단 *남용 금지* — 기본 8px 간격이 이미
+  적정. spacer 는 *시각적 절 구분* 이 필요할 때만.
+- 필수: `type`, `id`. 선택: `size` ∈ `sm` (16px), `md` (32px, 기본), `lg` (64px).
+- LLM 이 *항상 spacer 를 끼워넣는* 패턴 금지. 보통 0-2개로 충분.
+
+### 2.11 bibliography (참고문헌)
+
+- 문서 끝의 출처 목록. 본문에서는 `[[cite:KEY]]` 인라인 문법으로 anchor link.
+- docx import 가 자동으로 **"References" / "참고문헌" / "Bibliography"** 헤더
+  뒤의 단락을 인식해 만들어줌 — LLM 은 그냥 "References" 섹션 작성하면 됨.
+- 필수: `type`, `id`, `entries` (배열). 각 entry: `{key, text, doi?, url?}`.
+- 인용 키는 *영문 + 숫자 + 하이픈* 만 (`[[cite:smith-2024]]`).
+
+### 2.12 figure-index (그림/표/차트 목차)
+
+- 본문에 들어간 *캡션 있는 이미지 / 표 / 차트* 의 자동 생성 목차.
+- 본문 처음에 한 블록 두면 렌더러가 문서 전체를 훑어 목록 생성.
+- 필수: `type`, `id`. 선택: `title`, `kinds` (필터 — `image` / `table` / `chart`).
+- LLM 작성 시: 캡션을 잘 달면 (1.7 §image / §table 참고) figure-index 가 자동
+  으로 풍부해짐. 별도 본문 작성 불요.
+
+### 2.13 form (사용자 입력 폼)
+
+- 사이트 방문자가 응답할 수 있는 폼 (조사 / 신청 / 피드백).
+- docx 로는 표현 불가 — LLM 이 docx 작성 시 *form 블록을 만들지 말 것*.
+  대신 본문에 "이 자리는 form 블록" 표시 + 사용자가 사이트 에디터에서 추가.
+- 필수: `type`, `id`, `questions` (배열). 사이트 전용 위젯이므로 사람이 만듦.
+
+### 2.14 quiz (퀴즈)
+
+- form 과 유사하지만 정답 / 채점 / 합격선 추가. 학습 / 시험 / 인증.
+- form 과 동일 규칙 — **LLM 이 docx 에 만들지 말고** 사이트 에디터에서 추가.
+- 필수: `type`, `id`, `questions`. 선택: `passing_score`, `shuffle`, `max_attempts`.
+
+### 2.15 calculator (수식 계산기)
+
+- 사용자가 입력 (예: 매출, 단가) 을 넣으면 *공식 적용 결과* 를 표시.
+- docx 로는 표현 불가 — LLM 은 본문에 *공식 + 예시 결과* 만 적고 사용자가
+  사이트에서 calculator 블록 추가.
+- 필수: `type`, `id`, `inputs` (변수 정의), `formula` (수식 문자열).
+
+### 2.16 data-source / dashboard-embed (라이브 데이터 / 외부 대시보드)
+
+- 외부 API 또는 Grafana / Looker 등에서 실시간 데이터 가져옴.
+- 둘 다 *사이트 전용* — LLM 이 docx 로 만들지 말 것. 본문에 "이 자리는 라이브
+  데이터" / "Grafana 대시보드 panelId=42" 등 placeholder 단락만 두고 사용자가
+  사이트에서 실제 블록 추가.
+- 필수 — data-source: `endpoint`, `render` (`chart` / `table` / `kpi`).
+  dashboard-embed: `provider` (`grafana` / `looker`), `panelId`.
+
+### 2.17 LLM 이 docx 로 만들 수 없는 블록 (요약)
+
+| 블록 | 사유 | LLM 이 할 일 |
+|---|---|---|
+| `spreadsheet` | docx 본문 표현 모호 | 일반 `table` + 본문 주석 |
+| `form` / `quiz` | 사용자 입력 / 채점 필요 | 본문에 placeholder 단락 |
+| `calculator` | 동적 수식 계산 | 공식 + 예시값 단락 |
+| `data-source` / `dashboard-embed` | 라이브 데이터 / 외부 시스템 | placeholder + 출처 표시 |
+
+→ 이 6 블록은 사이트 에디터에서 *사람이* 직접 추가하는 게 정답. LLM 은 본문에
+"여기에 form 블록 추가 예정" 같은 단락만 남기면 사용자 review 시 보강 가능.
+
 ---
 
 ## 3. 위젯 룰 — *형태* 가 자동 인식의 키
