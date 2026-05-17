@@ -35,6 +35,16 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
+      # Disable CRLF normalization globally before checkout so Windows
+      # receives byte-identical files to ubuntu/macOS. .gitattributes
+      # alone doesn't fix this because checkout populates the working
+      # tree from git's index using the runner's autocrlf setting.
+      - name: Disable git autocrlf (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+        shell: bash
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
