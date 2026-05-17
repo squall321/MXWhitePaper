@@ -6,10 +6,22 @@ Run:    python packages/shared/codegen/generate-py.py
 """
 from __future__ import annotations
 
+import io
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+# Windows runners default to cp1252 which can't encode the → / ✓ chars
+# we print. Force UTF-8 on stdout/stderr so the CI gate's regen step
+# stops crashing with UnicodeEncodeError.
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMA = ROOT / "packages" / "shared" / "schemas" / "document.json"
