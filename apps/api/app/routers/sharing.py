@@ -258,7 +258,7 @@ async def create_share_link(
                 if ok:
                     notified.append(addr)
             await s.commit()
-        except Exception:  # noqa: BLE001
+        except Exception:
             import logging as _logging
 
             _logging.getLogger(__name__).exception(

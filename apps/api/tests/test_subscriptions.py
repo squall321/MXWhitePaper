@@ -13,7 +13,7 @@ dev-fallback admin so we don't have to mint extra users.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -279,7 +279,7 @@ async def test_emit_digests_skips_when_within_cutoff() -> None:
             text("UPDATE subscriptions SET last_digest_at = :t"
                  " WHERE id = CAST(:s AS uuid)"),
             {
-                "t": datetime.now(timezone.utc) - timedelta(hours=1),
+                "t": datetime.now(UTC) - timedelta(hours=1),
                 "s": sub_id,
             },
         )

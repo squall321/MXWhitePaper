@@ -153,7 +153,7 @@ async def main() -> None:
         from app.scripts import seed_widget_facts
         await seed_widget_facts._amain()
         print("✓ widget fact tables seeded")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"⚠ widget fact seed skipped: {e}")
 
     # Canonical glossary terms — DB-backs the `glossary-ref` block
@@ -161,28 +161,28 @@ async def main() -> None:
     try:
         from app.scripts import seed_glossary
         await seed_glossary._amain()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"⚠ glossary seed skipped: {e}")
 
     # Launch tasks / timeline / demand forecast — DB-backs sample 06.
     try:
         from app.scripts import seed_launch_facts
         await seed_launch_facts._amain()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"⚠ launch facts seed skipped: {e}")
 
     # Form / quiz canonical definitions lifted from sample 11 / 13.
     try:
         from app.scripts import seed_form_quiz_defs
         await seed_form_quiz_defs._amain()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"⚠ form/quiz defs seed skipped: {e}")
 
     # Cohort retention / funnel / audit summary / incidents / campaigns.
     try:
         from app.scripts import seed_more_facts
         await seed_more_facts._amain()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"⚠ more facts seed skipped: {e}")
 
     print("✓ seed complete")

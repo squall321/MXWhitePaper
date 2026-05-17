@@ -20,15 +20,14 @@ shallow — the dispatcher tolerates missing keys gracefully.
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Body, Depends, Path, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.core.auth import require_admin
 from app.core.db import get_db
@@ -151,7 +150,7 @@ def _validate_and_compute_cron(
             details={"cron_expression": expr},
         ) from e
     tz = _resolve_tz_or_422(tz_name)
-    nxt = next_run(parsed, datetime.now(timezone.utc), tz=tz)
+    nxt = next_run(parsed, datetime.now(UTC), tz=tz)
     canonical_tz = tz.key if hasattr(tz, "key") else (tz_name or "UTC")
     return expr.strip(), nxt, canonical_tz
 

@@ -116,7 +116,7 @@ async def test_csv_body_splits_paragraphs() -> None:
     csv_bytes = (
         "slug,title,division,owners,confidentiality,body\n"
         f'{slug},Body Split,DX,,internal,"{body}"\n'
-    ).encode("utf-8")
+    ).encode()
     r = await _post_csv(csv_bytes)
     assert r.status_code == 200, r.text
     assert r.json()["data"]["created"] == 1

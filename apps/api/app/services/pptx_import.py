@@ -31,12 +31,12 @@ so the import endpoint can stay symmetric.
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 import ulid
 from pptx import Presentation
-from pptx.util import Emu
 
 from app.core.config import get_settings
 
@@ -129,13 +129,13 @@ def _is_title_placeholder(shape: Any) -> bool:
         return False
     try:
         ph = shape.placeholder_format
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
     if ph is None:
         return False
     try:
         return ph.idx == 0
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 
@@ -217,7 +217,7 @@ def _picture_to_block(
         data = img.blob
         ext = (img.ext or "png").lower()
         result = image_uploader(data, f"pptx-import.{ext}")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         summary.warnings.append(f"image extraction failed: {e}")
         return None
     if not result or not result.get("image_id"):

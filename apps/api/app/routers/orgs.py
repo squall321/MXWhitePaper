@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import require_admin, require_reader
+from app.core.auth import require_admin
 from app.core.db import get_db
 from app.core.errors import Conflict, NotFound, envelope
 from app.repos import document_repo
@@ -31,7 +31,6 @@ from app.schemas.org import (
     TeamNode,
     TeamUpdate,
 )
-
 
 router = APIRouter(prefix="/api/v1", tags=["orgs"])
 

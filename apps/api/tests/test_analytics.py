@@ -1,13 +1,15 @@
 """Tier 2D — usage analytics endpoints."""
 from __future__ import annotations
 
+from datetime import UTC
+
 import pytest
 from httpx import ASGITransport, AsyncClient
-
-from app.core.security import hash_password, make_access_token
-from app.core.db import session_scope
-from app.main import app
 from sqlalchemy import text
+
+from app.core.db import session_scope
+from app.core.security import hash_password, make_access_token
+from app.main import app
 
 
 async def _login_admin(ac: AsyncClient) -> str:
@@ -301,7 +303,7 @@ async def test_top_docs_returns_list_shape() -> None:
 async def test_analytics_pruner_drops_rows_older_than_ttl() -> None:
     """analytics_pruner.prune_once removes anchor_samples > 30 days old
     and leaves recent ones intact."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from app.services import analytics_pruner
 
@@ -315,7 +317,7 @@ async def test_analytics_pruner_drops_rows_older_than_ttl() -> None:
             {"slug": SEED_SLUG},
         )).first()
         assert admin is not None and doc is not None
-        old_ts = datetime.now(timezone.utc) - timedelta(days=60)
+        old_ts = datetime.now(UTC) - timedelta(days=60)
         await s.execute(
             text("""
                 INSERT INTO anchor_samples

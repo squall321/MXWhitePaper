@@ -408,7 +408,7 @@ def run(args: argparse.Namespace) -> int:
                 src = futures[fut]
                 try:
                     res = fut.result()
-                except Exception as e:  # noqa: BLE001 — last-resort capture
+                except Exception as e:
                     res = FileResult(
                         source=str(src),
                         ok=False,

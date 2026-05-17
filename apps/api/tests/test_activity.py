@@ -5,7 +5,7 @@ either the aggregate endpoint or `?kind=` / `?since=` / `?limit=` filters.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -75,7 +75,7 @@ async def _ensure_user(email: str, role: str = "reader") -> str:
 @pytest.mark.asyncio
 async def test_activity_aggregates_multiple_kinds() -> None:
     """The /activity endpoint should yield rows across more than one source."""
-    doc_id, _ = await _seed_doc_id()
+    _doc_id, _ = await _seed_doc_id()
     # Drop a fresh comment so we know at least one comment_added is in the feed.
     async with await _client() as ac:
         rc = await ac.post(
@@ -115,7 +115,7 @@ async def test_activity_kind_filter_returns_only_requested() -> None:
 @pytest.mark.asyncio
 async def test_activity_since_filter_excludes_older_rows() -> None:
     # Anchor in the future — nothing should match.
-    future = (datetime.now(tz=timezone.utc) + timedelta(days=365)).isoformat()
+    future = (datetime.now(tz=UTC) + timedelta(days=365)).isoformat()
     async with await _client() as ac:
         r = await ac.get("/api/v1/activity", params={"since": future})
     assert r.status_code == 200, r.text

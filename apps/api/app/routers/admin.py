@@ -31,7 +31,6 @@ from app.services.maintenance import (
     purge_expired_pending_uploads,
 )
 
-
 VALID_STATUSES: set[str] = {
     "draft",
     "in_review",
@@ -467,7 +466,7 @@ async def bulk_docs(
                 affected_doc_ids.append(doc["id"])
 
             ok += 1
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             failed += 1
             msg = getattr(e, "message", None) or str(e) or e.__class__.__name__
             errors.append({"slug": slug, "message": msg})
@@ -478,7 +477,7 @@ async def bulk_docs(
     if affected_doc_ids:
         try:
             await refresh_search_view(s)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         archived_now = op == "delete" or (
             op == "transition" and payload.status == "archived"
@@ -486,7 +485,7 @@ async def bulk_docs(
         for did in affected_doc_ids:
             try:
                 await reindex_meili(s, doc_id=did, archived=archived_now)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
     return envelope(

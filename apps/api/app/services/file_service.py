@@ -14,7 +14,8 @@ Endpoint:
 from __future__ import annotations
 
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import ulid
 from sqlalchemy import text
@@ -201,7 +202,7 @@ def _head_object(bucket: str, key: str) -> dict[str, Any]:
     cli = minio_adapter.internal_client()
     try:
         return cli.head_object(Bucket=bucket, Key=key)
-    except Exception as e:  # noqa: BLE001 — boto3 raises ClientError variants
+    except Exception as e:
         raise NotFound(
             f"uploaded object not found at {key}",
             details={"key": key, "error": str(e)[:200]},
@@ -373,12 +374,12 @@ async def issue_download_url(
 
 # ── exports for tests ────────────────────────────────────────────────
 __all__ = [
-    "presign_put",
+    "_ALLOWED_APPLICATION_PREFIXES",
+    "_BLOCKED_MIMES",
+    "enforce_rate_limit",
     "finalize",
     "issue_download_url",
-    "enforce_rate_limit",
-    "_BLOCKED_MIMES",
-    "_ALLOWED_APPLICATION_PREFIXES",
+    "presign_put",
 ]
 
 

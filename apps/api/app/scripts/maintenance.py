@@ -17,8 +17,8 @@ from app.scripts._env import load_env
 
 load_env()
 
-from app.core.db import session_scope  # noqa: E402
-from app.services.maintenance import (  # noqa: E402
+from app.core.db import session_scope
+from app.services.maintenance import (
     compact_versions,
     purge_expired_pending_uploads,
     purge_old_audit_logs,

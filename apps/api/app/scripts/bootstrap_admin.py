@@ -30,8 +30,8 @@ from app.scripts._env import load_env
 
 load_env()
 
-from app.core.db import session_scope  # noqa: E402
-from app.core.security import hash_password  # noqa: E402
+from app.core.db import session_scope
+from app.core.security import hash_password
 
 
 async def _main_async() -> int:

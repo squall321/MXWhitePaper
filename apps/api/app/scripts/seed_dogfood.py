@@ -19,7 +19,7 @@ import asyncio
 import hashlib
 import json
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import ulid
@@ -29,7 +29,7 @@ from app.scripts._env import load_env
 
 load_env()
 
-from app.core.db import session_scope  # noqa: E402
+from app.core.db import session_scope
 
 # ────────────────────────── 부서 트리 ──────────────────────────
 # realistic Korean names + ASCII slug. parts 까지 ~30+.
@@ -273,7 +273,7 @@ def _ulid() -> str:
 
 def _slugify(prefix: str, title: str, idx: int) -> str:
     """ASCII slug — 한글 제거하고 짧은 hash 부여."""
-    h = hashlib.md5(f"{title}-{idx}".encode("utf-8")).hexdigest()[:8]
+    h = hashlib.md5(f"{title}-{idx}".encode()).hexdigest()[:8]
     base = "".join(c for c in title.lower() if c.isascii() and (c.isalnum() or c == "-"))
     base = base[:30] or "doc"
     return f"{prefix}-{base}-{h}".strip("-")
@@ -661,7 +661,7 @@ async def _purge_dogfood(s) -> int:
 # ────────────────────────── main ──────────────────────────
 async def main(count: int, purge: bool, no_refresh: bool) -> None:
     rng = random.Random(20260508)  # 재현성 있는 시드
-    started = datetime.now(timezone.utc).isoformat()
+    started = datetime.now(UTC).isoformat()
     print(f"▶ dogfood seed start ({started})")
 
     if purge:
@@ -712,7 +712,7 @@ async def main(count: int, purge: bool, no_refresh: bool) -> None:
 
     # 사전 slug 풀 생성 — wiki link 가 가리킬 후보. 본격 빌드 전에 미리 만들어 둠.
     pre_slugs: list[str] = []
-    rng2 = random.Random(20260508)
+    random.Random(20260508)
     for i, (category, title, _, _) in enumerate(plan):
         pre_slugs.append(_slugify(SLUG_PREFIX[category], title, i))
 

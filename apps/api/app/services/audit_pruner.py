@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
@@ -148,14 +148,14 @@ async def audit_pruner_ticker() -> None:
     last_run: datetime | None = None
     while True:
         try:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if (
                 last_run is None
                 or now - last_run >= timedelta(seconds=TICK_INTERVAL_SECONDS)
             ):
                 await tick_once()
                 last_run = now
-        except Exception:  # noqa: BLE001 — ticker must never die
+        except Exception:
             logger.exception("audit_pruner tick failed")
         from app.services.ticker_state import report_tick as _rt; _rt("audit_pruner", next_due_at=(last_run + timedelta(seconds=TICK_INTERVAL_SECONDS)) if last_run else None)
         # Sleep in 60s slices so cancel propagates quickly on shutdown.

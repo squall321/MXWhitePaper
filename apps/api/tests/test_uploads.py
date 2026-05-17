@@ -200,8 +200,9 @@ async def test_finalize_strips_exif_and_generates_3_sizes() -> None:
         if d1.get("deduped"):
             _cleanup_test_objects(f"{sha[0:2]}/{sha[2:4]}/{sha}/")
             # row 도 지움
-            from app.core.db import session_scope
             from sqlalchemy import text as _text
+
+            from app.core.db import session_scope
             async with session_scope() as s:
                 await s.execute(_text("DELETE FROM images WHERE sha256 = :sha"), {"sha": sha})
             r1 = await ac.post(
@@ -249,8 +250,9 @@ async def test_finalize_strips_exif_and_generates_3_sizes() -> None:
 
     # cleanup
     _cleanup_test_objects(f"{sha[0:2]}/{sha[2:4]}/{sha}/")
-    from app.core.db import session_scope
     from sqlalchemy import text as _text
+
+    from app.core.db import session_scope
     async with session_scope() as s:
         await s.execute(_text("DELETE FROM images WHERE sha256 = :sha"), {"sha": sha})
 

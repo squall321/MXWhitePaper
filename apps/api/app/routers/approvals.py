@@ -278,7 +278,7 @@ async def add_reviewers(
                 ok = await send_email(addr, subject, body_text)
                 if ok:
                     notified.append(addr)
-        except Exception:  # noqa: BLE001
+        except Exception:
             import logging as _logging
 
             _logging.getLogger(__name__).exception(

@@ -10,7 +10,6 @@ from sqlalchemy import text
 
 from app.core.db import session_scope
 
-
 PROGRAM = "galaxy-flip-2026"
 
 # Multiple launch programs. Each gets the same TASKS / TIMELINE / FORECAST

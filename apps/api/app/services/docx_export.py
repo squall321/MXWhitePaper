@@ -43,18 +43,18 @@ from __future__ import annotations
 
 import io
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from docx import Document
 from docx.enum.text import WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Inches, Pt
 
 from app.services.variables import walk_doc_substitute
 from app.services.widget_markers import emit_marker_text
-
 
 # ── Tunables ─────────────────────────────────────────────────────────
 
@@ -166,7 +166,7 @@ def _render_title(document: Any, doc: dict[str, Any]) -> None:
     summary = _str(doc.get("summary"))
     metadata = doc.get("metadata") or {}
 
-    p = document.add_paragraph(title, style="Title")
+    document.add_paragraph(title, style="Title")
     if summary:
         document.add_paragraph(summary, style="Subtitle")
 

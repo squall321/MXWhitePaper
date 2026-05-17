@@ -53,9 +53,9 @@ for _candidate in (
     _load_env_file(_candidate)
 
 
-from app.core.db import session_scope  # noqa: E402
-from app.repos import document_repo  # noqa: E402
-from app.services import document_service  # noqa: E402
+from app.core.db import session_scope
+from app.repos import document_repo
+from app.services import document_service
 
 
 async def _resolve_path(s, doc: dict) -> str:

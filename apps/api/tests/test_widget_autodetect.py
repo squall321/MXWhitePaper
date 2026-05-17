@@ -407,7 +407,7 @@ def test_autodetect_gallery_copies_caption_and_alt() -> None:
     gal = blocks[0]
     assert gal["type"] == "gallery"
     assert len(gal["items"]) == 3
-    for src, item in zip([i1, i2, i3], gal["items"]):
+    for src, item in zip([i1, i2, i3], gal["items"], strict=False):
         assert item["imageId"] == src["imageId"]
         assert item["caption"] == src["caption"]
         assert item["alt"] == src["alt"]

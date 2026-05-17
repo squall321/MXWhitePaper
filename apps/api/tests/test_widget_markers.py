@@ -8,12 +8,11 @@ image-annotation, iframe, video, file (placeholder fileId), pdf
 """
 from __future__ import annotations
 
-import io
 from typing import Any
 
 import ulid
 
-from app.services.docx_export import DocxOptions, render_docx
+from app.services.docx_export import render_docx
 from app.services.docx_import import docx_to_document
 from app.services.widget_markers import (
     WIDGET_CONVERTERS,
@@ -938,7 +937,6 @@ def test_image_annotation_marker_image_plus_unparseable_table_consumes_only_imag
 
 
 import re as _re
-
 
 _ULID_RE = _re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 

@@ -1785,7 +1785,7 @@ def _materialise_bibliography(
         "id": _new_id(),
         "entries": entries,
     }
-    section["blocks"] = keepers + [biblio]
+    section["blocks"] = [*keepers, biblio]
 
 
 _CITE_KEY_BRACKET_RE = re.compile(r"^\[([A-Za-z][A-Za-z0-9_-]{2,40})\]")

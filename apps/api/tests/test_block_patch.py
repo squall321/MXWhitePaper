@@ -73,7 +73,7 @@ async def test_replace_paragraph_block() -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         data, etag = await _get(ac)
         # onboarding-guide 의 첫 list block 을 paragraph 로 교체
-        sid, blk = _find_first_block(data["content"], "list")
+        _sid, blk = _find_first_block(data["content"], "list")
         blk_id = blk["id"]
         new_block = {"type": "paragraph", "id": blk_id, "text": "교체된 본문"}
         r = await ac.patch(

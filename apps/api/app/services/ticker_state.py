@@ -16,9 +16,8 @@ endpoint at low cadence, so contention is a non-issue.
 from __future__ import annotations
 
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
 
 _LOCK = threading.Lock()
 _STATE: dict[str, dict[str, Any]] = {}
@@ -34,7 +33,7 @@ def report_tick(name: str, *, next_due_at: datetime | None = None) -> None:
     """
     if not name:
         return
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     with _LOCK:
         _STATE[name] = {
             "last_tick_at": now,
@@ -85,4 +84,4 @@ def reset_for_tests() -> None:
         _STATE.clear()
 
 
-__all__ = ["report_tick", "snapshot", "reset_for_tests"]
+__all__ = ["report_tick", "reset_for_tests", "snapshot"]

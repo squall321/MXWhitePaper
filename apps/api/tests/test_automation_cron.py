@@ -13,7 +13,7 @@ client. Verifies:
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -98,7 +98,7 @@ async def test_create_cron_rule_validates_and_sets_schedule() -> None:
         assert data["next_cron_run_at"] is not None
         # next_cron_run_at must be in the future.
         nxt = datetime.fromisoformat(data["next_cron_run_at"])
-        assert nxt > datetime.now(timezone.utc) - timedelta(seconds=5)
+        assert nxt > datetime.now(UTC) - timedelta(seconds=5)
 
 
 @pytest.mark.asyncio
@@ -211,7 +211,7 @@ async def test_tick_fires_due_cron_rule_and_advances_schedule() -> None:
         assert int(row[0]) == 1
         assert row[1] is not None  # last_fired_at
         assert row[2] is not None
-        assert row[2] > datetime.now(timezone.utc)
+        assert row[2] > datetime.now(UTC)
 
     # A run_log row landed.
     async with session_scope() as s:

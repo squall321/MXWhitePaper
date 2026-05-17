@@ -26,9 +26,8 @@ from app.core.errors import NotFound, PreconditionFailed, ValidationFailed
 from app.repos import document_repo
 from app.schemas.document import DocumentjsonV10
 from app.search import meili_indexer
-from app.services import webhook_dispatcher
+from app.services import section_numbering, webhook_dispatcher
 from app.services.heading_promote import promote_inline_headings
-from app.services import section_numbering
 from app.services.section_numbering import renumber_sections
 from app.services.wiki_link_extractor import extract_wiki_links
 
@@ -454,7 +453,7 @@ async def fire_webhook(
             from app.services import automation_dispatcher
 
             await automation_dispatcher.dispatch_event(event_kind, payload)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning("automation dispatch (%s) skipped: %s", event_kind, e)
 
     # Cycle 0018 — fan out to followers. We only handle the four event kinds
@@ -480,7 +479,7 @@ async def fire_webhook(
                     payload=payload,
                     actor_user_id=actor if isinstance(actor, str) else None,
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "subscription dispatch (%s) skipped: %s", event_kind, e,
                 )
@@ -1100,7 +1099,7 @@ async def patch_section(
     found = _find_section(content, section_id)
     if not found:
         raise NotFound(f"section not found: {section_id}")
-    sec, parent_list, idx, parent_level = found
+    sec, _parent_list, _idx, parent_level = found
 
     # level 변경 시 parent_level + 1 == new_level 보장.
     # parent_level == 0 이면 root → level 1 만 허용.
@@ -1340,7 +1339,7 @@ async def move_block(
     src = _find_block(content, block_id)
     if not src:
         raise NotFound(f"block not found: {block_id}")
-    blk_obj, src_parent, src_idx, _ = src
+    _blk_obj, src_parent, src_idx, _ = src
     # remove from source
     moved = src_parent.pop(src_idx)
 

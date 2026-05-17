@@ -141,12 +141,12 @@ async def _resolve_api_token(
                         matched_scopes = (
                             [str(x) for x in v] if isinstance(v, list) else []
                         )
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         matched_scopes = []
                 else:
                     matched_scopes = []
                 break
-        except Exception:  # noqa: BLE001
+        except Exception:
             continue
 
     if matched_user_id is None or matched_id is None:
@@ -166,7 +166,7 @@ async def _resolve_api_token(
             {"id": matched_id},
         )
         await s.commit()
-    except Exception:  # noqa: BLE001
+    except Exception:
         await s.rollback()
 
     return user, matched_scopes

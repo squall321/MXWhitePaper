@@ -51,9 +51,9 @@ for _candidate in (
     _load_env_file(_candidate)
 
 
-from app.core.db import session_scope  # noqa: E402
-from app.repos import document_repo  # noqa: E402
-from app.services.wiki_link_extractor import extract_wiki_links  # noqa: E402
+from app.core.db import session_scope
+from app.repos import document_repo
+from app.services.wiki_link_extractor import extract_wiki_links
 
 
 async def main() -> None:

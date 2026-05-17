@@ -15,7 +15,6 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.routers import dep_graph as dg
 
-
 # ── extract_slugs ───────────────────────────────────────────────────────
 
 

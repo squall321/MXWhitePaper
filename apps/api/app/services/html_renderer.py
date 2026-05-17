@@ -31,7 +31,6 @@ from app.services.css_sanitizer import sanitize_css
 from app.services.variables import walk_doc_substitute
 from app.services.widget_markers import emit_marker_text
 
-
 # ── Options ──────────────────────────────────────────────────────────
 
 

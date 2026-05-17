@@ -19,7 +19,7 @@ ticker) 가 `notifications` 테이블로 fan-out 한다.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Path, Query, Response
@@ -69,7 +69,7 @@ def _parse_remind_at(raw: Any) -> datetime:
             details={"got": raw},
         )
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 

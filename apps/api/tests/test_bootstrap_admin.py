@@ -1,7 +1,6 @@
 """Tests for bootstrap_admin script — env validation + idempotency."""
 from __future__ import annotations
 
-import asyncio
 import uuid
 
 import pytest

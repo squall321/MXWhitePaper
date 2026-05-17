@@ -31,7 +31,7 @@ import io
 import json
 import logging
 import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
@@ -67,7 +67,7 @@ def compute_next_run(
     a fixed 30-day cadence rather than calendar-month math to keep the rule
     simple — this matches every other in-process scheduler in the codebase.)
     """
-    now = after or datetime.now(timezone.utc)
+    now = after or datetime.now(UTC)
     # Today's anchor at hour_utc.
     anchor = now.replace(hour=hour_utc, minute=0, second=0, microsecond=0)
     if anchor <= now:
@@ -164,7 +164,7 @@ async def run_backup(
       4) Upload zip to ``mxwp-backups``.
       5) Update `backup_runs` to status=ok | failed.
     """
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
     storage_key = (
         f"{scope}/{started:%Y/%m}/{started:%Y-%m-%dT%H-%M-%SZ}-{fmt}.zip"
     )
@@ -214,7 +214,7 @@ async def run_backup(
                     zf.writestr(f"{slug}.{ext}", data)
                     rendered += 1
                     manifest.append({"slug": slug, "ok": True})
-                except Exception as e:  # noqa: BLE001 — per-doc isolation
+                except Exception as e:
                     logger.exception("backup render failed for %s", slug)
                     manifest.append({
                         "slug": slug, "ok": False, "error": str(e)[:200],
@@ -262,7 +262,7 @@ async def run_backup(
         )
         await s.commit()
         return {"run_id": run_id, "size_bytes": size, "doc_count": rendered}
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.exception("backup run %s crashed", run_id)
         await s.execute(
             text(
@@ -289,7 +289,7 @@ async def tick_once() -> int:
     if not settings.backup_enabled:
         return 0
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     executed = 0
 
     async with session_scope() as s:
@@ -334,7 +334,7 @@ async def tick_once() -> int:
                     target_doc_slug=sched["target_doc_slug"],
                 )
                 executed += 1
-            except Exception:  # noqa: BLE001 — already audited in run_backup
+            except Exception:
                 logger.error("schedule %s failed", sched["id"])
             # Always advance next_run_at so a poison schedule doesn't loop.
             nxt = compute_next_run(
@@ -362,7 +362,7 @@ async def backup_ticker() -> None:
     while True:
         try:
             await tick_once()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("backup tick failed")
-        from app.services.ticker_state import report_tick as _rt; _rt("backup", next_due_at=datetime.now(timezone.utc) + timedelta(seconds=TICK_INTERVAL_SECONDS))
+        from app.services.ticker_state import report_tick as _rt; _rt("backup", next_due_at=datetime.now(UTC) + timedelta(seconds=TICK_INTERVAL_SECONDS))
         await asyncio.sleep(TICK_INTERVAL_SECONDS)

@@ -19,7 +19,6 @@ from collections.abc import Sequence
 
 from alembic import op
 
-
 revision: str = "0039_sso_providers"
 down_revision: str | Sequence[str] | None = "0038_email_optout"
 branch_labels: str | Sequence[str] | None = None

@@ -12,8 +12,8 @@ from app.scripts._env import load_env
 
 load_env()
 
-from app.core.db import session_scope  # noqa: E402
-from app.services.maintenance import purge_expired_pending_uploads  # noqa: E402
+from app.core.db import session_scope
+from app.services.maintenance import purge_expired_pending_uploads
 
 
 async def main() -> None:

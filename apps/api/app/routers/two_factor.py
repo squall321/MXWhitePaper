@@ -130,7 +130,7 @@ async def _fetch_user_secrets(
         import json as _json
         try:
             raw_codes = _json.loads(raw_codes)
-        except Exception:  # noqa: BLE001
+        except Exception:
             raw_codes = []
     if not isinstance(raw_codes, list):
         raw_codes = []
@@ -152,7 +152,7 @@ async def _consume_backup_code(
             if verify_password(norm, h):
                 matched_idx = i
                 break
-        except Exception:  # noqa: BLE001
+        except Exception:
             continue
     if matched_idx is None:
         return False

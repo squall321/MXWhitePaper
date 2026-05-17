@@ -8,14 +8,14 @@ month rollover, leap day, and rejection of malformed input.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+import itertools
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from app.services.cron_parser import next_run, parse_cron
 
-
-UTC = timezone.utc
+UTC = UTC
 
 
 # ── parse_cron ───────────────────────────────────────────────────────────
@@ -261,5 +261,5 @@ def test_next_run_consecutive_calls_are_strictly_monotonic():
     # 00:45, 01:00, 01:15, 01:30, 01:45, 02:00.
     assert seen[0] == datetime(2026, 5, 9, 0, 15, tzinfo=UTC)
     assert seen[-1] == datetime(2026, 5, 9, 2, 0, tzinfo=UTC)
-    for a, b in zip(seen, seen[1:], strict=False):
+    for a, b in itertools.pairwise(seen):
         assert b - a == timedelta(minutes=15)

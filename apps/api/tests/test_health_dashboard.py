@@ -1,7 +1,7 @@
 """Tests for the admin health dashboard router + ticker registry."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -50,7 +50,7 @@ async def _ensure_reader_user() -> tuple[str, str]:
 def test_ticker_state_report_and_snapshot() -> None:
     ticker_state.reset_for_tests()
     assert ticker_state.snapshot() == []
-    nxt = datetime.now(timezone.utc) + timedelta(seconds=60)
+    nxt = datetime.now(UTC) + timedelta(seconds=60)
     ticker_state.report_tick("backup", next_due_at=nxt)
     ticker_state.report_tick("digest")  # no next_due_at
     snap = ticker_state.snapshot()
@@ -95,7 +95,7 @@ async def test_dashboard_returns_full_shape() -> None:
     ticker_state.reset_for_tests()
     ticker_state.report_tick(
         "backup",
-        next_due_at=datetime.now(timezone.utc) + timedelta(seconds=60),
+        next_due_at=datetime.now(UTC) + timedelta(seconds=60),
     )
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

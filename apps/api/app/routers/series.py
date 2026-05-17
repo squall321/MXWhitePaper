@@ -178,7 +178,7 @@ async def create_series(
     except IntegrityError as e:
         await s.rollback()
         raise Conflict(f"series slug already exists: {slug}") from e
-    series_id = str(row[0])
+    str(row[0])
     await document_repo.insert_audit(
         s,
         user_id=user["id"],

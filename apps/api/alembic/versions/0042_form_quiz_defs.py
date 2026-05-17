@@ -20,7 +20,6 @@ from collections.abc import Sequence
 
 from alembic import op
 
-
 revision: str = "0042_form_quiz_defs"
 down_revision: str | Sequence[str] | None = "0041_launch_facts"
 branch_labels: str | Sequence[str] | None = None

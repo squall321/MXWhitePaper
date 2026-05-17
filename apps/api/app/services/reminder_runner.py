@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any
+from datetime import UTC
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -89,7 +89,7 @@ async def _fire_one(
             await _maybe_send_reminder_email(
                 s, user_id=user_id, slug=slug, title=title, message=message
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("reminder email skipped for user %s", user_id)
     return inserted
 
@@ -162,7 +162,7 @@ async def tick_once() -> int:
                     slug=row[4],
                     title=row[5],
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception(
                     "reminder fire failed (id=%s)", row[0]
                 )
@@ -180,7 +180,7 @@ async def reminder_ticker() -> None:
     while True:
         try:
             await tick_once()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("reminder tick failed")
-        from datetime import datetime as _dt, timezone as _tz, timedelta as _td; from app.services.ticker_state import report_tick as _rt; _rt("reminder", next_due_at=_dt.now(_tz.utc) + _td(seconds=TICK_INTERVAL_SECONDS))
+        from datetime import datetime as _dt, timedelta as _td; from app.services.ticker_state import report_tick as _rt; _rt("reminder", next_due_at=_dt.now(UTC) + _td(seconds=TICK_INTERVAL_SECONDS))
         await asyncio.sleep(TICK_INTERVAL_SECONDS)

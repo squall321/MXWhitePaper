@@ -59,7 +59,7 @@ def _reset_rate_limiter_per_test():
     """
     try:
         from app.middleware.rate_limit import reset_for_tests as _rl_reset
-    except Exception:  # noqa: BLE001 — module may not be importable yet
+    except Exception:
         _rl_reset = None
     if _rl_reset is not None:
         _rl_reset()

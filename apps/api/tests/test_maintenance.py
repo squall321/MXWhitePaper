@@ -1,7 +1,7 @@
 """maintenance.py 단위 테스트 — pending TTL / version compaction / audit retention."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -53,7 +53,7 @@ def _mk_version(vid: str, version: int, hours_ago: float = 0) -> dict:
     return {
         "id": vid,
         "version": version,
-        "edited_at": datetime.now(timezone.utc) - timedelta(hours=hours_ago),
+        "edited_at": datetime.now(UTC) - timedelta(hours=hours_ago),
     }
 
 
@@ -63,7 +63,7 @@ def test_select_versions_keeps_head_and_v1() -> None:
         _mk_version("v2", 2, hours_ago=500),
         _mk_version("v3", 3, hours_ago=0),  # head, recent
     ]
-    keep = _select_versions_to_keep(versions, now=datetime.now(timezone.utc))
+    keep = _select_versions_to_keep(versions, now=datetime.now(UTC))
     assert "v1" in keep  # baseline
     assert "v3" in keep  # head
 
@@ -73,11 +73,11 @@ def test_select_versions_compacts_old_per_day() -> None:
     # Anchor on the *date* boundary (midday of `now - 2days`) so adding 2h
     # stays inside the same date — the prior test used `now - 2days` which
     # could cross midnight depending on the wall-clock hour at test time.
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     two_days_ago = (now - timedelta(days=2)).date()
     base = datetime(
         two_days_ago.year, two_days_ago.month, two_days_ago.day,
-        12, 0, 0, tzinfo=timezone.utc,
+        12, 0, 0, tzinfo=UTC,
     )
     versions = [
         _mk_version("v1", 1, hours_ago=10000),  # always-keep
@@ -93,14 +93,14 @@ def test_select_versions_compacts_old_per_day() -> None:
 
 def test_select_versions_compacts_ancient_per_month() -> None:
     # 60일 전 동일 월에 두 개 → 한 개만 keep
-    base = datetime.now(timezone.utc) - timedelta(days=60)
+    base = datetime.now(UTC) - timedelta(days=60)
     versions = [
         _mk_version("v1", 1, hours_ago=99999),  # baseline forced
         {"id": "old1", "version": 2, "edited_at": base},
         {"id": "old2", "version": 3, "edited_at": base + timedelta(days=2)},
-        {"id": "head", "version": 4, "edited_at": datetime.now(timezone.utc)},
+        {"id": "head", "version": 4, "edited_at": datetime.now(UTC)},
     ]
-    keep = _select_versions_to_keep(versions, now=datetime.now(timezone.utc))
+    keep = _select_versions_to_keep(versions, now=datetime.now(UTC))
     assert "head" in keep
     # 동일 월 두 개 중 하나만
     assert ("old1" in keep) ^ ("old2" in keep)
@@ -111,7 +111,7 @@ def test_select_versions_compacts_ancient_per_month() -> None:
 async def test_compact_versions_is_idempotent() -> None:
     async with session_scope() as s:
         # 단순 호출 — 실제 시드 데이터에 대해 한 번 실행, 두 번째는 0 추가 삭제
-        first = await compact_versions(s)
+        await compact_versions(s)
     async with session_scope() as s:
         second = await compact_versions(s)
     assert second == 0, f"second pass should be no-op, got {second}"

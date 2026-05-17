@@ -18,10 +18,10 @@ from __future__ import annotations
 import json
 import os
 import re
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
-
+from typing import Any
 
 # `mxwp-snapshot-YYYYMMDD-HHMMSSZ.tar.gz` — the only filename shape
 # `snapshot.sh` produces. We refuse to surface anything else through
@@ -98,7 +98,7 @@ def _stat_or_none(p: Path) -> dict[str, Any] | None:
     return {
         "size_bytes": int(st.st_size),
         "mtime": datetime.fromtimestamp(
-            st.st_mtime, tz=timezone.utc
+            st.st_mtime, tz=UTC
         ).isoformat().replace("+00:00", "Z"),
     }
 

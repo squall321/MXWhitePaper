@@ -24,7 +24,8 @@ Converter 시그니처 (Phase 2):
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
 from urllib.parse import urlparse
 
 import ulid

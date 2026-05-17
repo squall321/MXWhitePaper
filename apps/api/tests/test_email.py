@@ -19,7 +19,6 @@ from app.services.email import (
     verify_email_template,
 )
 
-
 # ── Templates ──────────────────────────────────────────────────────────────
 
 

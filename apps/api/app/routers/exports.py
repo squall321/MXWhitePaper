@@ -56,7 +56,7 @@ async def _persist_export(
             fmt=fmt, file_bytes=file_bytes,
             actor_id=actor_id, filename=filename,
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         import logging
         logging.getLogger(__name__).warning(
             "export artifact persist failed slug=%s fmt=%s err=%s",

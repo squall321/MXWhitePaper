@@ -25,7 +25,6 @@ from app.core.auth import get_current_user, require_admin, require_reader
 from app.core.db import get_db
 from app.core.errors import Forbidden, NotFound, envelope
 
-
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 
 
@@ -282,8 +281,8 @@ async def document_analytics(
 
     total_views = int(summary_row[0] or 0) if summary_row else 0
     unique_readers = int(summary_row[1] or 0) if summary_row else 0
-    avg_seconds = int(round(float(summary_row[2] or 0))) if summary_row else 0
-    median_seconds = int(round(float(summary_row[3] or 0))) if summary_row else 0
+    avg_seconds = round(float(summary_row[2] or 0)) if summary_row else 0
+    median_seconds = round(float(summary_row[3] or 0)) if summary_row else 0
 
     # 3) Last 30 days view buckets (gap-filled).
     daily_rows = (await s.execute(
@@ -374,7 +373,7 @@ async def document_analytics(
         section_attention.append({
             "section_id": sid,
             "section_title": meta["title"],
-            "est_seconds_per_visitor": int(round(avg_samples * sample_interval)),
+            "est_seconds_per_visitor": round(avg_samples * sample_interval),
         })
     section_attention.sort(
         key=lambda x: x["est_seconds_per_visitor"], reverse=True,
@@ -496,7 +495,7 @@ async def top_docs(
             "title": r[1],
             "views": int(r[2]),
             "unique_readers": int(r[3]),
-            "avg_read_seconds": int(round(float(r[4]))),
+            "avg_read_seconds": round(float(r[4])),
         }
         for r in rows
     ]

@@ -47,7 +47,7 @@ CSP rationale:
 """
 from __future__ import annotations
 
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 from urllib.parse import urlparse
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -196,7 +196,7 @@ def _origin_of(url: str) -> str:
         return ""
     try:
         u = urlparse(url)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return ""
     if not u.scheme or not u.netloc:
         return ""

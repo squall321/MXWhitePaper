@@ -15,7 +15,6 @@ from typing import Any
 from app.services.variables import walk_doc_substitute
 from app.services.widget_markers import emit_marker_text
 
-
 # ── Public entry ─────────────────────────────────────────────────────
 
 

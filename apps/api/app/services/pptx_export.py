@@ -27,8 +27,9 @@ from __future__ import annotations
 
 import io
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
@@ -39,7 +40,6 @@ from pptx.util import Emu, Inches, Pt
 
 from app.services.variables import walk_doc_substitute
 from app.services.widget_markers import emit_marker_text
-
 
 # ── Tunables ─────────────────────────────────────────────────────────
 

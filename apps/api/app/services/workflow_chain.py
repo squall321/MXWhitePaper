@@ -282,7 +282,7 @@ async def _run_step_action(
             payload=payload,
         )
         return status, err, action_kind, action_payload
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.warning(
             "chain step action %s failed: %s", action_kind, e,
         )
@@ -343,7 +343,7 @@ async def run_chain(
         if delay > 0:
             try:
                 await sleep_fn(delay)
-            except Exception:  # noqa: BLE001 — never break the chain
+            except Exception:
                 pass
 
         sf2 = session_factory()
@@ -367,7 +367,7 @@ async def run_chain(
                         action_payload=ap_for_pre,
                         payload=payload,
                     )
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.warning("pre-state capture failed: %s", e)
                     pre_state = None
 
@@ -376,7 +376,7 @@ async def run_chain(
             )
             try:
                 await s2.commit()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
         if status == "ok":
@@ -407,11 +407,11 @@ async def run_chain(
                             payload=payload,
                             pre_state=ps,
                         )
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.warning("rollback step failed: %s", e)
                 try:
                     await s3.commit()
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
             overall_status = "rolled_back"
             break

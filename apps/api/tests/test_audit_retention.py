@@ -16,7 +16,6 @@ from app.core.db import session_scope
 from app.main import app
 from app.services import audit_pruner
 
-
 # ── Fixtures + helpers ───────────────────────────────────────────────────
 
 

@@ -267,7 +267,7 @@ async def patch_saved_view(
         user_id=user["id"],
         action="saved_view.update",
         target=f"saved_views/{sv_id}",
-        payload={k: v for k, v in fields.items()},
+        payload=dict(fields.items()),
     )
     await s.commit()
     return envelope(data=_row_to_view(full))

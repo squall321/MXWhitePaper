@@ -23,7 +23,6 @@ from collections.abc import Sequence
 
 from alembic import op
 
-
 revision: str = "0016_anchor_samples"
 down_revision: str | Sequence[str] | None = "0015_backups"
 branch_labels: str | Sequence[str] | None = None

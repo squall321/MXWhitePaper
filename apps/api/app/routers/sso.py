@@ -33,7 +33,6 @@ from app.core.db import get_db
 from app.core.errors import APIError, Conflict, NotFound, ValidationFailed, envelope
 from app.repos import document_repo
 
-
 router = APIRouter(prefix="/api/v1", tags=["sso"])
 
 
@@ -224,7 +223,7 @@ async def create_provider(
                 },
             )
         ).first()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         # Likely unique violation on `name`.
         msg = str(e).lower()
         if "unique" in msg or "sso_providers_name_key" in msg:
@@ -351,7 +350,7 @@ async def patch_provider(
             ),
             params,
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         msg = str(e).lower()
         if "unique" in msg or "sso_providers_name_key" in msg:
             await s.rollback()

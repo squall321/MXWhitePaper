@@ -11,8 +11,6 @@ Coverage:
 """
 from __future__ import annotations
 
-import time
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text

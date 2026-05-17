@@ -22,7 +22,6 @@ from app.core.errors import (
 from app.routers import presence as presence_mod
 from app.routers.presence import router as presence_router
 
-
 SLUG = "month-end-closing"  # any reader-visible doc slug works
 
 

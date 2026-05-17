@@ -19,7 +19,7 @@ import hashlib
 import io
 import json
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import ulid
@@ -283,7 +283,7 @@ async def init_upload(
         ExpiresIn=_PRESIGN_TTL_SECONDS,
     )
 
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=_PENDING_TTL_SECONDS)
+    expires_at = datetime.now(UTC) + timedelta(seconds=_PENDING_TTL_SECONDS)
     await _insert_pending(
         s,
         upload_id=upload_id,
@@ -331,7 +331,7 @@ def _process_image_bytes(raw: bytes) -> dict[str, Any]:
         if img.width <= max_w:
             return img
         ratio = max_w / img.width
-        new_h = max(1, int(round(img.height * ratio)))
+        new_h = max(1, round(img.height * ratio))
         return img.resize((max_w, new_h), Image.LANCZOS)
 
     def _to_webp(img: Image.Image) -> bytes:

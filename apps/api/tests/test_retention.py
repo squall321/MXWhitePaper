@@ -11,7 +11,6 @@ teardown.
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -20,7 +19,6 @@ from sqlalchemy import text
 from app.core.db import session_scope
 from app.main import app
 from app.services import retention_runner
-
 
 # ── Fixtures + helpers ───────────────────────────────────────────────────
 
@@ -415,7 +413,7 @@ async def test_ticker_skips_disabled_policies() -> None:
                     "enabled": False,
                 },
             )
-            pid = r.json()["data"]["id"]
+            r.json()["data"]["id"]
 
         executed = await retention_runner.tick_once()
         # Other tests' policies are wiped by the autouse fixture, so 0 here.

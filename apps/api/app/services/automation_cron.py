@@ -33,7 +33,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -63,7 +63,7 @@ TICK_INTERVAL_SECONDS = 30
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 async def _due_rules(s: AsyncSession, *, now: datetime) -> list[dict[str, Any]]:
@@ -180,7 +180,7 @@ async def tick_once() -> int:
                     dry_run=False,
                 )
                 fired += 1
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception(
                     "automation_cron: rule %s crashed during dispatch",
                     rule["id"],
@@ -223,7 +223,7 @@ async def cron_ticker() -> None:
     while True:
         try:
             await tick_once()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("automation_cron tick failed")
         from datetime import timedelta as _td; from app.services.ticker_state import report_tick as _rt; _rt("automation_cron", next_due_at=_utcnow() + _td(seconds=TICK_INTERVAL_SECONDS))
         await asyncio.sleep(TICK_INTERVAL_SECONDS)

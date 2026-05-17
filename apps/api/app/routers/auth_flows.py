@@ -140,7 +140,7 @@ async def _consume_token(
                     return None
                 await s.commit()
                 return {"user_id": str(row[1]), "token_id": str(row[0])}
-        except Exception:  # noqa: BLE001
+        except Exception:
             # Argon2 throws on malformed hashes; just keep looking.
             continue
     return None

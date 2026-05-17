@@ -14,7 +14,6 @@ from sqlalchemy import text
 
 from app.core.db import session_scope
 
-
 SAMPLES_DIR = Path("/workspace/packages/shared/samples")
 if not SAMPLES_DIR.exists():
     SAMPLES_DIR = Path(__file__).resolve().parents[3] / "packages" / "shared" / "samples"
@@ -22,8 +21,7 @@ if not SAMPLES_DIR.exists():
 
 def _walk_blocks(sections):
     for s in sections:
-        for b in s.get("blocks", []):
-            yield b
+        yield from s.get("blocks", [])
         yield from _walk_blocks(s.get("subsections") or [])
 
 

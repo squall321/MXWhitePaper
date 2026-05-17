@@ -33,7 +33,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
@@ -306,7 +306,7 @@ async def run_policy(
             else:
                 raise ValueError(f"unknown action: {action!r}")
             status = "ok"
-        except Exception as e:  # noqa: BLE001 — captured into the run row
+        except Exception as e:
             logger.exception("retention policy %s failed", policy["id"])
             error = f"{type(e).__name__}: {e}"
             status = "failed"
@@ -344,13 +344,13 @@ async def run_policy(
 
 def compute_next_run(after: datetime | None = None) -> datetime:
     """Return now + 24h. Constant cadence — see module docstring."""
-    base = after or datetime.now(timezone.utc)
+    base = after or datetime.now(UTC)
     return base + timedelta(hours=NEXT_RUN_INTERVAL_HOURS)
 
 
 async def tick_once() -> int:
     """One scheduler pass. Returns the number of policies executed."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     executed = 0
 
     async with session_scope() as s:
@@ -386,7 +386,7 @@ async def tick_once() -> int:
             try:
                 await run_policy(s, policy=policy, dry_run=False)
                 executed += 1
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception(
                     "retention policy %s tick crashed", policy["id"]
                 )
@@ -413,7 +413,7 @@ async def retention_ticker() -> None:
     while True:
         try:
             await tick_once()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("retention tick failed")
-        from app.services.ticker_state import report_tick as _rt; _rt("retention", next_due_at=datetime.now(timezone.utc) + timedelta(seconds=TICK_INTERVAL_SECONDS))
+        from app.services.ticker_state import report_tick as _rt; _rt("retention", next_due_at=datetime.now(UTC) + timedelta(seconds=TICK_INTERVAL_SECONDS))
         await asyncio.sleep(TICK_INTERVAL_SECONDS)

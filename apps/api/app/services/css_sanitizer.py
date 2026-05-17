@@ -121,4 +121,4 @@ def sanitize_css(raw: str | None) -> tuple[str, list[str]]:
     return text, warnings
 
 
-__all__ = ["sanitize_css", "MAX_CUSTOM_CSS_LEN"]
+__all__ = ["MAX_CUSTOM_CSS_LEN", "sanitize_css"]

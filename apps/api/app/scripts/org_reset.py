@@ -31,7 +31,6 @@ from sqlalchemy import text
 
 from app.core.db import session_scope
 
-
 SAMPLE_SLUGS: tuple[str, ...] = (
     "month-end-closing",
     "onboarding-guide",

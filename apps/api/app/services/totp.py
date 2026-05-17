@@ -108,7 +108,7 @@ def verify_code(
         return False
     try:
         key = _b32decode(secret)
-    except Exception:  # noqa: BLE001 — malformed secret = reject
+    except Exception:
         return False
 
     now = at if at is not None else time.time()

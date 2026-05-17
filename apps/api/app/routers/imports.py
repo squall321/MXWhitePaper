@@ -40,8 +40,8 @@ from app.core.db import get_db
 from app.core.errors import APIError, Conflict, ValidationFailed, envelope
 from app.repos import document_repo
 from app.services import (
-    docx_import,
     document_service,
+    docx_import,
     pptx_import,
     upload_service,
 )

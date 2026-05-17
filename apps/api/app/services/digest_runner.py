@@ -32,7 +32,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
@@ -83,7 +83,7 @@ async def dispatch_subscription_event(
                 payload=payload,
                 actor_user_id=actor_user_id,
             )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.warning("subscription dispatch (%s) skipped: %s", event_kind, e)
         return 0
 
@@ -177,7 +177,7 @@ async def emit_digests_for_user(
     cutoff — or NULL (never digested before). We bundle items per subscription
     (so daily and weekly subs that happened to share a user don't mix).
     """
-    cur = now or datetime.now(timezone.utc)
+    cur = now or datetime.now(UTC)
     # Pull subs that have at least one buffered item + are due to fire.
     rows = (await s.execute(
         text(
@@ -290,7 +290,7 @@ async def emit_digests_for_user(
         if digest_email_enabled:
             try:
                 await _maybe_send_digest_email(s, user_id=user_id, items=items)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("digest email skipped for user %s", user_id)
         bundled_total += len(items)
 
@@ -339,7 +339,7 @@ async def tick_once() -> int:
         try:
             async with session_scope() as s2:
                 total += await emit_digests_for_user(s2, user_id=uid)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("digest emit failed for user %s", uid)
     return total
 
@@ -350,7 +350,7 @@ async def digest_ticker() -> None:
     while True:
         try:
             await tick_once()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("digest tick failed")
-        from app.services.ticker_state import report_tick as _rt; _rt("digest", next_due_at=datetime.now(timezone.utc) + timedelta(seconds=TICK_INTERVAL_SECONDS))
+        from app.services.ticker_state import report_tick as _rt; _rt("digest", next_due_at=datetime.now(UTC) + timedelta(seconds=TICK_INTERVAL_SECONDS))
         await asyncio.sleep(TICK_INTERVAL_SECONDS)

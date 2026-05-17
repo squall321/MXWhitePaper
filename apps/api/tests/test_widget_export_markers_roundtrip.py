@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
 import ulid
 
 from app.services.docx_export import DocxOptions, render_docx

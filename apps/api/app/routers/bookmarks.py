@@ -113,8 +113,8 @@ async def create_bookmark(
     user: dict[str, Any] = Depends(require_reader),
 ) -> dict[str, Any]:
     doc_id = await _resolve_doc_id(s, body.document_id)
-    folder = (body.folder or None) and body.folder.strip() or None
-    notes = (body.notes or None) and body.notes.strip() or None
+    folder = ((body.folder or None) and body.folder.strip()) or None
+    notes = ((body.notes or None) and body.notes.strip()) or None
 
     # UNIQUE (user_id, document_id) — duplicate insert returns 409.
     existing = (await s.execute(
@@ -247,7 +247,7 @@ async def patch_bookmark(
     await document_repo.insert_audit(
         s, user_id=user["id"], action="bookmark.update",
         target=f"bookmarks/{bid}",
-        payload={k: v for k, v in fields.items()},
+        payload=dict(fields.items()),
     )
     await s.commit()
 

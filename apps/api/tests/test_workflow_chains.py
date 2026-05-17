@@ -14,7 +14,6 @@ Each test wipes its own rows so they don't bleed.
 from __future__ import annotations
 
 import json
-from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -23,7 +22,6 @@ from sqlalchemy import text
 from app.core.db import session_scope
 from app.main import app
 from app.services import automation_dispatcher, workflow_chain
-
 
 SEED_SLUG = "month-end-closing"
 

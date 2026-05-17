@@ -18,7 +18,8 @@ import csv
 import io
 import json
 import time
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -28,7 +29,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import require_admin
 from app.core.db import get_db
 from app.core.errors import envelope
-
 
 router = APIRouter(prefix="/api/v1/audit", tags=["admin"])
 

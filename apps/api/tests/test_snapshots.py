@@ -11,7 +11,7 @@ import io
 import json
 import os
 import tarfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -30,7 +30,7 @@ def _make_fake_snapshot(
     """Drop a minimal `mxwp-snapshot-<id>.tar.gz` + sidecar into tmp_dir."""
     if buckets is None:
         buckets = [{"name": "mxwp-images", "object_count": 1, "size_bytes": 100}]
-    iso = datetime.fromtimestamp(created_at_epoch, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    iso = datetime.fromtimestamp(created_at_epoch, tz=UTC).isoformat().replace("+00:00", "Z")
     manifest = {
         "snapshot_id": snapshot_id,
         "created_at": iso,

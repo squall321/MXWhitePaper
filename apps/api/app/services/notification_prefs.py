@@ -91,7 +91,7 @@ async def load_for_user(
             ),
             {"u": user_id},
         )).first()
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("notification_prefs lookup failed for user=%s", user_id)
         return defaults()
     if not row:

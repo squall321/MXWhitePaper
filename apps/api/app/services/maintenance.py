@@ -11,7 +11,7 @@ Cycle 11 — outstandingItems 의 두 항목을 닫는다:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
@@ -98,7 +98,7 @@ def _select_versions_to_keep(
     for v in sorted(versions, key=lambda x: x["edited_at"], reverse=True):
         edited = v["edited_at"]
         if edited.tzinfo is None:
-            edited = edited.replace(tzinfo=timezone.utc)
+            edited = edited.replace(tzinfo=UTC)
         if edited >= threshold_24h:
             keep.add(v["id"])
             continue
@@ -143,7 +143,7 @@ async def compact_versions(
 
     idempotent — 한 번 실행 후 즉시 재실행하면 추가 삭제 0건.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     total = 0
     if doc_id:
         total += await _compact_one_doc(s, doc_id, now=now)

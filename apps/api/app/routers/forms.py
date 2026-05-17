@@ -54,7 +54,6 @@ async def get_form_definition(
     s: AsyncSession = Depends(get_db),
 ) -> dict:
     """Single form definition + its fields."""
-    import json as _json
     row = (await s.execute(
         text("SELECT id, title, description, submit_label, thanks_text, max_attempts "
              "FROM form_definitions WHERE id = :id"),
@@ -198,7 +197,7 @@ def _validate_answer(question: dict[str, Any], value: Any) -> Any:
         if not isinstance(value, str) or not ISO_DATE_RE.match(value):
             raise FormValidationError(f"'{label}' must be YYYY-MM-DD")
         try:
-            datetime.strptime(value, "%Y-%m-%d")  # noqa: DTZ007
+            datetime.strptime(value, "%Y-%m-%d")
         except ValueError as e:
             raise FormValidationError(f"'{label}' is not a valid date") from e
         return value
@@ -410,7 +409,7 @@ def _aggregate(form: dict[str, Any], rows: list[dict[str, Any]]) -> list[dict[st
             for v in values:
                 if isinstance(v, str) and ISO_DATE_RE.match(v):
                     try:
-                        d = datetime.strptime(v, "%Y-%m-%d")  # noqa: DTZ007
+                        d = datetime.strptime(v, "%Y-%m-%d")
                     except ValueError:
                         continue
                     iso_year, iso_week, _ = d.isocalendar()

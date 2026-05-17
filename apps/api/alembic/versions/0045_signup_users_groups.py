@@ -17,7 +17,6 @@ from collections.abc import Sequence
 
 from alembic import op
 
-
 revision: str = "0045_signup_users_groups"
 down_revision: str | Sequence[str] | None = "0044_more_facts"
 branch_labels: str | Sequence[str] | None = None

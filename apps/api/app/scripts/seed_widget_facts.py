@@ -15,12 +15,11 @@ from __future__ import annotations
 
 import asyncio
 import math
-from datetime import date, timedelta, datetime, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import text
 
 from app.core.db import session_scope
-
 
 TEAMS = ["finance", "sales", "engineering", "design"]
 REGIONS = [
@@ -110,7 +109,7 @@ KPI_SNAPSHOTS = [
 
 
 async def _upsert_kpis(s) -> int:
-    captured = datetime(2026, 5, 1, 9, 0, tzinfo=timezone.utc)
+    captured = datetime(2026, 5, 1, 9, 0, tzinfo=UTC)
     for key, value, delta, trend in KPI_SNAPSHOTS:
         await s.execute(
             text(

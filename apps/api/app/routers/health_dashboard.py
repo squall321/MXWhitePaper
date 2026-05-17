@@ -41,7 +41,6 @@ from app.search import meili_indexer
 from app.services import ticker_state
 from app.storage import minio_adapter
 
-
 router = APIRouter(prefix="/api/v1", tags=["admin"])
 
 
@@ -77,7 +76,7 @@ def _git_version() -> str:
             timeout=2,
         ).decode("utf-8", "replace").strip()
         return out or "unknown"
-    except Exception:  # noqa: BLE001
+    except Exception:
         return "unknown"
 
 
@@ -99,7 +98,7 @@ def _database_section() -> dict[str, Any]:
             "overflow": overflow,
             "ok": True,
         }
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return {
             "pool_size": 0,
             "checked_out": 0,
@@ -124,7 +123,7 @@ def _bucket_stat(cli: Any, name: str) -> dict[str, Any]:
                 count += 1
                 size_bytes += int(obj.get("Size") or 0)
         return {"name": name, "count": count, "size_bytes": size_bytes}
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return {
             "name": name,
             "count": 0,
@@ -149,7 +148,7 @@ def _minio_section() -> dict[str, Any]:
             "buckets": rows,
             "ok": ok,
         }
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return {
             "endpoint": settings.minio_endpoint,
             "buckets": [],
@@ -175,7 +174,7 @@ def _meilisearch_section() -> dict[str, Any]:
             "indexes": [{"uid": meili_indexer.INDEX_UID, "count": int(nd or 0)}],
             "ok": True,
         }
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return {
             "url": settings.meili_host,
             "indexes": [],
@@ -236,7 +235,7 @@ async def _errors_24h(s: AsyncSession) -> int:
             )
         )).first()
         return int(row[0]) if row else 0
-    except Exception:  # noqa: BLE001
+    except Exception:
         return 0
 
 
@@ -250,7 +249,7 @@ def _rate_limit_section() -> dict[str, Any]:
             "active_buckets": int(snap.get("total_buckets") or 0),
             "active_blocks": int(snap.get("active_block_count") or 0),
         }
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {"active_buckets": 0, "active_blocks": 0}
 
 
@@ -274,7 +273,7 @@ async def _queue_depths(s: AsyncSession) -> dict[str, int]:
             )
         )).first()
         out["automation_pending"] = int(row[0]) if row else 0
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     # webhook_deliveries_pending — rows still being retried
     try:
@@ -285,7 +284,7 @@ async def _queue_depths(s: AsyncSession) -> dict[str, int]:
             )
         )).first()
         out["webhook_deliveries_pending"] = int(row[0]) if row else 0
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     # subscription_digest_buffer
     try:
@@ -293,7 +292,7 @@ async def _queue_depths(s: AsyncSession) -> dict[str, int]:
             text("SELECT COUNT(*) FROM pending_digest_items")
         )).first()
         out["subscription_digest_buffer"] = int(row[0]) if row else 0
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     return out
 

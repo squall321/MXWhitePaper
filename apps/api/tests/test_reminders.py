@@ -9,7 +9,7 @@ Coverage targets:
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -61,7 +61,7 @@ async def _resolve_seed() -> tuple[str, str]:
 @pytest.mark.asyncio
 async def test_create_then_list_then_patch_then_delete() -> None:
     in_two_hours = (
-        datetime.now(timezone.utc) + timedelta(hours=2)
+        datetime.now(UTC) + timedelta(hours=2)
     ).isoformat()
     async with await _client() as ac:
         r1 = await ac.post(
@@ -83,7 +83,7 @@ async def test_create_then_list_then_patch_then_delete() -> None:
 
         # PATCH — bump remind_at + drop the message
         in_three_hours = (
-            datetime.now(timezone.utc) + timedelta(hours=3)
+            datetime.now(UTC) + timedelta(hours=3)
         ).isoformat()
         r3 = await ac.patch(
             f"/api/v1/reminders/{rid}",
@@ -114,7 +114,7 @@ async def test_create_validation_rejects_bad_timestamp() -> None:
 @pytest.mark.asyncio
 async def test_create_404_on_unknown_slug() -> None:
     in_two_hours = (
-        datetime.now(timezone.utc) + timedelta(hours=2)
+        datetime.now(UTC) + timedelta(hours=2)
     ).isoformat()
     async with await _client() as ac:
         r = await ac.post(
@@ -152,7 +152,7 @@ async def _seed_reminder(
 @pytest.mark.asyncio
 async def test_tick_once_fires_due_reminder_and_stamps_fired_at() -> None:
     user_id, doc_id = await _resolve_seed()
-    past = datetime.now(timezone.utc) - timedelta(minutes=1)
+    past = datetime.now(UTC) - timedelta(minutes=1)
     rid = await _seed_reminder(
         user_id, doc_id, remind_at=past, message="ping me"
     )
@@ -186,7 +186,7 @@ async def test_tick_once_fires_due_reminder_and_stamps_fired_at() -> None:
 @pytest.mark.asyncio
 async def test_tick_once_skips_future_reminder() -> None:
     user_id, doc_id = await _resolve_seed()
-    future = datetime.now(timezone.utc) + timedelta(hours=1)
+    future = datetime.now(UTC) + timedelta(hours=1)
     await _seed_reminder(user_id, doc_id, remind_at=future)
 
     fired = await reminder_runner.tick_once()
@@ -198,7 +198,7 @@ async def test_tick_once_gated_on_settings_flag() -> None:
     from app.core.config import get_settings
 
     user_id, doc_id = await _resolve_seed()
-    past = datetime.now(timezone.utc) - timedelta(minutes=1)
+    past = datetime.now(UTC) - timedelta(minutes=1)
     await _seed_reminder(user_id, doc_id, remind_at=past)
 
     settings = get_settings()

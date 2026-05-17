@@ -16,7 +16,6 @@ from sqlalchemy import text
 
 from app.core.db import session_scope
 
-
 TERMS = [
     ("ASP",      "Average Selling Price — 평균 판매가."),
     ("MoM",      "Month-over-Month — 전월 대비 증감."),

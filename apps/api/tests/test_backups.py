@@ -12,7 +12,7 @@ tests focus on:
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import patch
 
@@ -50,20 +50,20 @@ async def _wipe_backups():
 
 
 def test_compute_next_run_daily() -> None:
-    base = datetime(2026, 5, 9, 1, 0, 0, tzinfo=timezone.utc)
+    base = datetime(2026, 5, 9, 1, 0, 0, tzinfo=UTC)
     nxt = backup_runner.compute_next_run(cadence="daily", hour_utc=3, after=base)
-    assert nxt == datetime(2026, 5, 9, 3, 0, 0, tzinfo=timezone.utc)
+    assert nxt == datetime(2026, 5, 9, 3, 0, 0, tzinfo=UTC)
 
 
 def test_compute_next_run_daily_rolls_to_tomorrow() -> None:
     # When `after` is past today's anchor we should jump to tomorrow.
-    base = datetime(2026, 5, 9, 5, 0, 0, tzinfo=timezone.utc)
+    base = datetime(2026, 5, 9, 5, 0, 0, tzinfo=UTC)
     nxt = backup_runner.compute_next_run(cadence="daily", hour_utc=3, after=base)
-    assert nxt == datetime(2026, 5, 10, 3, 0, 0, tzinfo=timezone.utc)
+    assert nxt == datetime(2026, 5, 10, 3, 0, 0, tzinfo=UTC)
 
 
 def test_compute_next_run_weekly_and_monthly() -> None:
-    base = datetime(2026, 5, 9, 1, 0, 0, tzinfo=timezone.utc)
+    base = datetime(2026, 5, 9, 1, 0, 0, tzinfo=UTC)
     weekly = backup_runner.compute_next_run(
         cadence="weekly", hour_utc=3, after=base
     )
@@ -145,7 +145,7 @@ async def test_run_backup_happy_path_full_json() -> None:
     captured: dict[str, Any] = {}
 
     class _FakeS3:
-        def put_object(self, **kwargs: Any) -> None:  # noqa: D401
+        def put_object(self, **kwargs: Any) -> None:
             captured["bucket"] = kwargs["Bucket"]
             captured["key"] = kwargs["Key"]
             captured["size"] = len(kwargs["Body"])
@@ -205,7 +205,7 @@ async def test_tick_once_runs_due_schedule_and_reschedules() -> None:
                 """
             ),
             {
-                "nxt": datetime.now(timezone.utc) - timedelta(minutes=5),
+                "nxt": datetime.now(UTC) - timedelta(minutes=5),
                 "u": admin[0],
             },
         )
@@ -230,7 +230,7 @@ async def test_tick_once_runs_due_schedule_and_reschedules() -> None:
         )).first()
     assert row is not None
     nxt, last = row[0], row[1]
-    assert nxt is not None and nxt > datetime.now(timezone.utc)
+    assert nxt is not None and nxt > datetime.now(UTC)
     assert last is not None
 
 

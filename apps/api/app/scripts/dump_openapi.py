@@ -35,7 +35,7 @@ os.environ.setdefault("MINIO_ACCESS_KEY", "x")
 os.environ.setdefault("MINIO_SECRET_KEY", "x")
 os.environ.setdefault("JWT_SECRET", "x")
 
-from app.main import app  # noqa: E402
+from app.main import app
 
 spec = app.openapi()
 OUT.write_text(json.dumps(spec, indent=2, ensure_ascii=False, sort_keys=True) + "\n")

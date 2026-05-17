@@ -29,8 +29,8 @@ from typing import Any
 from sqlalchemy import text
 
 from app.core.db import session_scope
-from app.services.docx_import import _strip_leading_numbering
 from app.services.document_service import reindex_meili
+from app.services.docx_import import _strip_leading_numbering
 
 
 def _strip_section_titles(section: dict[str, Any]) -> int:

@@ -7,7 +7,6 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-
 # Pydantic 에러 type → 한국어 friendly 안내. 매칭 안되면 원문 msg 사용.
 _PYDANTIC_KO_MESSAGES: dict[str, str] = {
     "missing": "필수 필드가 누락되었습니다.",

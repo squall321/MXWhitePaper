@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from app.services.css_sanitizer import MAX_CUSTOM_CSS_LEN, sanitize_css
 
-
 # ── empty / None passthrough ─────────────────────────────────────────
 
 

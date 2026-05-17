@@ -20,7 +20,6 @@ from typing import Any
 
 from app.services.document_service import scrub_blocks_for_role
 
-
 REDACTED_TEXT = "[권한이 부족한 블록]"
 
 

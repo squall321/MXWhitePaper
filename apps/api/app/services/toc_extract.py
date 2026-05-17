@@ -38,7 +38,6 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Any
 
-
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
@@ -129,7 +128,7 @@ def _paragraph_plain_text(p: ET.Element) -> str:
         if t.text:
             parts.append(t.text)
         # treat tabs as a single space so leader patterns still match
-    for tab in p.iter(_q("tab")):
+    for _tab in p.iter(_q("tab")):
         # leader dots between tabs are common — keep a sentinel
         # so the page-number regex can fire.
         parts.append("\t")

@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import math
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import text
 
 from app.core.db import session_scope
-
 
 COHORTS = [
     ("2025-Q4", [(0,100),(1,72),(7,52),(14,41),(30,33),(60,28),(90,24)]),
@@ -26,11 +25,11 @@ FUNNEL = [
 ]
 
 INCIDENTS = [
-    ("INC-2026-001", "P2", "resolved",   "로그인 지연 (5xx 1.2%)",       "SRE",        58,  datetime(2026,4,3,9,12, tzinfo=timezone.utc), datetime(2026,4,3,10,10,tzinfo=timezone.utc)),
-    ("INC-2026-002", "P1", "resolved",   "결제 게이트웨이 timeout 다발", "Payments",   142, datetime(2026,4,15,3,40,tzinfo=timezone.utc), datetime(2026,4,15,6,2, tzinfo=timezone.utc)),
-    ("INC-2026-003", "P3", "mitigated",  "검색 인덱스 지연",             "Search",     35,  datetime(2026,4,22,14,5,tzinfo=timezone.utc), datetime(2026,4,22,14,40,tzinfo=timezone.utc)),
-    ("INC-2026-004", "P2", "resolved",   "이미지 업로드 실패율 상승",     "Platform",   72,  datetime(2026,5,1,11,30,tzinfo=timezone.utc), datetime(2026,5,1,12,42,tzinfo=timezone.utc)),
-    ("INC-2026-005", "P4", "open",       "관리자 페이지 표시 깨짐",       "FE-Admin",   None,datetime(2026,5,10,16,0,tzinfo=timezone.utc), None),
+    ("INC-2026-001", "P2", "resolved",   "로그인 지연 (5xx 1.2%)",       "SRE",        58,  datetime(2026,4,3,9,12, tzinfo=UTC), datetime(2026,4,3,10,10,tzinfo=UTC)),
+    ("INC-2026-002", "P1", "resolved",   "결제 게이트웨이 timeout 다발", "Payments",   142, datetime(2026,4,15,3,40,tzinfo=UTC), datetime(2026,4,15,6,2, tzinfo=UTC)),
+    ("INC-2026-003", "P3", "mitigated",  "검색 인덱스 지연",             "Search",     35,  datetime(2026,4,22,14,5,tzinfo=UTC), datetime(2026,4,22,14,40,tzinfo=UTC)),
+    ("INC-2026-004", "P2", "resolved",   "이미지 업로드 실패율 상승",     "Platform",   72,  datetime(2026,5,1,11,30,tzinfo=UTC), datetime(2026,5,1,12,42,tzinfo=UTC)),
+    ("INC-2026-005", "P4", "open",       "관리자 페이지 표시 깨짐",       "FE-Admin",   None,datetime(2026,5,10,16,0,tzinfo=UTC), None),
 ]
 
 CAMPAIGNS = [

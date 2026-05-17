@@ -24,7 +24,6 @@ from app.core.db import session_scope
 from app.main import app
 from app.services.api_token_scopes import check_scope, required_scope_for
 
-
 # ── unit tests ──────────────────────────────────────────────────────────
 
 

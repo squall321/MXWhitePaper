@@ -1,8 +1,6 @@
 """Sprint 6 — Auth & RBAC 통합 테스트."""
 from __future__ import annotations
 
-import os
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 

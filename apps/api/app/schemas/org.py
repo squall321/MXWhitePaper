@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 _SLUG = r"^[a-z0-9][a-z0-9-]{0,99}$"
 
 

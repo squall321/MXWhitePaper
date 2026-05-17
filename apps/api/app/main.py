@@ -28,7 +28,6 @@ from .routers.auth import router as auth_router
 from .routers.auth_flows import router as auth_flows_router
 from .routers.automation import router as automation_router
 from .routers.backups import router as backups_router
-from .routers.snapshots import router as snapshots_router
 from .routers.bookmarks import router as bookmarks_router
 from .routers.comments import router_doc as comments_doc_router
 from .routers.comments import router_one as comments_one_router
@@ -56,6 +55,7 @@ from .routers.saved_views import router as saved_views_router
 from .routers.search import router as search_router
 from .routers.series import router as series_router
 from .routers.sharing import router as sharing_router
+from .routers.snapshots import router as snapshots_router
 from .routers.snippets import router as snippets_router
 from .routers.sso import router as sso_router
 from .routers.subscriptions import router as subscriptions_router
@@ -67,7 +67,6 @@ from .routers.version_tags import router as version_tags_router
 from .routers.webhooks import router as webhooks_router
 from .routers.widgets import router as widgets_router
 from .routers.workflow_chains import router as workflow_chains_router
-
 
 # Polish D — Swagger /docs 에서 각 그룹의 의미를 한국어로 요약.
 TAGS_METADATA: list[dict[str, str]] = [
@@ -465,7 +464,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             t.cancel()
             try:
                 await t
-            except (BaseException,):  # noqa: BLE001 — cancel is expected
+            except BaseException:
                 pass
 
 

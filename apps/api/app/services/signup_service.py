@@ -22,7 +22,6 @@ from app.core.config import get_settings
 from app.core.errors import Conflict, ValidationFailed
 from app.core.security import hash_password
 
-
 _PW_MIN = 12
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 

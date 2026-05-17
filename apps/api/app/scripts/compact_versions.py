@@ -18,8 +18,8 @@ from app.scripts._env import load_env
 
 load_env()
 
-from app.core.db import session_scope  # noqa: E402
-from app.services.maintenance import compact_versions  # noqa: E402
+from app.core.db import session_scope
+from app.services.maintenance import compact_versions
 
 
 async def main() -> None:

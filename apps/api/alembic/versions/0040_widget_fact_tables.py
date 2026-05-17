@@ -16,7 +16,6 @@ from collections.abc import Sequence
 
 from alembic import op
 
-
 revision: str = "0040_widget_fact_tables"
 down_revision: str | Sequence[str] | None = "0039_sso_providers"
 branch_labels: str | Sequence[str] | None = None

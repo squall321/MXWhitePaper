@@ -167,10 +167,10 @@ async def _action_webhook(
     factory = wd._client_factory
     try:
         async with factory() as client:
-            status, snippet, timed_out = await wd._post(
+            status, _snippet, timed_out = await wd._post(
                 client, url, body, signature,
             )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return "failed", f"webhook error: {e}"
     last_status = wd._classify(status, timed_out=timed_out)
     if last_status == "ok":
@@ -391,7 +391,7 @@ async def _action_email_subscribers(
             ok = await send_email(addr, subject, body)
             if ok:
                 sent += 1
-        except Exception as e:  # noqa: BLE001 — best-effort
+        except Exception as e:
             logger.warning("email_subscribers send failed: %s", e)
     return ("ok", None) if sent else ("failed", "all sends failed")
 
@@ -420,7 +420,7 @@ async def _action_trigger_chain(
         loop.create_task(
             wc.run_chain(chain_id.strip(), {"trigger": trigger_kind, **payload})
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return "failed", f"chain schedule error: {e}"
     return "ok", None
 
@@ -464,7 +464,7 @@ async def run_rule(
                 trigger_kind=trigger_kind,
                 payload=payload,
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(
                 "automation rule %s action %s failed: %s",
                 rule.get("id"), action_kind, e,
@@ -502,7 +502,7 @@ async def run_rule(
                 {"r": rule["id"]},
             )
             await s.commit()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning("run-log persist failed: %s", e)
 
     return {"status": status, "error_message": err}
@@ -527,7 +527,7 @@ async def dispatch_event(
             rules = await _list_matching_rules(
                 s, trigger_kind=trigger_kind, payload=payload
             )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.warning("automation lookup (%s) skipped: %s", trigger_kind, e)
         return 0
 
@@ -540,7 +540,7 @@ async def dispatch_event(
                     s2, rule=rule, trigger_kind=trigger_kind, payload=payload,
                 )
             fired += 1
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(
                 "automation rule %s skipped: %s", rule.get("id"), e,
             )

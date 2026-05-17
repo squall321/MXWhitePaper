@@ -19,8 +19,9 @@ clear "not implemented" body so the FE can render a friendly placeholder.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -28,8 +29,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import require_reader
-from app.core.errors import envelope
 from app.core.db import get_db as get_session
+from app.core.errors import envelope
 
 router = APIRouter(prefix="/api/v1/widgets", tags=["widgets"])
 

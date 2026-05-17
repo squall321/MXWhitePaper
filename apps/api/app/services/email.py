@@ -22,8 +22,9 @@ from __future__ import annotations
 
 import logging
 import smtplib
+from collections.abc import Iterable
 from email.message import EmailMessage
-from typing import Any, Iterable
+from typing import Any
 
 from app.core.config import get_settings
 
@@ -92,7 +93,7 @@ async def send_email(
                 smtp.login(settings.smtp_user, settings.smtp_password)
             smtp.send_message(msg)
         return True
-    except Exception as e:  # noqa: BLE001 — best-effort, never propagate
+    except Exception as e:
         logger.warning(
             "send_email failed: to=%s subject=%s error=%s", to, subject, e
         )

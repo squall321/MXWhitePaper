@@ -20,7 +20,6 @@ from app.core.db import session_scope
 from app.main import app
 from app.services import automation_dispatcher, webhook_dispatcher
 
-
 SEED_SLUG = "month-end-closing"
 
 
@@ -277,7 +276,7 @@ async def test_action_notification_blast_inserts_per_user() -> None:
                 "action_payload": {"kind": "automation_blast", "message_template": "보관됨"},
             },
         )
-        rid = r.json()["data"]["id"]
+        r.json()["data"]["id"]
 
     await automation_dispatcher.dispatch_event(
         "doc_archived", {"document_id": "x", "slug": "y"},
@@ -397,7 +396,7 @@ async def test_action_transition_flips_status() -> None:
                 "action_payload": {"status": "archived"},
             },
         )
-        rid = r.json()["data"]["id"]
+        r.json()["data"]["id"]
 
     await automation_dispatcher.dispatch_event(
         "doc_archived", {"document_id": doc_id, "slug": SEED_SLUG},

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 
@@ -50,14 +50,14 @@ async def analytics_pruner() -> None:
     last_run: datetime | None = None
     while True:
         try:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if (
                 last_run is None
                 or now - last_run >= timedelta(seconds=TICK_INTERVAL_SECONDS)
             ):
                 await prune_once()
                 last_run = now
-        except Exception:  # noqa: BLE001 — pruner must never die
+        except Exception:
             logger.exception("analytics_pruner tick failed")
         # Sleep in 60s slices so cancel propagates quickly on shutdown.
         await asyncio.sleep(60)

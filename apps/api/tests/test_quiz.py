@@ -7,7 +7,6 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.routers.quiz import _is_question_correct, score_attempt
 
-
 SEED_SLUG = "quiz-sample"
 QUIZ_BLOCK_ID = "01J9X1Y2Z3A4B5C6D7E8F9GZQ1"
 
@@ -16,6 +15,7 @@ QUIZ_BLOCK_ID = "01J9X1Y2Z3A4B5C6D7E8F9GZQ1"
 async def _clean_attempts() -> None:
     """Wipe attempts for the seeded quiz block before each integration test."""
     from sqlalchemy import text
+
     from app.core.db import engine as get_engine
     eng = get_engine()
     async with eng.begin() as conn:

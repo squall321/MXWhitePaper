@@ -51,7 +51,8 @@ fire twice (once per civil minute) — same as cron(8). Acceptable for the
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, tzinfo as _tzinfo
+from datetime import UTC, datetime, timedelta
+from datetime import tzinfo as _tzinfo
 
 # Inclusive (min, max) for each field, matching standard cron.
 _FIELD_RANGES: tuple[tuple[int, int], ...] = (
@@ -210,7 +211,7 @@ def next_run(
       - matching ``after.tzinfo`` (UTC if naïve) when ``tz`` is None.
     """
     if after.tzinfo is None:
-        after = after.replace(tzinfo=timezone.utc)
+        after = after.replace(tzinfo=UTC)
     # Step to the *next* minute boundary. ``next_run`` is documented as
     # strictly greater than ``after`` so a tick scheduled exactly on the
     # boundary fires once, not twice.
@@ -231,7 +232,7 @@ def next_run(
             # Persist as UTC when a tz was supplied so callers don't have
             # to remember the convention.
             return (
-                candidate.astimezone(timezone.utc)
+                candidate.astimezone(UTC)
                 if tz is not None
                 else candidate
             )
