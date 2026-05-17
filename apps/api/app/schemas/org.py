@@ -55,11 +55,14 @@ class GroupCreate(BaseModel):
     division_slug: str = Field(..., pattern=_SLUG)
     slug: str = Field(..., pattern=_SLUG)
     name: str = Field(..., min_length=1, max_length=200)
+    # 'lab' is a team-direct unit that lives in the same `groups` table.
+    kind: str = Field(default="group", pattern="^(group|lab)$")
 
 
 class GroupUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(None, min_length=1, max_length=200)
+    kind: str | None = Field(None, pattern="^(group|lab)$")
 
 
 class GroupRead(BaseModel):
@@ -67,6 +70,7 @@ class GroupRead(BaseModel):
     team_id: str
     slug: str
     name: str
+    kind: str = "group"
 
 
 # ── Part ────────────────────────────────────────────────────────────────

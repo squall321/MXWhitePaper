@@ -51,6 +51,11 @@ class Settings(BaseSettings):
 
     # Document import caps + rate limit. Tuned per format because pptx
     # decks are typically ~2-3× the size of equivalent docx reports.
+    # Signup self-service: comma-separated whitelist of email domains
+    # accepted by POST /auth/signup. Empty string = allow-all (dev / CI).
+    # In production deployments this should be set to the corp domain(s).
+    signup_allowed_email_domains: str = Field(default="")
+
     docx_import_max_bytes: int = Field(default=30 * 1024 * 1024)
     pptx_import_max_bytes: int = Field(default=50 * 1024 * 1024)
     csv_import_max_bytes: int = Field(default=5 * 1024 * 1024)

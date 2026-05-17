@@ -178,6 +178,65 @@ MAX = get_settings().docx_import_max_bytes
 JWT payload: `{sub: user_id, role: …, exp, iat}`. 변경 시 FE 미들웨어
 ([[src/apps/web/src/lib/auth.ts]]) 의 디코드도 같이 확인.
 
+## 6. Signup — 자가 가입 + 조직 등록
+
+`POST /api/v1/auth/signup` 으로 외부 사용자가 직접 계정을 만든다. 사내망
+가정으로 즉시 활성화, role 은 `reader`. 라우터는 [[src/app/routers/auth.py#signup]]
+이 진입점이고 모든 검증 로직은 [[src/app/services/signup_service.py#create_user_account]]
+에 모여 있다 (라우터 = 얇은 어댑터, service = 단일 진실원).
+
+### 가입 endpoint
+
+| Method | Path | 인증 | 비고 |
+|---|---|---|---|
+| POST | `/api/v1/auth/signup` | 없음 (public) | body: email/name/password/team_id/group_id?, 분당 5회/IP rate-limit |
+
+검증 순서 (실패 시 즉시 422 / 409):
+
+1. email regex, 도메인 화이트리스트 (`SIGNUP_ALLOWED_EMAIL_DOMAINS` env, 비면 allow-all)
+2. 비밀번호: 12자+ / 영문 / 숫자 / 특수 각 1자 이상
+3. email UNIQUE collision → 409 (SSO 우선 머지 정책: 자체 가입은 거부, SSO 로 유도)
+4. team_id 존재 + group_id ⊆ team_id
+
+성공 시 `users` INSERT + `audit_logs` (`action='user_signup'`) 한 트랜잭션.
+
+### 조직 셀렉터 (가입 폼이 채우는 cascading dropdown)
+
+이미 존재하는 `routers/orgs.py` 가 그대로 쓰임:
+
+| Method | Path | 인증 | 비고 |
+|---|---|---|---|
+| GET | `/api/v1/divisions` | 없음 | 모든 division |
+| GET | `/api/v1/teams?division=<slug>` | 없음 | division 산하 teams |
+| GET | `/api/v1/groups?division=<slug>&team=<slug>` | 없음 | team 산하 groups (kind 포함) |
+| POST | `/api/v1/divisions`, `/teams`, `/groups` | admin | 조직 등록 — body 의 `kind ∈ {'group','lab'}` |
+
+`groups.kind` 컬럼은 0045 마이그레이션이 추가. `'lab'` 은 공식적으로 팀 직속
+인 단위로, `'group'` 과 같은 테이블에서 살림. UI 는 kind 로 필터/그룹핑 자유.
+
+### 부트스트랩 첫 admin
+
+production 환경에서 dev fallback `_fetch_admin()` 없이 첫 admin 을 만들려면:
+
+```bash
+apptainer exec instance://mxwp_api bash -lc '
+  cd /workspace/apps/api &&
+  BOOTSTRAP_ADMIN_EMAIL=admin@samsung.com \
+  BOOTSTRAP_ADMIN_PASSWORD=Init!Setup2026 \
+  python3 -m app.scripts.bootstrap_admin
+'
+```
+
+스크립트 ([[src/app/scripts/bootstrap_admin.py]]) 는 idempotent — 이미 active
+admin 이 1명 이상이면 skip + exit 0.
+
+### SSO 호환
+
+본 사이클은 [[src/app/routers/sso.py]] 를 변경하지 않는다. 자체 가입 시 email
+collision 을 일찍 거부 (alternative 정책) 함으로써 SSO 머지 시점의 복잡성을
+피한다. 자체가입 후 같은 email 로 SSO 시도 → SSO 라우터의 기존 collision
+핸들링이 처리.
+
 ## 자주 묻는 것 / 함정
 
 1. **`get_settings()` 은 lru_cache** — 테스트에서 환경변수 바꿔도 재로드 안 됨.

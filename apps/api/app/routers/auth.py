@@ -4,12 +4,15 @@ POST /api/v1/auth/login        body: {email, password}
 POST /api/v1/auth/login/totp   body: {partial_token, code}  (Cycle 17)
 POST /api/v1/auth/refresh      cookie: mxwp_refresh
 POST /api/v1/auth/logout
+POST /api/v1/auth/signup       body: {email, name, password, team_id, group_id?}
 GET  /api/v1/me
 """
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
@@ -21,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import get_current_user
 from app.core.config import get_settings
 from app.core.db import get_db
-from app.core.errors import Unauthorized, envelope
+from app.core.errors import APIError, Unauthorized, envelope
 from app.core.security import (
     decode_token,
     make_access_token,
@@ -29,6 +32,7 @@ from app.core.security import (
     verify_password,
 )
 from app.routers.two_factor import verify_totp_for_user
+from app.services.signup_service import create_user_account
 
 router = APIRouter(prefix="/api/v1", tags=["auth"])
 
@@ -252,3 +256,68 @@ async def logout(response: Response) -> None:
 @router.get("/me")
 async def me(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
     return envelope(data=user)
+
+
+# ── Signup ──────────────────────────────────────────────────────────
+
+
+class SignupBody(BaseModel):
+    # Format validation lives in signup_service (_check_email_format); the
+    # pydantic side just bounds the string length so a 10 MB body can't
+    # waste CPU on regex.
+    email: str = Field(min_length=3, max_length=320)
+    name: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=12, max_length=200)
+    team_id: UUID
+    group_id: UUID | None = None
+
+
+# Tiny in-memory IP rate limit (5/min). Restart-bounded, which is fine
+# for a self-signup flow; if abuse becomes real, move to Redis.
+_SIGNUP_RATE_WINDOW = 60.0
+_SIGNUP_RATE_LIMIT = 5
+_signup_hits: dict[str, list[float]] = {}
+
+
+class _SignupRateLimited(APIError):
+    http_status = 429
+    code = "RATE_LIMITED"
+    message = f"signup limited to {_SIGNUP_RATE_LIMIT}/min per IP"
+
+
+def _signup_ip_key(request: Request) -> str:
+    if request.client is None:
+        return "unknown"
+    return request.client.host
+
+
+def _signup_rate_ok(key: str) -> bool:
+    now = time.monotonic()
+    cutoff = now - _SIGNUP_RATE_WINDOW
+    hits = [t for t in _signup_hits.get(key, []) if t > cutoff]
+    if len(hits) >= _SIGNUP_RATE_LIMIT:
+        _signup_hits[key] = hits
+        return False
+    hits.append(now)
+    _signup_hits[key] = hits
+    return True
+
+
+@router.post("/auth/signup", status_code=201)
+async def signup(
+    body: SignupBody,
+    request: Request,
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    if not _signup_rate_ok(_signup_ip_key(request)):
+        raise _SignupRateLimited()
+    user = await create_user_account(
+        s,
+        email=str(body.email),
+        name=body.name,
+        password=body.password,
+        team_id=body.team_id,
+        group_id=body.group_id,
+        request_ip=request.client.host if request.client else None,
+    )
+    return envelope(data={"user": user})

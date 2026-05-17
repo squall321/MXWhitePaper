@@ -330,21 +330,22 @@ async def list_groups(
     if division and team:
         rows = (await s.execute(
             text("""
-                SELECT g.id, g.team_id, g.slug, g.name
+                SELECT g.id, g.team_id, g.slug, g.name, g.kind
                 FROM groups g
                 JOIN teams t ON t.id = g.team_id
                 JOIN divisions d ON d.id = t.division_id
                 WHERE d.slug = :ds AND t.slug = :ts
-                ORDER BY g.slug
+                ORDER BY g.kind, g.slug
             """),
             {"ds": division, "ts": team},
         )).all()
     else:
         rows = (await s.execute(text(
-            "SELECT id, team_id, slug, name FROM groups ORDER BY slug"
+            "SELECT id, team_id, slug, name, kind FROM groups ORDER BY kind, slug"
         ))).all()
     data = [
-        {"id": str(r[0]), "team_id": str(r[1]), "slug": r[2], "name": r[3]}
+        {"id": str(r[0]), "team_id": str(r[1]), "slug": r[2],
+         "name": r[3], "kind": r[4]}
         for r in rows
     ]
     return envelope(data=data, meta={"count": len(data)})
@@ -356,7 +357,7 @@ async def get_group(
 ) -> dict[str, Any]:
     row = (await s.execute(
         text("""
-            SELECT g.id, g.team_id, g.slug, g.name
+            SELECT g.id, g.team_id, g.slug, g.name, g.kind
             FROM groups g
             JOIN teams t ON t.id = g.team_id
             JOIN divisions d ON d.id = t.division_id
@@ -367,7 +368,8 @@ async def get_group(
     if not row:
         raise NotFound(f"group not found: {division}/{team}/{slug}")
     return envelope(data={
-        "id": str(row[0]), "team_id": str(row[1]), "slug": row[2], "name": row[3],
+        "id": str(row[0]), "team_id": str(row[1]), "slug": row[2],
+        "name": row[3], "kind": row[4],
     })
 
 
@@ -381,18 +383,19 @@ async def create_group(
     try:
         row = (await s.execute(
             text("""
-                INSERT INTO groups (team_id, slug, name)
-                VALUES (:t, :slug, :name)
-                RETURNING id, team_id, slug, name
+                INSERT INTO groups (team_id, slug, name, kind)
+                VALUES (:t, :slug, :name, :kind)
+                RETURNING id, team_id, slug, name, kind
             """),
-            {"t": team_id, "slug": payload.slug, "name": payload.name},
+            {"t": team_id, "slug": payload.slug, "name": payload.name,
+             "kind": payload.kind},
         )).first()
         await document_repo.insert_audit(
             s,
             user_id=user.get("id"),
             action="org.group.create",
             target=f"group:{payload.division_slug}/{payload.team_slug}/{payload.slug}",
-            payload={"name": payload.name},
+            payload={"name": payload.name, "kind": payload.kind},
         )
         await s.commit()
     except IntegrityError as e:
@@ -400,7 +403,8 @@ async def create_group(
         raise Conflict(f"group already exists: {payload.team_slug}/{payload.slug}") from e
     assert row is not None
     return envelope(data={
-        "id": str(row[0]), "team_id": str(row[1]), "slug": row[2], "name": row[3],
+        "id": str(row[0]), "team_id": str(row[1]), "slug": row[2],
+        "name": row[3], "kind": row[4],
     })
 
 
@@ -414,26 +418,34 @@ async def update_group(
     user: dict = Depends(require_admin),
 ) -> dict[str, Any]:
     group_id = await _fetch_group_id(s, division, team, slug)
+    sets: list[str] = []
+    params: dict[str, Any] = {"id": group_id}
     if payload.name is not None:
+        sets.append("name = :n")
+        params["n"] = payload.name
+    if payload.kind is not None:
+        sets.append("kind = :k")
+        params["k"] = payload.kind
+    if sets:
         await s.execute(
-            text("UPDATE groups SET name = :n WHERE id = :id"),
-            {"n": payload.name, "id": group_id},
+            text(f"UPDATE groups SET {', '.join(sets)} WHERE id = :id"), params
         )
         await document_repo.insert_audit(
             s,
             user_id=user.get("id"),
             action="org.group.update",
             target=f"group:{division}/{team}/{slug}",
-            payload={"name": payload.name},
+            payload={"name": payload.name, "kind": payload.kind},
         )
         await s.commit()
     row = (await s.execute(
-        text("SELECT id, team_id, slug, name FROM groups WHERE id = :id"),
+        text("SELECT id, team_id, slug, name, kind FROM groups WHERE id = :id"),
         {"id": group_id},
     )).first()
     assert row is not None
     return envelope(data={
-        "id": str(row[0]), "team_id": str(row[1]), "slug": row[2], "name": row[3],
+        "id": str(row[0]), "team_id": str(row[1]), "slug": row[2],
+        "name": row[3], "kind": row[4],
     })
 
 
