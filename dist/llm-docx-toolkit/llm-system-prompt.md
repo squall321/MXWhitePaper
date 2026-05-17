@@ -22,9 +22,14 @@
 
 ---
 
-## 2. 18 위젯 한 줄 요약 (형태 + 필수 신호)
+## 2. 35 Block 한 줄 요약 (LLM 으로 만들 수 있는 29 + 사람 전용 6)
 
-| 위젯 | 형태 | 필수 신호 |
+스키마는 총 35 종 블록 정의. 그 중 6 종 (`spreadsheet` / `form` / `quiz` /
+`calculator` / `data-source` / `dashboard-embed`) 은 사용자 입력 / 라이브 데이터 /
+외부 시스템 의존이라 **docx 본문으로 표현 불가** — 본문에 placeholder 단락만
+두고 사람이 사이트 에디터에서 추가. 자세히는 `llm-input-rules.md` §2.17.
+
+| 블록 | 형태 | 필수 신호 / 비고 |
 |---|---|---|
 | paragraph         | 일반 단락                                        | 본문 텍스트 (inline bold/italic/link OK) |
 | heading-4         | `Heading 4` 스타일 단락                           | 탭/아코디언 라벨용 |
@@ -32,11 +37,14 @@
 | quote             | `Quote` / `Intense Quote` 스타일                   | — |
 | code              | `Code` 스타일 또는 회색배경(`F1F5F9`)+Consolas    | — |
 | math              | OMML 수식 또는 `$LaTeX$` 텍스트                    | — |
-| image             | inline picture                                   | floating 금지 |
+| image             | inline picture                                   | floating 금지, caption 권장 |
 | table             | 일반 표, 첫 행 헤더                              | 헤더 plain text (bold X) |
+| spacer            | 한 줄짜리 빈 paragraph + marker                  | `Widget: spacer (md)` — 남용 금지 |
+| bibliography      | "References" / "참고문헌" 헤더 + 항목 단락 목록   | 자동 import. 인용은 `[[cite:KEY]]` |
+| figure-index      | 한 단락 + marker (자동 생성됨)                    | `Widget: figure-index` — 본문 처음 위치 |
 | callout           | 1×1 색 표 + 이모지/라벨 OR 색배경+이모지 paragraph | 색 + ⚠️/💡/🚨/ℹ️ 또는 `[주의]`/`[정보]` |
 | kpi-cards         | 표, 헤더 = `label`,`value`(+`delta`,`trend`)      | 행 1~4개 |
-| chart             | 라벨축+시리즈 N 개 헤더 표 + marker               | `Widget: chart (bar)` 필수 (autodetect 안 함) |
+| chart             | 라벨축+시리즈 N 개 헤더 표 + marker               | `Widget: chart (bar)` 필수 |
 | gantt             | 표, 헤더 = `name`,`start`,`end`(+`progress`)      | 세 컬럼 |
 | flow              | code block 안 mermaid DSL                        | `graph TD` 등 |
 | org-chart         | 들여쓰기 리스트 OR `name`/`parent` 헤더 표        | — |
@@ -52,8 +60,15 @@
 | glossary-ref      | 단어 paragraph + marker                          | `Widget: glossary` 필수 |
 | image-annotation  | 이미지 + 좌표 표 (복잡) — *MX 에서 직접* 권장      | docx 비권장 |
 | whiteboard        | docx 표현 불가 — *MX 에서만 작성*                  | docx 에 만들지 마라 |
+| **spreadsheet** 👤 | 일반 `table` + 본문 주석 "spreadsheet 로 전환" | 사용자가 사이트에서 변환 |
+| **form** 👤        | placeholder 단락 "이 자리 form 블록"             | 사용자가 사이트 에디터에서 추가 |
+| **quiz** 👤        | placeholder 단락 "이 자리 quiz 블록"             | 동일 |
+| **calculator** 👤  | 공식 + 예시값만 본문에 단락으로                  | 동적 계산은 사이트에서 |
+| **data-source** 👤 | placeholder 단락 + endpoint URL 명시              | 사용자가 사이트에서 라이브 연결 |
+| **dashboard-embed** 👤 | placeholder 단락 + provider/panelId           | 동일 (Grafana / Looker 등) |
 
-> 위 표가 18 위젯 전부. 표에 없는 위젯명을 만들어내지 마라.
+> 위 표가 35 블록 전부. 👤 표시 = LLM 으로 docx 생성 불가, 본문에 placeholder
+> 만 두라. 표에 없는 블록명을 만들어내지 마라.
 
 ---
 

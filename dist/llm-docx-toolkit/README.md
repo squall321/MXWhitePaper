@@ -12,7 +12,7 @@
 ```
 llm-docx-toolkit/
 ├── README.md                   ← 이 문서
-├── llm-input-rules.md          ← LLM 에게 줄 명세서 (18 위젯 형태/실수/체크리스트)
+├── llm-input-rules.md          ← LLM 에게 줄 명세서 (35 블록 = 위젯 18 + 일반 17 + 사람전용 6)
 ├── llm-system-prompt.md        ← LLM 에게 직접 주입할 시스템 프롬프트
 ├── bin/
 │   ├── mxwp-validator-{linux,win32.exe}   ← .docx → DocumentJSON 검증
