@@ -69,6 +69,7 @@ GitHub Release 의 2 GB per-asset 한계 때문에 직접 빌드해서 받아갑
 ```
 llm-docx-toolkit-lite-{linux,windows}/
 ├── HANDOFF.md                ← 이 문서 (가장 먼저 읽음)
+├── docx-authoring-guide.html ← 19-slide deck (브라우저로 열어 백서 작성 절차 학습)
 ├── README.md                 ← 개발자용 상세
 ├── llm-input-rules.md        ← LLM 에게 줄 18-위젯 명세서 (전통적 방식)
 ├── llm-system-prompt.md      ← LLM 시스템 프롬프트 (간단형, MCP 의 prompt primitive)

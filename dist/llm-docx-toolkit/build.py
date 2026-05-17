@@ -493,6 +493,10 @@ def _pack_release(bin_dir: Path, variant: str) -> Path:
     for fname in (
         "HANDOFF.md", "README.md", "llm-input-rules.md",
         "llm-system-prompt.md", "requirements.txt", "build.py",
+        # 19-slide deck for authors — `mx_whitepaper_program_deck.html`
+        # styling, ships with every bundle so users can open it directly
+        # in a browser from the unpacked folder.
+        "docx-authoring-guide.html",
     ):
         f = here / fname
         if f.exists():

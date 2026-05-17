@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MX White Paper — .docx 작성 가이드 (LLM × 18 위젯)</title>
+<style>
+:root{
+ --blue:#1428A0; --blue2:#2563eb; --blue-dark:#0e1d6b;
+ --light:#eff6ff; --dark:#0f172a; --darker:#020617;
+ --gray:#64748b; --gray-light:#94a3b8; --border:#e2e8f0;
+ --green:#16a34a; --orange:#ea580c; --red:#dc2626;
+ --purple:#7c3aed; --teal:#0d9488; --yellow:#eab308;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+html,body{font-family:'Segoe UI','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+ background:#f8fafc;color:var(--dark);line-height:1.6;}
+
+.nav{position:fixed;top:0;left:0;right:0;z-index:200;background:var(--darker);color:#fff;
+ display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:52px;
+ font-size:.85rem;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+.nav-title{font-weight:700;letter-spacing:.03em;display:flex;align-items:center;gap:.6rem;}
+.nav-title .badge{background:var(--blue);padding:.18rem .55rem;border-radius:4px;font-weight:800;font-size:.72rem;}
+.nav-title .nav-cat{color:#93c5fd;font-size:.78rem;font-weight:600;}
+.nav-controls{display:flex;gap:.3rem;align-items:center;flex-wrap:wrap;}
+.nav-controls button{background:#1e293b;color:#cbd5e1;border:none;
+ padding:.32rem .6rem;border-radius:5px;cursor:pointer;font-size:.7rem;
+ font-weight:600;transition:all .15s;}
+.nav-controls button:hover{background:var(--blue2);color:#fff;}
+
+.slide{min-height:calc(100vh - 52px);display:flex;flex-direction:column;justify-content:center;
+ padding:3.5rem 4.5rem;border-bottom:1px solid var(--border);scroll-margin-top:52px;position:relative;}
+.slide:not(.cover):nth-child(odd){background:#ffffff;}
+.slide:not(.cover):nth-child(even){background:#f8fafc;}
+.slides-wrapper{padding-top:52px;}
+
+.slide-num{font-size:.72rem;font-weight:800;letter-spacing:.18em;
+ color:var(--blue2);text-transform:uppercase;margin-bottom:.6rem;}
+h2.slide-title{font-size:2.05rem;font-weight:900;color:var(--dark);margin-bottom:.35rem;line-height:1.15;}
+h2.slide-title span{color:var(--blue2);}
+.slide-sub{font-size:.97rem;color:var(--gray);margin-bottom:1.5rem;max-width:920px;}
+h3.sec{font-size:1.05rem;font-weight:800;color:var(--blue);margin:1.4rem 0 .6rem;
+ padding-left:.8rem;border-left:4px solid var(--blue2);}
+p,li{font-size:.9rem;line-height:1.65;color:#334155;}
+ul{padding-left:1.3rem;}
+code{background:#f1f5f9;border-radius:4px;padding:.15em .45em;font-size:.86em;
+ color:var(--blue);font-family:'Consolas','Menlo',monospace;font-weight:600;}
+
+.cover{min-height:calc(100vh - 52px);display:flex;flex-direction:column;justify-content:center;
+ padding:3rem 5rem;color:#fff;position:relative;overflow:hidden;
+ background:linear-gradient(135deg,#0e1d6b 0%,#1428A0 50%,#0d4a6b 100%);}
+.cover::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;
+ background-image:radial-gradient(circle at 20% 20%,rgba(255,255,255,.12) 0%,transparent 50%),
+ radial-gradient(circle at 80% 80%,rgba(255,255,255,.08) 0%,transparent 50%);pointer-events:none;}
+.cover-wrap{position:relative;z-index:2;max-width:1200px;}
+.cover-tagline{font-size:.82rem;font-weight:800;letter-spacing:.22em;
+ text-transform:uppercase;margin-bottom:1rem;opacity:.85;display:flex;align-items:center;gap:.8rem;}
+.cover-tagline .dot{width:8px;height:8px;border-radius:50%;background:currentColor;}
+.cover-title-block{margin-bottom:2rem;}
+.cover-title-block h1{font-size:3.6rem;font-weight:900;color:#fff;line-height:1.05;margin-bottom:.4rem;
+ text-shadow:0 2px 20px rgba(0,0,0,.3);}
+.cover-title-block .subtitle{font-size:1.12rem;color:rgba(255,255,255,.85);font-weight:500;}
+.cover-desc{font-size:1.05rem;color:rgba(255,255,255,.9);max-width:920px;line-height:1.75;
+ margin-bottom:2rem;}
+.cover-badges{display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:2rem;}
+.cover-badge{background:rgba(255,255,255,.15);backdrop-filter:blur(10px);
+ border:1px solid rgba(255,255,255,.25);color:#fff;padding:.5rem 1.1rem;border-radius:100px;
+ font-size:.82rem;font-weight:700;}
+.cover-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-top:2rem;max-width:900px;}
+.cover-stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+ border-radius:12px;padding:1rem 1.2rem;}
+.cover-stat .n{font-size:1.9rem;font-weight:900;color:#fff;line-height:1;}
+.cover-stat .l{font-size:.7rem;color:rgba(255,255,255,.7);text-transform:uppercase;
+ letter-spacing:.1em;margin-top:.4rem;font-weight:700;}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1.8rem;align-items:start;}
+.three-col{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;}
+.four-col{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;}
+.six-col{display:grid;grid-template-columns:repeat(6,1fr);gap:.7rem;}
+
+.card{background:#fff;border:1.5px solid var(--border);border-radius:12px;
+ padding:1.1rem 1.3rem;box-shadow:0 1px 3px rgba(0,0,0,.04);margin-bottom:.8rem;}
+.card h4{font-size:.96rem;font-weight:800;color:var(--blue);margin-bottom:.45rem;}
+.card p,.card li{font-size:.84rem;color:#475569;}
+.card ul{margin:.3rem 0;padding-left:1.1rem;}
+.card ul li{margin-bottom:.18rem;}
+.card.green{border-color:#86efac;background:linear-gradient(135deg,#fff,#f0fdf4);}
+.card.green h4{color:var(--green);}
+.card.orange{border-color:#fed7aa;background:linear-gradient(135deg,#fff,#fff7ed);}
+.card.orange h4{color:var(--orange);}
+.card.purple{border-color:#c4b5fd;background:linear-gradient(135deg,#fff,#faf5ff);}
+.card.purple h4{color:var(--purple);}
+.card.teal{border-color:#5eead4;background:linear-gradient(135deg,#fff,#f0fdfa);}
+.card.teal h4{color:var(--teal);}
+.card.red{border-color:#fca5a5;background:linear-gradient(135deg,#fff,#fff1f2);}
+.card.red h4{color:var(--red);}
+.card.dark{background:var(--darker);color:#cbd5e1;border-color:#1e293b;}
+.card.dark h4{color:#60a5fa;}
+.card.dark p,.card.dark li{color:#94a3b8;}
+.card.accent{border-color:var(--blue2);background:linear-gradient(135deg,#fff,var(--light));}
+.card.accent h4{color:var(--blue);}
+
+.workflow{display:flex;align-items:stretch;gap:.5rem;flex-wrap:wrap;margin:1.1rem 0;}
+.wf-step{flex:1;min-width:120px;background:#fff;border:2px solid var(--blue2);
+ border-radius:10px;padding:.75rem .85rem;position:relative;}
+.wf-step .wf-n{position:absolute;top:-10px;left:12px;background:var(--blue);color:#fff;
+ font-size:.7rem;font-weight:800;padding:.18rem .5rem;border-radius:100px;}
+.wf-step .wf-t{font-size:.83rem;font-weight:800;color:var(--blue);margin-bottom:.2rem;margin-top:.2rem;}
+.wf-step .wf-d{font-size:.72rem;color:#475569;line-height:1.45;}
+.wf-arrow{display:flex;align-items:center;color:var(--blue2);font-size:1.25rem;font-weight:800;padding:0 .1rem;}
+
+table{width:100%;border-collapse:collapse;font-size:.83rem;margin-bottom:1rem;
+ background:#fff;border-radius:10px;overflow:hidden;border:1px solid var(--border);}
+th{background:var(--darker);color:#e2e8f0;padding:.55rem .85rem;text-align:left;
+ font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+td{padding:.55rem .85rem;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--light);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.3rem;}
+.stat-box{background:#fff;border:1.5px solid var(--border);border-radius:12px;
+ padding:1.1rem 1rem;text-align:center;position:relative;overflow:hidden;}
+.stat-box::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--blue2);}
+.stat-box.green::before{background:var(--green);}
+.stat-box.orange::before{background:var(--orange);}
+.stat-box.purple::before{background:var(--purple);}
+.stat-box.teal::before{background:var(--teal);}
+.stat-box .stat-num{font-size:1.7rem;font-weight:900;color:var(--dark);line-height:1;}
+.stat-box .stat-label{font-size:.7rem;color:var(--gray);margin-top:.4rem;
+ text-transform:uppercase;letter-spacing:.08em;font-weight:700;}
+
+.tag{display:inline-flex;align-items:center;font-size:.71rem;font-weight:700;
+ padding:.22em .65em;border-radius:100px;margin:.12rem .08rem;}
+.tag-blue{background:#dbeafe;color:var(--blue);}
+.tag-green{background:#dcfce7;color:var(--green);}
+.tag-orange{background:#ffedd5;color:var(--orange);}
+.tag-teal{background:#ccfbf1;color:var(--teal);}
+.tag-purple{background:#ede9fe;color:var(--purple);}
+.tag-red{background:#fee2e2;color:var(--red);}
+.tag-dark{background:#1e293b;color:#cbd5e1;}
+
+.insight-box{background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid var(--blue2);
+ border-radius:12px;padding:1.1rem 1.4rem;margin:1rem 0;}
+.insight-box p{font-size:.92rem;color:var(--blue-dark);font-weight:600;line-height:1.7;}
+
+.json-block{background:#0f172a;border-radius:10px;padding:1.1rem 1.3rem;
+ font-family:'Consolas','Menlo',monospace;font-size:.76rem;line-height:1.6;
+ color:#e2e8f0;overflow-x:auto;margin:.7rem 0;}
+.json-block .key{color:#93c5fd;}
+.json-block .val{color:#86efac;}
+.json-block .str{color:#fbbf24;}
+.json-block .comment{color:#64748b;font-style:italic;}
+
+.slide-footer{margin-top:auto;padding-top:1.5rem;font-size:.74rem;color:var(--gray);
+ border-top:1px dashed var(--border);text-align:right;}
+
+.callout{display:grid;grid-template-columns:auto 1fr;gap:1rem;align-items:start;
+ background:#fff;border:1.5px solid var(--border);border-left:4px solid var(--blue2);
+ border-radius:8px;padding:.95rem 1.2rem;margin:.7rem 0;}
+.callout .ic{font-size:1.4rem;line-height:1;color:var(--blue2);}
+.callout h5{font-size:.88rem;font-weight:800;color:var(--blue);margin-bottom:.25rem;}
+.callout p{font-size:.83rem;color:#475569;}
+.callout.green{border-left-color:var(--green);}
+.callout.green h5{color:var(--green);}
+.callout.green .ic{color:var(--green);}
+.callout.orange{border-left-color:var(--orange);}
+.callout.orange h5{color:var(--orange);}
+.callout.orange .ic{color:var(--orange);}
+.callout.purple{border-left-color:var(--purple);}
+.callout.purple h5{color:var(--purple);}
+.callout.purple .ic{color:var(--purple);}
+.callout.red{border-left-color:var(--red);}
+.callout.red h5{color:var(--red);}
+.callout.red .ic{color:var(--red);}
+
+.block-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.6rem;margin:.7rem 0;}
+.block-chip{background:#fff;border:1.5px solid var(--border);border-radius:8px;
+ padding:.55rem .75rem;font-size:.78rem;font-weight:600;color:#334155;text-align:center;
+ transition:transform .12s,box-shadow .12s;}
+.block-chip:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.06);}
+.block-chip.necessary{border-color:#fca5a5;background:linear-gradient(135deg,#fff,#fff1f2);}
+.block-chip.identification{border-color:#fdba74;background:linear-gradient(135deg,#fff,#fff7ed);}
+.block-chip.roundtrip{border-color:#86efac;background:linear-gradient(135deg,#fff,#f0fdf4);}
+.block-chip .bc-icon{display:block;font-size:1.1rem;margin-bottom:.18rem;}
+
+.figcap{font-size:.78rem;color:var(--gray);font-style:italic;text-align:center;margin-top:.4rem;}
+.tblcap{font-size:.78rem;color:var(--gray);font-style:italic;text-align:center;margin-bottom:.4rem;}
+
+.tree{font-family:'Consolas','Menlo',monospace;font-size:.78rem;line-height:1.55;
+ background:#0f172a;color:#cbd5e1;border-radius:10px;padding:1.1rem 1.3rem;
+ white-space:pre;overflow-x:auto;}
+.tree .dir{color:#93c5fd;font-weight:700;}
+.tree .com{color:#64748b;font-style:italic;}
+
+@media(max-width:1100px){
+ .nav-controls button{padding:.28rem .45rem;font-size:.66rem;}
+}
+@media(max-width:900px){
+ .slide{padding:2rem 1.5rem;} .cover{padding:2rem 1.5rem;}
+ .two-col,.three-col,.four-col,.six-col,.stat-grid{grid-template-columns:1fr;}
+ .cover-title-block h1{font-size:2.3rem;}
+ .cover-stats{grid-template-columns:repeat(2,1fr);}
+ .workflow{flex-direction:column;}
+ .wf-arrow{transform:rotate(90deg);}
+ .block-grid{grid-template-columns:repeat(2,1fr);}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+ <div class="nav-title">
+  <span class="badge">MX</span>
+  <span>.docx 작성 가이드</span>
+  <span class="nav-cat">LLM × 18 위젯 · validator · RAG · MCP</span>
+ </div>
+ <div class="nav-controls">
+  <button onclick="location.href='#cover'">Cover</button>
+  <button onclick="location.href='#overview'">01</button>
+  <button onclick="location.href='#zip'">02</button>
+  <button onclick="location.href='#first5'">03</button>
+  <button onclick="location.href='#widgets'">04</button>
+  <button onclick="location.href='#widget-detail'">05</button>
+  <button onclick="location.href='#mode1'">06</button>
+  <button onclick="location.href='#mode2'">07</button>
+  <button onclick="location.href='#mode3'">08</button>
+  <button onclick="location.href='#prompt'">09</button>
+  <button onclick="location.href='#rag-cli'">10</button>
+  <button onclick="location.href='#mcp'">11</button>
+  <button onclick="location.href='#claude-desktop'">12</button>
+  <button onclick="location.href='#pipeline'">13</button>
+  <button onclick="location.href='#validator'">14</button>
+  <button onclick="location.href='#upload'">15</button>
+  <button onclick="location.href='#errors'">16</button>
+  <button onclick="location.href='#drift'">17</button>
+  <button onclick="location.href='#full'">18</button>
+  <button onclick="location.href='#cheat'">19</button>
+ </div>
+</nav>
+
+<div class="slides-wrapper">
+
+<!-- ===== COVER ===== -->
+<section class="cover slide" id="cover">
+ <div class="cover-wrap">
+  <div class="cover-tagline">
+   <span class="dot"></span> MX White Paper · 작성자 가이드 <span class="dot"></span> Authoring Reference
+  </div>
+  <div class="cover-title-block">
+   <h1>MX White Paper<br/>.docx 작성 가이드</h1>
+   <div class="subtitle">LLM × 18 위젯 · mxwp-validator · mxwp-rules · mxwp-mcp</div>
+  </div>
+  <div class="cover-desc">
+   사내 백서를 <strong style="color:#fbbf24;">LLM 으로 작성 → 로컬 validator 로 검증 → 서버에 업로드</strong>
+   하는 전 과정을 한 자리에 정리. LLM 활용은 3가지 모드 — 처음부터 생성 / 기존 자료 양식 정리 / 내용 보강.
+   18 위젯 (necessary 6 · identification 4 · round-trip 8), 4계층 drift 가드, MCP 통합까지.
+  </div>
+  <div class="cover-badges">
+   <span class="cover-badge">18 Widget Types</span>
+   <span class="cover-badge">3 LLM 활용 모드</span>
+   <span class="cover-badge">3 RAG Backends (bm25/st/openai)</span>
+   <span class="cover-badge">MCP stdio Server</span>
+   <span class="cover-badge">4-Layer Drift Guard</span>
+   <span class="cover-badge">lite ~110 MB / full ~2.6 GB</span>
+  </div>
+  <div class="cover-stats">
+   <div class="cover-stat"><div class="n">18</div><div class="l">Widget Types</div></div>
+   <div class="cover-stat"><div class="n">3</div><div class="l">LLM Modes</div></div>
+   <div class="cover-stat"><div class="n">5</div><div class="l">Step Pipeline</div></div>
+   <div class="cover-stat"><div class="n">4</div><div class="l">Drift Layers</div></div>
+  </div>
+ </div>
+</section>
+
+<!-- ===== 01: 한 장 요약 ===== -->
+<section class="slide" id="overview">
+ <div class="slide-num">SLIDE 01</div>
+ <h2 class="slide-title">한 장 요약 <span>— LLM 으로 백서 .docx 만들기</span></h2>
+ <div class="slide-sub">사용자가 하는 일 3가지 · LLM 이 하는 일 3가지 · 시스템이 하는 일 3가지.</div>
+
+ <div class="three-col">
+  <div class="card purple">
+   <h4>① 사용자가 한다</h4>
+   <ul>
+    <li>주제 · 목차 · 핵심 메시지를 LLM 에게 전달</li>
+    <li>(선택) 기존 자료 (워드/엑셀/메모) 를 LLM 에게 던지기</li>
+    <li>LLM 이 만든 <code>.docx</code> 를 받아 <code>mxwp-validator</code> 로 검증</li>
+    <li>OK 면 사이트에 업로드, 아니면 LLM 에게 재요청</li>
+   </ul>
+  </div>
+  <div class="card teal">
+   <h4>② LLM 이 한다 (3 모드)</h4>
+   <ul>
+    <li><strong>모드 ① 생성</strong>: 처음부터 18 위젯 규격으로 작성</li>
+    <li><strong>모드 ② 양식 정리</strong>: 기존 자료 → 18 위젯에 매핑</li>
+    <li><strong>모드 ③ 내용 보강</strong>: 거친 본문 → 인과관계 / 근거 / 예시 추가</li>
+    <li>룰 참조는 system prompt 통째 / RAG 검색 / MCP tool 중 선택</li>
+   </ul>
+  </div>
+  <div class="card green">
+   <h4>③ 시스템이 한다</h4>
+   <ul>
+    <li><code>mxwp-validator</code>: 로컬 검증 (서버 없이)</li>
+    <li><code>mxwp-rules</code>: RAG 검색 (bm25 / st / openai)</li>
+    <li><code>mxwp-mcp</code>: Claude Desktop / Code 에 stdio 로 연결</li>
+    <li>4계층 drift 가드 — 위젯 룰 바뀌면 자동 동기화</li>
+   </ul>
+  </div>
+ </div>
+
+ <div class="insight-box">
+  <p>핵심 — 사용자는 <strong>"이런 백서 만들어줘"</strong> 만 말한다. 18 위젯 / 마커 / 스키마 같은
+  기술 디테일은 LLM 과 toolkit 이 처리한다. 사용자는 결과만 검토 · 보강하면 된다.</p>
+ </div>
+
+ <div class="slide-footer">다음 — 받은 toolkit zip 안에 뭐가 있나</div>
+</section>
+
+<!-- ===== 02: zip 안에 뭐가 있나 ===== -->
+<section class="slide" id="zip">
+ <div class="slide-num">SLIDE 02</div>
+ <h2 class="slide-title">받은 자료 <span>— lite zip 안의 파일 트리</span></h2>
+ <div class="slide-sub">GitHub Release 의 <code>llm-docx-toolkit-lite-{linux,windows}</code> 를 풀면 다음 구조. ~110 MB.</div>
+
+ <div class="tree">llm-docx-toolkit-lite-{linux,windows}/
+├── <span class="dir">HANDOFF.md</span>            <span class="com"># 가장 먼저 읽음 — 한 페이지 핸드오프</span>
+├── <span class="dir">docx-authoring-guide.html</span>  <span class="com"># 이 슬라이드 (작성자용 deck)</span>
+├── <span class="dir">README.md</span>             <span class="com"># 개발자용 상세</span>
+├── llm-input-rules.md           <span class="com"># 18-위젯 명세서 (7 KB · 전통 방식 system prompt 용)</span>
+├── llm-system-prompt.md         <span class="com"># 시스템 프롬프트 (간결형 · MCP prompt primitive)</span>
+│
+├── <span class="dir">bin/</span>                          <span class="com"># 단일 실행 파일 (의존성 0)</span>
+│   ├── mxwp-validator-*  ~17 MB    <span class="com"># .docx 검증</span>
+│   ├── mxwp-rules-*      ~27 MB    <span class="com"># RAG CLI (bm25 backend)</span>
+│   └── mxwp-mcp-*        ~68 MB    <span class="com"># MCP stdio 서버</span>
+│
+├── <span class="dir">examples/</span>                     <span class="com"># 모범/반례 .docx (validator exit 0)</span>
+│   ├── good-example.docx          <span class="com"># 16 위젯 모범</span>
+│   ├── all-widgets.docx           <span class="com"># 18 위젯 전부</span>
+│   └── bad-example.docx           <span class="com"># marker round-trip 비교용</span>
+│
+├── <span class="dir">rag/</span>                          <span class="com"># RAG 코퍼스 (120 chunks)</span>
+│   ├── chunks.jsonl               <span class="com"># 결정론적 (SHA c1f22a05...)</span>
+│   └── index.lock                 <span class="com"># source hash manifest</span>
+│
+├── <span class="dir">mcp/</span>                          <span class="com"># MCP 클라이언트 설정 예시</span>
+│   ├── example-claude-desktop.json
+│   └── example-claude-code.json
+│
+└── <span class="dir">apply/</span>                        <span class="com"># 보조 도구</span>
+    ├── apply-rules.ps1
+    └── repack-as-zip.ps1          <span class="com"># Windows 동료 전달용</span></div>
+
+ <div class="callout">
+  <div class="ic">📦</div>
+  <div>
+   <h5>lite vs full</h5>
+   <p>위 트리는 <code>lite</code> 기준 (~110 MB). <strong>st / openai 백엔드</strong>가 통째 번들된
+   <code>full</code> (~2.6 GB) 은 GitHub Release 2 GB asset 한계로 직접 빌드 — 마지막 SLIDE 18 참고.</p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 첫 5분: validator 로 sanity check</div>
+</section>
+
+<!-- ===== 03: 첫 5분 ===== -->
+<section class="slide" id="first5">
+ <div class="slide-num">SLIDE 03</div>
+ <h2 class="slide-title">첫 5분 <span>— validator 로 sanity check</span></h2>
+ <div class="slide-sub">아무것도 안 만들고도 toolkit 이 정상 동작하는지 확인. 동봉된 examples 로 끝난다.</div>
+
+ <h3 class="sec">3.1 명령</h3>
+
+ <div class="two-col">
+  <div class="card accent">
+   <h4>Linux / macOS</h4>
+   <div class="json-block">$ ./bin/mxwp-validator-linux examples/good-example.docx
+$ echo "exit=$?"</div>
+  </div>
+  <div class="card accent">
+   <h4>Windows</h4>
+   <div class="json-block">PS&gt; .\bin\mxwp-validator-win32.exe examples\good-example.docx
+PS&gt; $LASTEXITCODE</div>
+  </div>
+ </div>
+
+ <h3 class="sec">3.2 출력 해석</h3>
+ <div class="tblcap">표 1. validator 종료 코드</div>
+ <table>
+  <thead><tr><th>코드</th><th>의미</th><th>다음 액션</th></tr></thead>
+  <tbody>
+   <tr><td><span class="tag tag-green">0</span></td><td>스키마 유효, import 준비 완료</td><td>서버 업로드로 진행</td></tr>
+   <tr><td><span class="tag tag-red">1</span></td><td>스키마 위반 — 서버가 REJECT</td><td>출력의 schema errors 보고 LLM 재요청</td></tr>
+   <tr><td><span class="tag tag-orange">2</span></td><td>.docx 파싱 실패 (zip 손상 / .docx 아님)</td><td>파일 재생성</td></tr>
+   <tr><td><span class="tag tag-orange">3</span></td><td>사용법 / I/O 오류</td><td>인자 / 경로 확인</td></tr>
+  </tbody>
+ </table>
+
+ <h3 class="sec">3.3 부수 산출물</h3>
+ <p>validator 가 <code>output.json</code> 을 자동 생성 — 서버가 보게 될 DocumentJSON 과 동일한 구조.
+ 사전에 형태 확인 가능 (위젯 인벤토리 / placeholder / autodetect 목록).</p>
+
+ <div class="callout green">
+  <div class="ic">✓</div>
+  <div>
+   <h5>good-example 결과 예시</h5>
+   <p><code>sections: 2 · blocks total: 25 · Widget inventory: callout 1 · chart 1 · gantt 1 · ...
+   · Schema valid. Document is import-ready.</code></p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 18 위젯 카탈로그</div>
+</section>
+
+<!-- ===== 04: 18 위젯 ===== -->
+<section class="slide" id="widgets">
+ <div class="slide-num">SLIDE 04</div>
+ <h2 class="slide-title">18 위젯 카탈로그 <span>— 3 그룹 (necessary · identification · round-trip)</span></h2>
+ <div class="slide-sub">위젯은 종류에 따라 docx 가 *왜* 마커가 필요한지 의미가 다르다. LLM 에게 룰을 줄 때도 이 구분이 도움.</div>
+
+ <h3 class="sec">4.1 위젯 18종 (마커 영역별)</h3>
+ <div class="block-grid">
+  <div class="block-chip necessary"><span class="bc-icon">🌐</span>iframe</div>
+  <div class="block-chip necessary"><span class="bc-icon">🎬</span>video</div>
+  <div class="block-chip necessary"><span class="bc-icon">📎</span>file</div>
+  <div class="block-chip necessary"><span class="bc-icon">📄</span>pdf</div>
+  <div class="block-chip necessary"><span class="bc-icon">🖍</span>whiteboard</div>
+  <div class="block-chip necessary"><span class="bc-icon">🖼</span>image-annotation</div>
+  <div class="block-chip necessary"><span class="bc-icon">🔀</span>flow</div>
+  <div class="block-chip necessary"><span class="bc-icon">📊</span>chart</div>
+  <div class="block-chip necessary"><span class="bc-icon">📅</span>gantt</div>
+  <div class="block-chip necessary"><span class="bc-icon">🏢</span>org-chart</div>
+  <div class="block-chip identification"><span class="bc-icon">🗂</span>tabs</div>
+  <div class="block-chip identification"><span class="bc-icon">📁</span>accordion</div>
+  <div class="block-chip identification"><span class="bc-icon">🔗</span>doc-link-card</div>
+  <div class="block-chip identification"><span class="bc-icon">📖</span>glossary-ref</div>
+  <div class="block-chip roundtrip"><span class="bc-icon">💡</span>callout</div>
+  <div class="block-chip roundtrip"><span class="bc-icon">📈</span>kpi-cards</div>
+  <div class="block-chip roundtrip"><span class="bc-icon">🗞</span>columns</div>
+  <div class="block-chip roundtrip"><span class="bc-icon">🎨</span>gallery</div>
+ </div>
+ <p class="figcap">그림 1. 위젯 chip — 빨간 박스 = necessary (docx 자체 표현 불가), 주황 = identification (모양만 봐선 모호), 녹색 = round-trip (autodetect fallback 가능)</p>
+
+ <h3 class="sec">4.2 그룹별 의미</h3>
+ <div class="three-col">
+  <div class="card red">
+   <h4>① Necessary (10 종)</h4>
+   <p><strong>docx 자체로 표현 불가</strong>. 반드시 hidden marker 필수.
+   외부 LLM 이 마커 없이 만들면 import 시 *완전 손실* (placeholder 만 남음).</p>
+   <p>iframe · video · file · pdf · whiteboard · image-annotation · flow · chart · gantt · org-chart</p>
+  </div>
+  <div class="card orange">
+   <h4>② Identification (4 종)</h4>
+   <p>자연 표현은 가능하지만 <strong>모양만 봐선 모호</strong> (table 인지 tabs 인지 등).
+   Marker 권장 — 없으면 일반 paragraph 로 떨어짐.</p>
+   <p>tabs · accordion · doc-link-card · glossary-ref</p>
+  </div>
+  <div class="card green">
+   <h4>③ Round-trip (4 종)</h4>
+   <p>본문 형태로 봐도 알 수 있는 위젯 (색 박스 / 2×2 격자 / 다중 칼럼 / 이미지 시리즈).
+   Marker 권장이지만 <strong>autodetect 가 fallback</strong> 처리.</p>
+   <p>callout · kpi-cards · columns · gallery</p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 위젯별 사용 예시 (5종 선별)</div>
+</section>
+
+<!-- ===== 05: 위젯 상세 ===== -->
+<section class="slide" id="widget-detail">
+ <div class="slide-num">SLIDE 05</div>
+ <h2 class="slide-title">위젯 상세 예시 <span>— 자주 쓰는 5 종</span></h2>
+ <div class="slide-sub">LLM 에게 "callout 으로 강조해줘" 처럼 직접 지시하면 가장 정확. 입력 룰 전문은 <code>llm-input-rules.md</code>.</div>
+
+ <div class="two-col">
+  <div>
+   <h3 class="sec">5.1 callout (강조 박스)</h3>
+   <div class="card green">
+    <h4>용도</h4>
+    <p>중요 메시지 / 경고 / 팁. variant: <code>info</code> · <code>warning</code> · <code>error</code> · <code>tip</code></p>
+   </div>
+   <div class="json-block"><span class="comment"># marker text (docx 안 hidden)</span>
+<span class="key">Widget:</span> <span class="val">callout</span>
+<span class="key">variant:</span> <span class="str">"warning"</span>
+<span class="key">text:</span> <span class="str">"이 절차는 production 에서만"</span></div>
+
+   <h3 class="sec">5.2 chart (차트)</h3>
+   <div class="card green">
+    <h4>용도</h4>
+    <p>막대 · 선 · 파이 · 영역. <code>labels</code> + <code>series</code> 표 형식.</p>
+   </div>
+   <div class="json-block"><span class="key">Widget:</span> <span class="val">chart</span>
+<span class="key">kind:</span> <span class="str">"bar"</span>
+<span class="key">labels:</span> [<span class="str">"Q1","Q2","Q3","Q4"</span>]
+<span class="key">series:</span> [{<span class="key">name:</span> <span class="str">"매출"</span>, <span class="key">data:</span> [12,18,9,21]}]</div>
+  </div>
+  <div>
+   <h3 class="sec">5.3 kpi-cards (핵심 지표)</h3>
+   <div class="card green">
+    <h4>용도</h4>
+    <p>핵심 수치 2-6개 grid 표시. <code>items</code> 배열, 각 <code>label/value/delta?</code>.</p>
+   </div>
+   <div class="json-block"><span class="key">Widget:</span> <span class="val">kpi-cards</span>
+<span class="key">items:</span> [
+  {<span class="key">label:</span> <span class="str">"가입자"</span>, <span class="key">value:</span> <span class="str">"12,400"</span>, <span class="key">delta:</span> <span class="str">"+8%"</span>},
+  {<span class="key">label:</span> <span class="str">"MAU"</span>,   <span class="key">value:</span> <span class="str">"3,200"</span>}
+]</div>
+
+   <h3 class="sec">5.4 callout · 5.5 tabs</h3>
+   <div class="card orange">
+    <h4>tabs</h4>
+    <p>같은 주제의 *대안* (Linux/macOS/Windows · before/after 등). marker 권장 — 없으면 그냥 표로 떨어짐.</p>
+   </div>
+   <div class="json-block"><span class="key">Widget:</span> <span class="val">tabs</span>
+<span class="key">items:</span> [
+  {<span class="key">label:</span> <span class="str">"Linux"</span>, <span class="key">content:</span> [...]},
+  {<span class="key">label:</span> <span class="str">"Windows"</span>, <span class="key">content:</span> [...]}
+]</div>
+  </div>
+ </div>
+
+ <div class="callout purple">
+  <div class="ic">💡</div>
+  <div>
+   <h5>LLM 에게 직접 위젯 이름으로 요청</h5>
+   <p>예: "이 단락은 <strong>callout(warning)</strong> 으로, 다음 표는 <strong>kpi-cards 4개</strong> 로 나눠줘".
+   LLM 이 RAG / system prompt 에서 해당 위젯의 정확한 marker 형식을 가져와 사용.</p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 모드 ① LLM 으로 처음부터 생성</div>
+</section>
+
+<!-- ===== 06: 모드 ① 생성 ===== -->
+<section class="slide" id="mode1">
+ <div class="slide-num">SLIDE 06</div>
+ <h2 class="slide-title">모드 ① <span>— LLM 으로 처음부터 생성</span></h2>
+ <div class="slide-sub">주제 / 목차만 주면 LLM 이 18-위젯 규격 .docx 를 만들어준다.</div>
+
+ <h3 class="sec">6.1 사용자 입력 (예시)</h3>
+ <div class="card dark">
+  <h4>대화창에 던지는 한 줄</h4>
+  <p style="color:#cbd5e1;">"<strong>MXWhitePaper 의 RAG 시스템 설계 백서</strong> 를 만들어줘.
+  목차는 1) 배경, 2) 아키텍처, 3) 4계층 drift 가드, 4) 검색 성능 비교, 5) 향후 계획.
+  3장에는 <strong>flow 위젯</strong> 으로 흐름도, 4장에는 <strong>chart</strong> 와 <strong>kpi-cards</strong> 활용. 분량 A4 5-7쪽."</p>
+ </div>
+
+ <h3 class="sec">6.2 LLM 이 하는 일 (자동)</h3>
+ <div class="workflow">
+  <div class="wf-step"><span class="wf-n">1</span><div class="wf-t">룰 fetch</div><div class="wf-d">RAG / system prompt 에서 18 위젯 marker 형식 가져옴</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">2</span><div class="wf-t">목차 → sections</div><div class="wf-d">5개 sections + subsections 트리 구성</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">3</span><div class="wf-t">위젯 매핑</div><div class="wf-d">flow / chart / kpi-cards 각 위치에 marker 삽입</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">4</span><div class="wf-t">.docx 렌더</div><div class="wf-d">사용자에게 파일 또는 다운로드 링크 제공</div></div>
+ </div>
+
+ <h3 class="sec">6.3 사용자 검증 (필수)</h3>
+ <div class="json-block">$ ./bin/mxwp-validator-linux output.docx
+<span class="comment"># Schema valid → 다음 단계. 아니면 LLM 에게 errors 보내 재요청</span></div>
+
+ <div class="callout green">
+  <div class="ic">✓</div>
+  <div>
+   <h5>강점</h5>
+   <p>0 에서 1 까지 빠름. 목차 한 줄로 5-7쪽 백서. <strong>LLM 이 위젯 다양성을 잘 활용</strong> 하므로
+   reader 가 보기 풍부함.</p>
+  </div>
+ </div>
+ <div class="callout orange">
+  <div class="ic">⚠</div>
+  <div>
+   <h5>약점</h5>
+   <p>내용의 *사실 정확도* 는 LLM 의 한계. 사내 사실 (조직명 / 수치 / 정책) 은 사용자가 review.
+   RAG 코퍼스에 분야 어휘를 추가하면 정확도 향상 (별도 사이클로 계획됨).</p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 모드 ② 기존 자료 양식 정리</div>
+</section>
+
+<!-- ===== 07: 모드 ② 양식 정리 ===== -->
+<section class="slide" id="mode2">
+ <div class="slide-num">SLIDE 07</div>
+ <h2 class="slide-title">모드 ② <span>— 기존 자료의 양식 정리</span></h2>
+ <div class="slide-sub">이미 있는 워드 / 엑셀 / 메모를 LLM 이 18 위젯 규격으로 재편성.</div>
+
+ <h3 class="sec">7.1 입력 가능한 원본</h3>
+ <div class="four-col">
+  <div class="card teal">
+   <h4>워드 문서</h4>
+   <p>제목/단락만 있는 기존 보고서. LLM 이 표 → kpi-cards, 색 박스 → callout 으로 매핑.</p>
+  </div>
+  <div class="card teal">
+   <h4>엑셀 표</h4>
+   <p>지표 시트 → kpi-cards / chart. 분기 데이터 → bar/line chart.</p>
+  </div>
+  <div class="card teal">
+   <h4>마크다운 / 노트</h4>
+   <p>회의록 · 위키 페이지. 헤더 구조 → sections, 코드 fence → 그대로 paragraph code.</p>
+  </div>
+  <div class="card teal">
+   <h4>PPT 슬라이드</h4>
+   <p>슬라이드별 → section. 다이어그램 위치 → flow / org-chart 위젯.</p>
+  </div>
+ </div>
+
+ <h3 class="sec">7.2 LLM 에게 주는 지시 (예시)</h3>
+ <div class="card dark">
+  <p style="color:#cbd5e1;">"첨부한 <strong>2025_Q4_고객분석.xlsx</strong> 를 MXWhitePaper 백서 .docx 로 정리해줘.
+  지표 4개는 <strong>kpi-cards</strong>, 분기 추이는 <strong>chart(line)</strong>, 핵심 인사이트는
+  <strong>callout(info)</strong> 로. 본문 흐름은 1) 요약 → 2) 데이터 → 3) 시사점."</p>
+ </div>
+
+ <h3 class="sec">7.3 LLM 이 하는 매핑</h3>
+ <div class="tblcap">표 2. 원본 → 위젯 매핑 (LLM 의 휴리스틱)</div>
+ <table>
+  <thead><tr><th>원본 패턴</th><th>매핑되는 위젯</th><th>판단 근거</th></tr></thead>
+  <tbody>
+   <tr><td>"중요 / 주의" 색 박스</td><td><span class="tag tag-blue">callout</span></td><td>variant 자동 선택 (warning/info)</td></tr>
+   <tr><td>지표 2-6 개 grid</td><td><span class="tag tag-blue">kpi-cards</span></td><td>label/value 추출</td></tr>
+   <tr><td>시계열 데이터 표</td><td><span class="tag tag-blue">chart (line/bar)</span></td><td>X 축 추정</td></tr>
+   <tr><td>탭처럼 구분된 섹션</td><td><span class="tag tag-blue">tabs</span></td><td>"Linux/Windows" 등 키워드</td></tr>
+   <tr><td>이미지 4-12 장 연속</td><td><span class="tag tag-blue">gallery</span></td><td>caption 동질성</td></tr>
+   <tr><td>흐름도 / 프로세스</td><td><span class="tag tag-blue">flow</span></td><td>화살표 / "단계 1, 2..."</td></tr>
+   <tr><td>일정 / 마일스톤</td><td><span class="tag tag-blue">gantt</span></td><td>날짜 + 항목 매트릭스</td></tr>
+   <tr><td>조직도</td><td><span class="tag tag-blue">org-chart</span></td><td>"실장 → 팀장 → 책임" 패턴</td></tr>
+  </tbody>
+ </table>
+
+ <div class="callout green">
+  <div class="ic">✓</div>
+  <div>
+   <h5>강점</h5>
+   <p>이미 사실 검증된 데이터를 *형식만* 정돈 → 정확도 보장 + 가독성 향상. 운영자가 매번 새 백서를
+   처음부터 쓸 필요 없음.</p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 모드 ③ 내용 보강</div>
+</section>
+
+<!-- ===== 08: 모드 ③ 내용 보강 ===== -->
+<section class="slide" id="mode3">
+ <div class="slide-num">SLIDE 08</div>
+ <h2 class="slide-title">모드 ③ <span>— 내용 보강 (인과관계 / 근거 / 예시)</span></h2>
+ <div class="slide-sub">초안의 *왜 / 어떻게* 가 빈약할 때 LLM 이 인과관계와 근거를 풍부하게.</div>
+
+ <h3 class="sec">8.1 보강 대상 (예시)</h3>
+ <div class="two-col">
+  <div class="card orange">
+   <h4>before — 사용자 초안</h4>
+   <p style="font-style:italic;">"새 가입 사용자가 증가했다. 마케팅 캠페인이 효과 있었다."</p>
+  </div>
+  <div class="card green">
+   <h4>after — LLM 보강</h4>
+   <p style="font-style:italic;">"3분기 신규 가입자는 12,400명 (전 분기 대비 +18%). 이는 동기간 진행한
+   '온라인 광고 A/B 테스트' 결과 안 B 안 (행동 유도 문구 강조) 의 클릭률이 A 안 대비 2.3× 였던 점,
+   그리고 SEO 키워드 12개 추가 등록이 검색 유입을 +37% 증가시킨 점의 합으로 보인다.
+   다만 가입 후 7일 잔존율은 동일 분기에 -4% pt 떨어졌으므로 후속 활성화 정책이 필요하다."</p>
+  </div>
+ </div>
+
+ <h3 class="sec">8.2 LLM 에게 주는 지시</h3>
+ <div class="card dark">
+  <p style="color:#cbd5e1;">"내가 쓴 본문 (3쪽) 의 *결론* 부분에 <strong>인과관계 (왜 그렇게 됐는지)</strong>,
+  <strong>근거 (어떤 데이터 / 사례)</strong>, <strong>한계 (어디까지 말할 수 있는지)</strong> 를 추가해줘.
+  사실 추측은 최소화. 만약 추측이면 명시적으로 '~로 추정' 으로 표현. 그 외 형식은 유지."</p>
+ </div>
+
+ <h3 class="sec">8.3 보강 단계 흐름</h3>
+ <div class="workflow">
+  <div class="wf-step"><span class="wf-n">1</span><div class="wf-t">사용자 초안</div><div class="wf-d">거친 본문 + 핵심 수치</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">2</span><div class="wf-t">LLM 분석</div><div class="wf-d">맥락 부족 / 주장 근거 부족 식별</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">3</span><div class="wf-t">보강 제안</div><div class="wf-d">인과 / 근거 / 한계 추가 draft</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">4</span><div class="wf-t">사용자 review</div><div class="wf-d">사실 검증 + 거짓 추측 제거</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">5</span><div class="wf-t">.docx 출력</div><div class="wf-d">18-위젯 규격으로 정돈된 최종본</div></div>
+ </div>
+
+ <div class="callout red">
+  <div class="ic">⚠</div>
+  <div>
+   <h5>주의 — LLM 의 '환각' 위험</h5>
+   <p>인과관계 보강은 LLM 이 그럴듯한 *가짜 근거* 를 만들기 쉽다. 반드시 사용자가 한 번 더 검증.
+   특히 외부 수치 인용은 출처 명시 요구.</p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 룰 참조 방식 ① system prompt 통째</div>
+</section>
+
+<!-- ===== 09: system prompt 통째 ===== -->
+<section class="slide" id="prompt">
+ <div class="slide-num">SLIDE 09</div>
+ <h2 class="slide-title">룰 참조 ① <span>— system prompt 통째 주입</span></h2>
+ <div class="slide-sub">가장 단순한 방법. <code>llm-input-rules.md</code> 또는 <code>llm-system-prompt.md</code> 를 system prompt 에 통째로.</div>
+
+ <h3 class="sec">9.1 두 파일의 차이</h3>
+ <div class="tblcap">표 3. system prompt 파일 비교</div>
+ <table>
+  <thead><tr><th>파일</th><th>크기</th><th>용도</th><th>대상 LLM</th></tr></thead>
+  <tbody>
+   <tr><td><code>llm-input-rules.md</code></td><td>~7 KB</td><td>18-위젯 입력 명세 (룰 전문)</td><td>긴 context 모델 (Claude / GPT-4)</td></tr>
+   <tr><td><code>llm-system-prompt.md</code></td><td>~7 KB</td><td>지시문 형식 (시스템 프롬프트)</td><td>지시 따르기 좋은 모델</td></tr>
+  </tbody>
+ </table>
+
+ <h3 class="sec">9.2 사용 절차</h3>
+ <div class="workflow">
+  <div class="wf-step"><span class="wf-n">1</span><div class="wf-t">파일 복사</div><div class="wf-d"><code>llm-input-rules.md</code> 전체 복사</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">2</span><div class="wf-t">system prompt 에 붙여넣기</div><div class="wf-d">대화 첫 메시지 또는 system 영역</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">3</span><div class="wf-t">"백서 만들어줘"</div><div class="wf-d">주제 + 목차 전달</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">4</span><div class="wf-t">.docx 산출</div><div class="wf-d">validator 로 검증</div></div>
+ </div>
+
+ <div class="three-col">
+  <div class="card green">
+   <h4>장점</h4>
+   <ul>
+    <li>설정 0 — 어떤 LLM 도 동작</li>
+    <li>RAG / MCP 인프라 불필요</li>
+    <li>오프라인 환경에서도 가능</li>
+   </ul>
+  </div>
+  <div class="card orange">
+   <h4>약점</h4>
+   <ul>
+    <li>매 요청마다 7 KB context 소모</li>
+    <li>룰이 진화하면 매번 새 파일 복사</li>
+    <li>여러 대화 세션 시 sync 부담</li>
+   </ul>
+  </div>
+  <div class="card purple">
+   <h4>권장 사용처</h4>
+   <ul>
+    <li>1회성 / 소규모 작성</li>
+    <li>외부 LLM 으로 빠른 prototyping</li>
+    <li>토큰 비용 무관 케이스</li>
+   </ul>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 룰 참조 ② RAG CLI</div>
+</section>
+
+<!-- ===== 10: mxwp-rules CLI ===== -->
+<section class="slide" id="rag-cli">
+ <div class="slide-num">SLIDE 10</div>
+ <h2 class="slide-title">룰 참조 ② <span>— mxwp-rules CLI (RAG 검색)</span></h2>
+ <div class="slide-sub">필요한 룰만 검색. 7 KB 전부가 아니라 top-k chunks 만 fetch.</div>
+
+ <h3 class="sec">10.1 명령</h3>
+ <div class="json-block">$ ./bin/mxwp-rules-linux query <span class="str">"차트 데이터 표 어떻게"</span> -k 3
+<span class="comment"># default backend = bm25 (lite 포함)</span>
+
+#  score   id                       heading
+-  ------  -----------------------  -----------------
+1  6.05    rules#3.3-chart-차트     3.3 chart (차트)
+2  3.90    rules#3.4-gantt-간트차트 3.4 gantt
+3  2.71    rules#layouts            본문 레이아웃</div>
+
+ <h3 class="sec">10.2 3 backend 비교</h3>
+ <div class="tblcap">표 4. RAG backend</div>
+ <table>
+  <thead><tr><th>Backend</th><th>한국어 의미</th><th>의존성</th><th>속도</th><th>lite 포함</th></tr></thead>
+  <tbody>
+   <tr><td><code>bm25</code></td><td>× (단어 매칭)</td><td>없음</td><td>즉시</td><td><span class="tag tag-green">✓ default</span></td></tr>
+   <tr><td><code>st</code></td><td>O (multilingual-e5)</td><td>sentence-transformers + torch (~2.5 GB)</td><td>모델 로딩 30s</td><td><span class="tag tag-orange">full 만</span></td></tr>
+   <tr><td><code>openai</code></td><td>O (text-embedding-3)</td><td>openai sdk + API key</td><td>API 호출</td><td><span class="tag tag-orange">full 만</span></td></tr>
+  </tbody>
+ </table>
+
+ <h3 class="sec">10.3 사용 시나리오</h3>
+ <div class="three-col">
+  <div class="card accent">
+   <h4>스크립트 자동화</h4>
+   <p>LLM 응답 파이프라인에서 호출 → top-k 결과를 context 에 주입.
+   <code>--json</code> 으로 구조화 출력.</p>
+  </div>
+  <div class="card accent">
+   <h4>대화형 탐색</h4>
+   <p>"이 위젯 어떻게 만드나" 빠른 lookup. <code>--rag-dir</code> 로 별도 코퍼스 지정 가능.</p>
+  </div>
+  <div class="card accent">
+   <h4>drift 확인</h4>
+   <p><code>mxwp-rules check</code> — index.lock 과 실제 chunks.jsonl SHA 일치 검증.</p>
+  </div>
+ </div>
+
+ <div class="callout orange">
+  <div class="ic">!</div>
+  <div>
+   <h5>lite 사용자 안내</h5>
+   <p><code>--backend st</code> 호출 시 친절 에러: "lite 빌드 입니다 — bm25 사용 또는 full 다운로드".
+   bm25 로 충분한 경우가 대부분.</p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 룰 참조 ③ MCP 서버</div>
+</section>
+
+<!-- ===== 11: MCP ===== -->
+<section class="slide" id="mcp">
+ <div class="slide-num">SLIDE 11</div>
+ <h2 class="slide-title">룰 참조 ③ <span>— MCP 서버 (LLM 이 직접 호출)</span></h2>
+ <div class="slide-sub">Claude Desktop / Code 에 stdio 로 붙으면 LLM 이 *대화 중* 자동으로 룰 fetch.</div>
+
+ <h3 class="sec">11.1 MCP 서버가 노출하는 primitive</h3>
+ <div class="tblcap">표 5. mxwp-mcp 서버 primitives</div>
+ <table>
+  <thead><tr><th>종류</th><th>이름</th><th>입력</th><th>LLM 입장에서</th></tr></thead>
+  <tbody>
+   <tr><td><span class="tag tag-blue">tool</span></td><td><code>query_rules</code></td><td>query, k, backend</td><td>"이 자연어에 맞는 top-k 룰 chunk 줘"</td></tr>
+   <tr><td><span class="tag tag-purple">resource</span></td><td><code>rag://chunks/{id}</code></td><td>chunk id</td><td>"특정 룰 chunk 의 원문 / 메타 줘"</td></tr>
+   <tr><td><span class="tag tag-teal">prompt</span></td><td><code>mxwp_system_prompt</code></td><td>(없음)</td><td>"시스템 프롬프트 줘"</td></tr>
+  </tbody>
+ </table>
+
+ <h3 class="sec">11.2 동작 흐름</h3>
+ <div class="workflow">
+  <div class="wf-step"><span class="wf-n">1</span><div class="wf-t">사용자 요청</div><div class="wf-d">"백서 만들어줘"</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">2</span><div class="wf-t">LLM 이 룰 필요 인지</div><div class="wf-d">"chart 형식 모름"</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">3</span><div class="wf-t">query_rules 호출</div><div class="wf-d">MCP tool 자동 실행</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">4</span><div class="wf-t">top-k chunks</div><div class="wf-d">LLM context 에 주입</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">5</span><div class="wf-t">.docx 생성</div><div class="wf-d">marker 정확</div></div>
+ </div>
+
+ <div class="insight-box">
+  <p>핵심 — 사용자는 <strong>MCP 도구 호출을 직접 안 하고</strong> LLM 이 자동 결정한다.
+  "백서 만들어줘" 한 줄이 내부적으로 5-10번의 query_rules 호출을 동반.</p>
+ </div>
+
+ <div class="slide-footer">다음 — Claude Desktop 통합 설정</div>
+</section>
+
+<!-- ===== 12: Claude Desktop 통합 ===== -->
+<section class="slide" id="claude-desktop">
+ <div class="slide-num">SLIDE 12</div>
+ <h2 class="slide-title">Claude Desktop / Code <span>— MCP 통합</span></h2>
+ <div class="slide-sub">가장 자주 쓰는 시나리오. 한 번 설정하면 모든 대화에서 자동 활성.</div>
+
+ <h3 class="sec">12.1 Claude Desktop 설정 파일</h3>
+ <p>경로: <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS) / <code>%APPDATA%\Claude\claude_desktop_config.json</code> (Windows)</p>
+
+ <div class="json-block">{
+  <span class="key">"mcpServers"</span>: {
+    <span class="key">"mxwp-rag"</span>: {
+      <span class="key">"command"</span>: <span class="str">"/absolute/path/to/bin/mxwp-mcp-linux"</span>,
+      <span class="key">"args"</span>: [
+        <span class="str">"--rag-dir"</span>, <span class="str">"/absolute/path/to/rag"</span>,
+        <span class="str">"--system-prompt"</span>, <span class="str">"/absolute/path/to/llm-system-prompt.md"</span>
+      ]
+    }
+  }
+}</div>
+
+ <h3 class="sec">12.2 Claude Code 설정 (.mcp.json)</h3>
+ <div class="json-block">{
+  <span class="key">"mcpServers"</span>: {
+    <span class="key">"mxwp-rag"</span>: {
+      <span class="key">"type"</span>: <span class="str">"stdio"</span>,
+      <span class="key">"command"</span>: <span class="str">"/absolute/path/to/bin/mxwp-mcp-linux"</span>,
+      <span class="key">"args"</span>: [<span class="str">"--rag-dir"</span>, <span class="str">"/absolute/path/to/rag"</span>]
+    }
+  }
+}</div>
+
+ <h3 class="sec">12.3 동작 확인</h3>
+ <div class="three-col">
+  <div class="card accent">
+   <h4>1. 재시작</h4>
+   <p>Claude Desktop / Code 완전 종료 후 재실행 (MCP config 는 시작 시 1회 로드)</p>
+  </div>
+  <div class="card accent">
+   <h4>2. tool 목록 확인</h4>
+   <p>대화창에서 "사용 가능한 도구 보여줘" → <code>mxwp-rag</code> 가 보이면 OK</p>
+  </div>
+  <div class="card accent">
+   <h4>3. 첫 요청</h4>
+   <p>"MXWhitePaper 룰 따라 .docx 만들어줘" — LLM 이 자동 query_rules 사용</p>
+  </div>
+ </div>
+
+ <div class="callout">
+  <div class="ic">📁</div>
+  <div>
+   <h5>예시 config 동봉</h5>
+   <p>toolkit zip 의 <code>mcp/example-claude-desktop.json</code> / <code>example-claude-code.json</code>
+   복사해서 경로만 수정.</p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 작성 → 검증 → 업로드 전체 5-step</div>
+</section>
+
+<!-- ===== 13: 전체 파이프라인 ===== -->
+<section class="slide" id="pipeline">
+ <div class="slide-num">SLIDE 13</div>
+ <h2 class="slide-title">전체 파이프라인 <span>— 작성 → 검증 → 업로드</span></h2>
+ <div class="slide-sub">처음부터 서버 import 까지 5단계.</div>
+
+ <div class="workflow">
+  <div class="wf-step"><span class="wf-n">1</span><div class="wf-t">LLM 으로 작성</div><div class="wf-d">모드 ①/②/③ 중 택일.<br/>RAG / MCP / prompt 로 룰 참조</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">2</span><div class="wf-t">로컬 검증</div><div class="wf-d"><code>mxwp-validator</code> exit 0 확인</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">3</span><div class="wf-t">사용자 review</div><div class="wf-d">위젯 인벤토리 / placeholder / 사실 정확도</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">4</span><div class="wf-t">서버 업로드</div><div class="wf-d"><code>POST /api/v1/imports/docx</code> + <code>POST /documents</code></div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">5</span><div class="wf-t">검색 인덱싱</div><div class="wf-d">Meilisearch 자동 (서버 측)</div></div>
+ </div>
+
+ <h3 class="sec">13.1 단계별 사용자 액션</h3>
+ <div class="tblcap">표 6. 단계 매트릭스</div>
+ <table>
+  <thead><tr><th>#</th><th>단계</th><th>사용자 액션</th><th>실패 시</th></tr></thead>
+  <tbody>
+   <tr><td>1</td><td>LLM 작성</td><td>주제 / 목차 / 자료 전달</td><td>재요청 (지시 명확화)</td></tr>
+   <tr><td>2</td><td>validator</td><td><code>./bin/mxwp-validator-... output.docx</code></td><td>exit ≠ 0 → schema errors LLM 에 전달</td></tr>
+   <tr><td>3</td><td>review</td><td>위젯 / 사실 / 인과 검토</td><td>모드 ③ 보강 또는 직접 수정</td></tr>
+   <tr><td>4</td><td>업로드</td><td>cURL / UI 로 import + create document</td><td>auth / size / rate limit 확인</td></tr>
+   <tr><td>5</td><td>인덱싱</td><td>자동 (관여 안 함)</td><td>UI 검색에서 안 보이면 1분 대기</td></tr>
+  </tbody>
+ </table>
+
+ <div class="slide-footer">다음 — validator 사용법 디테일</div>
+</section>
+
+<!-- ===== 14: validator 디테일 ===== -->
+<section class="slide" id="validator">
+ <div class="slide-num">SLIDE 14</div>
+ <h2 class="slide-title">mxwp-validator <span>— 출력 해석 가이드</span></h2>
+ <div class="slide-sub">validator 출력은 단순 OK/NO 가 아니라 사용자에게 *왜 / 어디가* 잘못됐는지 알려줌.</div>
+
+ <h3 class="sec">14.1 출력 섹션</h3>
+ <div class="three-col">
+  <div class="card teal">
+   <h4>① Widget Inventory</h4>
+   <p>인식된 위젯 종류 + 개수. 18 위젯 중 의도한 것이 모두 잡혔는지 검증.</p>
+  </div>
+  <div class="card teal">
+   <h4>② Autodetected</h4>
+   <p>marker 없이 본문 형태로 인식된 위젯 (callout / kpi-cards / gallery / gantt).
+   여기에 표시되면 외부 LLM 이 marker 없이도 통과했다는 뜻.</p>
+  </div>
+  <div class="card teal">
+   <h4>③ Placeholders</h4>
+   <p>marker 는 있으나 *콘텐츠가 없는* 위젯 (이미지 미해소 / file_id 없음 등).
+   서버 import 시 placeholder 박스가 표시됨.</p>
+  </div>
+ </div>
+
+ <h3 class="sec">14.2 흔한 출력 예시</h3>
+ <div class="two-col">
+  <div class="card green">
+   <h4>✓ 모범 (good-example)</h4>
+   <div class="json-block" style="margin:0;"><span class="val">sections     : 2
+blocks total : 25
+Widget inventory:
+  callout    1
+  chart      1
+  ...
+Schema valid.</span></div>
+  </div>
+  <div class="card red">
+   <h4>✗ 스키마 위반</h4>
+   <div class="json-block" style="margin:0;"><span class="str">Schema validation FAILED (2 errors):
+  /sections/0/blocks/3: 'variant' is required
+  /metadata/owners: '[]' is too short
+⛔ Document would be REJECTED.</span></div>
+  </div>
+ </div>
+
+ <h3 class="sec">14.3 placeholder 경고 (서버 import 시 의미)</h3>
+ <div class="callout orange">
+  <div class="ic">!</div>
+  <div>
+   <h5>예: gallery 이미지 손실</h5>
+   <p><code>[!] gallery marker: image bytes missing on round-trip — placeholder gallery emitted</code></p>
+   <p>외부 LLM 이 marker 는 만들었지만 실제 이미지 파일을 첨부 안 함. 서버 업로드 후 placeholder
+   박스로 표시되며 사용자가 별도 이미지 업로드 필요.</p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 서버 업로드 절차</div>
+</section>
+
+<!-- ===== 15: 서버 업로드 ===== -->
+<section class="slide" id="upload">
+ <div class="slide-num">SLIDE 15</div>
+ <h2 class="slide-title">서버 업로드 <span>— 2-step API</span></h2>
+ <div class="slide-sub">imports 는 *DocumentJSON 반환* 만 함. 별도 documents POST 로 영속화.</div>
+
+ <h3 class="sec">15.1 2-step 흐름</h3>
+ <div class="workflow">
+  <div class="wf-step"><span class="wf-n">1</span><div class="wf-t">POST /imports/docx</div><div class="wf-d">.docx → DocumentJSON 파싱 결과 반환 (저장 안 됨)</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">2</span><div class="wf-t">결과 검토</div><div class="wf-d">warnings / 위젯 인벤토리 확인 후 저장 여부 결정</div></div>
+  <div class="wf-arrow">→</div>
+  <div class="wf-step"><span class="wf-n">3</span><div class="wf-t">POST /documents/</div><div class="wf-d">DocumentJSON 영속화 → DB INSERT + 검색 인덱싱</div></div>
+ </div>
+
+ <h3 class="sec">15.2 cURL 예시</h3>
+ <div class="json-block"><span class="comment"># 1) Import (반환만)</span>
+$ curl -X POST https://&lt;server&gt;/api/v1/imports/docx \
+    -H "Authorization: Bearer mxwp_..." \
+    -F "file=@output.docx" \
+    -F "slug=my-whitepaper-2026" \
+    -F "title=내 백서"
+<span class="comment"># {"document": {...DocumentJSON...}, "summary": {warnings, ...}}</span>
+
+<span class="comment"># 2) Persist (저장)</span>
+$ curl -X POST https://&lt;server&gt;/api/v1/documents/ \
+    -H "Authorization: Bearer mxwp_..." \
+    -H "Content-Type: application/json" \
+    -d @document.json
+<span class="comment"># {"id": "01...", "slug": "...", "version": 1}</span></div>
+
+ <h3 class="sec">15.3 인증 — API Token</h3>
+ <div class="tblcap">표 7. API Token 발급</div>
+ <table>
+  <thead><tr><th>단계</th><th>액션</th></tr></thead>
+  <tbody>
+   <tr><td>1</td><td>MXWhitePaper UI 로그인 (editor+ 권한)</td></tr>
+   <tr><td>2</td><td>Settings → API Tokens → Create</td></tr>
+   <tr><td>3</td><td>Scope: <code>imports:write</code> + <code>documents:write</code> 선택</td></tr>
+   <tr><td>4</td><td>만료일 설정 후 토큰 1회 표시 — 안전한 곳에 보관</td></tr>
+   <tr><td>5</td><td>모든 호출에 <code>Authorization: Bearer mxwp_...</code> 첨부</td></tr>
+  </tbody>
+ </table>
+
+ <div class="callout green">
+  <div class="ic">✓</div>
+  <div>
+   <h5>사내망 dev 모드</h5>
+   <p>운영 인스턴스가 <code>APP_ENV=development</code> 이면 토큰 없이도 첫 admin user 자동 fallback.
+   외부 노출 인스턴스는 production 모드 + 토큰 필수.</p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 흔히 만나는 에러</div>
+</section>
+
+<!-- ===== 16: 에러 매트릭스 ===== -->
+<section class="slide" id="errors">
+ <div class="slide-num">SLIDE 16</div>
+ <h2 class="slide-title">실패 매트릭스 <span>— 어디서 깨지나 + 대처</span></h2>
+ <div class="slide-sub">단계별로 자주 만나는 에러와 대응. 출력 keyword 로 검색하면 빠름.</div>
+
+ <h3 class="sec">16.1 validator 단계</h3>
+ <div class="tblcap">표 8. 로컬 검증 에러</div>
+ <table>
+  <thead><tr><th>증상</th><th>원인</th><th>대처</th></tr></thead>
+  <tbody>
+   <tr><td>exit 1, schema errors</td><td>LLM 이 필수 필드 누락 (variant / text 등)</td><td>schema errors 전체를 LLM 에 보내 재요청</td></tr>
+   <tr><td>exit 2, parsing failed</td><td>.docx 파일 손상 / PK zip 매직 아님</td><td>LLM 에서 재생성</td></tr>
+   <tr><td>placeholder 다수</td><td>marker 있으나 콘텐츠 (이미지/파일) 없음</td><td>본문은 import OK, 별도로 이미지 업로드</td></tr>
+  </tbody>
+ </table>
+
+ <h3 class="sec">16.2 업로드 단계</h3>
+ <div class="tblcap">표 9. 서버 import 에러</div>
+ <table>
+  <thead><tr><th>HTTP</th><th>error code</th><th>원인</th><th>대처</th></tr></thead>
+  <tbody>
+   <tr><td><span class="tag tag-red">401</span></td><td>UNAUTHORIZED</td><td>토큰 누락 / 만료</td><td>신규 토큰 발급</td></tr>
+   <tr><td><span class="tag tag-red">403</span></td><td>FORBIDDEN</td><td>scope 부족 (reader 가 import 시도)</td><td>editor 권한 받기</td></tr>
+   <tr><td><span class="tag tag-orange">409</span></td><td>CONFLICT</td><td>같은 slug 문서 이미 존재</td><td>slug 변경 또는 PUT 으로 update</td></tr>
+   <tr><td><span class="tag tag-orange">413</span></td><td>—</td><td>30 MB 초과 (.docx 기준)</td><td>이미지 압축 또는 분할</td></tr>
+   <tr><td><span class="tag tag-orange">422</span></td><td>VALIDATION_FAILED</td><td>schema 위반 / 파일명 .docx 아님</td><td>출력 details 확인</td></tr>
+   <tr><td><span class="tag tag-orange">429</span></td><td>RATE_LIMITED</td><td>분당 호출 한계 초과 (5/min/user)</td><td>60s 후 재시도</td></tr>
+  </tbody>
+ </table>
+
+ <h3 class="sec">16.3 LLM 단계</h3>
+ <div class="three-col">
+  <div class="card red">
+   <h4>환각 (사실 오류)</h4>
+   <p>LLM 이 그럴듯한 가짜 수치 / 인용. 모드 ③ 사용 시 특히 주의. 사용자 review 필수.</p>
+  </div>
+  <div class="card red">
+   <h4>marker 누락</h4>
+   <p>LLM 이 룰 모르고 자체 형식으로 작성. validator 의 autodetect 가 일부 잡지만 완전치 않음.
+   RAG / MCP 로 룰 참조 강제.</p>
+  </div>
+  <div class="card red">
+   <h4>위젯 변형 무시</h4>
+   <p>"callout 으로 강조" 했는데 일반 단락으로. 모델이 작아서 지시 못 따름 →
+   더 큰 모델 / system prompt 강화.</p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 4계층 drift 가드</div>
+</section>
+
+<!-- ===== 17: drift 가드 ===== -->
+<section class="slide" id="drift">
+ <div class="slide-num">SLIDE 17</div>
+ <h2 class="slide-title">4계층 drift 가드 <span>— 룰 진화 시 자동 동기화</span></h2>
+ <div class="slide-sub">위젯 룰이 바뀌면 RAG / LLM context / validator 가 자동으로 따라온다.</div>
+
+ <div class="four-col">
+  <div class="card accent">
+   <h4>Layer 1 — CI Lock Check</h4>
+   <p>GitHub Actions <code>rag-lock-verify</code> job 이 PR 머지 전 차단. <strong>merge 전</strong></p>
+  </div>
+  <div class="card accent">
+   <h4>Layer 2 — Path Filter</h4>
+   <p>workflow paths 가 5개 추적 소스에만 발화. <strong>무관한 push 차단</strong></p>
+  </div>
+  <div class="card accent">
+   <h4>Layer 3 — Pre-commit Hook</h4>
+   <p><code>.husky/pre-commit</code> 이 chunker --check. <strong>커밋 전</strong></p>
+  </div>
+  <div class="card accent">
+   <h4>Layer 4 — Runtime Check</h4>
+   <p><code>mxwp-validator</code> / <code>mxwp-rules check</code> 가 사용 시점 검증. <strong>사용자가 발견</strong></p>
+  </div>
+ </div>
+
+ <h3 class="sec">17.1 사용자 입장에서의 의미</h3>
+ <div class="two-col">
+  <div class="card green">
+   <h4>이 toolkit 을 그냥 받아서 쓰는 경우</h4>
+   <p>신경 쓸 일 없음. 새 위젯이 추가되면 새 <code>v1.x.y</code> 태그가 GitHub Release 에 올라온다.
+   그 번들을 받아 교체.</p>
+  </div>
+  <div class="card green">
+   <h4>이 toolkit 을 자체 빌드하는 경우</h4>
+   <p>위젯 룰 5개 (widget_markers.py · docx_import.py · document.json · llm-input-rules.md · toolkit 폴더)
+   중 하나라도 바꾸면 pre-commit hook 이 막는다.</p>
+  </div>
+ </div>
+
+ <h3 class="sec">17.2 drift 의심 시 명령</h3>
+ <div class="json-block">$ ./bin/mxwp-rules-linux check
+<span class="comment"># ✓ OK — index.lock matches live sources + chunks.jsonl
+# ✗ RAG index.lock is stale: ... → 새 v1.x.y 번들 받아야 함</span></div>
+
+ <div class="insight-box">
+  <p>핵심 차별점 — 일반 RAG 시스템은 "build once, hope it doesn't drift". 본 toolkit 은
+  drift 가 <strong>force-fail at build time</strong> 또는 <strong>loud warning at runtime</strong>.
+  lock-step 이 사람 디스플린이 아니라 *시스템* 으로 강제.</p>
+ </div>
+
+ <div class="slide-footer">다음 — full 빌드 (자체)</div>
+</section>
+
+<!-- ===== 18: full 빌드 ===== -->
+<section class="slide" id="full">
+ <div class="slide-num">SLIDE 18</div>
+ <h2 class="slide-title">full 빌드 <span>— Windows / Linux 직접</span></h2>
+ <div class="slide-sub">ST / OpenAI 백엔드 통째 번들 (~2.6 GB). GitHub Release 2 GB 한계 때문에 직접 빌드.</div>
+
+ <h3 class="sec">18.1 사전 준비</h3>
+ <div class="three-col">
+  <div class="card accent">
+   <h4>도구</h4>
+   <ul>
+    <li>Python 3.12 (Windows: "Add to PATH" 체크)</li>
+    <li>git</li>
+   </ul>
+  </div>
+  <div class="card accent">
+   <h4>디스크</h4>
+   <p>~15 GB (torch 등 의존성 다운로드 + 빌드 산출물)</p>
+  </div>
+  <div class="card accent">
+   <h4>시간</h4>
+   <p>~15-30 분 (PyInstaller 가 torch 통째 번들)</p>
+  </div>
+ </div>
+
+ <h3 class="sec">18.2 절차 (Windows / Linux 공통)</h3>
+ <div class="json-block"><span class="comment"># 1) 본 프로젝트 통째 clone</span>
+$ git clone https://github.com/squall321/MXWhitePaper.git
+$ cd MXWhitePaper
+
+<span class="comment"># 2) 의존성 설치 (lite dep 위에 torch + sentence-transformers + openai)</span>
+$ cd dist/llm-docx-toolkit
+$ python -m pip install -r requirements.txt
+
+<span class="comment"># 3) RAG 인덱스 (최신 chunks.jsonl 보장)</span>
+$ python rag/chunker.py
+
+<span class="comment"># 4) full 빌드</span>
+$ python build.py --clean --variant full</span></div>
+
+ <h3 class="sec">18.3 산출물 (_release/full-{linux,windows}/)</h3>
+ <div class="tblcap">표 10. full 빌드 산출물</div>
+ <table>
+  <thead><tr><th>파일</th><th>크기</th><th>용도</th></tr></thead>
+  <tbody>
+   <tr><td><code>llm-docx-toolkit-full-{...}.{zip|tar.gz}</code></td><td>~2.6 GB</td><td>원본 (빌더가 검증 용도)</td></tr>
+   <tr><td><code>...001</code> · <code>...002</code></td><td>각 1.5 GB</td><td>분할 파트 (GitHub Release 2 GB 회피)</td></tr>
+   <tr><td><code>REASSEMBLE.md</code></td><td>1 KB</td><td>받은 쪽에서 합치는 방법 (cat / copy /b)</td></tr>
+  </tbody>
+ </table>
+
+ <h3 class="sec">18.4 받은 쪽에서 합치기</h3>
+ <div class="json-block"><span class="comment"># Linux / macOS</span>
+$ cat llm-docx-toolkit-full-linux.tar.gz.* &gt; full.tar.gz
+$ tar -xzf full.tar.gz
+
+<span class="comment"># Windows (cmd.exe)</span>
+&gt; copy /b llm-docx-toolkit-full-windows.zip.* full.zip
+&gt; <span class="comment">우클릭 → 압축 풀기</span></div>
+
+ <div class="callout purple">
+  <div class="ic">📦</div>
+  <div>
+   <h5>동료 전달용 PowerShell</h5>
+   <p><code>apply/repack-as-zip.ps1</code> — 받은 폴더를 timestamped zip + SHA-256 으로 묶어 메일/메신저 전달.</p>
+  </div>
+ </div>
+
+ <div class="slide-footer">다음 — 한 페이지 치트시트</div>
+</section>
+
+<!-- ===== 19: 치트시트 ===== -->
+<section class="slide" id="cheat">
+ <div class="slide-num">SLIDE 19</div>
+ <h2 class="slide-title">한 페이지 치트시트 <span>— 모든 명령 한 자리에</span></h2>
+ <div class="slide-sub">즐겨찾기용. 실제 path 는 자신의 toolkit 위치로 치환.</div>
+
+ <h3 class="sec">19.1 명령</h3>
+ <div class="json-block"><span class="comment"># 검증</span>
+./bin/mxwp-validator-linux output.docx
+
+<span class="comment"># 룰 검색 (default = bm25)</span>
+./bin/mxwp-rules-linux query "차트 데이터 표 어떻게" -k 3
+
+<span class="comment"># RAG drift 확인</span>
+./bin/mxwp-rules-linux check
+
+<span class="comment"># MCP 서버 (Claude Desktop 가 자동 실행, 수동 테스트용)</span>
+./bin/mxwp-mcp-linux --version
+
+<span class="comment"># 서버 업로드 (2-step)</span>
+curl -X POST $SERVER/api/v1/imports/docx \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@output.docx" -F "slug=my-doc" -F "title=내 백서"
+curl -X POST $SERVER/api/v1/documents/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @document.json
+
+<span class="comment"># Windows 동료에게 재패키지 전달</span>
+PS&gt; .\apply\repack-as-zip.ps1</div>
+
+ <h3 class="sec">19.2 파일 위치 빠른 참조</h3>
+ <div class="tblcap">표 11. 자주 보는 파일</div>
+ <table>
+  <thead><tr><th>파일</th><th>용도</th></tr></thead>
+  <tbody>
+   <tr><td><code>HANDOFF.md</code></td><td>한 페이지 핸드오프 (가장 먼저)</td></tr>
+   <tr><td><code>docx-authoring-guide.html</code></td><td>이 슬라이드</td></tr>
+   <tr><td><code>llm-input-rules.md</code></td><td>18-위젯 명세 (system prompt 통째 주입용)</td></tr>
+   <tr><td><code>llm-system-prompt.md</code></td><td>시스템 프롬프트 (간결형)</td></tr>
+   <tr><td><code>examples/good-example.docx</code></td><td>모범 예시 .docx</td></tr>
+   <tr><td><code>examples/all-widgets.docx</code></td><td>18 위젯 전부</td></tr>
+   <tr><td><code>mcp/example-claude-desktop.json</code></td><td>MCP config 템플릿</td></tr>
+   <tr><td><code>rag/chunks.jsonl</code></td><td>RAG 코퍼스 (결정론적)</td></tr>
+   <tr><td><code>rag/index.lock</code></td><td>source hash manifest (drift 진실원)</td></tr>
+  </tbody>
+ </table>
+
+ <h3 class="sec">19.3 한 줄 요약</h3>
+ <div class="insight-box">
+  <p>사용자는 <strong>주제 + 자료 + 위젯 지시</strong> 만 LLM 에 전달한다. 18-위젯 마커 / 스키마 /
+  drift 동기화는 toolkit 이 처리. 결과 <code>.docx</code> 를 validator 로 검증 → 서버 업로드.
+  LLM 활용은 모드 ① 생성 · 모드 ② 양식 정리 · 모드 ③ 내용 보강 중 상황에 맞게.</p>
+ </div>
+
+ <div class="slide-footer">끝 — 질문 / 보완 요청은 HANDOFF.md §7 트러블슈팅 + README.md 참고</div>
+</section>
+
+</div> <!-- /slides-wrapper -->
+
+</body>
+</html>
