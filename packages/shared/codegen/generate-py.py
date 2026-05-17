@@ -161,7 +161,10 @@ if enum_names:
     )
     src = pattern.sub(_fix_enum_default, src)
 
-OUT.write_text(src, encoding="utf-8")
+# Force LF on every platform — Path.write_text uses os.linesep otherwise,
+# which on Windows would yield CRLF and make the codegen-drift gate fire.
+with OUT.open("w", encoding="utf-8", newline="\n") as _f:
+    _f.write(src)
 print(f"✓ Pydantic models generated → {OUT}")
 print("✓ Block union annotated with discriminator='type'")
 print(f"✓ Enum defaults normalized ({len(enum_names)} enum classes scanned)")
