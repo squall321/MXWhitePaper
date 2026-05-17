@@ -171,7 +171,13 @@ def cmd_query(args: argparse.Namespace) -> int:
         return 1
 
     backend = _make_backend(args.backend)
-    backend.load(rag_dir)
+    try:
+        backend.load(rag_dir)
+    except RuntimeError as exc:
+        # _st / _openai _ensure_* raise this with a multi-line user-facing
+        # message; printing the traceback on top would only bury it.
+        print(_err(str(exc)), file=sys.stderr)
+        return 1
     hits = backend.query(args.text, k=args.k)
 
     if args.json:

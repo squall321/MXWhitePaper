@@ -138,6 +138,12 @@ class STRetriever(Retriever):
                 f.write(c.to_json_line() + "\n")
 
     def load(self, index_dir: Path) -> None:
+        # Probe sentence-transformers availability up front. Without this
+        # the lite build dies with a generic FileNotFoundError on the npz
+        # path (which is missing because nobody indexed for this backend)
+        # and the user never sees the actionable "use bm25 / install /
+        # download the full build" message.
+        self._ensure_model()
         index_dir = Path(index_dir)
         npz_path = index_dir / "embeddings.npz"
         jsonl_path = index_dir / "embeddings.jsonl"

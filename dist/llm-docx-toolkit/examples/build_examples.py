@@ -147,7 +147,20 @@ def all_widgets_example() -> dict:
 
 
 def bad_example() -> dict:
-    """Common LLM mistakes — the validator should flag warnings."""
+    """Edge-case round-trip demo — *not* a schema-failing docx.
+
+    Both blocks would lose information if an external LLM produced them
+    without hidden widget markers: callout would become a plain colored
+    box that autodetect can't recognize, and the kpi-cards would degrade
+    to a generic 2x2 table. They round-trip cleanly here only because
+    docx_export emits the markers.
+
+    Name kept as 'bad-example' for backward compatibility with CI smoke
+    tests, README, and existing release bundles in the wild. The
+    validator correctly returns schema-valid (exit 0) on this file —
+    the 'bad' label refers to the *marker-less external form*, not the
+    rendered docx.
+    """
     return _doc("bad-example", "흔한 실수 모음 (autodetect 가 잡거나 못 잡는 패턴)", [
         # callout 처럼 보이지만 색만 있고 신호 없음 → autodetect 가 못 잡음.
         {"type": "callout", "id": _u(), "variant": "info", "text": "그냥 색 박스"},

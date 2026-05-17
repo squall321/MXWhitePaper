@@ -78,10 +78,13 @@ llm-docx-toolkit-lite-{linux,windows}/
 │   ├── mxwp-rules-{linux,win32.exe}        ~50 MB   ← RAG CLI (bm25 backend)
 │   └── mxwp-mcp-{linux,win32.exe}          ~50 MB   ← MCP stdio 서버 (bm25)
 │
-├── examples/                 ← 모범/반례 예시
-│   ├── good-example.docx     ← 룰을 따른 예 (15 위젯)
+├── examples/                 ← 모범/반례 예시 (모두 validator exit 0)
+│   ├── good-example.docx     ← 룰을 따른 예 (16 위젯)
 │   ├── all-widgets.docx      ← 18 위젯 전부
-│   └── bad-example.docx      ← 흔한 실수
+│   └── bad-example.docx      ← marker 로 round-trip 보장된 까다로운 패턴.
+│                               'bad' 라는 이름이지만 schema valid (exit 0).
+│                               외부 LLM 이 같은 모양을 *marker 없이* 만들면
+│                               autodetect 가 못 잡아 콘텐츠 손실 위험을 보여줌.
 │
 ├── rag/                      ← 룰 검색 인덱스 (코퍼스)
 │   ├── chunks.jsonl          ← 120 chunks, 결정론적 (SHA c1f22a05...)
