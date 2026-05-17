@@ -12,6 +12,7 @@ Fixture .docx 는 `docx_import.build_minimal_docx()` 로 매 테스트마다 in-
 from __future__ import annotations
 
 import io
+from collections.abc import Iterator
 from struct import pack
 from zlib import compress
 
@@ -39,7 +40,7 @@ def _tiny_png() -> bytes:
 
 
 @pytest.fixture(autouse=True)
-def _reset_rate_limit() -> None:
+def _reset_rate_limit() -> Iterator[None]:
     imports_mod._reset_rate_limit_for_tests()
     yield
     imports_mod._reset_rate_limit_for_tests()

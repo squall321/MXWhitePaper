@@ -85,7 +85,7 @@ async def reset_org() -> dict[str, Any]:
                 ),
                 {"slugs": list(SAMPLE_SLUGS)},
             )
-        ).rowcount or 0
+        ).rowcount or 0  # type: ignore[attr-defined]  # DML result is CursorResult
 
         # 3) Wipe every division except MX (CASCADE drops nested teams/
         #    groups/parts; users.team_id is ON DELETE SET NULL).

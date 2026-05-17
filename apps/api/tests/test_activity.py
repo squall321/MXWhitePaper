@@ -67,6 +67,7 @@ async def _ensure_user(email: str, role: str = "reader") -> str:
         row = (await s.execute(
             text("SELECT id FROM users WHERE email = :e"), {"e": email}
         )).first()
+        assert row is not None  # just upserted above
         return str(row[0])
     finally:
         await _close_session(gen)

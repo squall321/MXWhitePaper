@@ -252,6 +252,7 @@ async def test_digest_skipped_when_subscription_digest_in_app_disabled() -> None
             ),
             {"u": user_id, "d": doc_id},
         )).first()
+        assert sub_row is not None  # INSERT...RETURNING always emits one row
         sub_id = str(sub_row[0])
         await s.execute(
             text(

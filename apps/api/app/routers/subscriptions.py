@@ -166,6 +166,7 @@ async def subscribe(
             "cad": cadence,
         },
     )).first()
+    assert row is not None  # INSERT...ON CONFLICT DO UPDATE always returns a row
     sub_id = str(row[0])
     await document_repo.insert_audit(
         s,
@@ -199,7 +200,9 @@ async def unsubscribe(
         """),
         {"u": user["id"], "d": doc_id},
     )
-    if (res.rowcount or 0) == 0:
+    # `Result` is the abstract base; for DML statements SQLAlchemy returns a
+    # `CursorResult` which exposes `rowcount`. Use getattr to keep pyright happy.
+    if (getattr(res, "rowcount", 0) or 0) == 0:
         # nothing to delete — return 204 anyway so the FE can hit it idempotently
         return Response(status_code=204)
     await document_repo.insert_audit(

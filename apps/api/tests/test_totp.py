@@ -171,6 +171,7 @@ async def test_setup_and_verify_round_trip() -> None:
                 )
             )
         ).first()
+    assert row is not None  # bootstrap admin row exists
     assert row[0] is None and row[1] is None
 
     # Now verify with the live code.
@@ -193,6 +194,7 @@ async def test_setup_and_verify_round_trip() -> None:
                 )
             )
         ).first()
+    assert row is not None  # bootstrap admin row exists
     assert row[0] == data["secret"]
     assert row[1] is not None
     assert row[2] == BACKUP_CODE_COUNT
@@ -348,6 +350,7 @@ async def test_disable_clears_columns() -> None:
                 )
             )
         ).first()
+    assert row is not None  # bootstrap admin row exists
     assert row[0] is None and row[1] is None
 
 

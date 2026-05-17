@@ -190,6 +190,7 @@ async def create_api_token(
             "e": expires_at,
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     new_id = str(row[0])
 
     await document_repo.insert_audit(
@@ -325,6 +326,7 @@ async def rotate_api_token(
             "e": expires_at,
         },
     )).first()
+    assert new_row is not None  # INSERT...RETURNING always emits one row
     new_id = str(new_row[0])
 
     await document_repo.insert_audit(

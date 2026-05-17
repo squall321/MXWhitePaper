@@ -678,7 +678,7 @@ def _paragraph_text(
                     if url:
                         if not hasattr(ctx, "drawing_links"):
                             ctx.drawing_links = {}  # type: ignore[attr-defined]
-                        ctx.drawing_links[id(d)] = url
+                        ctx.drawing_links[id(d)] = url  # type: ignore[attr-defined]
                 label = "".join(inner_parts)
                 if url and label:
                     parts.append(f"[{label}]({url})")

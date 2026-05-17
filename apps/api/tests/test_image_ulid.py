@@ -12,6 +12,7 @@ import json
 import re
 import secrets
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -54,7 +55,7 @@ def _ulid_like() -> str:
 
 
 @pytest.fixture(autouse=True)
-def _reset_minio_clients() -> None:
+def _reset_minio_clients() -> Iterator[None]:
     minio_adapter.reset_clients_for_tests()
     yield
     minio_adapter.reset_clients_for_tests()

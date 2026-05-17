@@ -177,6 +177,7 @@ async def create_policy(
             "cb": user["id"],
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     pid = str(row[0])
     await document_repo.insert_audit(
         s, user_id=user["id"], action="retention.create",

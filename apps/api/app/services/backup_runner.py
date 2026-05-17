@@ -188,6 +188,7 @@ async def run_backup(
             "key": storage_key,
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     run_id = str(row[0])
     await s.commit()
 

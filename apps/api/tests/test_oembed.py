@@ -162,6 +162,7 @@ async def test_oembed_refuses_restricted_doc() -> None:
             text("SELECT content_json FROM documents WHERE slug = :slug"),
             {"slug": SEED_SLUG},
         )).first()
+        assert row is not None, f"seed document {SEED_SLUG!r} missing"
         original_body = row[0]
         if isinstance(original_body, str):
             original_body = json.loads(original_body)

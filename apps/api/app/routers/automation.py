@@ -230,6 +230,7 @@ async def create_rule(
             "ctz": cron_tz,
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     rid = str(row[0])
     await document_repo.insert_audit(
         s, user_id=user["id"], action="automation.create",

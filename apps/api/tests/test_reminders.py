@@ -145,6 +145,7 @@ async def _seed_reminder(
             ),
             {"u": user_id, "d": doc_id, "m": message, "ra": remind_at},
         )).first()
+        assert row is not None  # INSERT...RETURNING always emits one row
         await s.commit()
         return str(row[0])
 

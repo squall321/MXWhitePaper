@@ -1,6 +1,8 @@
 """Tests for forms router (embedded form/survey block)."""
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -12,7 +14,7 @@ FORM_BLOCK_ID = "01J9X1Y2Z3A4B5C6D7E8F9GFF1"
 
 
 @pytest.fixture
-async def _clean_responses() -> None:
+async def _clean_responses() -> AsyncIterator[None]:
     """Clear responses for this form block before each integration test."""
     from sqlalchemy import text
 

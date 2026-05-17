@@ -265,6 +265,7 @@ async def test_list_runs_and_download_redirects_to_presigned_url() -> None:
                 """
             )
         )).first()
+        assert row is not None  # INSERT...RETURNING always emits one row
         run_id = str(row[0])
 
     transport = ASGITransport(app=app)

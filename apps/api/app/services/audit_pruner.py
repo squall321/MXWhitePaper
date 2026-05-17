@@ -109,7 +109,7 @@ async def prune_once(*, force: bool = False) -> int:
             ),
             {"days": str(retain_days)},
         )
-        deleted = max(int(res.rowcount or 0), 0)
+        deleted = max(int(getattr(res, "rowcount", 0) or 0), 0)
 
         await s.execute(
             text(

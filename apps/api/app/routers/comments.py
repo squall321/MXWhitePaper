@@ -274,6 +274,7 @@ async def create_comment(
             "mn": mentions_json,
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     new_id = str(row[0])
 
     await document_repo.insert_audit(
@@ -403,6 +404,7 @@ async def patch_comment(
         """),
         params,
     )).first()
+    assert updated is not None  # existence verified above at line 380
 
     await document_repo.insert_audit(
         s, user_id=user["id"], action="comment.update",
@@ -415,6 +417,7 @@ async def patch_comment(
         text(f"{_SELECT_COMMENT_COLUMNS} WHERE c.id = CAST(:id AS uuid)"),
         {"id": updated[0]},
     )).first()
+    assert full is not None  # row just updated in the same transaction
     return envelope(data=_row_to_dict(full))
 
 

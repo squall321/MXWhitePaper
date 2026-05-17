@@ -178,6 +178,7 @@ async def create_series(
     except IntegrityError as e:
         await s.rollback()
         raise Conflict(f"series slug already exists: {slug}") from e
+    assert row is not None  # INSERT...RETURNING always emits one row
     str(row[0])
     await document_repo.insert_audit(
         s,
@@ -354,6 +355,7 @@ async def add_series_item(
             """),
             {"sid": series["id"]},
         )).first()
+        assert last is not None  # aggregate query always returns one row
         position = int(last[0]) + 1
     else:
         position = body.position

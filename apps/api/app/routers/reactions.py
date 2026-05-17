@@ -227,6 +227,7 @@ async def toggle_reaction(
             "e": body.emoji,
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
 
     await _maybe_notify(
         s,

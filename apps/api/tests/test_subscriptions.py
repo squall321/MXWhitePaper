@@ -143,6 +143,7 @@ async def _seed_subscription(
             ),
             {"u": user_id, "d": doc_id, "c": cadence},
         )).first()
+        assert row is not None  # INSERT...RETURNING always emits one row
         await s.commit()
         return str(row[0])
 

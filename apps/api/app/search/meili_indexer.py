@@ -108,7 +108,7 @@ def ensure_index() -> dict[str, Any]:
     cli = get_client()
     try:
         cli.create_index(INDEX_UID, {"primaryKey": PRIMARY_KEY})
-    except meilisearch.errors.MeilisearchApiError:
+    except meilisearch.errors.MeilisearchApiError:  # type: ignore[attr-defined]  # meilisearch stub omits the errors submodule
         # 이미 존재 — 무시.
         pass
 

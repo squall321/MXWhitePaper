@@ -293,7 +293,9 @@ def test_roundtrip_page_break_paragraph() -> None:
         (b.get("meta") or {}).get("note") == "page-break-before"
         for b in blocks
     )
-    assert has_break, [b.get("type") + ":" + (b.get("text") or "") for b in blocks]
+    assert has_break, [
+        str(b.get("type") or "") + ":" + str(b.get("text") or "") for b in blocks
+    ]
 
 
 def test_roundtrip_block_order_preserved_for_simple_doc() -> None:
@@ -338,8 +340,8 @@ def test_roundtrip_block_order_preserved_for_simple_doc() -> None:
         title="",
         owner_user_id="01OWNER000000000000000000",
     )
-    paragraphs = [
-        b.get("text") for b in _walk_blocks(result["document"])
+    paragraphs: list[str] = [
+        b["text"] for b in _walk_blocks(result["document"])
         if b.get("type") == "paragraph" and b.get("text")
     ]
     # alpha appears before beta, beta before gamma.

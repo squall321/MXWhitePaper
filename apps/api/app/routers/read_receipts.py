@@ -72,6 +72,7 @@ async def ack_read(
         """),
         {"u": user["id"], "d": doc["id"], "c": body.comment},
     )).first()
+    assert row is not None  # INSERT...ON CONFLICT DO UPDATE always returns a row
     await s.commit()
     return envelope(data={
         "id": str(row[0]),

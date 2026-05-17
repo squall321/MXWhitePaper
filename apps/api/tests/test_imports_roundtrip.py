@@ -17,6 +17,7 @@ import hashlib
 import io
 import json
 import zipfile
+from collections.abc import Iterator
 from struct import pack
 from zlib import compress
 
@@ -56,7 +57,7 @@ def _extract_first_png(blob: bytes) -> bytes | None:
 
 
 @pytest.fixture(autouse=True)
-def _reset_rate_limit() -> None:
+def _reset_rate_limit() -> Iterator[None]:
     imports_mod._reset_rate_limit_for_tests()
     yield
     imports_mod._reset_rate_limit_for_tests()

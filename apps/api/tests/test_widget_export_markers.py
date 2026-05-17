@@ -57,7 +57,8 @@ def _all_pptx_text(blob: bytes) -> str:
     for slide in pres.slides:
         for shape in slide.shapes:
             if shape.has_text_frame:
-                for para in shape.text_frame.paragraphs:
+                # python-pptx stub keeps text_frame on the concrete subclass.
+                for para in shape.text_frame.paragraphs:  # type: ignore[attr-defined]
                     for run in para.runs:
                         chunks.append(run.text)
                     chunks.append(para.text)

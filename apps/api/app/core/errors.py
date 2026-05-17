@@ -1,6 +1,7 @@
 """Standard API error response envelope."""
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from fastapi import Request
@@ -29,11 +30,17 @@ _PYDANTIC_KO_MESSAGES: dict[str, str] = {
 }
 
 
-def format_pydantic_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def format_pydantic_errors(
+    errors: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     """Pydantic v2 errors → 친화적 details 형식.
 
     각 항목: { field, code, message, expected?, got? }
     field 는 dot-path (`metadata.confidentiality`, `sections[0].subsections[0].level` 등).
+
+    Accepts pydantic ``ErrorDetails`` TypedDict items (which structurally
+    satisfy ``Mapping[str, Any]``) so both ``RequestValidationError.errors()``
+    and ``ValidationError.errors()`` can be passed without casts.
     """
     out: list[dict[str, Any]] = []
     for e in errors or []:

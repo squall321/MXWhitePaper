@@ -179,6 +179,7 @@ async def create_schedule(
             "uid": user["id"],
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     await s.commit()
     detail = await _fetch_schedule(s, str(row[0]))
     assert detail is not None

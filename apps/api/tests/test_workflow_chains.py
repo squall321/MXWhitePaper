@@ -322,6 +322,7 @@ async def test_fail_strategy_rollback_undoes_add_tag() -> None:
             text("SELECT content_json FROM documents WHERE id = CAST(:d AS uuid)"),
             {"d": doc_id},
         )).first()
+        assert row is not None  # seed document
         c = row[0] if isinstance(row[0], dict) else json.loads(row[0])
         tags = (c.get("metadata") or {}).get("tags") or []
         assert "rollback-marker" not in tags

@@ -12,6 +12,7 @@ import zipfile
 
 import pytest
 from docx import Document
+from docx.document import Document as DocxDocument
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
@@ -53,7 +54,7 @@ def _doc(blocks: list[dict] | None = None, **overrides: object) -> dict:
     return base
 
 
-def _all_text(doc: Document) -> str:
+def _all_text(doc: DocxDocument) -> str:
     """문서 모든 paragraph + table 셀 텍스트를 모아 검색용으로 반환."""
     parts: list[str] = []
     for p in doc.paragraphs:
@@ -88,7 +89,12 @@ def test_renderer_emits_title_and_summary() -> None:
 def test_renderer_emits_section_headings() -> None:
     out = render_docx(_doc())
     doc = Document(io.BytesIO(out))
-    headings = [p.text for p in doc.paragraphs if p.style.name.startswith("Heading")]
+    headings = [
+        p.text for p in doc.paragraphs
+        if p.style is not None
+        and p.style.name is not None
+        and p.style.name.startswith("Heading")
+    ]
     assert any("1 서론" in h for h in headings)
 
 
@@ -159,7 +165,7 @@ def test_renderer_list_styles_bullet_and_number() -> None:
     ]
     out = render_docx(_doc(blocks))
     doc = Document(io.BytesIO(out))
-    styles = [p.style.name for p in doc.paragraphs]
+    styles = [p.style.name for p in doc.paragraphs if p.style is not None]
     assert "List Number" in styles
     assert "List Bullet" in styles
     text = _all_text(doc)
@@ -197,7 +203,10 @@ def test_renderer_quote_uses_quote_style() -> None:
     ]
     out = render_docx(_doc(blocks))
     doc = Document(io.BytesIO(out))
-    styles = [p.style.name for p in doc.paragraphs]
+    styles = [
+        p.style.name for p in doc.paragraphs
+        if p.style is not None and p.style.name is not None
+    ]
     assert any("Quote" in s for s in styles)
     text = _all_text(doc)
     assert "Drucker" in text

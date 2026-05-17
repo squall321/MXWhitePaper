@@ -186,6 +186,8 @@ def _validate_answer(question: dict[str, Any], value: Any) -> Any:
             raise FormValidationError(f"'{label}' must be a boolean")
         return value
     if kind == "rating-5":
+        if not isinstance(value, (int, float, str)) or isinstance(value, bool):
+            raise FormValidationError(f"'{label}' must be an integer 1..5")
         try:
             n = int(value)
         except (TypeError, ValueError) as e:
@@ -281,6 +283,7 @@ async def submit_response(
             "a": json.dumps(normalized, ensure_ascii=False),
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     new_id = str(row[0])
 
     await document_repo.insert_audit(

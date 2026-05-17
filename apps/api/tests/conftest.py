@@ -71,6 +71,10 @@ def _reset_rate_limiter_per_test():
 @pytest.fixture(autouse=True)
 async def _reset_engine_per_test():
     """매 테스트마다 새 engine 을 사용해 loop-affinity 충돌을 피한다."""
+    from typing import cast
+
+    from sqlalchemy.ext.asyncio import AsyncEngine
+
     from app.core import db as db_mod
 
     # 기존 engine 이 있으면 (이전 테스트 잔재) 정리 시도
@@ -84,9 +88,13 @@ async def _reset_engine_per_test():
 
     yield
 
-    if db_mod._engine is not None:
+    # Re-read after yield because tests may have repopulated _engine via
+    # get_engine(). `cast` resets pyright's narrowing (set-to-None above
+    # would otherwise leave it as Literal[None]).
+    eng = cast("AsyncEngine | None", db_mod._engine)
+    if eng is not None:
         try:
-            await db_mod._engine.dispose()
+            await eng.dispose()
         except Exception:
             pass
     db_mod._engine = None

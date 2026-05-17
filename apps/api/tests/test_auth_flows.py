@@ -70,6 +70,7 @@ async def _create_temp_user(email: str, password: str) -> str:
                 {"e": email, "n": "Temp User", "h": hash_password(password)},
             )
         ).first()
+        assert row is not None  # INSERT...RETURNING always emits one row
         await s.commit()
         return str(row[0])
 

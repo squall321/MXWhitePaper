@@ -345,7 +345,7 @@ async def _action_transition(
         ),
         {"st": target, "d": doc_id},
     )
-    if (res.rowcount or 0) == 0:
+    if (getattr(res, "rowcount", 0) or 0) == 0:
         return "skipped", "doc missing or already at target status"
     return "ok", None
 

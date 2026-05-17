@@ -145,6 +145,7 @@ async def test_patch_section_response_scrubs_for_reader() -> None:
                     text("SELECT id FROM users WHERE email = :e"),
                     {"e": ed_email},
                 )).first()
+            assert row is not None  # just inserted above
             ed_uid = str(row[0])
         ed_token = make_access_token(ed_uid)
 

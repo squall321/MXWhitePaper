@@ -332,7 +332,7 @@ def _process_image_bytes(raw: bytes) -> dict[str, Any]:
             return img
         ratio = max_w / img.width
         new_h = max(1, round(img.height * ratio))
-        return img.resize((max_w, new_h), Image.LANCZOS)
+        return img.resize((max_w, new_h), Image.LANCZOS)  # type: ignore[attr-defined]  # PIL stub lacks legacy LANCZOS alias
 
     def _to_webp(img: Image.Image) -> bytes:
         buf = io.BytesIO()
@@ -348,7 +348,7 @@ def _process_image_bytes(raw: bytes) -> dict[str, Any]:
     # ImageStat.Stat runs in C — faster than Python iteration over getdata()
     # and side-steps the Pillow 14 deprecation of Image.Image.getdata().
     color_img = base.convert("RGB").copy()
-    color_img.thumbnail((50, 50), Image.LANCZOS)
+    color_img.thumbnail((50, 50), Image.LANCZOS)  # type: ignore[attr-defined]  # PIL stub lacks legacy LANCZOS alias
     mean = ImageStat.Stat(color_img).mean  # [r, g, b] floats in [0, 255]
     r, g, b = int(mean[0]), int(mean[1]), int(mean[2])
     dominant_color = f"#{r:02x}{g:02x}{b:02x}"

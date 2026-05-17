@@ -80,6 +80,7 @@ async def _seed_secondary_user(email: str) -> str:
             ),
             {"e": email, "n": email.split("@")[0]},
         )).first()
+        assert row is not None  # INSERT...RETURNING always emits one row
         await s.commit()
         return str(row[0])
 

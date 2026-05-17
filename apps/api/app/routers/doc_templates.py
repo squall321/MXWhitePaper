@@ -220,6 +220,7 @@ async def create_template(
             "u": user["id"],
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
 
     await document_repo.insert_audit(
         s,

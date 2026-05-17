@@ -425,10 +425,13 @@ async def roundtrip_docx_endpoint(
     if not docx_import.is_docx_content(buf):
         raise ValidationFailed("zip does not contain word/document.xml")
 
+    strip_toc_b = _bool_form(strip_toc, default=True)
+    verify_toc_b = _bool_form(verify_toc, default=True)
+    aggressive_toc_b = _bool_form(aggressive_toc, default=False)
     opts = {
-        "strip_toc": _bool_form(strip_toc, default=True),
-        "verify_toc": _bool_form(verify_toc, default=True),
-        "aggressive_toc": _bool_form(aggressive_toc, default=False),
+        "strip_toc": strip_toc_b,
+        "verify_toc": verify_toc_b,
+        "aggressive_toc": aggressive_toc_b,
     }
 
     # The roundtrip itself is CPU-bound (XML parse + Pillow-free docx
@@ -438,7 +441,9 @@ async def roundtrip_docx_endpoint(
         out_bytes, summary = await run_in_threadpool(
             roundtrip_docx,
             buf,
-            **opts,
+            strip_toc=strip_toc_b,
+            verify_toc=verify_toc_b,
+            aggressive_toc=aggressive_toc_b,
         )
     except ValueError as e:
         raise ValidationFailed(str(e)) from e

@@ -155,6 +155,7 @@ async def _open_run(
             "p": json.dumps(trigger_payload, ensure_ascii=False),
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     await s.commit()
     return int(row[0])
 

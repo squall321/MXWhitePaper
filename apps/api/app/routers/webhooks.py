@@ -209,6 +209,7 @@ async def create_webhook(
             "fp": json.dumps(parts),
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     new_id = str(row[0])
 
     await document_repo.insert_audit(

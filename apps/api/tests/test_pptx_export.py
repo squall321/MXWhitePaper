@@ -13,6 +13,7 @@ import zipfile
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pptx import Presentation
+from pptx.presentation import Presentation as PptxPresentation
 
 from app.main import app
 from app.services.pptx_export import PptxOptions, render_pptx
@@ -53,17 +54,19 @@ def _doc(blocks: list[dict] | None = None, **overrides: object) -> dict:
     return base
 
 
-def _slides_text(prs: Presentation) -> str:
+def _slides_text(prs: PptxPresentation) -> str:
     """모든 슬라이드의 모든 text frame 을 직렬화 (검색용)."""
     buf: list[str] = []
     for slide in prs.slides:
         for shape in slide.shapes:
+            # python-pptx stub keeps `text_frame` / `table` on the concrete
+            # subclasses only; `has_text_frame`/`has_table` are runtime guards.
             if shape.has_text_frame:
-                for para in shape.text_frame.paragraphs:
+                for para in shape.text_frame.paragraphs:  # type: ignore[attr-defined]
                     for run in para.runs:
                         buf.append(run.text)
             if shape.has_table:
-                table = shape.table
+                table = shape.table  # type: ignore[attr-defined]
                 for row in table.rows:
                     for cell in row.cells:
                         buf.append(cell.text)
@@ -131,7 +134,7 @@ def test_renderer_paragraph_inline_bold_italic_strike() -> None:
         for shape in slide.shapes:
             if not shape.has_text_frame:
                 continue
-            for para in shape.text_frame.paragraphs:
+            for para in shape.text_frame.paragraphs:  # type: ignore[attr-defined]
                 for run in para.runs:
                     if run.text == "굵게" and run.font.bold:
                         found_bold = True
@@ -166,7 +169,7 @@ def test_renderer_table_emits_native_table_shape() -> None:
         s for slide in prs.slides for s in slide.shapes if s.has_table
     ]
     assert len(table_shapes) == 1
-    table = table_shapes[0].table
+    table = table_shapes[0].table  # type: ignore[attr-defined]
     assert table.cell(0, 0).text == "이름"
     assert table.cell(0, 1).text == "수량"
     assert table.cell(1, 0).text == "사과"
@@ -247,7 +250,9 @@ def test_renderer_speaker_note_appended_to_slide_notes() -> None:
     out = render_pptx(_doc(blocks))
     prs = Presentation(io.BytesIO(out))
     # Slide 0 = title, slide 1 = our section.
-    note = prs.slides[1].notes_slide.notes_text_frame.text
+    notes_tf = prs.slides[1].notes_slide.notes_text_frame
+    assert notes_tf is not None  # speaker note added above
+    note = notes_tf.text
     assert "여기서 천천히 강조합니다." in note
 
 

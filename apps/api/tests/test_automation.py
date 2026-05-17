@@ -329,6 +329,7 @@ async def test_action_add_tag_mutates_doc_metadata() -> None:
             text("SELECT content_json FROM documents WHERE id = CAST(:d AS uuid)"),
             {"d": doc_id},
         )).first()
+        assert row is not None  # seed document
         content = row[0] if isinstance(row[0], dict) else json.loads(row[0])
         assert "auto-published" in (content.get("metadata") or {}).get("tags", [])
 
@@ -342,6 +343,7 @@ async def test_action_add_tag_mutates_doc_metadata() -> None:
             text("SELECT content_json FROM documents WHERE id = CAST(:d AS uuid)"),
             {"d": doc_id},
         )).first()
+        assert row is not None  # seed document
         c = row[0] if isinstance(row[0], dict) else json.loads(row[0])
         m = c.get("metadata") or {}
         m["tags"] = [t for t in (m.get("tags") or []) if t != "auto-published"]

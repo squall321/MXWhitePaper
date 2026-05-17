@@ -269,6 +269,7 @@ async def submit_attempt(
             "ds": int(body.duration_seconds),
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     new_id = str(row[0])
 
     await document_repo.insert_audit(
@@ -379,19 +380,20 @@ async def leaderboard(
         {"d": doc_id, "b": block_id},
     )).all()
 
+    entries: list[dict[str, Any]] = [
+        {
+            "user_id": str(r[0]),
+            "score": int(r[1]),
+            "duration_seconds": int(r[2]),
+            "submitted_at": r[3].isoformat() if r[3] else None,
+            "name": r[4],
+            "email": r[5],
+        }
+        for r in rows
+    ]
     ranked = sorted(
-        [
-            {
-                "user_id": str(r[0]),
-                "score": int(r[1]),
-                "duration_seconds": int(r[2]),
-                "submitted_at": r[3].isoformat() if r[3] else None,
-                "name": r[4],
-                "email": r[5],
-            }
-            for r in rows
-        ],
-        key=lambda x: (-x["score"], x["duration_seconds"]),
+        entries,
+        key=lambda x: (-int(x["score"]), int(x["duration_seconds"])),
     )[:10]
 
     items = []

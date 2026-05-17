@@ -135,6 +135,7 @@ async def create_bookmark(
         """),
         {"u": user["id"], "d": doc_id, "f": folder, "n": notes},
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
 
     await document_repo.insert_audit(
         s, user_id=user["id"], action="bookmark.create",
@@ -294,6 +295,7 @@ async def post_read(
         """),
         {"u": user["id"], "d": doc_id, "sec": body.read_seconds},
     )).first()
+    assert row is not None  # INSERT...ON CONFLICT...RETURNING always emits one row
     await s.commit()
     return envelope(data={
         "document_id": doc_id,

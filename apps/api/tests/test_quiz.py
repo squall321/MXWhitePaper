@@ -1,6 +1,8 @@
 """Tests for quiz router (embedded quiz block, Cycle 0029)."""
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -12,7 +14,7 @@ QUIZ_BLOCK_ID = "01J9X1Y2Z3A4B5C6D7E8F9GZQ1"
 
 
 @pytest.fixture
-async def _clean_attempts() -> None:
+async def _clean_attempts() -> AsyncIterator[None]:
     """Wipe attempts for the seeded quiz block before each integration test."""
     from sqlalchemy import text
 

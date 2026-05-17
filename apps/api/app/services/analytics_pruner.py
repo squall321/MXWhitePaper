@@ -38,8 +38,9 @@ async def prune_once() -> int:
         )
         await s.commit()
         # rowcount may be -1 on async dialects that don't surface it; treat
-        # as 0 for the audit log.
-        deleted = max(int(res.rowcount or 0), 0)
+        # as 0 for the audit log. getattr keeps pyright quiet — abstract
+        # `Result` doesn't expose `rowcount`, only `CursorResult` does.
+        deleted = max(int(getattr(res, "rowcount", 0) or 0), 0)
         logger.info("analytics_pruner: deleted %d anchor_samples rows", deleted)
         return deleted
 

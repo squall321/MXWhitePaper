@@ -176,6 +176,7 @@ async def create_snippet(
             "t": json.dumps(tags_clean, ensure_ascii=False),
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
 
     await document_repo.insert_audit(
         s,
@@ -425,5 +426,6 @@ async def use_snippet(
         """),
         {"id": sid},
     )).first()
+    assert bumped is not None  # existence verified above via _fetch_with_visibility
     await s.commit()
     return envelope(data={"snippet_id": sid, "use_count": int(bumped[0])})

@@ -144,6 +144,7 @@ async def create_reminder(
         ),
         {"u": user["id"], "d": doc["id"], "m": message, "ra": remind_at},
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     rid = str(row[0])
     await document_repo.insert_audit(
         s,
@@ -282,6 +283,7 @@ async def patch_reminder(
         ),
         params,
     )).first()
+    assert full is not None  # existence verified above at line 256
     # Look up slug+title for response parity with list endpoint.
     doc_row = (await s.execute(
         text("SELECT slug, title FROM documents WHERE id = CAST(:d AS uuid)"),

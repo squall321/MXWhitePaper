@@ -228,6 +228,7 @@ async def test_revoke_by_non_creator_returns_403() -> None:
         row = (await s.execute(
             text("SELECT id FROM users WHERE email = :e"), {"e": reader_email}
         )).first()
+        assert row is not None  # just upserted above
         reader_id = str(row[0])
     finally:
         await _close_session(gen)

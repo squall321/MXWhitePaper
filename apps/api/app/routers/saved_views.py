@@ -162,6 +162,7 @@ async def create_saved_view(
             "f": _jsonb(filters),
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     sv_id = str(row[0])
 
     await document_repo.insert_audit(

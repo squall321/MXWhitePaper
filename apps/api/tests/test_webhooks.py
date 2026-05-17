@@ -277,6 +277,7 @@ async def test_dispatch_signs_payload_and_records_delivery() -> None:
             text("SELECT last_status FROM webhooks WHERE id = CAST(:id AS uuid)"),
             {"id": hook_id},
         )).first()
+        assert st is not None  # webhook just created above
         assert st[0] == "ok"
     finally:
         await _close_session(gen)

@@ -55,6 +55,7 @@ async def _ensure_user(email: str, role: str) -> str:
         row = (await s.execute(
             text("SELECT id FROM users WHERE email = :e"), {"e": email}
         )).first()
+        assert row is not None  # just upserted above
         return str(row[0])
     finally:
         await _close_session(gen)
@@ -68,6 +69,7 @@ async def _reset_doc_state() -> dict[str, Any]:
             text("SELECT id, owner_id FROM documents WHERE slug = :s"),
             {"s": SEED_SLUG},
         )).first()
+        assert row is not None, f"seed document {SEED_SLUG!r} missing"
         doc_id = str(row[0])
         owner_id = str(row[1])
         await s.execute(

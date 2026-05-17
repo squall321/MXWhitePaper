@@ -122,6 +122,7 @@ async def create_version_tag(
             f"tag already exists for document: {slug} / {name}"
         ) from e
 
+    assert row is not None  # INSERT...RETURNING always emits one row
     tag_id = str(row[0])
     await document_repo.insert_audit(
         s,

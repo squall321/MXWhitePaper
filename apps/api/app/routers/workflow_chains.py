@@ -272,6 +272,7 @@ async def create_chain(
             "cb": user["id"],
         },
     )).first()
+    assert row is not None  # INSERT...RETURNING always emits one row
     cid = str(row[0])
     await _insert_steps(s, chain_id=cid, steps=body.steps)
     await document_repo.insert_audit(

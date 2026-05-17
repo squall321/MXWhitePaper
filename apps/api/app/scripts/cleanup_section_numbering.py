@@ -96,7 +96,9 @@ def _to_jsonb(obj: dict[str, Any]) -> str:
 
 
 async def _amain() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(
+        description=(__doc__ or "cleanup section numbering").splitlines()[0]
+    )
     parser.add_argument("--apply", action="store_true", help="write changes (default: dry-run)")
     parser.add_argument("--slug", help="limit to a single document slug")
     args = parser.parse_args()

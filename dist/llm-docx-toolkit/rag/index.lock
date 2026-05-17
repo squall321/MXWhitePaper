@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-17T15:02:21.656960+00:00",
+  "generated_at": "2026-05-17T16:20:20.361355+00:00",
   "source_hashes": {
     "packages/shared/schemas/document.json": "50804e64a535d9c210877d3603f91ed7d119c02feac2b3576a4f1be20e9e9a20",
     "apps/api/app/services/widget_markers.py": "29b9da045c859288c6bcb1195176ee9ebb9b50c2c5376c419d5c293632a5658e",
-    "apps/api/app/services/docx_import.py": "824fd0dae21126724cf326c62a594f7a087eee0a6b209256698821d2803ed6ec",
+    "apps/api/app/services/docx_import.py": "804bcf7ebf28df1270fe475360e667aaacdfa3707dd444ce4eb48edeb2a1b7e1",
     "docs/llm-input-rules.md": "076ad0e9e2594faeaebe1edde6af595ca0786c51e34f295643e4ba4f8f915921",
     "dist/llm-docx-toolkit/llm-system-prompt.md": "b07e354dc7be92c9b89cfdabdb523897828f7c5f0b4abeb99ef8cb53f48a4dab"
   },
