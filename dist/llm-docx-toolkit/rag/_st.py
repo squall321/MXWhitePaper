@@ -68,7 +68,21 @@ class STRetriever(Retriever):
     def _ensure_model(self) -> None:
         if self._model is not None:
             return
-        from sentence_transformers import SentenceTransformer  # heavy import
+        try:
+            from sentence_transformers import SentenceTransformer  # heavy import
+        except ImportError as exc:
+            raise RuntimeError(
+                "The 'st' (sentence-transformer) backend is not installed.\n"
+                "This is the LITE build of mxwp-rules — torch and "
+                "sentence-transformers were stripped to keep the binary "
+                "under 100 MB.\n"
+                "Options:\n"
+                "  1) Use --backend bm25 instead (no extra install needed).\n"
+                "  2) Install the deps and run from source:\n"
+                "       pip install sentence-transformers numpy\n"
+                "       python -m rag query --backend st '<query>'\n"
+                "  3) Download the FULL toolkit (see HANDOFF.md §full build)."
+            ) from exc
 
         cached = _model_is_cached(self._model_name)
         if not cached:

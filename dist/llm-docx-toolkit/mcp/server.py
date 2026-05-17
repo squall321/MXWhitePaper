@@ -108,7 +108,7 @@ def build_server() -> FastMCP:
             "(id, heading, score, text) for a natural-language query."
         ),
     )
-    def query_rules(query: str, k: int = 5, backend: str = "st") -> list[dict[str, Any]]:
+    def query_rules(query: str, k: int = 5, backend: str = "bm25") -> list[dict[str, Any]]:
         r = _get_retriever(backend)
         hits = r.query(query, k=k)
         return [

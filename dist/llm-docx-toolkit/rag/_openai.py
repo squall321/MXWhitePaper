@@ -61,7 +61,20 @@ class OpenAIRetriever(Retriever):
             raise RuntimeError(
                 "OPENAI_API_KEY missing — pass api_key=... or set env var"
             )
-        from openai import OpenAI  # heavy / optional import
+        try:
+            from openai import OpenAI  # heavy / optional import
+        except ImportError as exc:
+            raise RuntimeError(
+                "The 'openai' backend is not installed.\n"
+                "This is the LITE build of mxwp-rules — the openai SDK was "
+                "stripped to keep the binary small.\n"
+                "Options:\n"
+                "  1) Use --backend bm25 instead (no extra install needed).\n"
+                "  2) Install openai and run from source:\n"
+                "       pip install openai numpy\n"
+                "       python -m rag query --backend openai '<query>'\n"
+                "  3) Download the FULL toolkit (see HANDOFF.md §full build)."
+            ) from exc
 
         self._client = OpenAI(api_key=api_key)
         return self._client

@@ -124,18 +124,16 @@ a = Analysis(
         'rag._bm25',
         'rag._lock',
         'rag.retriever',
-        # st + openai are heavy and lazy-loaded; we still declare them
-        # so the binary can find them when the user picks those backends.
-        'rag._st',
-        'rag._openai',
         'numpy',
-        'sentence_transformers',
-        'openai',
+        # Variant-dependent imports (st / openai backends + their heavy
+        # dependencies). Empty list in 'lite' mode so torch / transformers
+        # are NOT bundled; full list in 'full' mode.
+        {extra_hiddenimports}
     ],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[{extra_excludes}],
     cipher=block_cipher,
     noarchive=False,
 )
@@ -194,17 +192,16 @@ a = Analysis(
     hiddenimports=[
         'mcp.server.fastmcp',
         'rag._bm25',
-        'rag._st',
-        'rag._openai',
         'rag.retriever',
         'numpy',
-        'sentence_transformers',
-        'openai',
+        # Variant-dependent: empty in 'lite' so torch / transformers stay
+        # out of the binary; populated in 'full'.
+        {extra_hiddenimports}
     ] + _mcp_hidden + _pyd_hidden,
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[{extra_excludes}],
     cipher=block_cipher,
     noarchive=False,
 )
@@ -354,7 +351,35 @@ def _stage_rules_entry(work_dir: Path) -> Path:
     return launcher
 
 
-def _build_rules(work_dir: Path, bin_dir: Path, onefile: bool) -> Path:
+def _variant_imports_excludes(variant: str) -> tuple[str, str]:
+    """Return the (hiddenimports, excludes) lines for a build variant.
+
+    `lite` keeps torch / sentence-transformers / openai OUT of the binary
+    so the resulting artifact fits under GitHub Release's 2 GB per-asset
+    limit (~50-80 MB). The user gets a friendly error if they request the
+    st / openai backends without installing the deps themselves.
+
+    `full` bundles everything for the offline / self-contained scenario.
+    Artifact ~2.6 GB; needs a side channel for distribution.
+    """
+    if variant == "full":
+        hidden = "'rag._st', 'rag._openai', 'sentence_transformers', 'openai',"
+        excludes = ""
+    else:  # lite
+        hidden = ""
+        # Force-exclude the heavy stack even if a transitive import would
+        # otherwise pull it in — pyinstaller will warn but not bundle.
+        excludes = (
+            "'torch', 'torchvision', 'torchaudio', 'triton', "
+            "'sentence_transformers', 'transformers', 'huggingface_hub', "
+            "'openai', 'tensorboard', 'tokenizers', 'safetensors',"
+        )
+    return hidden, excludes
+
+
+def _build_rules(
+    work_dir: Path, bin_dir: Path, onefile: bool, variant: str = "lite",
+) -> Path:
     chunks = HERE / "rag" / "chunks.jsonl"
     lock = HERE / "rag" / "index.lock"
     if not chunks.exists() or not lock.exists():
@@ -362,6 +387,7 @@ def _build_rules(work_dir: Path, bin_dir: Path, onefile: bool) -> Path:
             f"rag/chunks.jsonl or rag/index.lock missing. "
             f"Run: python {HERE / 'rag' / 'chunker.py'}"
         )
+    extra_hidden, extra_excludes = _variant_imports_excludes(variant)
     launcher = _stage_rules_entry(work_dir)
     spec_path = work_dir / "mxwp-rules.spec"
     spec_path.write_text(
@@ -374,6 +400,8 @@ def _build_rules(work_dir: Path, bin_dir: Path, onefile: bool) -> Path:
             input_rules=repr(str(HERE / "llm-input-rules.md")),
             schema=repr(str(SCHEMA)),
             onefile="True" if onefile else "False",
+            extra_hiddenimports=extra_hidden,
+            extra_excludes=extra_excludes,
         ),
         encoding="utf-8",
     )
@@ -387,7 +415,10 @@ def _build_rules(work_dir: Path, bin_dir: Path, onefile: bool) -> Path:
     return _collect(work_dir / "dist-rules", bin_dir, "mxwp-rules", onefile)
 
 
-def _build_mcp(work_dir: Path, bin_dir: Path, onefile: bool) -> Path:
+def _build_mcp(
+    work_dir: Path, bin_dir: Path, onefile: bool, variant: str = "lite",
+) -> Path:
+    extra_hidden, extra_excludes = _variant_imports_excludes(variant)
     launcher = _stage_mcp_entry(work_dir)
     chunks = HERE / "rag" / "chunks.jsonl"
     lock = HERE / "rag" / "index.lock"
@@ -401,6 +432,8 @@ def _build_mcp(work_dir: Path, bin_dir: Path, onefile: bool) -> Path:
             system_prompt=repr(str(HERE / "llm-system-prompt.md")),
             onefile="True" if onefile else "False",
             toolkit_dir=repr(str(HERE)),
+            extra_hiddenimports=extra_hidden,
+            extra_excludes=extra_excludes,
         ),
         encoding="utf-8",
     )
@@ -412,6 +445,147 @@ def _build_mcp(work_dir: Path, bin_dir: Path, onefile: bool) -> Path:
         str(spec_path),
     ])
     return _collect(work_dir / "dist-mcp", bin_dir, "mxwp-mcp", onefile)
+
+
+def _platform_dir_name() -> str:
+    """`linux` / `windows` / `darwin` — folder-safe platform label."""
+    if sys.platform == "win32":
+        return "windows"
+    if sys.platform == "darwin":
+        return "darwin"
+    return "linux"
+
+
+def _pack_release(bin_dir: Path, variant: str) -> Path:
+    """Bundle bin/ + docs/examples/rag/mcp into _release/<variant>-<os>/.
+
+    For 'lite' the result is a single .zip (Windows) or .tar.gz (Linux/Mac)
+    well under the 2 GB GitHub Release per-asset cap.
+
+    For 'full' the result is the same archive, then split into 1.5 GB
+    chunks (.001 / .002 / ...) with a REASSEMBLE.md alongside so the
+    receiver knows how to put them back together.
+    """
+    here = HERE
+    platform_dir = _platform_dir_name()
+    release_root = here / "_release"
+    out_dir = release_root / f"{variant}-{platform_dir}"
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True)
+
+    # Staging: copy the user-facing layout (binaries + docs + corpus).
+    staging = out_dir / f"llm-docx-toolkit-{variant}-{platform_dir}"
+    staging.mkdir()
+    if bin_dir.exists():
+        shutil.copytree(bin_dir, staging / "bin")
+    for child in ("examples", "rag", "mcp", "apply", "src"):
+        src = here / child
+        if src.exists():
+            shutil.copytree(
+                src, staging / child,
+                ignore=shutil.ignore_patterns(
+                    "__pycache__", ".pytest_cache",
+                    "embeddings.npz", "embeddings.jsonl",
+                    "openai_embeddings.npz", "openai_embeddings.jsonl",
+                ),
+            )
+    for fname in (
+        "HANDOFF.md", "README.md", "llm-input-rules.md",
+        "llm-system-prompt.md", "requirements.txt", "build.py",
+    ):
+        f = here / fname
+        if f.exists():
+            shutil.copy(f, staging / fname)
+
+    # Drop pyc + caches anywhere in the tree.
+    for cache in staging.rglob("__pycache__"):
+        if cache.is_dir():
+            shutil.rmtree(cache, ignore_errors=True)
+
+    # Archive — platform-native default: zip on Windows, tar.gz elsewhere.
+    if platform_dir == "windows":
+        archive = shutil.make_archive(
+            str(out_dir / staging.name), "zip", root_dir=out_dir, base_dir=staging.name,
+        )
+    else:
+        archive = shutil.make_archive(
+            str(out_dir / staging.name), "gztar", root_dir=out_dir, base_dir=staging.name,
+        )
+    archive_path = Path(archive)
+    size_mb = archive_path.stat().st_size / (1024 * 1024)
+    print(f"[release] {archive_path.name} = {size_mb:.1f} MB")
+
+    # Only the full variant needs splitting — lite is ~50-80 MB and fits.
+    if variant == "full":
+        _split_archive(archive_path)
+
+    return out_dir
+
+
+def _split_archive(archive: Path, chunk_mb: int = 1500) -> list[Path]:
+    """Cut `archive` into <chunk_mb>-sized .001 / .002 / ... parts.
+
+    GitHub Release caps each asset at 2 GB; 1.5 GB chunks leave headroom
+    for archive-format overhead. Original file kept too so the dev who
+    ran the build can verify locally before shipping the parts.
+    """
+    chunk = chunk_mb * 1024 * 1024
+    size = archive.stat().st_size
+    parts: list[Path] = []
+    with archive.open("rb") as f:
+        idx = 1
+        while True:
+            buf = f.read(chunk)
+            if not buf:
+                break
+            part = archive.with_suffix(archive.suffix + f".{idx:03d}")
+            part.write_bytes(buf)
+            parts.append(part)
+            mb = part.stat().st_size / (1024 * 1024)
+            print(f"[release]   split {part.name} ({mb:.1f} MB)")
+            idx += 1
+    if not parts:
+        return []
+    # Side-by-side instructions — concise so it ships alongside the parts.
+    reassemble = archive.parent / "REASSEMBLE.md"
+    reassemble.write_text(_reassemble_instructions(archive.name, parts), encoding="utf-8")
+    print(f"[release]   wrote {reassemble.name}")
+    # Original archive is now redundant on disk; keep it so the builder
+    # can verify SHA before publishing the parts.
+    print(f"[release]   original kept at {archive.name} ({size / 1024 / 1024:.1f} MB)")
+    return parts
+
+
+def _reassemble_instructions(archive_name: str, parts: list[Path]) -> str:
+    part_glob_unix = f"{archive_name}.*"
+    return (
+        f"# Reassembling {archive_name}\n\n"
+        f"This release was split into {len(parts)} parts so each fits under\n"
+        f"GitHub Release's 2 GB per-asset limit. After downloading all\n"
+        f"`{archive_name}.001` through `{archive_name}.{len(parts):03d}` into\n"
+        "the same folder:\n\n"
+        "## Linux / macOS\n\n"
+        "```bash\n"
+        f"cat {part_glob_unix} > {archive_name}\n"
+        f"tar -xzf {archive_name}\n"
+        "```\n\n"
+        "## Windows (PowerShell)\n\n"
+        "```powershell\n"
+        f"$parts = Get-ChildItem '{archive_name}.*' | Sort-Object Name\n"
+        f"$out = [System.IO.File]::Create('{archive_name}')\n"
+        "foreach ($p in $parts) {\n"
+        "  $bytes = [System.IO.File]::ReadAllBytes($p.FullName)\n"
+        "  $out.Write($bytes, 0, $bytes.Length)\n"
+        "}\n"
+        "$out.Close()\n"
+        f"Expand-Archive {archive_name} .\n"
+        "```\n\n"
+        "## Windows (cmd.exe)\n\n"
+        "```cmd\n"
+        f"copy /b {archive_name}.* {archive_name}\n"
+        "```\n"
+    )
 
 
 def _collect(dist_dir: Path, bin_dir: Path, name: str, onefile: bool) -> Path:
@@ -443,6 +617,18 @@ def main() -> int:
         default="all",
         help="Which binary to build (default: all three).",
     )
+    parser.add_argument(
+        "--variant",
+        choices=["lite", "full"],
+        default="lite",
+        help=(
+            "lite (default): bm25 backend only — ~50-80MB, fits GitHub "
+            "Release's 2GB-per-asset cap. "
+            "full: bundles torch + sentence-transformers + openai for the "
+            "st / openai backends offline. ~2.6GB; needs a side channel "
+            "(see infra/scripts/repack-zip-split.py for the auto-split)."
+        ),
+    )
     args = parser.parse_args()
 
     try:
@@ -468,13 +654,16 @@ def main() -> int:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     onefile = not args.onedir
+    print(f"[build] variant     : {args.variant}")
     artifacts: list[Path] = []
     if args.target in ("all", "validator"):
+        # validator doesn't load torch / sentence-transformers — variant
+        # only affects rules / mcp.
         artifacts.append(_build_validator(work_dir, bin_dir, onefile))
     if args.target in ("all", "rules"):
-        artifacts.append(_build_rules(work_dir, bin_dir, onefile))
+        artifacts.append(_build_rules(work_dir, bin_dir, onefile, args.variant))
     if args.target in ("all", "mcp"):
-        artifacts.append(_build_mcp(work_dir, bin_dir, onefile))
+        artifacts.append(_build_mcp(work_dir, bin_dir, onefile, args.variant))
 
     print("\nQuick sanity:", flush=True)
     for art in artifacts:
@@ -482,6 +671,15 @@ def main() -> int:
             subprocess.check_call([str(art), "--version"], timeout=15)
         except Exception as e:
             print(f"  ({art.name} sanity skipped — {e})")
+
+    # Only auto-pack a release when we built the whole set; partial builds
+    # would produce a misleading half-bundle.
+    if args.target == "all":
+        try:
+            out_dir = _pack_release(bin_dir, args.variant)
+            print(f"\n[release] bundle ready at: {out_dir}")
+        except Exception as e:
+            print(f"[release] packing failed (binaries are still usable): {e!r}")
     return 0
 
 

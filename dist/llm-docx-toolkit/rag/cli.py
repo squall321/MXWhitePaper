@@ -319,7 +319,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     pq = sub.add_parser("query", help="run a query against an on-disk index")
     pq.add_argument("text", help="query text")
-    pq.add_argument("--backend", choices=_BACKENDS, default="st")
+    # bm25 default: works in the lite binary without extra installs.
+    # st / openai still selectable but raise a friendly install hint in
+    # the lite build (see rag/_st.py and rag/_openai.py _ensure_*).
+    pq.add_argument("--backend", choices=_BACKENDS, default="bm25")
     pq.add_argument("-k", type=int, default=5)
     pq.add_argument("--json", action="store_true", help="emit hits as JSON")
     _add_rag_dir(pq)
@@ -327,7 +330,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     pi = sub.add_parser("index", help="build the on-disk index for a backend")
     pi.add_argument(
-        "--backend", choices=(*_BACKENDS, "all"), default="st",
+        "--backend", choices=(*_BACKENDS, "all"), default="bm25",
     )
     pi.add_argument(
         "--rebuild", action="store_true",

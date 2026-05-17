@@ -139,7 +139,7 @@ jobs:
           # cover the surface area we care about for build-time verification.
           python3 -m pytest rag/tests/ mcp/tests/ -v -m "not slow"
 
-      - name: Build all three binaries
+      - name: Build all three binaries (lite variant)
         working-directory: dist/llm-docx-toolkit
         shell: bash
         run: |
@@ -155,8 +155,12 @@ jobs:
             python -c "import numpy; print('numpy', numpy.__version__)"
             echo "=== folder listing ==="
             ls -la
-            echo "=== build.py --target all ==="
-            python build.py --clean
+            echo "=== build.py --variant lite --target all ==="
+            # Lite variant: ~50-80 MB total, fits GitHub Release's 2GB
+            # per-asset limit. Full variant must be built locally (see
+            # HANDOFF.md) because torch + sentence-transformers push the
+            # mxwp-rules / mxwp-mcp binaries to ~2.6 GB each.
+            python build.py --clean --variant lite
             echo "=== exit: $? ==="
           } 2>&1 | tee build.log
           BUILD_EC=${PIPESTATUS[0]}
@@ -222,51 +226,26 @@ jobs:
           set -e
           "$BIN" --version
 
-      - name: Stage release bundle
-        shell: bash
-        working-directory: dist/llm-docx-toolkit
-        run: |
-          BUNDLE="llm-docx-toolkit-${{ matrix.platform_tag }}"
-          rm -rf "_release/${BUNDLE}"
-          mkdir -p "_release/${BUNDLE}"
-          cp -r bin "_release/${BUNDLE}/bin"
-          cp -r examples "_release/${BUNDLE}/examples"
-          cp -r src "_release/${BUNDLE}/src"
-          cp -r rag "_release/${BUNDLE}/rag"
-          cp -r mcp "_release/${BUNDLE}/mcp"
-          cp HANDOFF.md README.md llm-input-rules.md llm-system-prompt.md requirements.txt build.py "_release/${BUNDLE}/"
-          if [ -d "apply" ]; then
-            cp -r apply "_release/${BUNDLE}/apply"
-          fi
-          # Strip pyc + caches before zipping.
-          find "_release/${BUNDLE}" -type d -name __pycache__ -prune -exec rm -rf {} +
-          find "_release/${BUNDLE}" -type d -name '.pytest_cache' -prune -exec rm -rf {} +
+      # build.py --variant lite --target all already wrote the bundle to
+      # _release/lite-<linux|windows>/ — the upload step just needs to
+      # point at it. No more hand-curated cp loops here.
 
-      - name: Upload artifact
+      - name: Upload artifact (lite bundle)
         uses: actions/upload-artifact@v4
         with:
-          name: llm-docx-toolkit-${{ matrix.platform_tag }}
-          path: dist/llm-docx-toolkit/_release/llm-docx-toolkit-${{ matrix.platform_tag }}
+          name: llm-docx-toolkit-lite-${{ matrix.platform_tag }}
+          path: dist/llm-docx-toolkit/_release/lite-${{ matrix.platform_tag }}/
           retention-days: 30
-
-      - name: Pack release archive (tags only)
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        working-directory: dist/llm-docx-toolkit/_release
-        run: |
-          BUNDLE="llm-docx-toolkit-${{ matrix.platform_tag }}"
-          if [ "${{ matrix.platform_tag }}" = "windows" ]; then
-            python -c "import shutil; shutil.make_archive('${BUNDLE}', 'zip', '${BUNDLE}')"
-          else
-            tar -czf "${BUNDLE}.tar.gz" "${BUNDLE}"
-          fi
-          ls -l
 
       - name: Attach to GitHub Release (tags only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          # Only the .zip / .tar.gz archive (and the split parts, if any —
+          # lite shouldn't produce them but the glob handles future drift).
+          # The full variant is built manually on the contributor's box
+          # (see HANDOFF.md §full build) — CI never publishes 2.6 GB asset.
           files: |
-            dist/llm-docx-toolkit/_release/llm-docx-toolkit-${{ matrix.platform_tag }}.tar.gz
-            dist/llm-docx-toolkit/_release/llm-docx-toolkit-${{ matrix.platform_tag }}.zip
+            dist/llm-docx-toolkit/_release/lite-${{ matrix.platform_tag }}/llm-docx-toolkit-lite-${{ matrix.platform_tag }}.zip
+            dist/llm-docx-toolkit/_release/lite-${{ matrix.platform_tag }}/llm-docx-toolkit-lite-${{ matrix.platform_tag }}.tar.gz
           fail_on_unmatched_files: false

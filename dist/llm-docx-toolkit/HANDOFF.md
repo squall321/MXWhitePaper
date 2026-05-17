@@ -49,19 +49,34 @@ MXWhitePaper 라는 백서 작성 시스템은 18 종류의 위젯(콜아웃·�
 
 ## 2. 받은 자료 — zip 안에 뭐가 들었나
 
-본 zip / tar.gz 의 파일 트리:
+### 두 가지 변형 (variant)
+
+| variant | 크기 | 배포 채널 | 백엔드 |
+|---|---|---|---|
+| **lite** (기본) | ~50-80 MB | GitHub Release | bm25 (즉시), st/openai (소스 빌드 시) |
+| **full** | ~2.6 GB | 사내망 / 직접 빌드 | bm25 / st / openai 모두 바로 |
+
+대부분은 **lite** 만 받으면 됩니다. 룰 검색 정확도 차이는 한국어 의미 검색
+필요할 때 (`--backend st`) 만 의미 있고, lite 에서도 `pip install sentence-
+transformers numpy` 후 소스 실행으로 같은 효과를 낼 수 있습니다.
+
+**full** 은 외부 인터넷 차단된 환경에서 *바로* st backend 가 필요한 케이스용.
+GitHub Release 의 2 GB per-asset 한계 때문에 직접 빌드해서 받아갑니다 (절차는
+[§8 Full 빌드](#8-full-빌드-windows-자체-빌드)).
+
+### 파일 트리 (lite 기준)
 
 ```
-llm-docx-toolkit-{linux,windows}/
+llm-docx-toolkit-lite-{linux,windows}/
 ├── HANDOFF.md                ← 이 문서 (가장 먼저 읽음)
 ├── README.md                 ← 개발자용 상세
 ├── llm-input-rules.md        ← LLM 에게 줄 18-위젯 명세서 (전통적 방식)
 ├── llm-system-prompt.md      ← LLM 시스템 프롬프트 (간단형, MCP 의 prompt primitive)
 │
 ├── bin/                      ← 단일 실행 파일 (의존성 0)
-│   ├── mxwp-validator-{linux,win32.exe}   17 MB   ← .docx 검증
-│   ├── mxwp-rules-{linux,win32.exe}      ~2.6 GB  ← RAG CLI
-│   └── mxwp-mcp-{linux,win32.exe}        ~2.6 GB  ← MCP stdio 서버
+│   ├── mxwp-validator-{linux,win32.exe}    ~17 MB   ← .docx 검증
+│   ├── mxwp-rules-{linux,win32.exe}        ~50 MB   ← RAG CLI (bm25 backend)
+│   └── mxwp-mcp-{linux,win32.exe}          ~50 MB   ← MCP stdio 서버 (bm25)
 │
 ├── examples/                 ← 모범/반례 예시
 │   ├── good-example.docx     ← 룰을 따른 예 (15 위젯)
@@ -363,9 +378,100 @@ A. GitHub Release 페이지를 watch. 위젯 룰이 바뀌면 자동으로 새 �
 
 ---
 
-## 8. 한 줄 요약
+## 8. Full 빌드 (Windows / 자체 빌드)
+
+GitHub Release 는 **lite** 만 publish 합니다. ST / OpenAI 백엔드가 통째로
+번들된 **full** 변형 (~2.6 GB) 이 필요하면 직접 빌드합니다.
+
+### 8.1 사전 준비
+
+- Python 3.12 (Windows: 공식 installer + "Add to PATH" 체크)
+- git
+- 디스크 ~15 GB (torch 등 의존성 다운로드 + 빌드 산출물)
+
+### 8.2 빌드 절차 (Windows / Linux 공통)
+
+```powershell
+# 1. 본 프로젝트 통째 clone (sparse-checkout 가능)
+git clone https://github.com/squall321/MXWhitePaper.git
+cd MXWhitePaper
+
+# 2. 의존성 (lite 의 dep 위에 torch + sentence-transformers + openai 가 추가됨)
+cd dist/llm-docx-toolkit
+python -m pip install -r requirements.txt
+
+# 3. RAG 인덱스 (분야별 어휘 등 최신 chunks.jsonl 보장)
+python rag/chunker.py
+
+# 4. full 빌드
+python build.py --clean --variant full
+```
+
+빌드 시간 ~15-30 분 (PyInstaller가 torch 통째 번들).
+
+### 8.3 산출물
+
+`_release/full-{linux,windows}/` 안에:
+
+```
+llm-docx-toolkit-full-{linux,windows}.{zip|tar.gz}         ← 원본 (2.6 GB)
+llm-docx-toolkit-full-{linux,windows}.{zip|tar.gz}.001     ← 분할 파트 1 (1.5 GB)
+llm-docx-toolkit-full-{linux,windows}.{zip|tar.gz}.002     ← 분할 파트 2
+REASSEMBLE.md                                              ← 합치는 방법
+```
+
+분할 파일은 GitHub Release / 사내 파일 서버 / 메일 첨부 등으로 전달.
+
+### 8.4 받은 쪽에서 합치기
+
+`REASSEMBLE.md` 안내 그대로:
+
+**Linux / macOS**:
+```bash
+cat llm-docx-toolkit-full-linux.tar.gz.* > llm-docx-toolkit-full-linux.tar.gz
+tar -xzf llm-docx-toolkit-full-linux.tar.gz
+```
+
+**Windows (cmd.exe)**:
+```cmd
+copy /b llm-docx-toolkit-full-windows.zip.* llm-docx-toolkit-full-windows.zip
+```
+이후 우클릭 → "압축 풀기" 또는 `Expand-Archive`.
+
+**Windows (PowerShell)** — REASSEMBLE.md 에 자동 스크립트 포함.
+
+---
+
+## 9. Windows 에서 동료에게 zip 으로 전달
+
+받은 toolkit 폴더를 동료에게 그대로 zip 으로 전달하고 싶을 때.
+
+### 9.1 PowerShell 한 줄
+
+```powershell
+Compress-Archive -Path .\llm-docx-toolkit-lite-windows -DestinationPath .\llm-docx-toolkit-lite-windows-$(Get-Date -Format yyyyMMdd).zip
+```
+
+### 9.2 자동화 스크립트
+
+`apply/repack-as-zip.ps1` (Windows 만, toolkit 안에 동봉):
+
+```powershell
+.\apply\repack-as-zip.ps1
+# → llm-docx-toolkit-<variant>-windows-<timestamp>.zip 자동 생성
+```
+
+스크립트는 다음을 자동 처리:
+- 현재 폴더 이름에서 variant 추출 (lite/full)
+- 타임스탬프 포함 파일명
+- `__pycache__`, `.pytest_cache` 자동 제외
+- 압축 후 SHA-256 출력 (전달 시 무결성 검증용)
+
+---
+
+## 10. 한 줄 요약
 
 > 받은 zip 안의 `bin/` 3개가 핵심. `mxwp-validator` 는 .docx 검사, `mxwp-rules`
 > 는 LLM 이 룰을 검색, `mxwp-mcp` 는 Claude Desktop/Code 에 끼우는 MCP 서버.
 > 위젯 룰이 바뀌면 새 zip 만 받아서 교체하면 된다. drift 는 4계층 가드가
-> 시스템적으로 막는다.
+> 시스템적으로 막는다. ST 백엔드는 lite 에 미포함 — `pip install` 또는 full 변형.
