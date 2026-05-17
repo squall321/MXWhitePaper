@@ -1,0 +1,28 @@
+# Default: let git infer text vs binary, but never auto-CRLF.
+*               text=auto eol=lf
+
+# Generated files — codegen writes LF on every platform. Without this
+# Windows checkout flips them to CRLF and the codegen-drift gate
+# reports false dirty.
+apps/web/src/types/document.ts text eol=lf
+apps/api/app/schemas/document.py text eol=lf
+apps/api/openapi.json           text eol=lf
+
+# Lock files, snapshots — preserve as-is.
+*.lock          text eol=lf
+*.jsonl         text eol=lf
+
+# Common binaries — don't try to diff or normalize.
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.webp          binary
+*.pdf           binary
+*.docx          binary
+*.xlsx          binary
+*.pptx          binary
+*.zip           binary
+*.tar.gz        binary
+*.sif           binary
+*.npz           binary
