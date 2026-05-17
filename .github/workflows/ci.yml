@@ -113,6 +113,11 @@ jobs:
       - run: pnpm schema:gen
       - run: pnpm --filter @mx/web typecheck
       - run: pnpm --filter @mx/web build
+        env:
+          # macOS runners ship a smaller Node heap by default; vite + tsc
+          # together push past it on big projects. Bump to 8GB so the
+          # build matches the ubuntu/windows runners.
+          NODE_OPTIONS: --max-old-space-size=8192
 
   api:
     name: API (ruff + pyright + pytest) — ${{ matrix.os }}
