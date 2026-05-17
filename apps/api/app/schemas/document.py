@@ -51,7 +51,7 @@ class DocumentMeta(BaseModel):
     part: str | None = None
     owners: list[str] = Field(..., min_length=1)
     reviewers: list[str] | None = []
-    tags: list[str] | None = []
+    tags: list[str] = []
     category: str | None = None
     confidentiality: Confidentiality
 
@@ -680,7 +680,7 @@ class GalleryBlock(BaseModel):
     )
     type: Literal['gallery']
     id: Ulid
-    layout: Layout2 | None = Layout2.grid
+    layout: Layout2 = Layout2.grid
     items: list[Item1] = Field(..., min_length=1)
     meta: BlockMeta | None = None
 
@@ -1072,8 +1072,8 @@ class SpreadsheetBlock(BaseModel):
     type: Literal['spreadsheet']
     id: Ulid
     title: str | None = None
-    cols: int | None = Field(6, ge=1, le=26)
-    rows: int | None = Field(10, ge=1, le=200)
+    cols: int = Field(6, ge=1, le=26)
+    rows: int = Field(10, ge=1, le=200)
     headers: list[str] | None = None
     cells: dict[str, str]
     """
