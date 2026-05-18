@@ -77,7 +77,8 @@ llm-docx-toolkit-lite-{linux,windows}/
 ├── bin/                      ← 단일 실행 파일 (의존성 0)
 │   ├── mxwp-validator-{linux,win32.exe}    ~17 MB   ← .docx 검증
 │   ├── mxwp-rules-{linux,win32.exe}        ~50 MB   ← RAG CLI (bm25 backend)
-│   └── mxwp-mcp-{linux,win32.exe}          ~50 MB   ← MCP stdio 서버 (bm25)
+│   ├── mxwp-mcp-{linux,win32.exe}          ~50 MB   ← MCP stdio 서버 (bm25)
+│   └── mxwp-import-{linux,win32.exe}        ~9 MB   ← 대량 .docx 일괄 업로드 (YAML 옵션)
 │
 ├── examples/                 ← 모범/반례 예시 (모두 validator exit 0)
 │   ├── good-example.docx     ← 룰을 따른 예 (16 위젯)

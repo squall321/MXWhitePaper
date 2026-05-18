@@ -233,6 +233,36 @@ jobs:
           set -e
           "$BIN" --version
 
+      - name: Smoke test — mxwp-import dry-run
+        shell: bash
+        working-directory: dist/llm-docx-toolkit
+        run: |
+          BIN="bin/mxwp-import-${{ matrix.platform_tag == 'linux' && 'linux' || 'win32' }}${{ matrix.ext }}"
+          chmod +x "$BIN" 2>/dev/null || true
+          set -e
+          "$BIN" --version
+          # Build a tiny YAML pointing at the bundled examples/ and exercise
+          # the full pipeline up to (but not over) the network. dry_run=true
+          # means client makes 0 HTTP calls but everything else fires.
+          cat > _smoketest_bulk.yml << 'EOF'
+          server: http://localhost:9999
+          token: smoke-test-token
+          source:
+            path: examples
+            pattern: "*.docx"
+          defaults:
+            division: mx
+            team: smoke
+            confidentiality: internal
+            owners: [smoke@mx.local]
+            tags: []
+          dry_run: true
+          delay_seconds: 0
+          EOF
+          "$BIN" --config _smoketest_bulk.yml
+          # The three example docx are good/all-widgets/bad — all should plan
+          # successfully even though they're not real bulk-import targets.
+
       # build.py --variant lite --target all already wrote the bundle to
       # _release/lite-<linux|windows>/ — the upload step just needs to
       # point at it. No more hand-curated cp loops here.
