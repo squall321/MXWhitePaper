@@ -139,6 +139,17 @@ jobs:
           # cover the surface area we care about for build-time verification.
           python3 -m pytest rag/tests/ mcp/tests/ -v -m "not slow"
 
+      # Build the example .docx files FIRST — build.py's _pack_release
+      # copies the examples/ folder as-is into the release bundle, so
+      # we need the .docx files written to disk before that step runs.
+      # Otherwise the shipped examples/ contains only build_examples.py
+      # and the user has nothing to run mxwp-validator on.
+      - name: Build example .docx files
+        working-directory: dist/llm-docx-toolkit
+        run: |
+          pip install python-docx
+          python examples/build_examples.py
+
       - name: Build all three binaries (lite variant)
         working-directory: dist/llm-docx-toolkit
         shell: bash
@@ -155,6 +166,8 @@ jobs:
             python -c "import numpy; print('numpy', numpy.__version__)"
             echo "=== folder listing ==="
             ls -la
+            echo "=== examples/ before build ==="
+            ls -la examples/
             echo "=== build.py --variant lite --target all ==="
             # Lite variant: ~50-80 MB total, fits GitHub Release's 2GB
             # per-asset limit. Full variant must be built locally (see
@@ -175,12 +188,6 @@ jobs:
           path: dist/llm-docx-toolkit/build.log
           retention-days: 7
           if-no-files-found: ignore
-
-      - name: Build example .docx files
-        working-directory: dist/llm-docx-toolkit
-        run: |
-          pip install python-docx
-          python examples/build_examples.py
 
       - name: Smoke test — validator on all 3 examples
         shell: bash

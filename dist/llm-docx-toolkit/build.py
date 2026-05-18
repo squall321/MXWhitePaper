@@ -490,6 +490,19 @@ def _pack_release(bin_dir: Path, variant: str) -> Path:
                     "openai_embeddings.npz", "openai_embeddings.jsonl",
                 ),
             )
+
+    # Loud warning if examples/ folder has no .docx files. v1.0.2 shipped
+    # an empty examples/ because the CI step that generates the .docx ran
+    # AFTER this packager — caught now so it can't slip into a release
+    # again silently.
+    example_docx = list((staging / "examples").glob("*.docx")) if (staging / "examples").exists() else []
+    if not example_docx:
+        print(
+            "[release] WARNING: examples/ in the bundle contains no .docx files. "
+            "Run `python examples/build_examples.py` BEFORE build.py so the "
+            "examples ship with the toolkit.",
+            file=sys.stderr,
+        )
     for fname in (
         "HANDOFF.md", "README.md", "llm-input-rules.md",
         "llm-system-prompt.md", "requirements.txt", "build.py",
