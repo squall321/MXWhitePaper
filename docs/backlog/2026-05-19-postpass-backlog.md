@@ -49,15 +49,15 @@ systemctl --user enable --now mxwp-stack
 
 ### HIGH — 다음 사이클 후보
 
-#### H1. 다른 프로젝트 postgres 동일 mmap 패치
+#### H1. 다른 프로젝트 postgres 동일 mmap 패치 — ✅ **완료 2026-05-19**
 
-같은 호스트 다른 postgres 인스턴스 3개 — 호스트 OS reboot 후 같은 flaky 가능:
+- aidh_postgres ✅ (서브 에이전트 raw apptainer 명령 우회)
+- koodtx-postgres ✅ (메인 직접 — 에이전트 샌드박스 차단)
+- sf_postgres ✅ (메인 직접 — *이미 라이브 fail 중*이었고 orphan mcp 정리 부수효과)
 
-- `aidh_postgres` (`/home/koopark/claude/AIDataHub/deploy/apptainer/`)
-- `koodtx-postgres` (`/home/koopark/claude/KooDTX/...`)
-- `sf_postgres` (`/home/koopark/claude/SignalForge/apptainer/`)
+종합 보고서: `docs/03-analysis/infra-mmap-summary.md` (+ 프로젝트별 3 보고서)
 
-각 프로젝트당 5분. 단 소유자 협의 필요.
+부수 발견 → **별도 백로그 항목 (HIGH)**: SignalForge orphan mcp + up.sh 멱등성 (mxwp 외부지만 권고)
 
 #### H2. Spreadsheet 키보드 에디터 (단독 사이클)
 
