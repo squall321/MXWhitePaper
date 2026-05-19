@@ -17,6 +17,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   forceCenter,
+  forceCollide,
   forceLink,
   forceManyBody,
   forceSimulation,
@@ -75,6 +76,8 @@ export interface GraphCanvasProps {
   nodes: GraphNode[]
   edges: GraphEdge[]
   highlight?: string
+  /** BFS root slug — 별도 색 + 더 큰 노드로 강조. */
+  rootSlug?: string | null
   onPickNode?: (slug: string) => void
 }
 
@@ -84,6 +87,7 @@ export function GraphCanvas({
   nodes: rawNodes,
   edges: rawEdges,
   highlight,
+  rootSlug,
   onPickNode,
 }: GraphCanvasProps) {
   const svgRef = useRef<SVGSVGElement | null>(null)
@@ -105,16 +109,27 @@ export function GraphCanvas({
         'link',
         forceLink<SimNode, SimLink>(links)
           .id((d) => d.slug)
-          .distance(80)
-          .strength(0.6),
+          .distance(160)   // 80 → 160: 노드 사이 거리 ↑
+          .strength(0.35), // 0.6 → 0.35: 링크 인력 약화 → 더 퍼짐
       )
-      .force('charge', forceManyBody<SimNode>().strength(-180))
+      // -180 → -600: repulse 강화 → 글자 겹침 ↓
+      .force('charge', forceManyBody<SimNode>().strength(-600).distanceMax(400))
+      // collide: 노드 ellipse 가 안 겹치게. rx 와 일관 + 약간 buffer.
+      // truncated label 의 가시 너비 기준 — 18 글자 cap.
+      .force(
+        'collide',
+        forceCollide<SimNode>((d) => {
+          const visibleLen = Math.min(d.title.length, 18)
+          return Math.min(90, Math.max(32, visibleLen * 7 + 8)) + 8
+        }).strength(0.9),
+      )
       .force('center', forceCenter(WIDTH / 2, HEIGHT / 2))
 
     simRef.current = sim
 
-    const linkSel = g
-      .select<SVGGElement>('g.links')
+    const linksG = g.select<SVGGElement>('g.links')
+    linksG.selectAll('*').remove()
+    const linkSel = linksG
       .selectAll<SVGLineElement, SimLink>('line')
       .data(links, (d) => `${(d.source as SimNode).slug ?? d.source}->${(d.target as SimNode).slug ?? d.target}`)
       .join('line')
@@ -122,24 +137,67 @@ export function GraphCanvas({
       .attr('stroke-opacity', 0.7)
       .attr('stroke-width', (d) => 1 + Math.min(d.count, 5))
 
-    const nodeSel = g
-      .select<SVGGElement>('g.nodes')
+    // 노드 ellipse — 가시성:
+    //  - rx (가로) 는 라벨 너비 기준
+    //  - ry (세로) 는 18~28 사이로 rx/ry aspect ratio 가 너무 길쭉하지 않게
+    //  - rx 자체도 최대 90 으로 cap — 그 이상은 라벨 truncate
+    const MAX_LABEL_CHARS = 18    // 한글 18글자 정도면 충분
+    const MIN_RX = 32
+    const MAX_RX = 90
+    const MIN_RY = 18
+    const MAX_RY = 28
+
+    const labelFor = (d: SimNode) => {
+      if (d.title.length <= MAX_LABEL_CHARS) return d.title
+      return d.title.slice(0, MAX_LABEL_CHARS - 1) + '…'
+    }
+
+    const radiusFor = (d: SimNode) => {
+      const label = labelFor(d)
+      const base = Math.max(MIN_RX, label.length * 7 + 8)
+      const capped = Math.min(MAX_RX, base)
+      return d.slug === rootSlug ? Math.min(MAX_RX, capped + 8) : capped
+    }
+
+    // ry: rx 의 1/3 ~ 1/2.5 비율 사이, MIN_RY~MAX_RY 안. 길쭉 방지.
+    const ryFor = (d: SimNode) => {
+      const rx = radiusFor(d)
+      const desired = Math.max(MIN_RY, Math.min(MAX_RY, rx / 2.8))
+      return d.slug === rootSlug ? Math.min(MAX_RY, desired + 4) : desired
+    }
+
+    // 색 결정: root → 주황, missing → 빨강, 일반 → 진청
+    const fillFor = (d: SimNode) =>
+      d.slug === rootSlug ? '#f59e0b'
+      : d.isMissing ? '#dc2626'
+      : '#0c4a6e'
+
+    // 기존 노드 (stale circle 등) 모두 제거하고 fresh build — 데이터 / rootSlug 변경 시
+    // ellipse + 내부 text 가 깨끗하게 다시 그려지게.
+    const nodesG = g.select<SVGGElement>('g.nodes')
+    nodesG.selectAll('*').remove()
+
+    const nodeSel = nodesG
       .selectAll<SVGGElement, SimNode>('g.node')
       .data(nodes, (d) => d.slug)
       .join((enter) => {
         const ng = enter.append('g').attr('class', 'node').style('cursor', 'pointer')
-        ng.append('circle')
-          .attr('r', (d) => 5 + Math.min(d.degree, 8))
-          .attr('fill', (d) => (d.isMissing ? '#dc2626' : '#0c4a6e'))
+        ng.append('ellipse')
+          .attr('rx', (d) => radiusFor(d))
+          .attr('ry', (d) => ryFor(d))
+          .attr('fill', fillFor)
           .attr('stroke', '#fff')
-          .attr('stroke-width', 1.5)
-        ng.append('title').text((d) => `${d.title} (${d.slug})`)
+          .attr('stroke-width', 2)
+        ng.append('title').text((d) => `${d.title} (${d.slug})`)  // 풀 title 은 hover tooltip
         ng.append('text')
-          .attr('dx', 10)
-          .attr('dy', 4)
-          .attr('font-size', 11)
-          .attr('fill', '#1f2937')
-          .text((d) => d.title)
+          .attr('text-anchor', 'middle')
+          .attr('dominant-baseline', 'middle')
+          .attr('dy', 1)
+          .attr('font-size', 12)
+          .attr('font-weight', (d) => (d.slug === rootSlug ? 700 : 500))
+          .attr('fill', '#ffffff')
+          .attr('pointer-events', 'none')
+          .text(labelFor)
         return ng
       })
 
@@ -284,6 +342,7 @@ export function GraphPage() {
           nodes={data.nodes}
           edges={data.edges}
           highlight={query}
+          rootSlug={slug ?? null}
           onPickNode={(s) => navigate(`/docs/${encodeURIComponent(s)}`)}
         />
       )}
