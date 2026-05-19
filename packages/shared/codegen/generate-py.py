@@ -161,6 +161,66 @@ if enum_names:
     )
     src = pattern.sub(_fix_enum_default, src)
 
+# ── Post-process: inject iframe src XOR html validator.
+# JSON Schema's `oneOf` on IframeBlock splits into IframeBlock1 (src branch)
+# and IframeBlock2 (html branch) via datamodel-codegen. The `not: required`
+# part of each oneOf clause is silently dropped, so each variant accepts
+# input that also has the *other* key set. Inject a `model_validator` into
+# both variants so "both set" is rejected — matching the schema contract.
+# "Neither set" is already rejected because each variant marks its primary
+# field as required.
+_iframe_validator_src = (
+    "\n"
+    "    @model_validator(mode='after')\n"
+    "    def _reject_html_when_src(self):\n"
+    "        # XOR enforcement: src-branch must not also carry html.\n"
+    "        if self.html is not None:\n"
+    "            raise ValueError(\n"
+    "                'iframe block requires exactly one of `src` or `html`'\n"
+    "            )\n"
+    "        return self\n"
+)
+_iframe_validator_html = (
+    "\n"
+    "    @model_validator(mode='after')\n"
+    "    def _reject_src_when_html(self):\n"
+    "        # XOR enforcement: html-branch must not also carry src.\n"
+    "        if self.src is not None:\n"
+    "            raise ValueError(\n"
+    "                'iframe block requires exactly one of `src` or `html`'\n"
+    "            )\n"
+    "        return self\n"
+)
+
+# Ensure model_validator is imported from pydantic.
+src = re.sub(
+    r"^(from pydantic import [^\n]+)$",
+    lambda m: m.group(1) if "model_validator" in m.group(1) else m.group(1) + ", model_validator",
+    src,
+    count=1,
+    flags=re.MULTILINE,
+)
+
+# Inject validators into IframeBlock1 / IframeBlock2. Each class body ends
+# with the `meta: BlockMeta | None = None` line followed by a blank line.
+def _inject_after_meta(src_text: str, classname: str, body: str) -> tuple[str, bool]:
+    pattern = (
+        r"(class " + re.escape(classname) + r"\(BaseModel\):.*?meta: BlockMeta \| None = None\n)"
+    )
+    m = re.search(pattern, src_text, flags=re.DOTALL)
+    if not m:
+        return src_text, False
+    return src_text[: m.end()] + body + src_text[m.end() :], True
+
+
+src, ok1 = _inject_after_meta(src, "IframeBlock1", _iframe_validator_src)
+src, ok2 = _inject_after_meta(src, "IframeBlock2", _iframe_validator_html)
+if not (ok1 and ok2):
+    print(
+        f"WARN: Iframe XOR validators only partially injected (src={ok1}, html={ok2})",
+        file=sys.stderr,
+    )
+
 # Force LF on every platform — Path.write_text uses os.linesep otherwise,
 # which on Windows would yield CRLF and make the codegen-drift gate fire.
 with OUT.open("w", encoding="utf-8", newline="\n") as _f:
@@ -168,3 +228,4 @@ with OUT.open("w", encoding="utf-8", newline="\n") as _f:
 print(f"✓ Pydantic models generated → {OUT}")
 print("✓ Block union annotated with discriminator='type'")
 print(f"✓ Enum defaults normalized ({len(enum_names)} enum classes scanned)")
+print("✓ IframeBlock XOR validator injected (src ↔ html)")

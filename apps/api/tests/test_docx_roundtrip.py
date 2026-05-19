@@ -11,6 +11,10 @@
   - footnote 인라인 표기 (`[^N]`) 는 export 측에서 ` (body)` 로 치환되어 본문에
     들어감 — 의도된 변환.
   - speaker note (`meta.note: speaker:…`) 는 drop.
+  - **list `style:"check"` → import 가 항상 `"bullet"` 로 복원** (pass-3 N2
+    확인). export 는 `☐ ` prefix 텍스트를 굽지만 import 가 numFmt 아닌
+    prefix 매칭 분기를 갖고 있지 않음. items 텍스트의 ☐ 도 별도 정리 안 됨.
+    별도 사이클로 (import 측 prefix detection 추가) — `test_list_check_roundtrip_known_limitation` 회귀 테스트가 현 동작을 명시.
 
 따라서 본 테스트는 "block 타입의 1:1 일치" 가 아닌 "텍스트 콘텐츠 보존" 과
 "네이티브 표현으로 변환된 블록(table, list, image)의 type 일치" 를 검증한다.
@@ -349,3 +353,54 @@ def test_roundtrip_block_order_preserved_for_simple_doc() -> None:
     b = next((i for i, t in enumerate(paragraphs) if "beta" in t), -1)
     g = next((i for i, t in enumerate(paragraphs) if "gamma" in t), -1)
     assert a >= 0 and b > a and g > b
+
+
+def test_list_check_roundtrip_known_limitation() -> None:
+    """list `style:"check"` 는 round-trip 시 `"bullet"` 으로 회수된다 (pass-3 N2).
+
+    docx_export 는 `☐ ` prefix 를 paragraph 텍스트로 굽고 list 스타일을 'List
+    Bullet' 로 설정한다. docx_import 는 numFmt 기반이 아니라 style 이름만 보고
+    bullet/number 를 구분하므로 check 는 인식 못 함. 별도 사이클 (import 측
+    prefix detection 또는 numFmt='bullet' + ☐ 매칭) 이 필요. 현재 동작을 명시
+    적으로 잠가 *모르는 사이에 바뀌면* 알아챌 수 있게 한다.
+    """
+    doc = {
+        "schema_version": "1.0",
+        "id": "01TEST0000000000000000RTCK",
+        "slug": "rt-check-list",
+        "title": "체크 리스트 회귀",
+        "metadata": {"division": "MX", "owners": ["t@e.com"], "tags": []},
+        "sections": [
+            {
+                "id": "01SEC00000000000000RTCK01",
+                "number": "1",
+                "level": 1,
+                "title": "할 일",
+                "blocks": [
+                    {
+                        "type": "list",
+                        "id": "01L00000000000000000RTCK1",
+                        "style": "check",
+                        "items": ["문서 작성", "리뷰 요청", "배포"],
+                    }
+                ],
+                "subsections": [],
+            }
+        ],
+    }
+    blob = render_docx(doc)
+    result = docx_to_document(
+        blob,
+        slug="rt-check-list-imported",
+        title="",
+        owner_user_id="01OWNER000000000000000000",
+    )
+    lists = [b for b in _walk_blocks(result["document"]) if b.get("type") == "list"]
+    assert lists, "import 가 list block 자체는 인식해야 함"
+    # 현재 한계: style 이 bullet 으로 변경됨. 만약 누가 import 를 고쳐서 'check'
+    # 로 회수되게 만들면 이 단언이 깨지면서 *좋은 신호* — 그 시점에 본 테스트를
+    # 'check' 로 갱신하면 된다.
+    assert lists[0]["style"] == "bullet", (
+        f"check style import 가 개선되었다면 본 테스트를 'check' 로 갱신할 것. "
+        f"실제 style: {lists[0]['style']}"
+    )

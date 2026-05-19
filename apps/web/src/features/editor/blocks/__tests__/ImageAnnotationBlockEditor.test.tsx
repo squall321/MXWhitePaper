@@ -125,12 +125,12 @@ describe('buildArrow / buildRect / buildCallout', () => {
     expect(r.h).toBe(0)
   })
 
-  it('buildCallout stores position + text + color', () => {
+  it('buildCallout stores position + label + color', () => {
     const c = buildCallout([0.6, 0.7], '여기 확인', '#16a34a')
     expect(c.kind).toBe('callout')
     expect(c.x).toBe(0.6)
     expect(c.y).toBe(0.7)
-    expect(c.text).toBe('여기 확인')
+    expect(c.label).toBe('여기 확인')
     expect(c.color).toBe('#16a34a')
   })
 })
@@ -157,7 +157,7 @@ describe('pickElement (select-tool hit-test)', () => {
     id: 'cl1',
     x: 0.2,
     y: 0.7,
-    text: 'hi',
+    label: 'hi',
     color: '#000',
   }
   const elements = [arrow, rect, callout]
@@ -186,7 +186,7 @@ describe('pickElement (select-tool hit-test)', () => {
 const sampleBlock: ImageAnnotationBlock = {
   type: 'image-annotation',
   id: '01TESTBLOCK000000000000IA2',
-  image_id: '01TESTIMAGE000000000000IA2',
+  imageId: '01TESTIMAGE000000000000IA2',
   annotations: [],
 }
 

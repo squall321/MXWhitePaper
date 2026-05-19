@@ -266,12 +266,25 @@ def _b_math(block: dict[str, Any]) -> str:
     return f"$$\n{expr}\n$$"
 
 
+def _table_stripe_comment(block: dict[str, Any]) -> str:
+    """Return an HTML-comment line preserving `options.stripe` for markdown.
+
+    Markdown itself has no row-banding affordance, so we serialise the
+    flag as a hidden comment that round-trip importers can read back.
+    Empty string when the option is at its default (stripe=true).
+    """
+    opts = block.get("options") or {}
+    if isinstance(opts, dict) and opts.get("stripe") is False:
+        return "<!-- stripe:false -->\n"
+    return ""
+
+
 def _b_table(block: dict[str, Any]) -> str:
     # Prefer sparse-cell mode when present — it carries merged cells and
     # mixed-content (paragraph/image/list) which `headers`/`rows` can't.
     cells = block.get("cells")
     if isinstance(cells, list) and cells:
-        return _b_table_sparse(block, cells)
+        return _table_stripe_comment(block) + _b_table_sparse(block, cells)
 
     headers = block.get("headers") or []
     rows = block.get("rows") or []
@@ -290,7 +303,7 @@ def _b_table(block: dict[str, Any]) -> str:
         while len(row_cells) < len(headers):
             row_cells.append("")
         body_lines.append("| " + " | ".join(row_cells) + " |")
-    return "\n".join([head_line, sep_line, *body_lines])
+    return _table_stripe_comment(block) + "\n".join([head_line, sep_line, *body_lines])
 
 
 def _b_table_sparse(block: dict[str, Any], cells: list[dict[str, Any]]) -> str:
@@ -641,6 +654,31 @@ def _b_image_annotation(block: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _b_bibliography(block: dict[str, Any]) -> str:
+    """Render a BibliographyBlock as `## 참고문헌` heading + numbered list.
+
+    Each entry becomes a numbered item; `key` (when present) is rendered as a
+    bracketed prefix so [[cite:KEY]] inline refs stay legible in markdown.
+    """
+    title = _str(block.get("title")) or "참고문헌"
+    entries = block.get("entries") or []
+    if not isinstance(entries, list) or not entries:
+        return ""
+    lines = [f"## {title}", ""]
+    for idx, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            continue
+        text = _convert_inline(_str(entry.get("text")))
+        url = _str(entry.get("url"))
+        key = _str(entry.get("key"))
+        prefix = f"[{key}] " if key else ""
+        body = f"{idx}. {prefix}{text}"
+        if url:
+            body += f" <{url}>"
+        lines.append(body)
+    return "\n".join(lines)
+
+
 _BLOCK_HANDLERS: dict[str, Any] = {
     "paragraph": _b_paragraph,
     "heading-4": _b_heading_4,
@@ -671,6 +709,7 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "pdf": _b_pdf,
     "whiteboard": _b_whiteboard,
     "image-annotation": _b_image_annotation,
+    "bibliography": _b_bibliography,
 }
 
 

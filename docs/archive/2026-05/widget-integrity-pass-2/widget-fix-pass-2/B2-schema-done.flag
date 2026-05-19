@@ -1,0 +1,15 @@
+B2 schema changes complete — B1/B3 unblocked.
+
+Date: 2026-05-18
+Schema file: packages/shared/schemas/document.json
+Regen output:
+  - apps/api/app/schemas/document.py
+  - apps/web/src/types/document.ts
+
+Changes:
+  - M2 iframe: oneOf src/html (schema) + dual model_validator (pydantic post-process)
+  - M4 video:  autoplay/controls/loop optional fields with safe defaults
+  - M5 annotation callout: text -> label (schema rename; B1 owns BE normaliser
+        for legacy `text` keys via _normalise_image_annotation_labels)
+  - M11 glossary-ref: schema audit confirmed no `definition` field exists —
+        no schema change needed; B1 removes the dead docx_export attempt.

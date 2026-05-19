@@ -30,8 +30,8 @@ import { useT } from '@/lib/i18n'
  *   1. Toolbar : tool picker (select/arrow/rect/callout) + color swatches +
  *                undo / redo / clear, plus a "이미지 교체" button that opens
  *                the existing ImageDropzone (reuses uploadImage).
- *   2. Image   : same `<img>` resolved through `useImage(image_id)` —
- *                the dropzone-replace flow swaps it via `image_id` in PATCH.
+ *   2. Image   : same `<img>` resolved through `useImage(imageId)` —
+ *                the dropzone-replace flow swaps it via `imageId` in PATCH.
  *   3. SVG     : viewBox `0 0 1 1`. Pointer events convert client → normalised
  *                coords so persistence is independent of rendered size.
  *
@@ -150,7 +150,7 @@ export function buildCallout(
     id: nextAnnotationId(),
     x: pos[0],
     y: pos[1],
-    text,
+    label: text,
     color,
   }
 }
@@ -193,8 +193,8 @@ export function pickElement(
       if (dist <= radius) return el
       continue
     }
-    // callout — bubble bbox roughly text.length * 0.014
-    const bw = Math.max(0.08, el.text.length * 0.014)
+    // callout — bubble bbox roughly label.length * 0.014
+    const bw = Math.max(0.08, el.label.length * 0.014)
     const bh = 0.045
     if (cx >= el.x - radius && cx <= el.x + bw + radius && cy >= el.y - radius && cy <= el.y + bh + radius) {
       return el
@@ -210,8 +210,8 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
 
-  const { data: image } = useImage(block.image_id || undefined)
-  const src = image?.urls.view ?? `/api/v1/images/${encodeURIComponent(block.image_id)}`
+  const { data: image } = useImage(block.imageId || undefined)
+  const src = image?.urls.view ?? `/api/v1/images/${encodeURIComponent(block.imageId)}`
   const bg = image?.dominant_color ?? '#f3f4f6'
 
   const [annotations, setAnnotations] = useState<AnnotationElement[]>(block.annotations)
@@ -249,7 +249,7 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
       if (!etag) return
       try {
         const patch: Partial<ImageAnnotationBlock> = { annotations: next }
-        if (nextImageId !== undefined) patch.image_id = nextImageId
+        if (nextImageId !== undefined) patch.imageId = nextImageId
         const result = await patchBlock(slug, block.id, patch, etag, t('editor.ia.changeLog'))
         apply(result.document, result.etag)
         setError(null)

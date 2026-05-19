@@ -29,6 +29,9 @@ build/
 !.vscode/settings.json.example
 .idea/
 
+# Claude Code / agent-local state (never commit — local-only memory/cache)
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db

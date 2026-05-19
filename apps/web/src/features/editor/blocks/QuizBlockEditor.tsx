@@ -28,6 +28,7 @@ import { Button, Field, Input, Modal, Select } from '@/components/ui'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { ulid } from '../ulid'
+import { loadBlockDefaults, rememberBlockDefaults } from '../utils/blockDefaults'
 import { apiClient } from '@/lib/api/client'
 
 interface Props {
@@ -45,14 +46,20 @@ const KIND_LABELS: Record<QuizQuestion['kind'], string> = {
 /**
  * Pure helper exposed for unit tests — produces a sane default question
  * payload (with sensible `correct` default) for the given `kind`.
+ *
+ * pass-3 N4: `kind` 미명시 시 마지막 사용 kind 를 localStorage 에서 복원.
  */
-export function makeQuizQuestion(kind: QuizQuestion['kind']): QuizQuestion {
+export function makeQuizQuestion(kind?: QuizQuestion['kind']): QuizQuestion {
+  const resolvedKind: QuizQuestion['kind'] =
+    kind ?? loadBlockDefaults<{ kind: QuizQuestion['kind'] }>('quiz-question', { kind: 'single-choice' }).kind
   const base = {
     id: ulid(),
-    kind,
+    kind: resolvedKind,
     label: '새 문제',
     points: 1,
   }
+  // 아래 분기에서 resolvedKind 사용 — 명명을 통일.
+  kind = resolvedKind
   if (kind === 'single-choice') {
     return { ...base, options: ['옵션 1', '옵션 2'], correct: '옵션 1' }
   }
@@ -290,6 +297,8 @@ function QuestionRow({
     question.kind === 'single-choice' || question.kind === 'multi-choice'
 
   const onKindChange = (kind: QuizQuestion['kind']) => {
+    // pass-3 N4: 마지막 사용 kind 를 기억해 다음 문제 추가 시 prefill.
+    rememberBlockDefaults('quiz-question', { kind })
     // Reset `correct` to a sane default when the kind flips so the union
     // shape stays valid.
     if (kind === 'true-false') onChange({ kind, correct: true, options: undefined })

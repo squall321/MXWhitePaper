@@ -1,0 +1,21 @@
+[Unit]
+Description=MX White Paper stack (postgres + meili + minio + api + web via Apptainer)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# apptainer 는 보통 /usr/bin 또는 /opt/apptainer/bin 에 있음. user systemd 의
+# 기본 PATH 가 짧을 수 있어 명시.
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/koopark/claude/MXWhitePaper/infra/scripts/boot.sh
+# stop 시 모든 인스턴스 정지. apptainer instance stop 은 한 번에 한 개만 받으므로 loop.
+# Stop 순서는 의존성 역순 — api/web 먼저, 그 다음 데이터 계층.
+ExecStop=/usr/bin/env bash -c 'for i in mxwp_api mxwp_web mxwp_meili mxwp_minio mxwp_postgres; do apptainer instance stop "$i" 2>&1 | tee -a /home/koopark/claude/MXWhitePaper/infra/logs/boot.log; done'
+# 부팅 시 한 번만 실행 (RemainAfterExit 으로 active 유지). 실패 시 30s 후 재시도.
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

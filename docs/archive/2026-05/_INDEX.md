@@ -1,7 +1,7 @@
 # Archive Index — 2026-05
 
 | Feature | Match Rate | Archived | Path |
-|---|:---:|---|---|
+| --- | :---: | --- | --- |
 | mixed-table-cells | 100% | 2026-05-15 | [mixed-table-cells/](mixed-table-cells/) |
 | widget-marker-import (Phase 1) | 100% | 2026-05-15 | [widget-marker-import/](widget-marker-import/) |
 | widget-phase2-batch (Phase 2 — 14 widgets + multi-block infra + web render) | 100% | 2026-05-15 | [widget-phase2-batch/](widget-phase2-batch/) |
@@ -11,3 +11,7 @@
 | widget-polish-batch (5 follow-up 통합: image picker / image-annotation roundtrip / inline format / drag-drop / columns autodetect + pre-existing maintenance fix) | 100% | 2026-05-15 | [widget-polish-batch/](widget-polish-batch/) |
 | widget-roundtrip-strictness (전수 검증 → 6 위젯 round-trip 결함 발견 + 3계층 강건한 fix: hidden marker / autodetect / placeholder. 18/18 위젯 lossless. LLM 입력 룰 문서화) | 100% | 2026-05-15 | [widget-roundtrip-strictness/](widget-roundtrip-strictness/) |
 | codegen (RAG toolkit for LLM-driven docx generation — 3 swappable backends + MCP server + 4-layer drift guard. v1.0.0 tagged, CI green on 9d856ab) | 100% (25/25 tests, CI green) | 2026-05-16 | [codegen/](codegen/) |
+| widget-integrity-pass-1 (4 Explore audit → 9 갭 + zebra 통합 4분할 병렬 픽스: BE export · schema/imageId · FE editor · lat/RAG sync. 신규 26 tests, 회귀 0) | 100% (C1~C14 14/14) | 2026-05-18 | [widget-integrity-pass-1/](widget-integrity-pass-1/) |
+| zebra-striping (superseded by widget-integrity-pass-1 — Plan/Design 작성 직후 점검 결과로 상위 사이클에 흡수. 참고용 보존) | superseded | 2026-05-18 | [zebra-striping-superseded/](zebra-striping-superseded/) |
+| widget-integrity-pass-2 (점검의 MED 우선순위 10건 통합 픽스: data-source polling · iframe XOR · video 옵션 · pdf/org-chart/gallery docx marker · annotation label · heading4 dropdown · quote editor · glossary-ref 정리. pydantic v2 oneOf 한계 발견 + generate-py.py 후처리 패치 = 재사용 자산) | 100% (C1~C14 14/14) | 2026-05-18 | [widget-integrity-pass-2/](widget-integrity-pass-2/) |
+| widget-integrity-pass-3 (MED 잔여 + cleanup 6건: spacer xl · list check round-trip 잠금 · image width 의도 명시 · form/quiz 기본값 학습 · pydantic 경고 제거 · INDEX MD060 fix. 2분할 직접 작업 ~3시간. 1차 89% → G1+G2 follow-up → 100%. **widget integrity 사이클 시리즈 종료**) | 100% (C1~C9 9/9) | 2026-05-19 | [widget-integrity-pass-3/](widget-integrity-pass-3/) |

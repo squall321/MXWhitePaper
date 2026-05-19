@@ -29,6 +29,7 @@ import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { ulid } from '../ulid'
 import { apiClient } from '@/lib/api/client'
+import { loadBlockDefaults, rememberBlockDefaults } from '../utils/blockDefaults'
 
 interface Props {
   slug: Slug
@@ -51,14 +52,24 @@ const KIND_LABELS: Record<FormQuestion['kind'], string> = {
  * Pure helper exposed for unit tests — produces a sane default question
  * payload for the given `kind`.
  */
-export function makeQuestion(kind: FormQuestion['kind']): FormQuestion {
+/**
+ * pass-3 N4: `kind` 가 명시되지 않으면 사용자의 마지막 선택 (localStorage) 을
+ * 기본값으로 적용. 호출자가 명시하면 그 값 우선. `required` 도 마지막 토글
+ * 상태를 기억해 다음 추가 시 prefill.
+ */
+export function makeQuestion(kind?: FormQuestion['kind']): FormQuestion {
+  const defaults = loadBlockDefaults<{ kind: FormQuestion['kind']; required: boolean }>(
+    'form-field',
+    { kind: 'text', required: false },
+  )
+  const resolvedKind = kind ?? defaults.kind
   const base: FormQuestion = {
     id: ulid(),
-    kind,
+    kind: resolvedKind,
     label: '새 질문',
-    required: false,
+    required: defaults.required,
   }
-  if (kind === 'select' || kind === 'multi-select') {
+  if (resolvedKind === 'select' || resolvedKind === 'multi-select') {
     return { ...base, options: ['옵션 1', '옵션 2'] }
   }
   return base
@@ -287,7 +298,11 @@ function QuestionRow({
         />
         <Select
           value={question.kind}
-          onChange={(e) => onChange({ kind: e.target.value as FormQuestion['kind'] })}
+          onChange={(e) => {
+            const k = e.target.value as FormQuestion['kind']
+            rememberBlockDefaults('form-field', { kind: k })
+            onChange({ kind: k })
+          }}
         >
           {(Object.keys(KIND_LABELS) as Array<FormQuestion['kind']>).map((k) => (
             <option key={k} value={k}>
@@ -299,7 +314,10 @@ function QuestionRow({
           <input
             type="checkbox"
             checked={!!question.required}
-            onChange={(e) => onChange({ required: e.target.checked })}
+            onChange={(e) => {
+              rememberBlockDefaults('form-field', { required: e.target.checked })
+              onChange({ required: e.target.checked })
+            }}
           />
           필수
         </label>

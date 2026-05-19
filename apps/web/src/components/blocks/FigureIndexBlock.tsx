@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 /**
  * Renders a self-updating table of figures.
@@ -7,7 +7,9 @@ import { useEffect, useMemo, useState } from 'react'
  * data-block-type=... data-has-caption="true"> with its CSS-counter
  * label and caption text. Three sub-lists (그림/표/차트) controlled
  * by the `kinds` prop. Re-runs when the article mutates (caption
- * edits, block adds/removes) via MutationObserver.
+ * edits, block adds/removes) via MutationObserver — and also when the
+ * user clicks the 갱신 button (manual refresh for stubborn cases
+ * where the observer missed an async re-render).
  */
 export function FigureIndexBlockView({
   block,
@@ -19,29 +21,31 @@ export function FigureIndexBlockView({
     { kind: 'image' | 'table' | 'chart'; n: number; caption: string }[]
   >([])
 
+  const collect = useCallback(() => {
+    const root = document.querySelector('article') ?? document.body
+    const counters: Record<string, number> = { image: 0, table: 0, chart: 0 }
+    const out: { kind: 'image' | 'table' | 'chart'; n: number; caption: string }[] = []
+    root.querySelectorAll(
+      'figure[data-block-type="image"][data-has-caption="true"], ' +
+      'figure[data-block-type="table"][data-has-caption="true"], ' +
+      'figure[data-block-type="chart"][data-has-caption="true"]',
+    ).forEach((fig) => {
+      const kind = (fig as HTMLElement).dataset.blockType as 'image' | 'table' | 'chart'
+      counters[kind] = (counters[kind] ?? 0) + 1
+      const caption =
+        (fig.querySelector('.figure-caption-text') as HTMLElement | null)?.innerText?.trim() ?? ''
+      out.push({ kind, n: counters[kind], caption })
+    })
+    setEntries(out)
+  }, [])
+
   useEffect(() => {
     const root = document.querySelector('article') ?? document.body
-    const collect = () => {
-      const counters: Record<string, number> = { image: 0, table: 0, chart: 0 }
-      const out: { kind: 'image' | 'table' | 'chart'; n: number; caption: string }[] = []
-      root.querySelectorAll(
-        'figure[data-block-type="image"][data-has-caption="true"], ' +
-        'figure[data-block-type="table"][data-has-caption="true"], ' +
-        'figure[data-block-type="chart"][data-has-caption="true"]',
-      ).forEach((fig) => {
-        const kind = (fig as HTMLElement).dataset.blockType as 'image' | 'table' | 'chart'
-        counters[kind] = (counters[kind] ?? 0) + 1
-        const caption =
-          (fig.querySelector('.figure-caption-text') as HTMLElement | null)?.innerText?.trim() ?? ''
-        out.push({ kind, n: counters[kind], caption })
-      })
-      setEntries(out)
-    }
     collect()
     const obs = new MutationObserver(() => collect())
     obs.observe(root, { subtree: true, childList: true, characterData: true })
     return () => obs.disconnect()
-  }, [])
+  }, [collect])
 
   const grouped = useMemo(() => {
     return kinds.map((k) => ({
@@ -56,7 +60,18 @@ export function FigureIndexBlockView({
       data-block-type="figure-index"
       className="my-3 rounded-md border border-gray-200 bg-gray-50/60 p-3 text-sm"
     >
-      <div className="mb-2 font-semibold text-gray-800">{block.title ?? '그림 목차'}</div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="font-semibold text-gray-800">{block.title ?? '그림 목차'}</div>
+        <button
+          type="button"
+          onClick={collect}
+          aria-label="그림 목차 갱신"
+          data-action="figure-index-refresh"
+          className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-100"
+        >
+          🔄 갱신
+        </button>
+      </div>
       {grouped.map((g) =>
         g.entries.length === 0 ? null : (
           <div key={g.kind} className="mb-2 last:mb-0">

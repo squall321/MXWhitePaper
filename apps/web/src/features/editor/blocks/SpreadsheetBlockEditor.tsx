@@ -3,6 +3,7 @@ import type { SpreadsheetBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { evaluateAll, refOf, parseRef } from './spreadsheet/formulaEngine'
+import { getZebraClass } from './zebra'
 
 interface Props {
   slug: Slug
@@ -80,6 +81,7 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
           rows: next.rows,
           headers: next.headers,
           cells: next.cells,
+          options: next.options,
         } as Partial<SpreadsheetBlock>,
         etag,
         '스프레드시트 편집',
@@ -101,6 +103,11 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
     if (value === '') delete next[ref]
     else next[ref] = value
     schedule({ ...local, cells: next })
+  }
+
+  const updateOptions = (patch: Partial<NonNullable<SpreadsheetBlock['options']>>) => {
+    const nextOpts = { ...(local.options ?? {}), ...patch }
+    schedule({ ...local, options: nextOpts })
   }
 
   const focusRef = (ref: string) => {
@@ -190,6 +197,18 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
         >
           + 열 추가
         </button>
+        <label
+          className="flex items-center gap-1 text-xs text-gray-600"
+          data-spreadsheet-stripe-toggle
+        >
+          <input
+            type="checkbox"
+            checked={local.options?.stripe !== false}
+            onChange={(e) => updateOptions({ stripe: e.target.checked })}
+            aria-label="줄무늬 표시"
+          />
+          줄무늬
+        </label>
       </div>
 
       <div
@@ -224,7 +243,10 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
           </thead>
           <tbody>
             {Array.from({ length: rows }).map((_, r) => (
-              <tr key={r}>
+              <tr
+                key={r}
+                className={getZebraClass('spreadsheet', local.options, r)}
+              >
                 <th
                   scope="row"
                   className="border border-gray-200 bg-gray-50 px-2 py-1 text-center font-medium text-gray-500"

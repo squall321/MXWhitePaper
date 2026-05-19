@@ -5,8 +5,13 @@
 > 인식되고, 위젯은 자동 변환된다. 룰을 어겨도 서버는 best-effort 로 import
 > 하지만 정보가 손실되거나 위젯이 plain text 로 떨어진다.
 >
-> **현재 시스템 동작 기준 (2026-05-15)**. 18 위젯 모두 lossless round-trip
-> 검증 완료.
+> **현재 시스템 동작 기준 (2026-05-18)**. 18 위젯 모두 lossless round-trip
+> 검증 완료. widget-integrity-pass-1 사이클로 table/spreadsheet stripe 옵션,
+> bibliography 4-export, image width docx 반영, imageId 통일 완료.
+> widget-integrity-pass-2 사이클로 iframe src/html XOR, video autoplay/controls/loop
+> 옵션, image-annotation callout label 통일, data-source refreshInterval 폴링 반영,
+> heading-4 level dropdown, quote editor 신규, glossary-ref broken-ref 시각화,
+> pdf/org-chart 비-default 속성의 hidden marker 보존을 완료.
 
 ---
 
@@ -71,6 +76,9 @@ markdown 마커 (`**bold**`, `*italic*`, `[text](url)`) 도 인식.
 
 - Word 의 `Heading 4` 스타일.
 - *섹션 깊이가 아닌* heading-4 *블록* 으로 처리됨. 본문 안에 박혀있어도 OK.
+- 사이트 에디터에서는 호버/포커스 시 **H2 / H3 / H4 dropdown** 으로 `level`
+  변경 가능 (widget-integrity-pass-2 M8) — block 의 `level` 필드가 결과 반영.
+  legacy `meta.level` 도 읽음.
 
 ### 2.3 list
 
@@ -81,6 +89,11 @@ markdown 마커 (`**bold**`, `*italic*`, `[text](url)`) 도 인식.
 ### 2.4 quote
 
 - Word 의 `Quote` 또는 `Intense Quote` 스타일.
+- 필드: `text` (필수), `cite?` (선택).
+- 사이트 에디터에 `QuoteBlockEditor` 추가됨 (widget-integrity-pass-2 M9) —
+  text textarea + cite input, 600 ms debounced patchBlock. 빈 cite 는
+  `undefined` 로 정규화되어 read 측 `QuoteBlockView` 의 footer 가 빈 "— " 로
+  찍히지 않도록.
 
 ### 2.5 code
 
@@ -97,6 +110,10 @@ markdown 마커 (`**bold**`, `*italic*`, `[text](url)`) 도 인식.
 - Word 의 `Insert > Picture` 로 inline 삽입.
 - *floating* (텍스트 wrap=tight 등) 는 부분 인식.
 - 캡션이 필요하면 `Caption` 스타일 (`그림 N: 설명`).
+- 본문 데이터 모델은 `imageId` (camelCase) 키 사용 — 과거 `image_id` 는 폐기.
+  레거시 데이터는 BE 가 read 시점에 자동 정규화 (사용자가 신경 안 써도 됨).
+- `width` enum (`sm` / `md` / `lg` / `full`) 이 *docx export 에도 반영* 됨.
+  sm≈2.08in, md≈4.17in, lg≈6.25in, full=intrinsic.
 
 ### 2.8 table
 
@@ -105,6 +122,10 @@ markdown 마커 (`**bold**`, `*italic*`, `[text](url)`) 도 인식.
 - 셀 병합 (rowSpan / colSpan) 지원.
 - 셀 안에 paragraph / image / list 혼합 가능 (mixed-cell).
 - **셀 안에 표 / 위젯 직접 금지**.
+- `options.stripe` (default `true`) 가 4 export (docx / html / pptx / markdown)
+  모두 반영됨. docx 는 `Light Grid Accent 1` ↔ `Table Grid` 분기, html 은
+  `b-table striped` ↔ `b-table no-stripe` 클래스, pptx 는 `table.horz_banding`
+  토글, markdown 은 `<!-- stripe:false -->` 주석으로 옵션만 보존.
 
 ### 2.9 spreadsheet (편집 가능한 표)
 
@@ -113,14 +134,21 @@ markdown 마커 (`**bold**`, `*italic*`, `[text](url)`) 도 인식.
 - LLM 이 docx 로 작성 시: 일반 `table` 로 만들고 메타에 *"사이트에서 spreadsheet
   로 전환하세요"* 한 줄 주석을 본문에 남기는 정도가 안전. spreadsheet 자체는
   docx 본문에서 표현이 모호.
-- 필수: `cols` (1-26), `rows` (1-200), `cells` 배열.
+- 필수: `cols` (1-26), `rows` (1-200), `cells` (sparse cell-ref map).
+- 선택: `headers`, `title`, `options.stripe` (default `true` — zebra data rows,
+  header 미영향). `options.stripe=false` 면 plain. docx export 는 `Light Grid`
+  ↔ `Table Grid` 분기로 반영 (html 에는 spreadsheet 핸들러 없음 — 사이트 자체
+  React 컴포넌트가 렌더).
 - 권장: 가능하면 `table` 로 두고 사이트에서 변환.
 
 ### 2.10 spacer (여백)
 
 - 본문 흐름에 일부러 공백을 더 줄 때. 단 *남용 금지* — 기본 8px 간격이 이미
   적정. spacer 는 *시각적 절 구분* 이 필요할 때만.
-- 필수: `type`, `id`. 선택: `size` ∈ `sm` (16px), `md` (32px, 기본), `lg` (64px).
+- 필수: `type`, `id`. 선택: `size` ∈ `sm` (16px), `md` (32px, 기본), `lg` (64px),
+  `xl` (128px). (xl 은 pass-3 N1 에서 추가됨)
+- 사이트 에디터에 `SpacerBlockEditor` 가 추가되어 size dropdown 4 옵션 + px
+  미리보기 제공.
 - LLM 이 *항상 spacer 를 끼워넣는* 패턴 금지. 보통 0-2개로 충분.
 
 ### 2.11 bibliography (참고문헌)
@@ -130,12 +158,19 @@ markdown 마커 (`**bold**`, `*italic*`, `[text](url)`) 도 인식.
   뒤의 단락을 인식해 만들어줌 — LLM 은 그냥 "References" 섹션 작성하면 됨.
 - 필수: `type`, `id`, `entries` (배열). 각 entry: `{key, text, doi?, url?}`.
 - 인용 키는 *영문 + 숫자 + 하이픈* 만 (`[[cite:smith-2024]]`).
+- ★ **4 export 모두 지원** (widget-integrity-pass-1 G1): docx 는 heading + 번호
+  매긴 paragraph, html 은 `<ol class="bibliography-list">` + `id="cite-{key}"`
+  anchor, pptx 는 heading 슬라이드 + bullet entries, markdown 은 `## 참고문헌`
+  + `1. [{key}] {text} <{url}>` 번호 리스트. 이전엔 docx 에만 핸들러가 있었음.
 
 ### 2.12 figure-index (그림/표/차트 목차)
 
 - 본문에 들어간 *캡션 있는 이미지 / 표 / 차트* 의 자동 생성 목차.
 - 본문 처음에 한 블록 두면 렌더러가 문서 전체를 훑어 목록 생성.
 - 필수: `type`, `id`. 선택: `title`, `kinds` (필터 — `image` / `table` / `chart`).
+- 사이트 에디터의 FigureIndexBlock 에 🔄 갱신 버튼 추가됨 (widget-integrity-pass-1
+  G9) — 본문 편집 중에 캡션 변경이 즉시 목차에 안 반영되면 사용자가 수동 갱신
+  가능.
 - LLM 작성 시: 캡션을 잘 달면 (1.7 §image / §table 참고) figure-index 가 자동
   으로 풍부해짐. 별도 본문 작성 불요.
 
@@ -166,6 +201,9 @@ markdown 마커 (`**bold**`, `*italic*`, `[text](url)`) 도 인식.
   데이터" / "Grafana 대시보드 panelId=42" 등 placeholder 단락만 두고 사용자가
   사이트에서 실제 블록 추가.
 - 필수 — data-source: `endpoint`, `render` (`chart` / `table` / `kpi`).
+  선택 — `refreshInterval` (초, default 60, 최소 30). widget-integrity-pass-2 M1
+  에서 폴링 로직이 react-query `refetchInterval` 에 실제 반영됨 — 사이트에서
+  설정한 값대로 자동 갱신.
   dashboard-embed: `provider` (`grafana` / `looker`), `panelId`.
 
 ### 2.17 LLM 이 docx 로 만들 수 없는 블록 (요약)
@@ -208,6 +246,11 @@ markdown 마커 (`**bold**`, `*italic*`, `[text](url)`) 도 인식.
 
 **중요**: *paragraph 만 색 배경* (이모지/라벨 없음) → 인식 안 됨 (일반 paragraph).
 이모지/라벨 + *색 없는 paragraph* → 인식 안 됨. 두 신호 다 필요.
+
+round-trip 보장: docx export 시 `Widget: callout (variant)` hidden marker 가
+emit 되므로 한 번 사이트에서 보여준 callout 은 다시 docx 로 내보내 import 해도
+원래 variant 유지 (회귀 테스트 `test_renderer_callout_emits_hidden_marker_run`
+가 보호).
 
 ### 3.2 kpi-cards (큰 숫자 카드)
 
@@ -279,6 +322,10 @@ graph TD
 | Carol | Alice  |
 ```
 
+★ `layout` 이 default (`tree`) 가 아니면 docx export 시 추가 hidden run
+`⟦org-chart:layout={layout}⟧` 가 emit (widget-integrity-pass-2 M6). LLM 이
+직접 layout 변경할 일은 거의 없음 — 사이트 에디터에서만 다룸.
+
 ### 3.7 gallery (이미지 모음)
 
 연속 3개 이상의 inline 이미지. 2개 이하는 개별 이미지로 처리.
@@ -307,10 +354,39 @@ https://example.com     ← URL paragraph
 
 또는 marker 없이 시스템 안에서 직접 위젯 블록 생성 (MX 에디터로).
 
+**iframe 필드 (widget-integrity-pass-2 M2)**: `src` (URL) **XOR** `html`
+(sanitized snippet) — 정확히 하나만 set. 양쪽 모두 set 또는 둘 다 unset 인
+입력은 schema `oneOf` + pydantic model validator 가 거부 (`packages/shared/
+codegen/generate-py.py` 가 regen 마다 validator 주입).
+
+**video 필드 (widget-integrity-pass-2 M4)**: `src` (URL) + 옵션 `autoplay?`
+(default `false`), `controls?` (default `true`), `loop?` (default `false`).
+browser 정책상 `autoplay=true` 가 muted 없이는 차단될 수 있으니 권장 X.
+기존 video 문서 (옵션 없음) 는 default 로 통과.
+
+**pdf 위젯의 `page` 보존 (widget-integrity-pass-2 M3)**: `page != 1` 인 PDF
+블록은 docx export 시 hidden run `⟦pdf:page={N}⟧` 가 추가 emit 됨 (visible
+marker `Widget: pdf` 와 별도). page=1 (default) 인 경우엔 hidden marker 없음 —
+소음 회피.
+
+**glossary-ref schema (widget-integrity-pass-2 M11)**: `term` (lookup key) 만
+권위 — `definition` 필드는 schema 에 *없음* (이전 docx_export dead branch 정리).
+미정의 term 은 사이트 read 컴포넌트가 ⚠️ + 회색 + "(용어 사전에 없음)" 으로
+시각화.
+
 ### 3.11 image-annotation (이미지 위 주석)
 
-이미지 + 주석 좌표 표 (헤더: `kind`/`x`/`y`/`from_x`/`from_y`/`to_x`/`to_y`/`w`/`h`/`text`/`color`).
+이미지 + 주석 좌표 표 (헤더: `kind`/`x`/`y`/`from_x`/`from_y`/`to_x`/`to_y`/`w`/`h`/`label`/`color`).
 복잡하면 *MX 안에서 직접 만드는 것* 을 권장.
+
+본문 데이터 모델은 `imageId` (camelCase) 키 사용 — 과거 `image_id` (snake_case)
+는 폐기. legacy 데이터는 BE 가 `validate_documentjson()` 진입부에서 자동 정규화
+(read 시점, DB 마이그레이션 없음). API 로 새로 만들 땐 *반드시* `imageId` 사용.
+
+annotation 의 텍스트 키도 widget-integrity-pass-2 M5 에서 통일됨 —
+arrow / rect / callout 모두 `label` (이전 callout 만 `text`). legacy `text`
+가 남은 문서는 BE 의 `_normalise_image_annotation_labels()` 가 read 시점에
+in-place 로 `label` 로 rename. API 로 새로 만들 땐 *반드시* `label` 사용.
 
 ### 3.12 whiteboard
 

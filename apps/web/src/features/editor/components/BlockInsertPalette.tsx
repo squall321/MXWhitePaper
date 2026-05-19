@@ -337,7 +337,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     build: () => ({
       type: 'image-annotation',
       id: ulid(),
-      image_id: '',
+      imageId: '',
       annotations: [],
     }),
     hint: '업로드한 이미지에 화살표/사각형/콜아웃을 얹어 강조.',

@@ -381,6 +381,29 @@ def test_renderer_list_styles_bullet_number_check() -> None:
     assert "TODO1" in text
 
 
+def test_renderer_bibliography_block_emits_title_and_entries() -> None:
+    """BibliographyBlock → heading paragraph + one paragraph per entry."""
+    blocks = [
+        {
+            "type": "bibliography",
+            "id": "01BIB00000000000000000001",
+            "title": "참고",
+            "entries": [
+                {"key": "smith2020", "text": "Smith, J. (2020). Foo.", "url": "https://example.org/foo"},
+                {"text": "익명 보고서, 2021."},
+            ],
+        }
+    ]
+    out = render_pptx(_doc(blocks))
+    prs = Presentation(io.BytesIO(out))
+    text = _slides_text(prs)
+    assert "참고" in text
+    assert "Smith, J. (2020). Foo." in text
+    assert "[smith2020]" in text
+    assert "익명 보고서, 2021." in text
+    assert "https://example.org/foo" in text
+
+
 # ── endpoint integration ─────────────────────────────────────────────
 
 

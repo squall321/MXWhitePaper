@@ -520,10 +520,24 @@ def _b_math(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: in
     return True
 
 
+def _apply_table_stripe(table: Any, block: dict[str, Any]) -> None:
+    """Toggle PowerPoint's horizontal banding (zebra) based on
+    `options.stripe`. Default is True; set False to render plain rows.
+    """
+    opts = block.get("options") or {}
+    stripe = True
+    if isinstance(opts, dict) and "stripe" in opts:
+        stripe = bool(opts.get("stripe"))
+    try:
+        table.horz_banding = stripe
+    except (AttributeError, ValueError):
+        pass
+
+
 def _b_table(slide: Any, _frame: Any, block: dict[str, Any], _ctx: _Ctx, _depth: int) -> bool:
     cells = block.get("cells")
     if isinstance(cells, list) and cells:
-        return _emit_table_sparse(slide, cells)
+        return _emit_table_sparse(slide, cells, block)
     headers = block.get("headers") or []
     rows = block.get("rows") or []
     if not headers and not rows:
@@ -541,6 +555,7 @@ def _b_table(slide: Any, _frame: Any, block: dict[str, Any], _ctx: _Ctx, _depth:
     height = Inches(min(0.4 * n_rows + 0.4, 5.2))
     shape = slide.shapes.add_table(n_rows, n_cols, left, top, width, height)
     table = shape.table
+    _apply_table_stripe(table, block)
     for c, h in enumerate(headers):
         cell = table.cell(0, c)
         cell.text = _str(h)
@@ -558,7 +573,7 @@ def _b_table(slide: Any, _frame: Any, block: dict[str, Any], _ctx: _Ctx, _depth:
     return True
 
 
-def _emit_table_sparse(slide: Any, cells: list[Any]) -> bool:
+def _emit_table_sparse(slide: Any, cells: list[Any], block: dict[str, Any] | None = None) -> bool:
     """Render sparse `cells` list into a python-pptx table.
 
     python-pptx table cells are text-only frames — image blocks inside a cell
@@ -587,6 +602,8 @@ def _emit_table_sparse(slide: Any, cells: list[Any]) -> bool:
     height = Inches(min(0.4 * n_rows + 0.4, 5.2))
     shape = slide.shapes.add_table(n_rows, n_cols, left, top, width, height)
     table = shape.table
+    if block is not None:
+        _apply_table_stripe(table, block)
 
     for cell in cells:
         if not isinstance(cell, dict):
@@ -1217,6 +1234,46 @@ def _b_image_annotation(
     return True
 
 
+def _b_bibliography(
+    slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int
+) -> bool:
+    """Render a BibliographyBlock as a heading paragraph + one numbered
+    paragraph per entry, into the current slide's body text frame.
+    """
+    title = _str(block.get("title")) or "참고문헌"
+    entries = block.get("entries") or []
+    if not isinstance(entries, list) or not entries:
+        return False
+    h = _next_paragraph(frame)
+    h.level = depth
+    h_run = h.add_run()
+    h_run.text = title
+    h_run.font.bold = True
+    h_run.font.size = Pt(16)
+    for idx, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            continue
+        text = _str(entry.get("text"))
+        url = _str(entry.get("url"))
+        key = _str(entry.get("key"))
+        p = _next_paragraph(frame)
+        p.level = depth + 1
+        prefix = f"[{key}] " if key else f"{idx}. "
+        prefix_run = p.add_run()
+        prefix_run.text = prefix
+        prefix_run.font.bold = True
+        prefix_run.font.size = Pt(13)
+        body_run = p.add_run()
+        body_run.text = text
+        body_run.font.size = Pt(13)
+        if url:
+            url_run = p.add_run()
+            url_run.text = f"  {url}"
+            url_run.font.italic = True
+            url_run.font.size = Pt(11)
+    return True
+
+
 def _b_unknown(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
     btype = _str(block.get("type"))
     p = _next_paragraph(frame)
@@ -1258,6 +1315,7 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "pdf": _b_pdf,
     "whiteboard": _b_whiteboard,
     "image-annotation": _b_image_annotation,
+    "bibliography": _b_bibliography,
 }
 
 

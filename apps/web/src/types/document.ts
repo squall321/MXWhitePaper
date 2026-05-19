@@ -53,6 +53,27 @@ export type Block =
  */
 export type CellBlock = ParagraphBlock | ImageBlock | ListBlock
 /**
+ * Embed an external page (`src`) OR an inline self-contained HTML document (`html`). Exactly one MUST be set. The renderer wraps the iframe in a sandbox boundary so the embed can't reach the parent DOM, cookies, or storage; only `allow-scripts` is granted so interactive embeds (charts, calculators) still work.
+ */
+export type IframeBlock = {
+  type: 'iframe'
+  id: Ulid
+  /**
+   * 사내 화이트리스트 도메인만. `html` 와 동시 사용 금지.
+   */
+  src?: string
+  /**
+   * Self-contained HTML document. Rendered via iframe srcdoc + sandbox. Use this for ad-hoc interactive embeds (e.g. canvas-based charts) that don't need a hosting URL. `src` 와 동시 사용 금지.
+   */
+  html?: string
+  title?: string
+  height?: number
+  meta?: BlockMeta
+} & IframeBlock1
+export type IframeBlock1 = {
+  [k: string]: any | undefined
+}
+/**
  * FK to images.id — accepts ULID (legacy seed data) or UUID (uploaded images)
  */
 export type ImageRef = string
@@ -119,7 +140,10 @@ export type AnnotationElement =
         x: number
         y: number
       }
-      text: string
+      /**
+       * Annotation label (was `text` pre-pass-2). BE normaliser rewrites legacy `text` → `label` on read.
+       */
+      label: string
       color: string
     }
 
@@ -536,30 +560,24 @@ export interface OrgChartNode {
   role?: string
   children?: OrgChartNode[]
 }
-/**
- * Embed an external page (`src`) OR an inline self-contained HTML document (`html`). Exactly one MUST be set. The renderer wraps the iframe in a sandbox boundary so the embed can't reach the parent DOM, cookies, or storage; only `allow-scripts` is granted so interactive embeds (charts, calculators) still work.
- */
-export interface IframeBlock {
-  type: 'iframe'
-  id: Ulid
-  /**
-   * 사내 화이트리스트 도메인만. `html` 와 동시 사용 금지.
-   */
-  src?: string
-  /**
-   * Self-contained HTML document. Rendered via iframe srcdoc + sandbox. Use this for ad-hoc interactive embeds (e.g. canvas-based charts) that don't need a hosting URL. `src` 와 동시 사용 금지.
-   */
-  html?: string
-  title?: string
-  height?: number
-  meta?: BlockMeta
-}
 export interface VideoBlock {
   type: 'video'
   id: Ulid
   url: string
   title?: string
   provider?: 'intra' | 'youtube' | 'vimeo'
+  /**
+   * Auto-play on load. Browser autoplay policies may block this when muted=false; treat as a hint.
+   */
+  autoplay?: boolean
+  /**
+   * Show native video controls (play/pause/volume/seek).
+   */
+  controls?: boolean
+  /**
+   * Restart automatically when the video ends.
+   */
+  loop?: boolean
   meta?: BlockMeta
 }
 export interface GalleryBlock {
@@ -801,9 +819,9 @@ export interface ImageAnnotationBlock {
   type: 'image-annotation'
   id: Ulid
   /**
-   * FK to images table (mxwp-images)
+   * FK to images table (mxwp-images). Camel-case to match ImageBlock; BE normalizes legacy 'image_id' on read.
    */
-  image_id: string
+  imageId: string
   caption?: string
   annotations: AnnotationElement[]
   meta?: BlockMeta
@@ -820,6 +838,15 @@ export interface SpreadsheetBlock {
    */
   cells: {
     [k: string]: string | undefined
+  }
+  /**
+   * Visual rendering options. All fields optional with sensible defaults.
+   */
+  options?: {
+    /**
+     * Zebra-striped data rows for readability. Default true; set false to disable. Header row is unaffected.
+     */
+    stripe?: boolean
   }
   meta?: BlockMeta
 }
@@ -873,12 +900,12 @@ export interface BibliographyBlock {
   meta?: BlockMeta
 }
 /**
- * Explicit vertical spacer. Default inter-block spacing is tight (8px). Insert a spacer block to add deliberate breathing room. `size` chooses the gap: sm=16px, md=32px (default), lg=64px.
+ * Explicit vertical spacer. Default inter-block spacing is tight (8px). Insert a spacer block to add deliberate breathing room. `size` chooses the gap: sm=16px, md=32px (default), lg=64px, xl=128px.
  */
 export interface SpacerBlock {
   type: 'spacer'
   id: Ulid
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl'
   meta?: BlockMeta
 }
 /**

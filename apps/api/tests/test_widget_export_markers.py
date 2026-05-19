@@ -770,3 +770,93 @@ def test_columns_roundtrips_via_hidden_marker() -> None:
     cols = [b for b in out if b.get("type") == "columns"]
     assert cols, [b.get("type") for b in out]
     assert len(cols[0]["columns"]) >= 2
+
+
+# ── pass-2 MED gaps: pdf page / org-chart layout / glossary-ref ──────
+
+
+def test_b_pdf_page_hidden_marker_emitted_when_non_default() -> None:
+    """pass-2 M3 — `Widget: pdf` marker doesn't carry the page number, so
+    docx_export emits a separate hidden `⟦pdf:page=N⟧` run when page != 1
+    (the default) so round-trip can later recover the page reference."""
+    blocks = [{
+        "type": "pdf",
+        "id": _u(),
+        "file_id": _u(),
+        "title": "Sample doc",
+        "page": 5,
+    }]
+    blob = render_docx(_build_doc(blocks))
+    doc = Document(io.BytesIO(blob))
+    found_pdf_marker = False
+    found_page_marker = False
+    for p in doc.paragraphs:
+        for r in p.runs:
+            if r.font.hidden and "Widget: pdf" in r.text:
+                found_pdf_marker = True
+            if r.font.hidden and r.text == "⟦pdf:page=5⟧":
+                found_page_marker = True
+    assert found_pdf_marker
+    assert found_page_marker
+
+
+def test_b_pdf_page_hidden_marker_skipped_when_default() -> None:
+    """page=1 is the default — no `⟦pdf:page=…⟧` hidden marker should be
+    emitted. The standard `Widget: pdf` marker is still present."""
+    blocks = [{
+        "type": "pdf",
+        "id": _u(),
+        "file_id": _u(),
+        "title": "Sample doc",
+        "page": 1,
+    }]
+    blob = render_docx(_build_doc(blocks))
+    doc = Document(io.BytesIO(blob))
+    for p in doc.paragraphs:
+        for r in p.runs:
+            assert not (r.font.hidden and r.text.startswith("⟦pdf:page="))
+
+
+def test_b_org_chart_horizontal_layout_hidden_marker() -> None:
+    """pass-2 M6 — org-chart `Widget: org-chart` marker doesn't carry a
+    layout variant in the standard grammar, so docx_export emits a separate
+    hidden `⟦org-chart:layout=horizontal⟧` run for non-default layouts."""
+    blocks = [{
+        "type": "org-chart",
+        "id": _u(),
+        "layout": "horizontal",
+        "root": {
+            "id": "n1",
+            "label": "CEO",
+            "children": [
+                {"id": "n2", "label": "CTO", "children": []},
+                {"id": "n3", "label": "CFO", "children": []},
+            ],
+        },
+    }]
+    blob = render_docx(_build_doc(blocks))
+    doc = Document(io.BytesIO(blob))
+    found_layout = False
+    for p in doc.paragraphs:
+        for r in p.runs:
+            if r.font.hidden and r.text == "⟦org-chart:layout=horizontal⟧":
+                found_layout = True
+    assert found_layout
+
+
+def test_b_glossary_ref_renders_without_definition_field() -> None:
+    """pass-2 M11 regression — GlossaryRefBlock schema only has `term`; the
+    legacy docx_export code that tried to read `block.get("definition")` is
+    dead and removed. Export must still produce a term-only paragraph."""
+    blocks = [{
+        "type": "glossary-ref",
+        "id": _u(),
+        "term": "ULID",
+    }]
+    blob = render_docx(_build_doc(blocks))
+    doc = Document(io.BytesIO(blob))
+    has_term = False
+    for p in doc.paragraphs:
+        if "ULID" in p.text and not all(r.font.hidden for r in p.runs):
+            has_term = True
+    assert has_term

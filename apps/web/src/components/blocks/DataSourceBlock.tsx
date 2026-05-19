@@ -39,6 +39,29 @@ const STABLE_PARAMS_KEY = (params: unknown) => {
   }
 }
 
+/**
+ * Derive react-query polling settings from `block.refreshInterval` (seconds).
+ * Pure — exported for unit testing.
+ *
+ *  - When `enabled` is false (no endpoint), `refetchInterval` is `false`
+ *    so we don't kick off a useless poll.
+ *  - `staleTime` is set to `intervalMs - 1000` so each poll sees a stale
+ *    cache and refetches; clamped at 0 if `refreshInterval` is tiny.
+ *  - When `refreshInterval` is unset, we fall back to `DEFAULT_REFRESH_S`
+ *    (60s), matching the schema default.
+ */
+export function derivePollingConfig(
+  refreshIntervalSec: number | undefined,
+  enabled: boolean,
+): { intervalMs: number; refetchInterval: number | false; staleTime: number } {
+  const intervalMs = (refreshIntervalSec ?? DEFAULT_REFRESH_S) * 1000
+  return {
+    intervalMs,
+    refetchInterval: enabled ? intervalMs : false,
+    staleTime: Math.max(0, intervalMs - 1000),
+  }
+}
+
 async function fetchDataSource(endpoint: string, params: unknown) {
   // The endpoint may be absolute (`/widgets/kpi/finance-daily`) or relative.
   // The api client baseURL already includes `/api/v1`, so strip a leading
@@ -115,16 +138,19 @@ interface Props {
  * via the matching read-mode component. Auto-refresh interval = `refreshInterval`.
  */
 export function DataSourceBlockView({ block }: Props) {
-  const intervalMs = (block?.refreshInterval ?? DEFAULT_REFRESH_S) * 1000
   const paramsKey = STABLE_PARAMS_KEY(block?.params)
   const enabled = Boolean(block?.endpoint)
+  const { refetchInterval, staleTime } = derivePollingConfig(
+    block?.refreshInterval,
+    enabled,
+  )
 
   const { data, error, isLoading, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ['data-source', block?.endpoint, paramsKey],
     queryFn: () => fetchDataSource(block.endpoint, block.params),
     enabled,
-    refetchInterval: enabled ? intervalMs : false,
-    staleTime: Math.max(0, intervalMs - 1000),
+    refetchInterval,
+    staleTime,
     retry: false,
   })
 

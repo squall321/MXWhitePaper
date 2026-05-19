@@ -22,6 +22,7 @@ import { TableOptionsPanel } from './TableOptionsPanel'
 import { ColumnHeaderMenu } from './ColumnHeaderMenu'
 import { CellStyleToolbar } from './CellStyleToolbar'
 import { ColumnResizer } from './ColumnResizer'
+import { getZebraClass } from './zebra'
 import {
   applyTabularPasteToFlat,
   looksLikeTabular,
@@ -325,12 +326,18 @@ export function TableBlockEditor({ slug, block }: Props) {
         <div className="overflow-x-auto rounded border border-smsg-100 bg-white shadow-sm">
           <table className="w-full min-w-[480px] border-collapse text-left text-sm">
             <tbody>
-              {rowKeys.map((r) => {
+              {rowKeys.map((r, rIdx) => {
                 const rowEntries = cellsByRow.get(r) ?? []
                 const Tag = isHeaderRow(r) ? 'th' : 'td'
+                // Match the previous CSS `:nth-child(odd|even)` behaviour:
+                // every `<tr>` (header or data) participated in the nth-child
+                // count, so we pass `rIdx` straight through. Header rows
+                // override with their own background below, so the zebra
+                // colour only ever shows on data rows.
+                const zebra = getZebraClass('table', local.options, rIdx)
                 const rowCls = isHeaderRow(r)
                   ? 'bg-smsg-50 text-smsg-900'
-                  : 'odd:bg-white even:bg-gray-50'
+                  : `bg-white ${zebra}`
                 return (
                   <Fragment key={r}>
                     <tr className={rowCls}>
@@ -511,7 +518,10 @@ export function TableBlockEditor({ slug, block }: Props) {
           </thead>
           <tbody>
             {local.rows.map((row, r) => (
-              <tr key={r} className="group/row odd:bg-white even:bg-gray-50">
+              <tr
+                key={r}
+                className={`group/row bg-white ${getZebraClass('table', local.options, r)}`}
+              >
                 <td className="border-b border-gray-100 px-1 align-top text-[10px] text-gray-400">
                   <div className="flex flex-col items-center gap-0.5 py-1 opacity-0 transition-opacity group-hover/row:opacity-100">
                     <button

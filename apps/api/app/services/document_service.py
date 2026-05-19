@@ -231,11 +231,125 @@ def parse_if_match(header: str | None) -> tuple[str, int] | None:
     return doc_id, version
 
 
+def _normalise_image_annotation_ids(payload: dict[str, Any]) -> None:
+    """Rewrite legacy ``image_id`` → ``imageId`` on every ``image-annotation``
+    block in place.
+
+    The schema migrated from ``image_id`` (snake-case) to ``imageId``
+    (camel-case, matching ``ImageBlock``/``GalleryBlock``). Old rows persisted
+    before the migration still carry ``image_id`` in their DocumentJSON.
+    Pydantic with ``extra='forbid'`` would reject those, so we shim the key
+    here — before validation — without touching any other field.
+
+    Only the ``image-annotation`` block is affected; the surrounding
+    ``image_id`` columns on ``images``/``templates``/``series`` tables are
+    out of scope.
+    """
+
+    def _walk_block(blk: Any) -> None:
+        if not isinstance(blk, dict):
+            return
+        t = blk.get("type")
+        if t == "image-annotation":
+            # Old key present, new key absent → rename. If both happen to be
+            # present, keep the new one (caller intent) and drop the legacy.
+            if "image_id" in blk:
+                if "imageId" not in blk:
+                    blk["imageId"] = blk["image_id"]
+                del blk["image_id"]
+            return
+        if t == "columns":
+            for col in blk.get("columns") or []:
+                if isinstance(col, list):
+                    for child in col:
+                        _walk_block(child)
+        elif t == "tabs":
+            for tab in blk.get("tabs") or []:
+                for child in (tab or {}).get("blocks") or []:
+                    _walk_block(child)
+        elif t == "accordion":
+            for item in blk.get("items") or []:
+                for child in (item or {}).get("blocks") or []:
+                    _walk_block(child)
+
+    def _walk_section(sec: dict[str, Any]) -> None:
+        for blk in sec.get("blocks") or []:
+            _walk_block(blk)
+        for sub in sec.get("subsections") or []:
+            _walk_section(sub)
+
+    for sec in payload.get("sections") or []:
+        if isinstance(sec, dict):
+            _walk_section(sec)
+
+
+def _normalise_image_annotation_labels(payload: dict[str, Any]) -> None:
+    """Rewrite legacy ``text`` → ``label`` on every callout-kind annotation
+    of every ``image-annotation`` block in place.
+
+    Pre-pass-2, callout-kind annotations carried their string under ``text``
+    while arrow / rect already used ``label``. The schema unified all three
+    on ``label``. Old rows persisted before the unification still carry
+    ``text`` in their DocumentJSON. Pydantic with ``extra='forbid'`` would
+    reject those, so we shim the key here — before validation — without
+    touching any other field. Mirrors ``_normalise_image_annotation_ids``.
+
+    Only ``kind == "callout"`` annotations are affected; arrow / rect were
+    already canonical.
+    """
+
+    def _walk_block(blk: Any) -> None:
+        if not isinstance(blk, dict):
+            return
+        t = blk.get("type")
+        if t == "image-annotation":
+            for ann in blk.get("annotations") or []:
+                if not isinstance(ann, dict):
+                    continue
+                if ann.get("kind") != "callout":
+                    continue
+                if "text" in ann:
+                    if "label" not in ann:
+                        ann["label"] = ann["text"]
+                    del ann["text"]
+            return
+        if t == "columns":
+            for col in blk.get("columns") or []:
+                if isinstance(col, list):
+                    for child in col:
+                        _walk_block(child)
+        elif t == "tabs":
+            for tab in blk.get("tabs") or []:
+                for child in (tab or {}).get("blocks") or []:
+                    _walk_block(child)
+        elif t == "accordion":
+            for item in blk.get("items") or []:
+                for child in (item or {}).get("blocks") or []:
+                    _walk_block(child)
+
+    def _walk_section(sec: dict[str, Any]) -> None:
+        for blk in sec.get("blocks") or []:
+            _walk_block(blk)
+        for sub in sec.get("subsections") or []:
+            _walk_section(sub)
+
+    for sec in payload.get("sections") or []:
+        if isinstance(sec, dict):
+            _walk_section(sec)
+
+
 def validate_documentjson(payload: dict[str, Any]) -> dict[str, Any]:
     """DocumentJSON v1.0 Pydantic 검증 + section 재번호 + columns widths 정합성."""
     from pydantic import ValidationError
 
     from app.core.errors import format_pydantic_errors
+
+    # Legacy migration: image-annotation blocks used snake-case `image_id`
+    # before the imageId unification. Rewrite in place so old rows validate.
+    _normalise_image_annotation_ids(payload)
+    # Legacy migration: callout-kind annotations used `text` before the
+    # arrow/rect/callout label unification (pass-2). Rewrite in place.
+    _normalise_image_annotation_labels(payload)
 
     try:
         doc = DocumentjsonV10.model_validate(payload)

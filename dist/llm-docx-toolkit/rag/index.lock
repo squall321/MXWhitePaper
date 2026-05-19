@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-17T23:19:24.711584+00:00",
+  "generated_at": "2026-05-19T02:58:52.634341+00:00",
   "source_hashes": {
-    "packages/shared/schemas/document.json": "50804e64a535d9c210877d3603f91ed7d119c02feac2b3576a4f1be20e9e9a20",
+    "packages/shared/schemas/document.json": "d7da9c1d28991e66dd4428bde0a34d1a06f250f16f5fa4443531ba50b3feb424",
     "apps/api/app/services/widget_markers.py": "29b9da045c859288c6bcb1195176ee9ebb9b50c2c5376c419d5c293632a5658e",
     "apps/api/app/services/docx_import.py": "804bcf7ebf28df1270fe475360e667aaacdfa3707dd444ce4eb48edeb2a1b7e1",
-    "docs/llm-input-rules.md": "236e47b28abb49b7d37fecf056e926a4688862b140f4270b72ba920ba85b2d93",
+    "docs/llm-input-rules.md": "174e43573dcff08000fd050d959bfacc5a47c6ced180338cb69ab93a11456ebc",
     "dist/llm-docx-toolkit/llm-system-prompt.md": "57916c20b5819cf9ce7f92f5f9c93dcef3ca3dcb2f1c10d2590e4e30f584dbfa"
   },
   "widget_types": [
@@ -28,7 +28,7 @@
     "video",
     "whiteboard"
   ],
-  "chunk_count": 131,
+  "chunk_count": 132,
   "embedding_backend_fingerprint": "chunks-only:v1",
-  "chunks_sha256": "ea9fae3abe19896609f141891440824a2e37453a49d94b863ccc3f78adef517a"
+  "chunks_sha256": "4ef9fe932b2ed4f9f058eed6b1095ae4c78ef590da732509c1b45103b9c40573"
 }

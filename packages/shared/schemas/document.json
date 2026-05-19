@@ -581,7 +581,11 @@
         "title":  { "type": "string" },
         "height": { "type": "integer", "minimum": 100, "maximum": 2000 },
         "meta":   { "$ref": "#/$defs/BlockMeta" }
-      }
+      },
+      "oneOf": [
+        { "required": ["src"],  "not": { "required": ["html"] } },
+        { "required": ["html"], "not": { "required": ["src"]  } }
+      ]
     },
     "VideoBlock": {
       "type": "object",
@@ -593,6 +597,21 @@
         "url":      { "type": "string", "format": "uri" },
         "title":    { "type": "string" },
         "provider": { "enum": ["intra", "youtube", "vimeo"], "default": "intra" },
+        "autoplay": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-play on load. Browser autoplay policies may block this when muted=false; treat as a hint."
+        },
+        "controls": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show native video controls (play/pause/volume/seek)."
+        },
+        "loop": {
+          "type": "boolean",
+          "default": false,
+          "description": "Restart automatically when the video ends."
+        },
         "meta":     { "$ref": "#/$defs/BlockMeta" }
       }
     },
@@ -786,11 +805,11 @@
       "type": "object",
       "required": ["type", "id"],
       "additionalProperties": false,
-      "description": "Explicit vertical spacer. Default inter-block spacing is tight (8px). Insert a spacer block to add deliberate breathing room. `size` chooses the gap: sm=16px, md=32px (default), lg=64px.",
+      "description": "Explicit vertical spacer. Default inter-block spacing is tight (8px). Insert a spacer block to add deliberate breathing room. `size` chooses the gap: sm=16px, md=32px (default), lg=64px, xl=128px.",
       "properties": {
         "type": { "const": "spacer" },
         "id":   { "$ref": "#/$defs/Ulid" },
-        "size": { "enum": ["sm", "md", "lg"], "default": "md" },
+        "size": { "enum": ["sm", "md", "lg", "xl"], "default": "md" },
         "meta": { "$ref": "#/$defs/BlockMeta" }
       }
     },
@@ -1055,12 +1074,12 @@
 
     "ImageAnnotationBlock": {
       "type": "object",
-      "required": ["type", "id", "image_id", "annotations"],
+      "required": ["type", "id", "imageId", "annotations"],
       "additionalProperties": false,
       "properties": {
         "type":         { "const": "image-annotation" },
         "id":           { "$ref": "#/$defs/Ulid" },
-        "image_id":     { "type": "string", "description": "FK to images table (mxwp-images)" },
+        "imageId":      { "type": "string", "description": "FK to images table (mxwp-images). Camel-case to match ImageBlock; BE normalizes legacy 'image_id' on read." },
         "caption":      { "type": "string" },
         "annotations": {
           "type": "array",
@@ -1112,7 +1131,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["kind", "id", "x", "y", "text", "color"],
+          "required": ["kind", "id", "x", "y", "label", "color"],
           "properties": {
             "kind":  { "const": "callout" },
             "id":    { "type": "string" },
@@ -1124,7 +1143,10 @@
               "required": ["x", "y"],
               "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
             },
-            "text":  { "type": "string" },
+            "label": {
+              "type": "string",
+              "description": "Annotation label (was `text` pre-pass-2). BE normaliser rewrites legacy `text` → `label` on read."
+            },
             "color": { "type": "string" }
           }
         }
@@ -1146,6 +1168,17 @@
           "type": "object",
           "additionalProperties": { "type": "string" },
           "description": "Sparse map of cell-ref → raw cell input (e.g. {'A1':'42', 'B2':'=SUM(A1:A10)'})"
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Visual rendering options. All fields optional with sensible defaults.",
+          "properties": {
+            "stripe": {
+              "type": "boolean",
+              "description": "Zebra-striped data rows for readability. Default true; set false to disable. Header row is unaffected."
+            }
+          }
         },
         "meta": { "$ref": "#/$defs/BlockMeta" }
       }

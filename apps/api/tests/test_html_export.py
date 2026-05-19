@@ -334,6 +334,54 @@ def test_renderer_image_align_emits_alignment_class() -> None:
     assert "b-image-align-right" in out
 
 
+def test_renderer_bibliography_emits_heading_and_ordered_list() -> None:
+    """BibliographyBlock → `<h2>` + numbered `<ol>` with cite anchors."""
+    blocks = [
+        {
+            "type": "bibliography",
+            "id": "01BIB00000000000000000001",
+            "title": "참고",
+            "entries": [
+                {"key": "smith2020", "text": "Smith, J. (2020). Foo.", "url": "https://example.org/foo"},
+                {"text": "익명 보고서, 2021."},
+            ],
+        }
+    ]
+    out = render_namuwiki_html(_doc(blocks))
+    assert "<section class=\"b-bibliography\">" in out
+    assert "<h2>참고</h2>" in out
+    assert '<ol class="bibliography-list">' in out
+    assert 'id="cite-smith2020"' in out
+    assert "https://example.org/foo" in out
+    assert "익명 보고서, 2021." in out
+
+
+def test_renderer_table_stripe_class_reflects_options() -> None:
+    """`options.stripe=True/False` → `striped` / `no-stripe` CSS class."""
+    striped_blocks = [
+        {
+            "type": "table",
+            "id": "01TBL00000000000000000001",
+            "headers": ["A", "B"],
+            "rows": [["1", "2"]],
+            "options": {"stripe": True},
+        }
+    ]
+    plain_blocks = [
+        {
+            "type": "table",
+            "id": "01TBL00000000000000000002",
+            "headers": ["A", "B"],
+            "rows": [["1", "2"]],
+            "options": {"stripe": False},
+        }
+    ]
+    striped_out = render_namuwiki_html(_doc(striped_blocks))
+    plain_out = render_namuwiki_html(_doc(plain_blocks))
+    assert "b-table striped" in striped_out
+    assert "b-table no-stripe" in plain_out
+
+
 def test_renderer_glossary_and_references_appear() -> None:
     doc = _doc()
     doc["glossary"] = [{"term": "RBAC", "definition": "Role-Based Access Control"}]

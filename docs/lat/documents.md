@@ -76,23 +76,80 @@
 - `ParagraphBlock` — markdown-flavored inline (`**굵게**`, `*기울임*`,
   `` `code` ``, `[link](url)`)
 - `Heading4Block` — depth-4 이상 헤딩은 sub-section 으로 자동 승격되므로
-  실제로는 임시. 자세히는 [[#heading-promotion]].
+  실제로는 임시. 자세히는 [[#heading-promotion]]. ★ FE editor
+  ([[src/features/editor/blocks/Heading4BlockEditor.tsx]]) 가 호버/포커스 시
+  **H2 / H3 / H4 dropdown** 노출 — 인라인 헤딩의 level 변경 가능 (widget-integrity-pass-2 M8).
+  legacy `meta.level` 도 읽음.
 - `ListBlock` — `style: "bullet"|"ordered"`, `items[]`
-- `QuoteBlock` — `text`, `cite?`
+- `QuoteBlock` — `text`, `cite?`. ★ FE editor
+  ([[src/features/editor/blocks/QuoteBlockEditor.tsx]]) 가 widget-integrity-pass-2 M9
+  사이클에서 추가됨 — text textarea + cite input, 600 ms debounced patchBlock.
+  빈 cite 는 `undefined` 로 정규화 (read 측의 `block.cite` truthy 체크와 일관).
 - `CalloutBlock` — `variant: "info"|"warn"|"danger"|"success"`, `title?`, `text`
 - `CodeBlock` — `language`, `code`
 - `MathBlock` — LaTeX `expression`, `display: "block"|"inline"`
-- `TableBlock` — `headers[]`, `rows[][]`, `caption?`, `options{}` (정렬, 정렬,
-  aggregate, footer, density, border-style). 두 가지 셀 모드:
+- `TableBlock` — `headers[]`, `rows[][]`, `caption?`, `options{}` (sortable,
+  searchable, density, stickyFirstCol, rowNumbers, **stripe** (default `true`,
+  zebra-striped data rows; header row 미영향), borderStyle). 두 가지 셀 모드:
   1. **flat**: `headers` + `rows` (단순 텍스트 그리드)
   2. **sparse**: `cells[]` — 각 항목 `{r, c, text?, blocks?, header?, rowSpan?, colSpan?}`.
      ★ 셀은 `text` **또는** `blocks` 중 하나만 — `blocks` 가 있으면
      [[src/app/services/document_service.py#_normalise_table_cells]] 가
      `text` 를 자동 제거해 one-of 계약 유지. `CellBlock` 은 `ParagraphBlock`
      / `ImageBlock` / `ListBlock` 셋으로 제한 (테이블 안 테이블 금지).
+  ★ `options.stripe` 는 4 export (docx / html / pptx / markdown) 모두 반영됨
+  — [[export#table-rendering-깊이]] 참고.
+- `SpreadsheetBlock` — 편집 가능한 *살아있는* 표. `cols` (1-26), `rows` (1-200),
+  `cells: { "A1": "42", "B2": "=SUM(A1:A10)" }` (sparse cell-ref map), `headers?`,
+  `title?`, `options.stripe` (default `true` — zebra data rows, header 미영향).
+  TableBlock 과 달리 docx import 가 만들지 않고 사이트 에디터에서 직접 추가/편집.
+  docx export 는 `_b_spreadsheet()` 가 `stripe=True` → `Light Grid Accent 1`,
+  `False` → `Table Grid` 로 분기.
+- `BibliographyBlock` — `entries[]` ( `{key?, text, doi?, url?}` ), `title?`, `style?`.
+  본문의 `[[cite:KEY]]` 가 `<li id="cite-{key}">` anchor 로 연결. ★ 4 export
+  (docx / html / pptx / markdown) 모두 핸들러 존재 (이전엔 docx 만 존재했음).
+- `ImageBlock` — `imageId` (camelCase, ULID/UUID), `alt?`, `caption?`, `width?`
+  (sm=200px / md=400px / lg=600px / full). docx export 도 `width` enum 을
+  Picture 너비로 반영 (sm/md/lg/full).
+- `ImageAnnotationBlock` — `imageId` (★ camelCase — 이전 `image_id` 폐기.
+  legacy 데이터는 `validate_documentjson()` 진입부의
+  [[src/app/services/document_service.py#_normalise_image_annotation_ids]] 가
+  in-place 로 키 rename), `annotations[]` ( `{kind, x, y, label?, color?, ...}` ).
+  ★ callout-kind annotation 의 키는 widget-integrity-pass-2 M5 에서 `text` → `label`
+  로 통일됨 (arrow/rect 는 이전부터 `label`). legacy `text` 키가 남은 문서는
+  [[src/app/services/document_service.py#_normalise_image_annotation_labels]] 가
+  read 시점에 in-place 로 `label` 로 rename (정규화 헬퍼 — 마이그레이션 X).
+- `SpacerBlock` — `size: "sm"|"md"|"lg"|"xl"` (16/32/64/128 px, default `md`).
+  본문 흐름의 명시적 여백. FE editor (SpacerBlockEditor.tsx) 가 dropdown 으로
+  4 옵션 노출 (pass-3 N1 확장).
+- `FigureIndexBlock` — 본문의 캡션 있는 image/table/chart 자동 목차. `kinds?`
+  필터, `title?`. FE 의 FigureIndexBlock 에 🔄 갱신 버튼 — MutationObserver
+  로 본문 변화 캐치 후 collect() 재실행.
+- `CalloutBlock` — `variant: "info"|"warn"|"danger"|"success"|"tip"`, `title?`, `text`.
+  docx export 시 `Widget: callout (variant)` hidden marker emit (검증:
+  `test_renderer_callout_emits_hidden_marker_run`).
 - `KpiCardsBlock` — `items[]` (label, value, trend)
-- `ChartBlock`, `ImageBlock`, `ColumnsBlock`, `TabsBlock`, `AccordionBlock`,
-  `GanttBlock`, `FlowBlock`, `OrgChartBlock`, …
+- `IframeBlock` — embed via `src` (URL) **XOR** `html` (sanitized snippet).
+  schema 가 `oneOf` 로 두 변종을 강제하고, pydantic v2 의 codegen 한계
+  (`not: required` 가 떨어짐) 는 [[packages/shared/codegen/generate-py.py]] 가
+  `IframeBlock1` (src branch) / `IframeBlock2` (html branch) 양쪽에
+  `@model_validator(mode='after')` 를 후처리 주입해 양쪽 모두 set 인 입력을
+  거부 (widget-integrity-pass-2 M2). neither 는 codegen 의 required 가 자동 거부.
+- `VideoBlock` — `src` (URL), `autoplay?` (default `false`), `controls?`
+  (default `true`), `loop?` (default `false`). 옵션 3 개는 widget-integrity-pass-2 M4
+  에서 추가됨. browser 정책상 `autoplay=true` 가 muted 없이는 차단될 수 있음.
+  기존 video 문서 (옵션 없음) 는 default 로 통과.
+- `DataSourceBlock` — 외부 endpoint 폴링 위젯. `endpoint`, `render` (`chart`/
+  `table`/`kpi`), `refreshInterval?` (초, schema default 60, min 30).
+  ★ widget-integrity-pass-2 M1 에서 FE 폴링 로직이
+  [[src/components/blocks/DataSourceBlock.tsx#derivePollingConfig]] 순수 함수로
+  추출되어 `refreshInterval` 이 실제 react-query `refetchInterval` 에 반영됨.
+- `GlossaryRefBlock` — `term` (lookup key). schema 에는 `definition` 필드
+  *없음* (이전 docx_export dead branch 정리, widget-integrity-pass-2 M11).
+  FE 컴포넌트가 미정의 term 을 ⚠️ + 회색 (border-gray-400, bg-gray-100) +
+  "(용어 사전에 없음)" 으로 시각화, `data-glossary-ref-broken` 속성 노출.
+- `ChartBlock`, `ColumnsBlock`, `TabsBlock`, `AccordionBlock`,
+  `GanttBlock`, `FlowBlock`, `OrgChartBlock`, `GalleryBlock`, …
 
 전체 enum 은 [[src/app/schemas/document.py]] 참고. 새 block type 추가 시:
 1. 스키마 클래스 + Union 등록
@@ -200,6 +257,26 @@ materialized view refresh 도 스킵 가능.
    재호출 필요. 종종 `list(_walk_…)` 로 박제하고 시작하는 게 안전.
 7. **columns widths 정규화**: `widths` 가 100 의 합이 아니면 비례 재조정.
    `[[src/app/services/document_service.py#_normalise_columns_widths]]`.
+8. **ImageAnnotationBlock 의 legacy `image_id` 키**: 과거 snake_case 로 저장된
+   document 가 DB 에 남아있을 수 있음. `validate_documentjson()` 진입부의
+   `_normalise_image_annotation_ids()` 가 read 시점에 in-place 로 `imageId` 로
+   rename — DB 마이그레이션은 없음. pydantic v2 의 `extra='forbid'` 때문에
+   정규화 안 거치면 legacy doc 이 validation reject 됨.
+   동일 패턴으로 `_normalise_image_annotation_labels()` 가 callout-kind
+   annotation 의 legacy `text` → `label` 을 read 시점에 rename
+   (widget-integrity-pass-2 M5).
+9. **SpreadsheetBlock 은 docx import 가 만들지 않는다** — 사이트 에디터에서
+   직접 추가. LLM 이 docx 로 작성할 땐 일반 TableBlock 으로 두고 사람이
+   사이트에서 변환. (참고: [[../llm-input-rules.md#2-9-spreadsheet-편집-가능한-표]])
+10. **TableBlock·SpreadsheetBlock 의 `options.stripe` 기본은 `true`** — 옵션
+    객체 없으면 zebra 적용. 명시적으로 끄려면 `options.stripe=false` 저장 필요.
+11. **pydantic v2 codegen 은 JSON Schema 의 `oneOf` 의 `not: required` 부분을
+    무시한다** — `datamodel-codegen` 이 두 helper class + `RootModel` union 으로
+    풀지만 cross-branch 거부 (양쪽 모두 set 입력) 는 모델 validator 가 필요.
+    [[packages/shared/codegen/generate-py.py#_inject_after_meta]] 가 매 regen 마다
+    `@model_validator(mode='after')` 를 후처리 주입한다. IframeBlock 의 src/html
+    XOR 가 첫 적용 사례 (widget-integrity-pass-2 M2); 향후 다른 oneOf 도 같은
+    패턴 확장 가능.
 
 ## Settings (`app.core.config`)
 

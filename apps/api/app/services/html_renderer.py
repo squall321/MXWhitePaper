@@ -412,6 +412,20 @@ def _b_math(block: dict[str, Any], ctx: _Ctx) -> str:
     return f'<{tag} class="b-math math-{display}">{html.escape(expr)}</{tag}>'
 
 
+def _table_class_for(block: dict[str, Any]) -> str:
+    """Build the HTML `class` attribute for a table block.
+
+    Always includes `b-table`; appends `striped` (default) or `no-stripe`
+    based on `options.stripe`. CSS in the site stylesheet picks up either
+    modifier.
+    """
+    opts = block.get("options") or {}
+    stripe = True
+    if isinstance(opts, dict) and "stripe" in opts:
+        stripe = bool(opts.get("stripe"))
+    return "b-table striped" if stripe else "b-table no-stripe"
+
+
 def _b_table(block: dict[str, Any], _ctx: _Ctx) -> str:
     cells = block.get("cells")
     if isinstance(cells, list) and cells:
@@ -432,7 +446,7 @@ def _b_table(block: dict[str, Any], _ctx: _Ctx) -> str:
             + "</tr>"
         )
     body += "</tbody>"
-    return f'<table class="b-table">{head}{body}</table>'
+    return f'<table class="{_table_class_for(block)}">{head}{body}</table>'
 
 
 def _b_table_sparse_html(
@@ -491,7 +505,7 @@ def _b_table_sparse_html(
             rows_html.append("<thead><tr>" + "".join(row_html) + "</tr></thead>")
         else:
             rows_html.append("<tr>" + "".join(row_html) + "</tr>")
-    return f'<table class="b-table">{"".join(rows_html)}</table>'
+    return f'<table class="{_table_class_for(block)}">{"".join(rows_html)}</table>'
 
 
 def _render_cell_html(cell: dict[str, Any], _ctx: _Ctx) -> str:
@@ -924,6 +938,40 @@ def _b_image_annotation(block: dict[str, Any], _ctx: _Ctx) -> str:
     )
 
 
+def _b_bibliography(block: dict[str, Any], _ctx: _Ctx) -> str:
+    """Render a BibliographyBlock as `<h2>` heading + numbered `<ol>`.
+
+    Each entry becomes `<li id="cite-{key}">…</li>` so in-document
+    `[[cite:KEY]]` markers (rendered as hyperlinks by `_render_inline`)
+    can anchor-link into the list.
+    """
+    title = _str(block.get("title")) or "참고문헌"
+    entries = block.get("entries") or []
+    if not isinstance(entries, list) or not entries:
+        return ""
+    items: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        text = _str(entry.get("text"))
+        url = _str(entry.get("url"))
+        key = _str(entry.get("key"))
+        id_attr = f' id="cite-{html.escape(key)}"' if key else ""
+        inner = _render_inline(text)
+        if url:
+            inner += (
+                f' <a class="biblio-url" href="{html.escape(url)}">'
+                f"{html.escape(url)}</a>"
+            )
+        items.append(f"<li{id_attr}>{inner}</li>")
+    return (
+        f'<section class="b-bibliography">'
+        f"<h2>{html.escape(title)}</h2>"
+        f'<ol class="bibliography-list">{"".join(items)}</ol>'
+        f"</section>"
+    )
+
+
 _BLOCK_HANDLERS: dict[str, Any] = {
     "paragraph": _b_paragraph,
     "heading-4": _b_heading_4,
@@ -954,6 +1002,7 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "pdf": _b_pdf,
     "whiteboard": _b_whiteboard,
     "image-annotation": _b_image_annotation,
+    "bibliography": _b_bibliography,
 }
 
 

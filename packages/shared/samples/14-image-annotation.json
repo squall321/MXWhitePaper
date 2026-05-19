@@ -25,7 +25,7 @@
         {
           "type": "image-annotation",
           "id": "01J9X1Y2Z3A4B5C6D7E8F9GAN3",
-          "image_id": "01J9X1Y2Z3A4B5C6D7E8F9GIMG",
+          "imageId": "01J9X1Y2Z3A4B5C6D7E8F9GIMG",
           "caption": "신제품 후면 — 카메라 모듈/지문센서 위치",
           "annotations": [
             {
@@ -52,7 +52,7 @@
               "x": 0.65,
               "y": 0.70,
               "anchor": { "x": 0.45, "y": 0.55 },
-              "text": "여기 마감 처리 확인",
+              "label": "여기 마감 처리 확인",
               "color": "#16a34a"
             }
           ]

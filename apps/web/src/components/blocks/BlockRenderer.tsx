@@ -50,6 +50,9 @@ import { FileBlockEditor } from '@/features/editor/blocks/FileBlockEditor'
 import { DocLinkCardBlockEditor } from '@/features/editor/blocks/DocLinkCardBlockEditor'
 import { TableBlockEditor } from '@/features/editor/blocks/TableBlockEditor'
 import { CodeBlockEditor } from '@/features/editor/blocks/CodeBlockEditor'
+import { SpacerBlockEditor } from '@/features/editor/blocks/SpacerBlockEditor'
+import { Heading4BlockEditor } from '@/features/editor/blocks/Heading4BlockEditor'
+import { QuoteBlockEditor } from '@/features/editor/blocks/QuoteBlockEditor'
 import {
   AccordionBlockEditor,
   ColumnsBlockEditor,
@@ -295,39 +298,10 @@ function BlockRendererInner({ block }: { block: Block }) {
       )
     }
     if (block.type === 'heading-4') {
-      // Schema-stored level lives in meta.level; default 4 keeps prior docs
-      // looking the same.
-      const lvl = (block.meta?.level ?? 4) as 2 | 3 | 4
-      const cls =
-        lvl === 2
-          ? 'text-2xl font-semibold text-smsg-900'
-          : lvl === 3
-            ? 'text-xl font-semibold text-smsg-900'
-            : 'text-lg font-semibold text-gray-700'
-      return (
-        <InlineTextBlockEditor
-          slug={editorSlug}
-          blockId={block.id}
-          blockType="heading-4"
-          level={lvl}
-          initialText={block.title}
-          className={`${cls} min-h-[1.5rem] py-1`}
-          placeholder="제목을 입력하세요…"
-        />
-      )
+      return <Heading4BlockEditor slug={editorSlug} block={block} />
     }
     if (block.type === 'quote') {
-      return (
-        <div className="border-l-4 border-smsg-300 pl-3 italic text-gray-700">
-          <InlineTextBlockEditor
-            slug={editorSlug}
-            blockId={block.id}
-            blockType="quote"
-            initialText={block.text}
-            placeholder="인용문…"
-          />
-        </div>
-      )
+      return <QuoteBlockEditor slug={editorSlug} block={block} />
     }
     if (block.type === 'callout') {
       const variant = block.variant ?? 'info'
@@ -436,6 +410,9 @@ function BlockRendererInner({ block }: { block: Block }) {
     }
     if (block.type === 'list') {
       return <ListBlockEditor slug={editorSlug} block={block} />
+    }
+    if (block.type === 'spacer') {
+      return <SpacerBlockEditor slug={editorSlug} block={block} />
     }
   }
 

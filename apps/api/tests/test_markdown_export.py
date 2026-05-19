@@ -346,6 +346,26 @@ def test_renderer_nested_sections_emit_progressive_headings() -> None:
     assert "depth-3" in out
 
 
+def test_renderer_bibliography_block_emits_numbered_list() -> None:
+    """BibliographyBlock → `## 참고문헌` + numbered list with cite keys."""
+    blocks = [
+        {
+            "type": "bibliography",
+            "id": "01BIB00000000000000000001",
+            "title": "참고",
+            "entries": [
+                {"key": "smith2020", "text": "Smith, J. (2020). Foo.", "url": "https://example.org/foo"},
+                {"text": "익명 보고서, 2021."},
+            ],
+        }
+    ]
+    out = render_markdown(_doc(blocks))
+    assert "## 참고" in out
+    assert "1. [smith2020] Smith, J. (2020). Foo." in out
+    assert "<https://example.org/foo>" in out
+    assert "2. 익명 보고서, 2021." in out
+
+
 def test_renderer_glossary_and_references_appear() -> None:
     doc = _doc()
     doc["glossary"] = [{"term": "RBAC", "definition": "Role-Based Access Control"}]

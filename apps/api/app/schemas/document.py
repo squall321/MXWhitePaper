@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Literal, Annotated
 
-from pydantic import AnyUrl, BaseModel, ConfigDict, Field, RootModel
+from pydantic import AnyUrl, BaseModel, ConfigDict, Field, RootModel, model_validator
 
 
 class Ulid(RootModel[str]):
@@ -592,7 +592,39 @@ class OrgChartNode(BaseModel):
     children: list[OrgChartNode] | None = Field([], validate_default=True)
 
 
-class IframeBlock(BaseModel):
+class IframeBlock1(BaseModel):
+    """
+    Embed an external page (`src`) OR an inline self-contained HTML document (`html`). Exactly one MUST be set. The renderer wraps the iframe in a sandbox boundary so the embed can't reach the parent DOM, cookies, or storage; only `allow-scripts` is granted so interactive embeds (charts, calculators) still work.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['iframe']
+    id: Ulid
+    src: AnyUrl
+    """
+    사내 화이트리스트 도메인만. `html` 와 동시 사용 금지.
+    """
+    html: str | None = Field(None, max_length=500000)
+    """
+    Self-contained HTML document. Rendered via iframe srcdoc + sandbox. Use this for ad-hoc interactive embeds (e.g. canvas-based charts) that don't need a hosting URL. `src` 와 동시 사용 금지.
+    """
+    title: str | None = None
+    height: int | None = Field(None, ge=100, le=2000)
+    meta: BlockMeta | None = None
+
+    @model_validator(mode='after')
+    def _reject_html_when_src(self):
+        # XOR enforcement: src-branch must not also carry html.
+        if self.html is not None:
+            raise ValueError(
+                'iframe block requires exactly one of `src` or `html`'
+            )
+        return self
+
+
+class IframeBlock2(BaseModel):
     """
     Embed an external page (`src`) OR an inline self-contained HTML document (`html`). Exactly one MUST be set. The renderer wraps the iframe in a sandbox boundary so the embed can't reach the parent DOM, cookies, or storage; only `allow-scripts` is granted so interactive embeds (charts, calculators) still work.
     """
@@ -606,13 +638,29 @@ class IframeBlock(BaseModel):
     """
     사내 화이트리스트 도메인만. `html` 와 동시 사용 금지.
     """
-    html: str | None = Field(None, max_length=500000)
+    html: str = Field(..., max_length=500000)
     """
     Self-contained HTML document. Rendered via iframe srcdoc + sandbox. Use this for ad-hoc interactive embeds (e.g. canvas-based charts) that don't need a hosting URL. `src` 와 동시 사용 금지.
     """
     title: str | None = None
     height: int | None = Field(None, ge=100, le=2000)
     meta: BlockMeta | None = None
+
+    @model_validator(mode='after')
+    def _reject_src_when_html(self):
+        # XOR enforcement: html-branch must not also carry src.
+        if self.src is not None:
+            raise ValueError(
+                'iframe block requires exactly one of `src` or `html`'
+            )
+        return self
+
+
+class IframeBlock(RootModel[IframeBlock1 | IframeBlock2]):
+    root: IframeBlock1 | IframeBlock2
+    """
+    Embed an external page (`src`) OR an inline self-contained HTML document (`html`). Exactly one MUST be set. The renderer wraps the iframe in a sandbox boundary so the embed can't reach the parent DOM, cookies, or storage; only `allow-scripts` is granted so interactive embeds (charts, calculators) still work.
+    """
 
 
 class Provider(Enum):
@@ -630,6 +678,18 @@ class VideoBlock(BaseModel):
     url: AnyUrl
     title: str | None = None
     provider: Provider | None = Provider.intra
+    autoplay: bool | None = False
+    """
+    Auto-play on load. Browser autoplay policies may block this when muted=false; treat as a hint.
+    """
+    controls: bool | None = True
+    """
+    Show native video controls (play/pause/volume/seek).
+    """
+    loop: bool | None = False
+    """
+    Restart automatically when the video ends.
+    """
     meta: BlockMeta | None = None
 
 
@@ -767,11 +827,12 @@ class Size(Enum):
     sm = 'sm'
     md = 'md'
     lg = 'lg'
+    xl = 'xl'
 
 
 class SpacerBlock(BaseModel):
     """
-    Explicit vertical spacer. Default inter-block spacing is tight (8px). Insert a spacer block to add deliberate breathing room. `size` chooses the gap: sm=16px, md=32px (default), lg=64px.
+    Explicit vertical spacer. Default inter-block spacing is tight (8px). Insert a spacer block to add deliberate breathing room. `size` chooses the gap: sm=16px, md=32px (default), lg=64px, xl=128px.
     """
 
     model_config = ConfigDict(
@@ -1055,7 +1116,10 @@ class AnnotationElement3(BaseModel):
     x: float
     y: float
     anchor: Anchor | None = None
-    text: str
+    label: str
+    """
+    Annotation label (was `text` pre-pass-2). BE normaliser rewrites legacy `text` → `label` on read.
+    """
     color: str
 
 
@@ -1063,6 +1127,20 @@ class AnnotationElement(
     RootModel[AnnotationElement1 | AnnotationElement2 | AnnotationElement3]
 ):
     root: AnnotationElement1 | AnnotationElement2 | AnnotationElement3
+
+
+class Options1(BaseModel):
+    """
+    Visual rendering options. All fields optional with sensible defaults.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    stripe: bool | None = None
+    """
+    Zebra-striped data rows for readability. Default true; set false to disable. Header row is unaffected.
+    """
 
 
 class SpreadsheetBlock(BaseModel):
@@ -1078,6 +1156,10 @@ class SpreadsheetBlock(BaseModel):
     cells: dict[str, str]
     """
     Sparse map of cell-ref → raw cell input (e.g. {'A1':'42', 'B2':'=SUM(A1:A10)'})
+    """
+    options: Options1 | None = None
+    """
+    Visual rendering options. All fields optional with sensible defaults.
     """
     meta: BlockMeta | None = None
 
@@ -1304,9 +1386,9 @@ class ImageAnnotationBlock(BaseModel):
     )
     type: Literal['image-annotation']
     id: Ulid
-    image_id: str
+    image_id: str = Field(..., alias='imageId')
     """
-    FK to images table (mxwp-images)
+    FK to images table (mxwp-images). Camel-case to match ImageBlock; BE normalizes legacy 'image_id' on read.
     """
     caption: str | None = None
     annotations: list[AnnotationElement]

@@ -278,7 +278,7 @@ const BLOCKS: Record<string, Block> = {
   'image-annotation': {
     type: 'image-annotation',
     id: ID(31),
-    image_id: '01TESTIMAGE000000000000I31',
+    imageId: '01TESTIMAGE000000000000I31',
     caption: '이미지 주석 샘플',
     annotations: [
       {
@@ -303,7 +303,7 @@ const BLOCKS: Record<string, Block> = {
         id: 'ann-c-1',
         x: 0.6,
         y: 0.7,
-        text: '확인',
+        label: '확인',
         color: '#16a34a',
       },
     ],

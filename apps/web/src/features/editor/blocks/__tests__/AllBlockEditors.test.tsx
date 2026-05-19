@@ -409,7 +409,7 @@ const CASES: Array<{
     block: {
       type: 'image-annotation',
       id: ID(24),
-      image_id: '01TESTIMAGE000000000000I24',
+      imageId: '01TESTIMAGE000000000000I24',
       caption: '주석 샘플',
       annotations: [],
     } satisfies ImageAnnotationBlock,

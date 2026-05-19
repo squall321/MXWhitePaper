@@ -71,6 +71,10 @@ render_<fmt>(doc, *, options, requester_role=None)
 - gantt, flow, org-chart, columns, tabs, accordion
 - iframe, video, image, gallery, file
 - doc-link-card, glossary-ref
+- **bibliography** — 4 export 모두 핸들러 존재 (widget-integrity-pass-1
+  사이클에서 html/pptx/md 에 핸들러 추가; 이전엔 docx 만).
+- **spreadsheet** — docx 에서만 핸들러 존재 (`_b_spreadsheet()`). html_renderer
+  에는 spreadsheet 분기 없음 (out-of-scope; 사이트 자체 React 컴포넌트가 렌더).
 
 renderer 별 추가 책임:
 - **docx_export**: `_emit_table_flat()`, `_emit_table_cells()` 가 표 → Word 표
@@ -114,6 +118,21 @@ export 단계에서 재계산 X.
 
 `_emit_table_flat()` 가 단순 표, `_emit_table_cells()` 가 병합/스타일 포함 표.
 
+### Stripe 옵션 (4-export 반영)
+
+`options.stripe` (default `true`) 가 4 렌더러 모두에서 처리됨 (widget-integrity-pass-1
+사이클 G2):
+
+| 렌더러 | 처리 |
+|---|---|
+| `docx_export._table_style_for()` | `stripe=True` → `Light Grid Accent 1` (zebra), `False` → `Table Grid` (plain). `_emit_table_flat()` / `_emit_table_cells()` 두 경로 모두. |
+| `html_renderer._table_class_for()` | `stripe=True` → `class="b-table striped"`, `False` → `class="b-table no-stripe"`. 사이트 CSS 의 `:nth-child(even)` 규칙 활용. |
+| `pptx_export._apply_table_stripe()` | python-pptx `table.horz_banding` 속성 토글. |
+| `markdown_export` | markdown 자체는 zebra 표현 불가 → `<!-- stripe:false -->` HTML 주석으로 옵션만 보존 (default true 면 주석 미emit). |
+
+SpreadsheetBlock 도 동일 패턴 — `docx_export._b_spreadsheet()` 가 `stripe=True` →
+`Light Grid`, `False` → `Table Grid` 분기.
+
 **Mixed-content cells** — 셀이 `text` 대신 `blocks` (paragraph/image/list) 를
 가지면 [[src/app/services/docx_export.py#_emit_cell_blocks]] 가 호출되어
 paragraph 는 텍스트로, image 는 cell paragraph 안 `add_picture()` 로 (resolver
@@ -147,6 +166,28 @@ docx export 시 18 위젯 모두 `Widget: <type> (variant)` 마커를 **hidden t
 variant 분기: chart (chartType) / gallery (carousel 만) / columns (count N) /
 callout (info/warn/danger/tip).
 
+### Hidden marker — non-default attribute encoding (pass-2)
+
+기본 `Widget: <type> (variant)` marker 외에 *추가 속성* 을 보존해야 할 때
+별도 grammar `⟦<type>:<key>=<value>⟧` 를 hidden run 으로 emit (widget-integrity-pass-2).
+기존 `Widget: …` marker 와 충돌하지 않도록 `⟦…⟧` 분리 grammar 채택:
+
+| 블록 | emit 조건 | hidden run 내용 | 위치 |
+|---|---|---|---|
+| `pdf` (M3) | `page != 1` (schema default) | `⟦pdf:page={page}⟧` | [[src/app/services/docx_export.py#_b_pdf]] |
+| `org-chart` (M6) | `layout != "tree"` (schema default) | `⟦org-chart:layout={layout}⟧` | [[src/app/services/docx_export.py#_b_org_chart]] |
+| `gallery` (M7, 기존) | `layout == "carousel"` | `Widget: gallery (carousel)` (기본 marker 내 variant) | [[src/app/services/widget_markers.py#emit_marker_text]] |
+
+default 값일 때 marker 미emit (소음 회피 + 빈 paragraph 부풀림 방지). round-trip
+importer 가 추후 `widget_markers.parse_marker` 옆에 `⟦…⟧` 별도 parser 를 추가하면
+hidden marker 가 원본 layout/page 복원에 쓰임 (현재는 *forward-only*).
+
+### Glossary-ref docx dead code 제거 (pass-2 M11)
+
+`_b_glossary_ref` 의 `block.get("definition")` 분기 3 라인 제거. `GlossaryRefBlock`
+스키마에는 `definition` 필드가 *없음* (오로지 `type / id / term / meta`) — dead
+branch 였음. 시각적으론 변화 없음 (resolver 가 actor 의 glossary lookup 으로 채움).
+
 3계층 round-trip 가드: marker → autodetect (외부 LLM docx 의 첫 입력 대비) →
 placeholder-on-failure (image bytes 등이 사라져도 widget identity 보존,
 n_consumed=0 marker-only path). 검증: `/tmp/smoke_all_widgets.py` 가 18/18 OK.
@@ -168,6 +209,17 @@ footnote 가 아니라 본문 텍스트 ` (body)` 로 평탄화 — 이는 round
 3. 반환된 bytes + mime → 렌더러가 docx Picture / pptx Picture / `<img>` /
    `![alt](data:…)` 로 emit
 4. resolver 가 None 리턴하면 docx 는 alt 텍스트만, html 은 placeholder
+
+### width enum 처리 (4-export)
+
+`ImageBlock.width` (sm/md/lg/full) enum 이 docx 에서도 반영됨 (이전엔 무시):
+
+```python
+_IMAGE_WIDTH_PX = {"sm": 200, "md": 400, "lg": 600, "full": None}
+```
+
+- sm ≈ 2.08 in (docx), md ≈ 4.17 in, lg ≈ 6.25 in, full = intrinsic (width 미지정).
+- `meta.width` (pixel) 가 있으면 enum 보다 우선순위 *낮음* — enum 이 ★ 우선.
 
 자세한 storage 측은 [[storage]].
 
@@ -200,6 +252,12 @@ footnote 가 아니라 본문 텍스트 ` (body)` 로 평탄화 — 이는 round
 7. **image_resolver 가 동기**여야 함 — 비동기 콜백은 export 흐름이 sync 라
    사용 불가. MinIO 에서 가져올 땐 caller 가 미리 일괄 fetch 후 dict resolver
    만들어 넘김.
+8. **list export 의 items 는 string-only** — 과거 docx_export `_b_list()` 에
+   `isinstance(item, dict)` 분기가 있었으나 schema 가 `items: array of string`
+   으로 명시. 죽은 코드 제거됨 (widget-integrity-pass-1 G6).
+9. **markdown 의 `<!-- stripe:false -->` 주석은 옵션 보존 마커** — markdown
+   import 측은 본 사이클 범위 밖이라 round-trip 으로 옵션 복원 X. export 측만
+   책임. 차후 import 사이클에서 보강.
 
 ## 테스트 지도
 

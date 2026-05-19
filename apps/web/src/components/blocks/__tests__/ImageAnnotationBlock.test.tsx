@@ -21,7 +21,7 @@ function harness(node: React.ReactNode) {
 const block: ImageAnnotationBlock = {
   type: 'image-annotation',
   id: '01TESTBLOCK000000000000IA1',
-  image_id: '01TESTIMAGE000000000000IA1',
+  imageId: '01TESTIMAGE000000000000IA1',
   caption: '예제 이미지 주석',
   annotations: [
     {
@@ -48,7 +48,7 @@ const block: ImageAnnotationBlock = {
       x: 0.6,
       y: 0.7,
       anchor: { x: 0.45, y: 0.55 },
-      text: '여기 마감 확인',
+      label: '여기 마감 확인',
       color: '#16a34a',
     },
   ],

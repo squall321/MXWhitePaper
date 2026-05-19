@@ -329,6 +329,94 @@ def test_renderer_hyperlink_link_is_external_relationship() -> None:
     assert "hyperlink" in rels.lower()
 
 
+def test_renderer_table_stripe_false_uses_plain_style() -> None:
+    """`options.stripe=False` → Table Grid (plain); True (default) → Light Grid Accent 1."""
+    striped_blocks = [
+        {
+            "type": "table",
+            "id": "01TBL00000000000000000001",
+            "headers": ["A", "B"],
+            "rows": [["1", "2"]],
+            "options": {"stripe": True},
+        }
+    ]
+    plain_blocks = [
+        {
+            "type": "table",
+            "id": "01TBL00000000000000000002",
+            "headers": ["A", "B"],
+            "rows": [["1", "2"]],
+            "options": {"stripe": False},
+        }
+    ]
+    striped_out = render_docx(_doc(striped_blocks))
+    plain_out = render_docx(_doc(plain_blocks))
+    striped_doc = Document(io.BytesIO(striped_out))
+    plain_doc = Document(io.BytesIO(plain_out))
+    striped_style = striped_doc.tables[0].style.name if striped_doc.tables[0].style else ""
+    plain_style = plain_doc.tables[0].style.name if plain_doc.tables[0].style else ""
+    assert "Light Grid" in striped_style
+    assert plain_style == "Table Grid"
+
+
+def test_renderer_callout_emits_hidden_marker_run() -> None:
+    """CalloutBlock → hidden `Widget: callout (variant)` marker run for round-trip."""
+    blocks = [
+        {
+            "type": "callout",
+            "id": "01CALLOUT0000000000000001",
+            "variant": "warn",
+            "title": "주의",
+            "text": "확인하세요.",
+        }
+    ]
+    out = render_docx(_doc(blocks))
+    with zipfile.ZipFile(io.BytesIO(out)) as zf:
+        doc_xml = zf.read("word/document.xml").decode("utf-8")
+    assert "Widget: callout" in doc_xml
+    # python-docx writes hidden runs with `<w:vanish/>`.
+    assert "vanish" in doc_xml
+
+
+def test_renderer_image_width_enum_drives_picture_size() -> None:
+    """`width=lg` → ~6.25 inch wide Picture (600 px / 96 dpi); `full` leaves intrinsic."""
+    png = _make_png(size=8)
+
+    def resolver(image_id: str) -> dict | None:
+        return {"bytes": png, "mime": "image/png"}
+
+    lg_blocks = [
+        {
+            "type": "image",
+            "id": "01I00000000000000000010A",
+            "imageId": "01IMG00000000000000000100",
+            "caption": "lg",
+            "width": "lg",
+        }
+    ]
+    full_blocks = [
+        {
+            "type": "image",
+            "id": "01I00000000000000000011A",
+            "imageId": "01IMG00000000000000000101",
+            "caption": "full",
+            "width": "full",
+        }
+    ]
+    lg_out = render_docx(_doc(lg_blocks), options=DocxOptions(image_resolver=resolver))
+    full_out = render_docx(_doc(full_blocks), options=DocxOptions(image_resolver=resolver))
+    lg_doc = Document(io.BytesIO(lg_out))
+    full_doc = Document(io.BytesIO(full_out))
+    # python-docx exposes shape width in EMU (1 inch = 914400 EMU).
+    lg_w = lg_doc.inline_shapes[0].width
+    full_w = full_doc.inline_shapes[0].width
+    # lg ≈ 600 / 96 = 6.25 inches → 5_715_000 EMU (allow ±5% rounding).
+    assert 5_400_000 <= lg_w <= 6_000_000
+    # full leaves intrinsic resolution — for an 8px PNG that's tiny (~75_000 EMU),
+    # so anything below 1 inch confirms we did NOT scale to 6.25 in.
+    assert full_w < 914_400
+
+
 # ── endpoint integration ─────────────────────────────────────────────
 
 

@@ -5,7 +5,7 @@ import { useImage } from '@/features/upload/hooks/useImage'
  * `image-annotation` block — read-only renderer.
  *
  * Layers:
- *   1. <img> resolved through `useImage(image_id)` (same hook ImageBlock uses).
+ *   1. <img> resolved through `useImage(imageId)` (same hook ImageBlock uses).
  *   2. Absolutely-positioned <svg> overlay covering the image rect (viewBox
  *      `0 0 1 1` so element coords are already in normalised space).
  *   3. Each annotation kind:
@@ -17,8 +17,8 @@ import { useImage } from '@/features/upload/hooks/useImage'
  * image — no recompute is needed when the parent column changes width.
  */
 export function ImageAnnotationBlockView({ block }: { block: ImageAnnotationBlock }) {
-  const { data: image } = useImage(block.image_id || undefined)
-  const src = image?.urls.view ?? `/api/v1/images/${encodeURIComponent(block.image_id)}`
+  const { data: image } = useImage(block.imageId || undefined)
+  const src = image?.urls.view ?? `/api/v1/images/${encodeURIComponent(block.imageId)}`
   const bg = image?.dominant_color ?? '#f3f4f6'
 
   return (
@@ -154,7 +154,7 @@ export function AnnotationElementView({ ann }: { ann: AnnotationElement }) {
       <rect
         x={ann.x}
         y={ann.y}
-        width={Math.max(0.08, ann.text.length * 0.014)}
+        width={Math.max(0.08, ann.label.length * 0.014)}
         height={0.045}
         rx={0.01}
         stroke={ann.color}
@@ -169,7 +169,7 @@ export function AnnotationElementView({ ann }: { ann: AnnotationElement }) {
         fontSize={0.025}
         dominantBaseline="middle"
       >
-        {ann.text}
+        {ann.label}
       </text>
     </g>
   )

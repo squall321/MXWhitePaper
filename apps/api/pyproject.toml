@@ -180,3 +180,11 @@ reportReturnType = "warning"
 addopts = "-ra -q"
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# pass-3 N5: IframeBlock 은 RootModel[IframeBlock1 | IframeBlock2] 인데 두 helper
+# class 가 공통 discriminator field 가 없어서 pydantic 이 left-to-right union
+# serializer 로 fallback → "Pydantic serializer warnings:" UserWarning 이 매
+# export 마다 발생. 동작은 정상 (validation + serialise 둘 다 OK). 메시지
+# prefix 로 매칭 — 좁게 잡아 다른 경고는 안 죽임.
+filterwarnings = [
+    "ignore:Pydantic serializer warnings:UserWarning",
+]

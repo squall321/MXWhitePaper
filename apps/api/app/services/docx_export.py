@@ -297,18 +297,11 @@ def _b_list(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     # arbitrary — round-trip only inspects existence + ilvl.
     num_id = "2" if style == "number" else "1"
     for item in items:
-        if isinstance(item, dict):
-            text = _str(item.get("text"))
-            depth = int(item.get("depth") or 0)
-        else:
-            text = _str(item)
-            depth = 0
-        if not text and depth == 0:
+        text = _str(item)
+        if not text:
             continue
         p = document.add_paragraph(style=word_style)
-        _set_numpr(p, num_id=num_id, ilvl=str(depth))
-        if depth > 0:
-            p.paragraph_format.left_indent = Inches(0.25 * depth)
+        _set_numpr(p, num_id=num_id, ilvl="0")
         prefix = ""
         if style == "check":
             prefix = "☐ "
@@ -404,6 +397,20 @@ def _b_math(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
     run.font.name = "Cambria Math"
 
 
+def _table_style_for(block: dict[str, Any]) -> str:
+    """Pick a Word table style based on the `options.stripe` flag.
+
+    Default is `Light Grid Accent 1` which has banded rows (zebra). When
+    `options.stripe=False` we fall back to the plain `Table Grid` style
+    (just borders, no row banding).
+    """
+    opts = block.get("options") or {}
+    stripe = True
+    if isinstance(opts, dict) and "stripe" in opts:
+        stripe = bool(opts.get("stripe"))
+    return "Light Grid Accent 1" if stripe else "Table Grid"
+
+
 def _b_table(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     cells = block.get("cells")
     if isinstance(cells, list) and cells:
@@ -443,7 +450,7 @@ def _emit_table_flat(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     if n_cols == 0:
         return
     table = document.add_table(rows=1 + len(rows), cols=n_cols)
-    table.style = "Table Grid"
+    table.style = _table_style_for(block)
     hdr_cells = table.rows[0].cells
     for c, h in enumerate(headers):
         cell = hdr_cells[c]
@@ -485,7 +492,7 @@ def _emit_table_cells(
     if n_rows == 0 or n_cols == 0:
         return
     table = document.add_table(rows=n_rows, cols=n_cols)
-    table.style = "Table Grid"
+    table.style = _table_style_for(block)
 
     # First fill every anchor cell with its text. Merges happen afterwards
     # because python-docx merges modify the underlying XML grid; touching
@@ -789,6 +796,14 @@ def _b_org_chart(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
         mp = document.add_paragraph()
         mr = mp.add_run(marker)
         mr.font.hidden = True
+    # Hidden layout marker — `Widget: org-chart` doesn't carry a variant in
+    # the standard marker grammar, so we emit a separate hidden run for the
+    # non-default layout to preserve it across round-trip.
+    layout = block.get("layout")
+    if isinstance(layout, str) and layout and layout != "tree":
+        lp = document.add_paragraph()
+        lpr = lp.add_run(f"⟦org-chart:layout={layout}⟧")
+        lpr.font.hidden = True
     root = block.get("root") or {}
     # Flatten the tree depth-first into (name, parent_name) pairs.
     rows: list[tuple[str, str]] = []
@@ -863,18 +878,31 @@ def _b_video(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
         run.font.size = Pt(9)
 
 
+_IMAGE_WIDTH_PX = {"sm": 200, "md": 400, "lg": 600, "full": None}
+
+
 def _b_image(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     image_id = _str(block.get("imageId") or block.get("image_id"))
     caption = _str(block.get("caption"))
     meta = block.get("meta") or {}
     width_px = None
     height_px = None
-    if isinstance(meta, dict):
+    # ImageBlock.width enum (sm/md/lg/full/xl) takes precedence over the
+    # `meta.width` pixel hint. `full` leaves width unset so python-docx
+    # renders at the image's intrinsic resolution.
+    # NOTE: schema doesn't define `meta.width` for ImageBlock, but legacy
+    # documents (pre-pass-1) may still have it. Kept as fallback for
+    # backward compat — DO NOT remove without a data migration pass.
+    width_enum = _str(block.get("width"))
+    if width_enum in _IMAGE_WIDTH_PX:
+        width_px = _IMAGE_WIDTH_PX[width_enum]
+    if width_px is None and isinstance(meta, dict):
         try:
             if meta.get("width"):
                 width_px = int(meta["width"])
         except (TypeError, ValueError):
             pass
+    if isinstance(meta, dict):
         try:
             if meta.get("height"):
                 height_px = int(meta["height"])
@@ -993,15 +1021,11 @@ def _b_glossary_ref(document: Any, block: dict[str, Any], _ctx: _Ctx) -> None:
         mr = mp.add_run(marker)
         mr.font.hidden = True
     term = _str(block.get("term"))
-    definition = _str(block.get("definition"))
     if not term:
         return
     p = document.add_paragraph()
     run = p.add_run(term)
     run.italic = True
-    if definition:
-        run2 = p.add_run(f" ({definition})")
-        run2.font.size = Pt(10)
 
 
 def _b_columns(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
@@ -1194,6 +1218,14 @@ def _b_pdf(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
     file_id = _str(block.get("fileId") or block.get("file_id"))
     title = _str(block.get("title")) or file_id or "PDF"
     page = block.get("page")
+    # Hidden page marker — `Widget: pdf` marker itself doesn't carry the page
+    # number (it's not a chart-type-style variant), so we emit a separate
+    # hidden run that round-trip importers can later parse to recover `page`.
+    # Only emit when page is set and != 1 (default).
+    if isinstance(page, int) and page != 1:
+        pm = document.add_paragraph()
+        pmr = pm.add_run(f"⟦pdf:page={page}⟧")
+        pmr.font.hidden = True
     p = document.add_paragraph()
     run = p.add_run(f"📄 PDF: {title}")
     run.bold = True
@@ -1448,7 +1480,11 @@ def _b_spreadsheet(document: Any, block: dict[str, Any], ctx: _Ctx) -> None:
         document.add_paragraph("(빈 스프레드시트)").italic = True
         return
     table = document.add_table(rows=rows + (1 if headers else 0), cols=cols)
-    table.style = "Light Grid"
+    opts = block.get("options") or {}
+    stripe = True
+    if isinstance(opts, dict) and "stripe" in opts:
+        stripe = bool(opts.get("stripe"))
+    table.style = "Light Grid" if stripe else "Table Grid"
     r0 = 0
     if headers:
         for c, h in enumerate(headers[:cols]):
