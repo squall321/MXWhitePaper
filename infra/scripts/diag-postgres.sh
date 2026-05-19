@@ -16,12 +16,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT"
 
-# .env 로드 (있으면)
+# .env 로드 (있으면) — APPTAINER 경로 오버라이드 가능
 [ -f .env ] && { set -a; . ./.env; set +a; }
 
 PG_PORT="${POSTGRES_PORT:-5532}"
 DATA_DIR="${DATA_DIR:-$REPO_ROOT/infra/data}"
 USER_NAME="$(id -un)"
+# .env 에 APPTAINER=/path/to/custom/apptainer 가 있으면 그것을 사용 (1.5.0 회피용
+# 1.3.6 자체 설치 — install-apptainer-1.3.6.sh 참고). 없으면 시스템 apptainer.
+APPTAINER="${APPTAINER:-apptainer}"
 
 bar() { printf '\n────────── %s ──────────\n' "$1"; }
 
@@ -29,7 +32,8 @@ echo "MXWP postgres diagnostic — $(date '+%Y-%m-%d %H:%M:%S')"
 echo "host=$(hostname)  user=$USER_NAME  pwd=$REPO_ROOT"
 
 bar "1. 환경 (apptainer + 사용자)"
-apptainer --version 2>&1 || echo "✗ apptainer 명령 없음 (PATH 확인)"
+echo "APPTAINER 명령: $APPTAINER"
+"$APPTAINER" --version 2>&1 || echo "✗ '$APPTAINER' 명령 없음 (PATH 확인 또는 install-apptainer-1.3.6.sh 실행)"
 echo
 echo "uid/gid:"
 id
@@ -79,7 +83,7 @@ fi
 [ -z "$(ss -tlnp 2>/dev/null | grep ":$PG_PORT") " ] && echo "  (포트 $PG_PORT 비어있음)"
 
 bar "5. apptainer 인스턴스 현재 상태"
-apptainer instance list 2>&1 | head -10
+"$APPTAINER" instance list 2>&1 | head -10
 echo
 echo "mxwp_postgres 인스턴스 로그 (존재하면):"
 LOG_BASE="$HOME/.apptainer/instances/logs"
@@ -125,7 +129,7 @@ fi
 bar "8. 실제 postgres 시작 시도 (드라이런 — apptainer raw)"
 # start.sh 와 동일한 옵션으로 *실제 시작 시도*. fail 하면 진짜 에러 메시지 노출.
 # 이미 떠있으면 skip (안전).
-if apptainer instance list 2>/dev/null | grep -q "^mxwp_postgres "; then
+if "$APPTAINER" instance list 2>/dev/null | grep -q "^mxwp_postgres "; then
   echo "✓ mxwp_postgres 이미 떠있음 — 시작 시도 skip"
 else
   # 권한 보정 (가장 흔한 fix — 만약 PGDATA 가 700 이 아니면)
@@ -136,8 +140,8 @@ else
     fi
   fi
 
-  echo "→ apptainer instance start mxwp_postgres ... 시도"
-  apptainer instance start \
+  echo "→ $APPTAINER instance start mxwp_postgres ... 시도"
+  "$APPTAINER" instance start \
     --bind "$DATA_DIR/postgres:/var/lib/postgresql/data" \
     --bind "$DATA_DIR/postgres-run:/var/run/postgresql" \
     --env "POSTGRES_USER=${POSTGRES_USER:-mxwp}" \
@@ -154,7 +158,7 @@ else
     echo
     echo "→ pg_isready 5초 대기..."
     sleep 5
-    apptainer exec instance://mxwp_postgres \
+    "$APPTAINER" exec instance://mxwp_postgres \
       pg_isready -h 127.0.0.1 -p "$PG_PORT" -U "${POSTGRES_USER:-mxwp}" 2>&1 | sed 's/^/  /'
     echo
     echo "→ 인스턴스 로그 (시작 직후):"
@@ -169,6 +173,8 @@ echo
 echo "위 결과 통째로 복사해서 보내주세요."
 echo
 echo "흔한 fix 후보 (위 §1~§3 에서 ✗/⚠ 보였다면):"
+echo "  - apptainer 1.5.x 호환성 의심: bash infra/scripts/install-apptainer-1.3.6.sh"
+echo "                              + .env 에 APPTAINER=\$HOME/.local/apptainer-1.3.6/usr/bin/apptainer 추가"
 echo "  - subuid 미설정: sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 \$USER"
 echo "  - PGDATA 권한: chmod 700 $DATA_DIR/postgres/pgdata"
 echo "  - 폴더 부재: mkdir -p $DATA_DIR/postgres $DATA_DIR/postgres-run"

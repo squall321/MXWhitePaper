@@ -232,6 +232,29 @@ sed -i "s/HOST_IP/$HOST_IP/g" .env
 - 적용 후: postgres + api 인스턴스 stop/start. 확인은 `psql -c 'SHOW dynamic_shared_memory_type'` 가 `mmap` 인지.
 - 같은 호스트 다른 프로젝트(`aidh_postgres`, `koodtx-postgres`, `sf_postgres`)도 같은 패턴이면 동일 패치 권고. mxwp 인스턴스는 *별개 PGDATA + 별개 conf* 라 격리됨.
 
+### 거. apptainer 1.5.x 와 우리 스택 호환성 — 사용자 영역 1.3.6 병행 설치
+
+- 증상: target 서버에 apptainer 1.5.0 이 시스템 설치돼있는데 `start.sh` / `recover.sh` 가 `container cleanup failed: no instance found with name mxwp_postgres` 로 죽음. dev 는 1.3.3 으로 정상.
+- 원인: apptainer 1.5.x 의 instance lifecycle 또는 cleanup 동작 변경으로 우리 bind/env 조합과 호환성 깨짐 (정확한 차이는 추가 조사 필요).
+- 해결: 시스템 1.5.0 을 *건드리지 않고* 사용자 영역에 1.3.6 별도 설치 + `.env` 한 줄로 우리 스택만 1.3.6 사용. 다른 프로젝트 (`aidh_postgres` 등) 는 그대로 1.5.0 사용.
+
+  ```bash
+  # 1) 사용자 영역에 1.3.6 설치 (sudo 불필요, .deb extract)
+  bash infra/scripts/install-apptainer-1.3.6.sh
+
+  # 2) .env 에 경로 한 줄 추가
+  echo "APPTAINER=$HOME/.local/apptainer-1.3.6/usr/bin/apptainer" >> .env
+
+  # 3) 진단으로 확인 (어느 버전 쓰는지 §1 에 표시)
+  bash infra/scripts/diag-postgres.sh
+
+  # 4) 정상이면 재기동
+  bash infra/scripts/recover.sh   # 또는 bash infra/scripts/start.sh
+  ```
+
+- `_common.sh:44` 의 `: "${APPTAINER:=apptainer}"` 가 `.env` 의 `APPTAINER=...` 를 자동 인식. 코드 변경 0. boot.sh / systemd unit 도 같은 변수 사용.
+- 다른 프로젝트 영향 0 — 우리 `.env` 만 보고 우리 스크립트만 1.3.6.
+
 ---
 
 ## 7. App-level 함정
