@@ -88,8 +88,17 @@ infra/backups/
 data.ms/
 
 # offline package cache (700MB — produced by scripts/download-packages.sh,
-# copied to air-gapped hosts via tar bundle, not part of the repo)
-infra/packages/deb/
-infra/packages/npm/
-infra/packages/pip/
-infra/packages/sif/
+# copied to air-gapped hosts via tar bundle, not part of the repo).
+# 폴더 자체는 살려두고 내용물만 ignore — 그래야 apptainer .deb 만 !exception 으로
+# 살릴 수 있음 (git: 폴더가 ignored면 안의 파일도 ! 무효).
+infra/packages/deb/*
+infra/packages/npm/*
+infra/packages/pip/*
+infra/packages/sif/*
+
+# 단 — apptainer 1.3.6 .deb (27 MB) 는 항상 commit. target 서버가 인터넷
+# 차단 환경이라도 git pull + install-apptainer-1.3.6.sh 한 줄로 즉시 설치.
+!infra/packages/deb/apptainer_*.deb
+
+# user-local apptainer install (project-internal, see infra/scripts/install-apptainer-*.sh)
+infra/apptainer/bin-1.3.6/
