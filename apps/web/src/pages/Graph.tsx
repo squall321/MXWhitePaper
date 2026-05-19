@@ -227,10 +227,17 @@ export function GraphCanvas({
           .attr('stroke', '#fff')
           .attr('stroke-width', 2)
         ng.append('title').text((d) => `${d.title} (${d.slug})`)  // 풀 title 은 hover tooltip
+        // SVG <text> 의 default baseline = alphabetic (글자 *아래쪽*이 y).
+        // 우리는 글자가 ellipse 의 정확한 중앙에 오기를 원하므로:
+        //  - text-anchor: middle → 가로 중앙
+        //  - dominant-baseline: central → 세로 중앙 (모든 브라우저 지원, 'middle' 보다 신뢰성 ↑)
+        //  - dy: 글자 자체의 visual centerline 보정 — alphabetic baseline 기준 약 fontSize/3 만큼 아래로
+        // 추가 안전망: y 도 0 으로 명시 (기본 0 이지만 어떤 변형도 무력화).
         ng.append('text')
+          .attr('x', 0)
+          .attr('y', 0)
           .attr('text-anchor', 'middle')
-          .attr('dominant-baseline', 'middle')
-          .attr('dy', 1)
+          .attr('dominant-baseline', 'central')
           .attr('font-size', fontFor)
           .attr('font-weight', (d) => (d.slug === rootSlug ? 700 : 500))
           .attr('fill', '#ffffff')
