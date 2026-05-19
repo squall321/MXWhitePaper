@@ -30,7 +30,7 @@ slug_source: json_or_filename
 
 # 같은 slug 의 문서가 이미 있으면? skip / overwrite / version
 # 기본 skip — 재실행 시 안전 (이미 들어간 건 무시)
-on_conflict: skip
+on_conflict: overwrite
 
 # 서버 rate limit (분당 5건) 자동 준수. 1 / parallel * delay >= 12s.
 parallel: 1

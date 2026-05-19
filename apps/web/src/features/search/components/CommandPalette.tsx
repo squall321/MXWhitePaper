@@ -153,6 +153,15 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
     [q, recent, onClose, navigate],
   )
 
+  const goGraph = useCallback(
+    (hit: DocSearchHit) => {
+      recent.push(q)
+      onClose()
+      navigate(`/graph/${encodeURIComponent(hit.slug)}?depth=2`)
+    },
+    [q, recent, onClose, navigate],
+  )
+
   const runCommand = useCallback(
     (cmd: CommandItem) => {
       onClose()
@@ -352,6 +361,7 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
                 onRemoveRecent={(s) => recent.remove(s)}
                 onClearRecent={() => recent.clear()}
                 onPick={goDoc}
+                onGraph={goGraph}
                 activeIdx={activeIdx}
                 onActivate={setActiveIdx}
                 listboxId={listboxId}
@@ -488,6 +498,18 @@ function DocIcon() {
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="text-smsg-500">
       <path d="M3 1.5h7l3 3V14a.5.5 0 01-.5.5h-9A.5.5 0 013 14V2a.5.5 0 010-.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
       <path d="M9.5 1.5V5h3.5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function GraphIcon() {
+  // 3 노드 + 2 엣지 — 지식그래프 아이콘.
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="3.5" cy="11" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="12.5" cy="11" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="8" cy="3.5" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5 9.7 7 5M9 5l2 4.7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   )
 }
@@ -671,6 +693,7 @@ function DocResults({
   onRemoveRecent,
   onClearRecent,
   onPick,
+  onGraph,
   activeIdx,
   onActivate,
   listboxId,
@@ -684,6 +707,7 @@ function DocResults({
   onRemoveRecent: (s: string) => void
   onClearRecent: () => void
   onPick: (hit: DocSearchHit, newTab: boolean) => void
+  onGraph: (hit: DocSearchHit) => void
   activeIdx: number
   onActivate: (i: number) => void
   listboxId: string
@@ -758,7 +782,10 @@ function DocResults({
             const i = cursor++
             const active = i === activeIdx
             return (
-              <li key={hit.slug + i}>
+              <li key={hit.slug + i} className={cn(
+                'group flex items-stretch rounded-md transition-colors',
+                active ? 'bg-smsg-100' : 'hover:bg-smsg-50',
+              )}>
                 <button
                   type="button"
                   role="option"
@@ -766,10 +793,7 @@ function DocResults({
                   aria-selected={active}
                   onMouseEnter={() => onActivate(i)}
                   onClick={(e) => onPick(hit, e.metaKey || e.ctrlKey)}
-                  className={cn(
-                    'flex w-full items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors',
-                    active ? 'bg-smsg-100' : 'hover:bg-smsg-50',
-                  )}
+                  className="flex flex-1 items-start gap-2.5 rounded-md px-2 py-2 text-left"
                 >
                   <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-smsg-50">
                     <DocIcon />
@@ -791,6 +815,22 @@ function DocResults({
                     )}
                     <span className="mt-0.5 block truncate font-mono text-[10px] text-gray-400">/{hit.slug}</span>
                   </div>
+                </button>
+                {/* 그래프로 보기 — active row 또는 hover 시 보이는 보조 액션 */}
+                <button
+                  type="button"
+                  aria-label={`${hit.title} — 위키 그래프로 보기`}
+                  title="위키 그래프로 보기"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onGraph(hit)
+                  }}
+                  className={cn(
+                    'flex shrink-0 items-center gap-1 px-2 text-xs text-gray-500 hover:text-smsg-700',
+                    active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                  )}
+                >
+                  <GraphIcon /> 그래프
                 </button>
               </li>
             )

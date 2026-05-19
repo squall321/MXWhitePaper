@@ -13,7 +13,7 @@
  *   - Clicking a node navigates to `/docs/<slug>` (only for non-missing).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   forceCenter,
@@ -210,12 +210,23 @@ export function GraphCanvas({
 
 export function GraphPage() {
   const { slug } = useParams<{ slug?: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
 
+  // BFS depth — URL ?depth=N 로 공유 가능, 1~4 (BE 가 강제). default 2.
+  const rawDepth = parseInt(searchParams.get('depth') ?? '2', 10)
+  const depth = Number.isFinite(rawDepth) && rawDepth >= 1 && rawDepth <= 4 ? rawDepth : 2
+
+  const setDepth = (d: number) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('depth', String(d))
+    setSearchParams(next, { replace: true })
+  }
+
   const { data, isPending, isError, error } = useQuery({
-    queryKey: ['graph', slug ?? '__global__'],
-    queryFn: () => fetchGraph(slug ?? null, 2),
+    queryKey: ['graph', slug ?? '__global__', depth],
+    queryFn: () => fetchGraph(slug ?? null, depth),
     staleTime: 30_000,
   })
 
@@ -225,18 +236,37 @@ export function GraphPage() {
         <div>
           <h1 className="text-lg font-semibold text-smsg-900">위키 그래프</h1>
           <p className="text-xs text-gray-500">
-            {slug ? `루트: ${slug} · 깊이 2` : '전역 그래프 (degree 상위 50)'}
+            {slug ? `루트: ${slug} · 깊이 ${depth}` : '전역 그래프 (degree 상위 50)'}
           </p>
         </div>
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="노드 검색…"
-          aria-label="노드 검색"
-          data-testid="graph-search"
-          className="w-48 rounded border border-gray-200 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none"
-        />
+        <div className="flex items-center gap-2">
+          {slug && (
+            <label className="flex items-center gap-1 text-xs text-gray-600">
+              깊이
+              <select
+                value={depth}
+                onChange={(e) => setDepth(parseInt(e.target.value, 10))}
+                aria-label="그래프 깊이"
+                data-testid="graph-depth"
+                className="rounded border border-gray-200 bg-white px-1 py-1 text-sm focus:border-smsg-500 focus:outline-none"
+              >
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+                <option value={4}>4</option>
+              </select>
+            </label>
+          )}
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="노드 검색…"
+            aria-label="노드 검색"
+            data-testid="graph-search"
+            className="w-48 rounded border border-gray-200 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none"
+          />
+        </div>
       </header>
 
       {isPending ? (
