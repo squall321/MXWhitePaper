@@ -69,6 +69,8 @@ step "Step 1 — 환경 확인"
 : "${MXWP_TOKEN:?✗ MXWP_TOKEN 미설정 — export MXWP_TOKEN=... 또는 .env 에 추가}"
 : "${MXWP_SERVER:=http://127.0.0.1:8800}"
 : "${MXWP_OWNER:=archive-importer@mx.local}"
+# 자식 process (mxwp-import) 가 ${VAR} 치환 시 읽어야 하므로 명시적 export
+export MXWP_TOKEN MXWP_SERVER MXWP_OWNER
 export BULK_SOURCE_DIR="$SCRIPT_DIR"
 
 ok "server  = $MXWP_SERVER"
@@ -155,6 +157,46 @@ case "$MODE" in
     ok "완료. 로그: $LOG"
     if [ -f "$LOG_DIR/failed.txt" ]; then
       warn "실패 건 있음 — $LOG_DIR/failed.txt 확인 후 재시도: bash $(basename "$0") --resume"
+    fi
+
+    # ── publish + reindex (검색 가능하게 만들기) ───────────────────
+    # mxwp-import 는 doc 을 status=draft 로 넣는다. documents_flat_v 가
+    # status='published' 만 보여주므로 검색에 안 잡힘. 임포트한 doc 들을
+    # published 로 transition + Meili reindex.
+    echo
+    step "Step 6 — publish + reindex (검색 가능하게)"
+    if command -v psql >/dev/null 2>&1 || apptainer instance list 2>/dev/null | grep -q mxwp_postgres; then
+      PG_PW=$(grep "^POSTGRES_PASSWORD=" "$REPO_ROOT/.env" 2>/dev/null | cut -d= -f2)
+      PG_PORT=$(grep "^POSTGRES_PORT=" "$REPO_ROOT/.env" 2>/dev/null | cut -d= -f2)
+      PG_PORT=${PG_PORT:-5532}
+      PG_USER=$(grep "^POSTGRES_USER=" "$REPO_ROOT/.env" 2>/dev/null | cut -d= -f2)
+      PG_USER=${PG_USER:-mxwp}
+      PG_DB=$(grep "^POSTGRES_DB=" "$REPO_ROOT/.env" 2>/dev/null | cut -d= -f2)
+      PG_DB=${PG_DB:-mxwp}
+
+      # bulk.yml 의 첫 namu-archive 태그를 통해 임포트한 doc 들만 published 로
+      apptainer exec instance://mxwp_postgres bash -lc \
+        "PGPASSWORD=$PG_PW LC_ALL=C psql -h 127.0.0.1 -p $PG_PORT -U $PG_USER -d $PG_DB -c \"
+UPDATE documents SET status = 'published'
+WHERE status = 'draft' AND id IN (
+  SELECT dt.document_id FROM document_tags dt
+  JOIN tags t ON dt.tag_id = t.id
+  WHERE t.name = 'namu-archive'
+);
+\"" 2>&1 | grep -E "UPDATE [0-9]+" | head -1 && ok "publish 완료" || warn "publish skip"
+
+      # Meili reindex (env 명시)
+      apptainer exec instance://mxwp_api /bin/sh -c "
+cd /workspace/apps/api && \
+DATABASE_URL='postgresql+asyncpg://$PG_USER:$PG_PW@127.0.0.1:$PG_PORT/$PG_DB' \
+MEILI_HOST='http://127.0.0.1:7700' \
+MEILI_MASTER_KEY='$(grep ^MEILI_MASTER_KEY= "$REPO_ROOT/.env" 2>/dev/null | cut -d= -f2)' \
+python3 -m app.scripts.reindex
+" 2>&1 | tail -1 | grep -E "reindex complete" && ok "reindex 완료" || warn "reindex skip — 수동: apptainer exec instance://mxwp_api ..."
+
+      ok "검색 가능 상태로 전환됨. 브라우저에서 http://<host>:5173/ 검색 확인"
+    else
+      warn "psql/postgres 인스턴스 못 찾음 — 수동으로 published 전환 + reindex 필요"
     fi
     ;;
 

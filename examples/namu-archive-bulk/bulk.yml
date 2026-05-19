@@ -7,7 +7,7 @@
 #   bash examples/namu-archive-bulk/import-namu-archive.sh           # dry-run (기본)
 #   bash examples/namu-archive-bulk/import-namu-archive.sh --go      # 실제 업로드
 
-server: ${MXWP_SERVER:-http://127.0.0.1:8800}
+server: http://127.0.0.1:8800
 token: ${MXWP_TOKEN}   # 필수 — 운영자가 환경변수로 export
 
 source:
@@ -20,7 +20,7 @@ defaults:
   team: research
   confidentiality: internal
   owners:
-    - ${MXWP_OWNER:-archive-importer@mx.local}
+    - ${MXWP_OWNER}
   tags:
     - namu-archive
     - imported-bulk
