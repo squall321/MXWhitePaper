@@ -14,6 +14,7 @@ import {
   type ServerTemplateSummary,
 } from '@/features/templates/serverApi'
 import { TagAutocomplete } from '@/features/tags/TagAutocomplete'
+import { slugify } from '@/lib/slugify'
 
 /**
  * 새 문서 생성 마법사 — 슬러그 + 제목 + 소속 파트 + 기밀도.
@@ -69,11 +70,28 @@ export function DocumentNewPage() {
 
   const [slug, setSlug] = useState(params.get('slug') ?? '')
   const [title, setTitle] = useState('')
+  // 사용자가 slug 를 *직접* 만지면 더 이상 자동으로 덮어쓰지 않음.
+  // URL ?slug= 로 들어왔으면 처음부터 dirty 로 간주.
+  const [slugDirty, setSlugDirty] = useState(!!params.get('slug'))
   const [partId, setPartId] = useState<string>('')
   const [confidentiality, setConf] = useState<'internal' | 'public' | 'restricted'>('internal')
   const [tags, setTags] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // title 입력 시 slug 자동 채우기 — 사용자가 slug 안 만진 경우만.
+  // 빈 title → slug 도 비움 (auto fill 의 자연스러운 reset).
+  const onTitleChange = (newTitle: string) => {
+    setTitle(newTitle)
+    if (!slugDirty) {
+      setSlug(newTitle ? slugify(newTitle) : '')
+    }
+  }
+
+  const onSlugChange = (newSlug: string) => {
+    setSlug(newSlug)
+    setSlugDirty(true)
+  }
 
   // Default to the first available part once tree loads.
   useEffect(() => {
@@ -83,11 +101,12 @@ export function DocumentNewPage() {
   }, [partOptions, partId])
 
   // When a template is selected pre-fill the title (only if user hasn't typed
-  // their own yet) so the form feels like a one-click action.
+  // their own yet) so the form feels like a one-click action. slug 도 자동
+  // 갱신 (slugDirty 아닌 경우만, onTitleChange 로 일관 처리).
   const onPickTemplate = (tpl: TemplateDef) => {
     setTemplateId(tpl.id)
     setServerSections(null)
-    if (!title.trim()) setTitle(tpl.title)
+    if (!title.trim()) onTitleChange(tpl.title)
   }
 
   const onPickServerTemplate = async (tpl: ServerTemplateSummary) => {
@@ -98,7 +117,7 @@ export function DocumentNewPage() {
       const full = await getServerTemplate(tpl.slug)
       setTemplateId(`server:${full.slug}`)
       setServerSections(full.sections as SectionLevel1[])
-      if (!title.trim()) setTitle(full.title)
+      if (!title.trim()) onTitleChange(full.title)
     } catch (e) {
       setError((e as Error).message)
     }
@@ -223,31 +242,36 @@ export function DocumentNewPage() {
       )}
 
       <Card padded="lg" className="space-y-5">
+        {/* 제목 먼저 — 사용자가 입력 시 slug 자동 채우기. 의도된 순서 */}
+        <Field label="제목" htmlFor="doc-title" required>
+          <Input
+            id="doc-title"
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            placeholder="예: 월결산 프로세스"
+            autoFocus
+            invalid={!titleOk && title.length > 0}
+          />
+        </Field>
+
         <Field
           label="슬러그 (URL)"
           htmlFor="doc-slug"
           required
-          hint="소문자, 숫자, 하이픈, 한글 음절을 사용할 수 있습니다."
+          hint={
+            slugDirty
+              ? '소문자, 숫자, 하이픈, 한글 음절만 사용 가능합니다.'
+              : '제목에서 자동 생성됨. 직접 편집하면 그 후엔 자동으로 안 바뀝니다.'
+          }
           error={!slugIsValid && slug ? '소문자/숫자/하이픈/한글만 가능합니다' : undefined}
         >
           <Input
             id="doc-slug"
             value={slug}
-            onChange={(e) => setSlug(e.target.value.toLowerCase())}
+            onChange={(e) => onSlugChange(e.target.value.toLowerCase())}
             placeholder="monthly-finance-closing"
             prefix={<span className="text-gray-400">/docs/</span>}
             invalid={!!slug && !slugIsValid}
-          />
-        </Field>
-
-        <Field label="제목" htmlFor="doc-title" required>
-          <Input
-            id="doc-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="예: 월결산 프로세스"
-            autoFocus
-            invalid={!titleOk && title.length > 0}
           />
         </Field>
 

@@ -7,6 +7,12 @@ import {
   detectLang,
   useSpellcheckPref,
 } from '@/features/spellcheck/preferencesStore'
+import {
+  WikiLinkAutocomplete,
+  detectWikiTrigger,
+  buildWikiLinkInsertion,
+  type WikiLinkHit,
+} from './WikiLinkAutocomplete'
 
 /**
  * InlineTextBlockEditor — contentEditable for text-only blocks
@@ -73,6 +79,18 @@ export function InlineTextBlockEditor({
   const dirtyRef = useRef(false)
   const debounceRef = useRef<number | null>(null)
 
+  // ── Wiki-link autocomplete (`[[…` trigger) ─────────────────────────────
+  // When the user types `[[` followed by a query inside this editable, we
+  // open a floating popup with /search hits. State holds the caret rect
+  // (for positioning) and the current query string. `null` = popup closed.
+  // The popup forwards keyboard events back through `autocompleteKeyRef`
+  // so it can intercept ↑↓/Enter/Tab/Esc before our own onKeyDown runs.
+  const [autocomplete, setAutocomplete] = useState<{
+    anchor: { left: number; bottom: number }
+    query: string
+  } | null>(null)
+  const autocompleteKeyRef = useRef<((e: KeyboardEvent) => boolean) | null>(null)
+
   // Initial population. We render markdown-lite as actual HTML so the user
   // sees WYSIWYG while editing (e.g. **bold** shows as bold). On save we
   // serialize HTML back to markdown-lite.
@@ -120,12 +138,117 @@ export function InlineTextBlockEditor({
     debounceRef.current = window.setTimeout(() => {
       void persist()
     }, 800)
+    // Re-evaluate the wiki-link trigger on every input. Cheap (single
+    // textContent walk to the caret) and keeps the popup state in sync with
+    // backspace / delete edits inside the bracket span.
+    updateWikiTrigger()
+  }
+
+  /**
+   * Inspect the text before the caret inside this editable. If there's an
+   * unclosed `[[` the popup opens (or updates its query). Otherwise the
+   * popup closes. Pure DOM read — no network call here, the popup itself
+   * debounces the fetch.
+   */
+  function updateWikiTrigger() {
+    const editable = ref.current
+    if (!editable) return
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return
+    const range = sel.getRangeAt(0)
+    if (!editable.contains(range.endContainer)) return
+    // Build a range from editable-start to caret, then read its plain text.
+    // `cloneRange` keeps the live selection intact.
+    const probe = range.cloneRange()
+    probe.setStart(editable, 0)
+    probe.setEnd(range.endContainer, range.endOffset)
+    const textBeforeCaret = probe.toString()
+    const trig = detectWikiTrigger(textBeforeCaret)
+    if (!trig) {
+      if (autocomplete !== null) setAutocomplete(null)
+      return
+    }
+    // Position the popup under the caret. Collapsed ranges have a zero-width
+    // bounding rect; that's still enough to pin the popup horizontally.
+    const caretRect = range.getBoundingClientRect()
+    // Some Chromium builds report `left=0, top=0` when the caret is at the
+    // very start of an empty editable — fall back to the editable's box.
+    const fallbackRect = editable.getBoundingClientRect()
+    const left = caretRect.left || fallbackRect.left
+    const bottom = caretRect.bottom || fallbackRect.bottom
+    setAutocomplete({ anchor: { left, bottom }, query: trig.query })
+  }
+
+  /**
+   * Commit a hit from the autocomplete. Replaces the `[[query` typed so far
+   * with `[[slug|query]]` (or `[[slug]]` when the query is empty / matches
+   * the slug) and places the caret right after the closing brackets.
+   *
+   * Implemented via the Selection API: we locate the trigger's offset by
+   * counting characters in the editable's plain-text view, then expand the
+   * range back over those characters and replace via `execCommand`.
+   */
+  function commitWikiHit(hit: WikiLinkHit) {
+    const editable = ref.current
+    if (!editable) {
+      setAutocomplete(null)
+      return
+    }
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) {
+      setAutocomplete(null)
+      return
+    }
+    const range = sel.getRangeAt(0)
+    if (!editable.contains(range.endContainer)) {
+      setAutocomplete(null)
+      return
+    }
+    const probe = range.cloneRange()
+    probe.setStart(editable, 0)
+    probe.setEnd(range.endContainer, range.endOffset)
+    const textBeforeCaret = probe.toString()
+    const trig = detectWikiTrigger(textBeforeCaret)
+    if (!trig) {
+      setAutocomplete(null)
+      return
+    }
+    // Extend the selection backwards by (caret - trig.start) chars so the
+    // about-to-be-inserted text replaces the literal `[[query` typed so far.
+    // `selection.modify` walks across text-node boundaries natively which is
+    // exactly what we want — the `[[` and the query might live in sibling
+    // spans after `insertText` formatting events.
+    const toDelete = textBeforeCaret.length - trig.start
+    sel.collapse(range.endContainer, range.endOffset)
+    for (let n = 0; n < toDelete; n++) {
+      sel.modify('extend', 'backward', 'character')
+    }
+    const inserted = buildWikiLinkInsertion(hit.slug, trig.query)
+    try {
+      document.execCommand('insertText', false, inserted)
+    } catch {
+      // Worst-case fallback — write the text directly via the range.
+      const r = sel.getRangeAt(0)
+      r.deleteContents()
+      r.insertNode(document.createTextNode(inserted))
+      r.collapse(false)
+    }
+    dirtyRef.current = true
+    setAutocomplete(null)
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }))
   }
 
   // Inline-formatting keyboard shortcuts. Browser already handles Ctrl+B/I/U
   // natively on contentEditable; we add Ctrl+E (code) and Ctrl+K (link) and
   // re-fire input so the debounce save kicks in.
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Wiki-link autocomplete eats arrows / Enter / Tab / Esc when its popup
+    // is open. The handler returns true when it consumed the event so we can
+    // stop processing here without disturbing the existing shortcuts below.
+    if (autocomplete && autocompleteKeyRef.current) {
+      const consumed = autocompleteKeyRef.current(e.nativeEvent)
+      if (consumed) return
+    }
     const mod = e.metaKey || e.ctrlKey
     if (!mod) return
     const k = e.key.toLowerCase()
@@ -210,31 +333,54 @@ export function InlineTextBlockEditor({
   }
 
   return (
-    <div
-      ref={ref}
-      data-inline-text-editor
-      data-block-id={blockId}
-      data-block-type={blockType}
-      role="textbox"
-      aria-multiline="true"
-      aria-label="블록 텍스트 편집"
-      contentEditable
-      suppressContentEditableWarning
-      spellCheck={effectiveSpellCheck}
-      lang={langAttr}
-      onInput={onInput}
-      onBlur={() => void persist()}
-      onKeyDown={onKeyDown}
-      onPaste={onPaste}
-      data-placeholder={placeholder}
-      className={
-        (className ?? '') +
-        ' outline-none focus:ring-2 focus:ring-smsg-300 focus:ring-offset-2 rounded ' +
-        (empty
-          ? 'before:content-[attr(data-placeholder)] before:text-gray-400 before:pointer-events-none'
-          : '')
-      }
-    />
+    <>
+      <div
+        ref={ref}
+        data-inline-text-editor
+        data-block-id={blockId}
+        data-block-type={blockType}
+        role="textbox"
+        aria-multiline="true"
+        aria-label="블록 텍스트 편집"
+        contentEditable
+        suppressContentEditableWarning
+        spellCheck={effectiveSpellCheck}
+        lang={langAttr}
+        onInput={onInput}
+        onBlur={() => {
+          // Defer persist + popup-close so an autocomplete mousedown (which
+          // blurs us) can still complete its onClick → commitWikiHit path.
+          window.setTimeout(() => {
+            void persist()
+            // Close the popup unless focus has already moved back into the
+            // editable (commitWikiHit refocuses via the input event).
+            if (!ref.current?.contains(document.activeElement)) {
+              setAutocomplete(null)
+            }
+          }, 0)
+        }}
+        onKeyDown={onKeyDown}
+        onPaste={onPaste}
+        data-placeholder={placeholder}
+        className={
+          (className ?? '') +
+          ' outline-none focus:ring-2 focus:ring-smsg-300 focus:ring-offset-2 rounded ' +
+          (empty
+            ? 'before:content-[attr(data-placeholder)] before:text-gray-400 before:pointer-events-none'
+            : '')
+        }
+      />
+      {autocomplete && (
+        <WikiLinkAutocomplete
+          anchor={autocomplete.anchor}
+          query={autocomplete.query}
+          excludeSlug={slug}
+          onPick={commitWikiHit}
+          onClose={() => setAutocomplete(null)}
+          onKeyDownRef={autocompleteKeyRef}
+        />
+      )}
+    </>
   )
 }
 
