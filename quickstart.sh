@@ -65,12 +65,62 @@ cd "$(dirname "$0")"
 ROOT="$(pwd)"
 
 # ── Step 0: preflight ───────────────────────────────────────────────
+# 정책: 시스템 apptainer 버전 무관 — 항상 *우리 프로젝트 내부의 1.3.6* 사용.
+# (시스템에 1.5.0 있으면 cgroup v2 + dbus 의존성으로 instance start 실패하는
+#  케이스가 잦아서. 1.3.6 은 더 관대한 fallback.)
+#
+# Step 0 첫 부분에서:
+#   1) 우리 1.3.6 이 infra/apptainer/bin-1.3.6/ 에 없으면 자동 설치 (vendored .deb)
+#   2) .env 의 APPTAINER= 한 줄 자동 갱신 (또는 추가)
+#   3) 그 이후 모든 단계가 그 apptainer 사용
+#
+# 시스템 apptainer 가 1.3.x 라서 굳이 vendored 안 써도 될 때 → SKIP_VENDORED_APPTAINER=1
 if run_step 0; then
   step 0 "preflight"
-  command -v apptainer >/dev/null 2>&1 \
-    && ok "apptainer: $(apptainer --version)" \
-    || fail "apptainer not found. Install ≥1.2 from https://apptainer.org/"
 
+  # ── 0a) vendored 1.3.6 자동 설치 (default ON) ─────────────────────
+  VENDORED_APPTAINER="$ROOT/infra/apptainer/bin-1.3.6/usr/bin/apptainer"
+  if [ "${SKIP_VENDORED_APPTAINER:-0}" = "1" ]; then
+    note "SKIP_VENDORED_APPTAINER=1 — vendored 1.3.6 건너뜀, 시스템 apptainer 사용"
+    APPTAINER_CMD="apptainer"
+  else
+    if [ ! -x "$VENDORED_APPTAINER" ]; then
+      note "vendored apptainer 1.3.6 미설치 — install-apptainer-1.3.6.sh --auto 자동 실행"
+      bash "$ROOT/infra/scripts/install-apptainer-1.3.6.sh" --auto || \
+        fail "vendored apptainer 1.3.6 설치 실패. 수동: bash infra/scripts/install-apptainer-1.3.6.sh --auto"
+    else
+      ok "vendored apptainer 1.3.6 이미 설치됨: $VENDORED_APPTAINER"
+    fi
+    APPTAINER_CMD="$VENDORED_APPTAINER"
+
+    # .env 에 APPTAINER= 가 없거나 다른 경로면 갱신
+    if [ -f .env ]; then
+      CUR_ENV_APPT="$(grep '^APPTAINER=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")"
+      if [ "$CUR_ENV_APPT" != "$VENDORED_APPTAINER" ]; then
+        if grep -q '^APPTAINER=' .env; then
+          sed -i "s|^APPTAINER=.*|APPTAINER=$VENDORED_APPTAINER|" .env
+          ok ".env 의 APPTAINER 갱신 → $VENDORED_APPTAINER"
+        else
+          echo "" >> .env
+          echo "# auto-added by quickstart.sh — use vendored 1.3.6" >> .env
+          echo "APPTAINER=$VENDORED_APPTAINER" >> .env
+          ok ".env 에 APPTAINER 추가 → $VENDORED_APPTAINER"
+        fi
+      else
+        ok ".env APPTAINER 이미 정확"
+      fi
+    fi
+  fi
+
+  # ── 0b) apptainer 동작 확인 ────────────────────────────────────────
+  if command -v "$APPTAINER_CMD" >/dev/null 2>&1 || [ -x "$APPTAINER_CMD" ]; then
+    APPTAINER_VER="$("$APPTAINER_CMD" --version 2>&1 | head -1 | awk '{print $NF}')"
+    ok "apptainer: $APPTAINER_CMD ($APPTAINER_VER)"
+  else
+    fail "apptainer not found ($APPTAINER_CMD)"
+  fi
+
+  # ── 0c) 나머지 toolchain ──────────────────────────────────────────
   command -v pnpm >/dev/null 2>&1 \
     && ok "pnpm: $(pnpm -v)" \
     || fail "pnpm not found. Install via 'corepack enable && corepack prepare pnpm@9 --activate'"

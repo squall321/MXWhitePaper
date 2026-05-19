@@ -234,8 +234,9 @@ sed -i "s/HOST_IP/$HOST_IP/g" .env
 
 ### 거. apptainer 1.5.x 와 우리 스택 호환성 — 사용자 영역 1.3.6 병행 설치
 
-- 증상: target 서버에 apptainer 1.5.0 이 시스템 설치돼있는데 `start.sh` / `recover.sh` 가 `container cleanup failed: no instance found with name mxwp_postgres` 로 죽음. dev 는 1.3.3 으로 정상.
-- 원인: apptainer 1.5.x 의 instance lifecycle 또는 cleanup 동작 변경으로 우리 bind/env 조합과 호환성 깨짐 (정확한 차이는 추가 조사 필요).
+- 증상 1: `start.sh` / `recover.sh` 가 `container cleanup failed: no instance found with name mxwp_postgres` 로 죽음. dev 는 1.3.3 으로 정상.
+- 증상 2 (확정 원인): `FATAL: container creation failed: while applying cgroups config: while creating cgroup manager: failed to connect to dbus (hint: for rootless containers, maybe you need to install dbus-user-session package): could not detect the OwnerUID` — apptainer 1.5.x 가 cgroup v2 + systemd user manager + dbus 의존성을 강화. `dbus-user-session` 패키지 없거나 user systemd 가 안 살아있으면 rootless instance start 실패.
+- 원인: apptainer 1.5.x 가 rootless cgroup 관리를 systemd user manager + dbus 로 변경. 1.3.x 는 더 관대한 fallback.
 - 해결: 시스템 1.5.0 을 *건드리지 않고* 사용자 영역에 1.3.6 별도 설치 + `.env` 한 줄로 우리 스택만 1.3.6 사용. 다른 프로젝트 (`aidh_postgres` 등) 는 그대로 1.5.0 사용.
 
   ```bash
