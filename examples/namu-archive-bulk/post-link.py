@@ -1,5 +1,9 @@
 """namu-archive 문서들의 본문에 *다른 namu-archive 문서 title*이 plain text로
-포함되어있으면 markdown inline link 로 변환.
+포함되어있으면 wiki link `[[slug|text]]` 로 변환.
+
+본 프로젝트는 markdown link `[text](url)` 이 아닌 *wiki link `[[...]]`* 가 표준
+(lib/wiki-link.ts 의 parseInline 이 wiki link 만 처리). 따라서 후처리도 wiki
+문법으로.
 
 전략:
 1) DB 에서 namu-archive tag 가진 모든 doc 의 title + slug 추출
@@ -87,7 +91,12 @@ def link_text(text: str, idx: list[tuple[str, str, str]], self_id: str) -> tuple
         pattern = BOUNDARY + title_re + BOUNDARY_END
 
         def _replace(m: re.Match[str], _t=title, _s=slug) -> str:
-            placeholders.append(f"[{_t}](/docs/{_s})")
+            # wiki link 형식: [[slug|display]] 또는 display == slug 면 [[slug]].
+            # parseInline (lib/wiki-link.ts) 가 이 패턴을 인식해 <WikiLink> 로 렌더.
+            if _t == _s:
+                placeholders.append(f"[[{_s}]]")
+            else:
+                placeholders.append(f"[[{_s}|{_t}]]")
             return f"\x00{len(placeholders) - 1}\x00"
 
         new_shielded, n = re.subn(pattern, _replace, shielded)
