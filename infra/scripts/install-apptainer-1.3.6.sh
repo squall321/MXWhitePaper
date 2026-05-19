@@ -92,6 +92,21 @@ if [ "$INSTALL_SKIPPED" != "1" ]; then
   dpkg-deb -x "$DEB_SRC" "$PREFIX"
   echo "  ✓ extracted to $PREFIX"
 
+  # 3a. .deb 는 system install 가정이라 conf 를 etc/ 에 풀음. apptainer 바이너리
+  # 가 자기 위치 (usr/bin/apptainer) 기준 ../etc/apptainer/ 가 아닌
+  # usr/etc/apptainer/ 또는 컴파일 시점 /etc/apptainer/ 를 찾는 경우가 있어
+  # *두 경로 모두 같은 conf 를 보게* 심볼릭 링크 + bind 한다.
+  mkdir -p "$PREFIX/usr/etc"
+  if [ -d "$PREFIX/etc/apptainer" ] && [ ! -e "$PREFIX/usr/etc/apptainer" ]; then
+    ln -s ../../etc/apptainer "$PREFIX/usr/etc/apptainer"
+    echo "  ✓ usr/etc/apptainer → ../../etc/apptainer (symlink for FATAL: couldn't parse conf fix)"
+  fi
+  # /var/apptainer/ 도 동일 패턴 — 일부 작업 (mksquashfs cache 등) 사용
+  mkdir -p "$PREFIX/usr/var" 2>/dev/null || true
+  if [ -d "$PREFIX/var/apptainer" ] && [ ! -e "$PREFIX/usr/var/apptainer" ]; then
+    ln -s ../../var/apptainer "$PREFIX/usr/var/apptainer" 2>/dev/null || true
+  fi
+
   # 다운받은 임시 파일이면 정리
   [ "$DEB_SRC" != "$VENDOR_DEB" ] && rm -rf "$(dirname "$DEB_SRC")"
 fi
