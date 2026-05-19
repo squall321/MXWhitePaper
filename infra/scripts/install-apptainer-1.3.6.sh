@@ -101,10 +101,13 @@ if [ "$INSTALL_SKIPPED" != "1" ]; then
     ln -s ../../etc/apptainer "$PREFIX/usr/etc/apptainer"
     echo "  ✓ usr/etc/apptainer → ../../etc/apptainer (symlink for FATAL: couldn't parse conf fix)"
   fi
-  # /var/apptainer/ 도 동일 패턴 — 일부 작업 (mksquashfs cache 등) 사용
-  mkdir -p "$PREFIX/usr/var" 2>/dev/null || true
-  if [ -d "$PREFIX/var/apptainer" ] && [ ! -e "$PREFIX/usr/var/apptainer" ]; then
-    ln -s ../../var/apptainer "$PREFIX/usr/var/apptainer" 2>/dev/null || true
+  # /var/lib/apptainer/ 도 동일 패턴 — instance start 시 session dir 가 여기.
+  # .deb 의 실제 경로는 var/lib/apptainer/ (var/apptainer 가 아님 — 처음 fix 의 typo).
+  # usr/var/lib/apptainer → ../../../var/lib/apptainer 로 심볼릭 링크.
+  mkdir -p "$PREFIX/usr/var/lib" 2>/dev/null || true
+  if [ -d "$PREFIX/var/lib/apptainer" ] && [ ! -e "$PREFIX/usr/var/lib/apptainer" ]; then
+    ln -s ../../../var/lib/apptainer "$PREFIX/usr/var/lib/apptainer"
+    echo "  ✓ usr/var/lib/apptainer → ../../../var/lib/apptainer (symlink for session dir)"
   fi
 
   # 다운받은 임시 파일이면 정리
