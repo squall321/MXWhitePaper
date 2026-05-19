@@ -1,0 +1,8 @@
+# 실행 로그 — 매번 늘어남, repo 에 안 들어감
+_logs/
+
+# 원본 데이터 (.docx + .json) — Namu_Archive 프로젝트의 정제 출력. 본 repo 에는
+# 도구만 commit 하고 데이터는 *사용자가 본인 환경에서 복사*. 명령:
+#   cp /data/Namu_Archive/out/upload/* examples/namu-archive-bulk/
+*.docx
+*.json

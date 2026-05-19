@@ -1,0 +1,50 @@
+# Namu_Archive 일괄 import YAML 설정.
+#
+# 본 파일은 mxwp-import CLI 가 읽어서 examples/namu-archive-bulk/ 안의
+# 모든 *.docx 를 짝지어진 *.json 메타와 함께 MXWhitePaper 서버에 적재.
+#
+# 사용:
+#   bash examples/namu-archive-bulk/import-namu-archive.sh           # dry-run (기본)
+#   bash examples/namu-archive-bulk/import-namu-archive.sh --go      # 실제 업로드
+
+server: ${MXWP_SERVER:-http://127.0.0.1:8800}
+token: ${MXWP_TOKEN}   # 필수 — 운영자가 환경변수로 export
+
+source:
+  # path 는 sh 가 자동으로 *본 파일 기준* 절대경로로 채움. 직접 사용 시:
+  path: ${BULK_SOURCE_DIR}
+  pattern: "*.docx"
+
+defaults:
+  division: mx
+  team: research
+  confidentiality: internal
+  owners:
+    - ${MXWP_OWNER:-archive-importer@mx.local}
+  tags:
+    - namu-archive
+    - imported-bulk
+
+# slug 출처 — json 의 `slug` 우선, 없으면 파일명 stem.
+slug_source: json_or_filename
+
+# 같은 slug 의 문서가 이미 있으면? skip / overwrite / version
+# 기본 skip — 재실행 시 안전 (이미 들어간 건 무시)
+on_conflict: skip
+
+# 서버 rate limit (분당 5건) 자동 준수. 1 / parallel * delay >= 12s.
+parallel: 1
+delay_seconds: 12
+
+# 첫 실패에 멈출지 — 보통 false (전체 시도 후 실패 리스트만 보고)
+stop_on_error: false
+
+# Namu_Archive 의 json 필드 → 우리 metadata 매핑.
+# json 의 `domain` 을 metadata.team 대신 *tag* 로 추가하는 식.
+metadata_mapping:
+  json_field_to_tag:
+    - domain          # json.domain → tag 로 추가 ("mobile", "semiconductor" 등)
+    - entry_kind      # "family", "model" 등
+
+# json 의 `body_md` / `structured_json` 은 *docx 본문이 우선*이라 무시.
+# server 가 docx → DocumentJSON 변환을 책임.
