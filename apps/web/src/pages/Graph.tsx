@@ -35,6 +35,8 @@ interface SimNode extends SimulationNodeDatum {
   status: string
   degree: number
   isMissing: boolean
+  /** BFS depth from rootSlug. 0 = root, 1+ = 자식 단계. root 없으면 모두 0. */
+  depth: number
 }
 
 type SimLink = SimulationLinkDatum<SimNode> & { count: number }
@@ -46,6 +48,7 @@ const MAX_NODES = 50
 function buildSim(
   rawNodes: GraphNode[],
   rawEdges: GraphEdge[],
+  rootSlug?: string | null,
 ): { nodes: SimNode[]; links: SimLink[] } {
   // Degree map across the full payload first.
   const deg = new Map<string, number>()
@@ -59,12 +62,44 @@ function buildSim(
   const top = sorted.slice(0, MAX_NODES)
   const keep = new Set(top.map((n) => n.slug))
 
+  // BFS depth from rootSlug. root 없으면 모두 0.
+  const depthMap = new Map<string, number>()
+  if (rootSlug && keep.has(rootSlug)) {
+    // 인접 리스트 (무방향)
+    const adj = new Map<string, Set<string>>()
+    for (const e of rawEdges) {
+      if (!keep.has(e.source) || !keep.has(e.target)) continue
+      if (!adj.has(e.source)) adj.set(e.source, new Set())
+      if (!adj.has(e.target)) adj.set(e.target, new Set())
+      adj.get(e.source)!.add(e.target)
+      adj.get(e.target)!.add(e.source)
+    }
+    depthMap.set(rootSlug, 0)
+    let frontier = [rootSlug]
+    let d = 1
+    while (frontier.length > 0) {
+      const next: string[] = []
+      for (const cur of frontier) {
+        for (const nb of adj.get(cur) ?? []) {
+          if (!depthMap.has(nb)) {
+            depthMap.set(nb, d)
+            next.push(nb)
+          }
+        }
+      }
+      frontier = next
+      d++
+    }
+  }
+
   const nodes: SimNode[] = top.map((n) => ({
     slug: n.slug,
     title: n.title,
     status: n.status,
     degree: deg.get(n.slug) ?? 0,
     isMissing: n.status === 'missing',
+    // root 모르면 0, root 있어도 연결 안 됐으면 99 (max depth+1)
+    depth: depthMap.get(n.slug) ?? (rootSlug ? 99 : 0),
   }))
   const links: SimLink[] = rawEdges
     .filter((e) => keep.has(e.source) && keep.has(e.target))
@@ -95,8 +130,8 @@ export function GraphCanvas({
   const simRef = useRef<Simulation<SimNode, SimLink> | null>(null)
 
   const { nodes, links } = useMemo(
-    () => buildSim(rawNodes, rawEdges),
-    [rawNodes, rawEdges],
+    () => buildSim(rawNodes, rawEdges, rootSlug),
+    [rawNodes, rawEdges, rootSlug],
   )
 
   // Force simulation tick — updates SVG attributes directly via d3-selection
@@ -114,13 +149,14 @@ export function GraphCanvas({
       )
       // -180 → -600: repulse 강화 → 글자 겹침 ↓
       .force('charge', forceManyBody<SimNode>().strength(-600).distanceMax(400))
-      // collide: 노드 ellipse 가 안 겹치게. rx 와 일관 + 약간 buffer.
-      // truncated label 의 가시 너비 기준 — 18 글자 cap.
+      // collide: 노드 ellipse 가 안 겹치게. depth 기반 rx + 약간 buffer.
+      // (SIZE_BY_DEPTH 와 일관 — 본 force 블록은 sizeFor 정의 *전* 이라 const literal 직접 사용)
       .force(
         'collide',
         forceCollide<SimNode>((d) => {
-          const visibleLen = Math.min(d.title.length, 18)
-          return Math.min(90, Math.max(32, visibleLen * 7 + 8)) + 8
+          if (!rootSlug) return 55 + 12  // depth 2 사이즈 기본
+          const rx = ({ 0: 90, 1: 70, 2: 55, 3: 45 } as Record<number, number>)[d.depth] ?? 45
+          return rx + 12
         }).strength(0.9),
       )
       .force('center', forceCenter(WIDTH / 2, HEIGHT / 2))
@@ -137,34 +173,36 @@ export function GraphCanvas({
       .attr('stroke-opacity', 0.7)
       .attr('stroke-width', (d) => 1 + Math.min(d.count, 5))
 
-    // 노드 ellipse — 가시성:
-    //  - rx (가로) 는 라벨 너비 기준
-    //  - ry (세로) 는 18~28 사이로 rx/ry aspect ratio 가 너무 길쭉하지 않게
-    //  - rx 자체도 최대 90 으로 cap — 그 이상은 라벨 truncate
-    const MAX_LABEL_CHARS = 18    // 한글 18글자 정도면 충분
-    const MIN_RX = 32
-    const MAX_RX = 90
-    const MIN_RY = 18
-    const MAX_RY = 28
+    // 노드 ellipse 크기 = depth 기반:
+    //   depth 0 (root)    rx 90 / ry 40 / font 14
+    //   depth 1           rx 70 / ry 32 / font 12
+    //   depth 2           rx 55 / ry 26 / font 11
+    //   depth 3+ (또는 root 없음) rx 45 / ry 22 / font 10
+    // label 은 각 단계의 최대 너비에 맞춰 truncate (글자가 *항상 노드 안에*).
+    type Sz = { rx: number; ry: number; fontSize: number; maxChars: number }
+    const SIZE_BY_DEPTH: Record<number, Sz> = {
+      0: { rx: 90, ry: 40, fontSize: 14, maxChars: 22 },
+      1: { rx: 70, ry: 32, fontSize: 12, maxChars: 17 },
+      2: { rx: 55, ry: 26, fontSize: 11, maxChars: 13 },
+      3: { rx: 45, ry: 22, fontSize: 10, maxChars: 10 },
+    }
+    const DEFAULT_SZ: Sz = SIZE_BY_DEPTH[3]!
+
+    const sizeFor = (d: SimNode): Sz => {
+      // rootSlug 없으면 모두 depth 0 처럼 균일 — DEFAULT 보다 살짝 크게 (depth 2 사이즈).
+      if (!rootSlug) return SIZE_BY_DEPTH[2]!
+      return SIZE_BY_DEPTH[d.depth] ?? DEFAULT_SZ
+    }
 
     const labelFor = (d: SimNode) => {
-      if (d.title.length <= MAX_LABEL_CHARS) return d.title
-      return d.title.slice(0, MAX_LABEL_CHARS - 1) + '…'
+      const sz = sizeFor(d)
+      if (d.title.length <= sz.maxChars) return d.title
+      return d.title.slice(0, sz.maxChars - 1) + '…'
     }
 
-    const radiusFor = (d: SimNode) => {
-      const label = labelFor(d)
-      const base = Math.max(MIN_RX, label.length * 7 + 8)
-      const capped = Math.min(MAX_RX, base)
-      return d.slug === rootSlug ? Math.min(MAX_RX, capped + 8) : capped
-    }
-
-    // ry: rx 의 1/3 ~ 1/2.5 비율 사이, MIN_RY~MAX_RY 안. 길쭉 방지.
-    const ryFor = (d: SimNode) => {
-      const rx = radiusFor(d)
-      const desired = Math.max(MIN_RY, Math.min(MAX_RY, rx / 2.8))
-      return d.slug === rootSlug ? Math.min(MAX_RY, desired + 4) : desired
-    }
+    const radiusFor = (d: SimNode) => sizeFor(d).rx
+    const ryFor = (d: SimNode) => sizeFor(d).ry
+    const fontFor = (d: SimNode) => sizeFor(d).fontSize
 
     // 색 결정: root → 주황, missing → 빨강, 일반 → 진청
     const fillFor = (d: SimNode) =>
@@ -193,7 +231,7 @@ export function GraphCanvas({
           .attr('text-anchor', 'middle')
           .attr('dominant-baseline', 'middle')
           .attr('dy', 1)
-          .attr('font-size', 12)
+          .attr('font-size', fontFor)
           .attr('font-weight', (d) => (d.slug === rootSlug ? 700 : 500))
           .attr('fill', '#ffffff')
           .attr('pointer-events', 'none')
