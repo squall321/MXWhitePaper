@@ -268,6 +268,9 @@ export function GraphCanvas({
         }).strength(0.9),
       )
       .force('center', forceCenter(WIDTH / 2, HEIGHT / 2))
+      // S5: 빠른 수렴 — default 0.0228 (≈300 ticks) → 0.05 (≈90 ticks). 70+ 노드에서 fps 부담 ↓.
+      .alphaDecay(0.05)
+      .velocityDecay(0.4)  // default 0.4. 명시 — 진동 더 빠르게 가라앉음
 
     // S4: soft cluster — focusedTag 가 있으면 그 tag 의 super_domain doc 들을 tag centroid 로 끌어당김.
     // d3 forceX/forceY 를 selective strength 로 적용. wiki link force 보다 약하게 (clusterStrength<<link.strength).
@@ -469,7 +472,14 @@ export function GraphCanvas({
       nodeSel.attr('transform', (d) => `translate(${d.x ?? 0},${d.y ?? 0})`)
     })
 
+    // S5: Obsidian 식 — 3초 후 simulation 정지 (계속 ticking 시 모바일 fps 부담).
+    // 데이터/cluster 변경 시 useEffect 가 재실행되어 새 sim 이 다시 돔.
+    const stopTimer = window.setTimeout(() => {
+      sim.stop()
+    }, 3000)
+
     return () => {
+      window.clearTimeout(stopTimer)
       sim.stop()
       simRef.current = null
     }
@@ -549,6 +559,71 @@ interface NodeMenu {
   slug: string
   x: number
   y: number
+}
+
+/**
+ * S5: 모바일/태블릿 list fallback — d3-force 가 작은 화면에선 무거우니
+ * 같은 데이터를 *목록* 으로 보여준다. tag 그룹 별로 그 tag 의 doc 들을 묶어 표시.
+ */
+function GraphListFallback({
+  nodes,
+  edges: _edges,
+  query,
+  onPickDoc,
+}: {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  query: string
+  onPickDoc: (slug: string) => void
+}) {
+  const q = query.trim().toLowerCase()
+  const docs = nodes.filter((n) => (n.kind ?? 'doc') === 'doc') as GraphNodeDoc[]
+  const tags = nodes.filter((n) => n.kind === 'tag') as GraphNodeTag[]
+
+  const visible = docs.filter(
+    (d) => !q || d.slug.toLowerCase().includes(q) || d.title.toLowerCase().includes(q),
+  )
+
+  return (
+    <div className="space-y-3" data-testid="graph-list-fallback">
+      {tags.length > 0 && (
+        <div className="rounded border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">태그</h2>
+          <ul className="flex flex-wrap gap-2">
+            {tags.map((t) => (
+              <li
+                key={t.slug}
+                className="rounded-full bg-smsg-100 px-2 py-1 text-xs text-smsg-900 dark:bg-smsg-900 dark:text-smsg-100"
+              >
+                #{t.name} <span className="text-gray-500">· {t.doc_count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <ul className="divide-y divide-gray-200 rounded border border-gray-200 bg-white dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-900">
+        {visible.length === 0 ? (
+          <li className="px-3 py-2 text-sm text-gray-500">표시할 문서가 없습니다.</li>
+        ) : (
+          visible.map((d) => (
+            <li key={d.slug}>
+              <button
+                type="button"
+                onClick={() => onPickDoc(d.slug)}
+                className="block w-full px-3 py-2 text-left text-sm hover:bg-smsg-50 dark:hover:bg-gray-800"
+              >
+                <span className="font-medium text-smsg-900 dark:text-gray-100">{d.title}</span>
+                <span className="ml-2 font-mono text-[11px] text-gray-500">{d.slug}</span>
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
+      <p className="text-[11px] text-gray-500">
+        그래프 시각화는 큰 화면 (≥1024px) 에서 보입니다. 검색은 위 입력창으로.
+      </p>
+    </div>
+  )
 }
 
 export function GraphPage() {
@@ -783,20 +858,33 @@ export function GraphPage() {
         ) : data.nodes.length === 0 ? (
           <p className="text-sm text-gray-500">표시할 노드가 없습니다.</p>
         ) : (
-          <GraphCanvas
-            nodes={data.nodes}
-            edges={data.edges}
-            highlight={query}
-            rootSlug={slug ?? null}
-            showOrphans={showOrphans}
-            edgeKinds={edgeKinds}
-            minDegree={minDegree}
-            focusedTag={focusedTag}
-            clusterStrength={0.15}
-            onPickNode={(s) => navigate(`/docs/${encodeURIComponent(s)}`)}
-            onPickTag={onPickTag}
-            onContextMenu={(s, x, y) => setMenu({ slug: s, x, y })}
-          />
+          <>
+            {/* 데스크탑: 그래프 렌더 (lg+). 모바일/태블릿: 아래 list fallback */}
+            <div className="hidden lg:block">
+              <GraphCanvas
+                nodes={data.nodes}
+                edges={data.edges}
+                highlight={query}
+                rootSlug={slug ?? null}
+                showOrphans={showOrphans}
+                edgeKinds={edgeKinds}
+                minDegree={minDegree}
+                focusedTag={focusedTag}
+                clusterStrength={0.15}
+                onPickNode={(s) => navigate(`/docs/${encodeURIComponent(s)}`)}
+                onPickTag={onPickTag}
+                onContextMenu={(s, x, y) => setMenu({ slug: s, x, y })}
+              />
+            </div>
+            <div className="lg:hidden">
+              <GraphListFallback
+                nodes={data.nodes}
+                edges={data.edges}
+                query={query}
+                onPickDoc={(s) => navigate(`/docs/${encodeURIComponent(s)}`)}
+              />
+            </div>
+          </>
         )}
       </div>
 
@@ -804,7 +892,7 @@ export function GraphPage() {
         스크롤로 줌, 드래그로 이동, 좌클릭 = 문서, 우클릭 = 메뉴. F11 = 전체화면. 빨간 노드는 아직 작성되지 않은 링크입니다.
       </p>
 
-      {/* 우클릭 컨텍스트 메뉴: 문서 열기 vs 그래프 루트로 이동. */}
+      {/* 우클릭 컨텍스트 메뉴 — kind 별 분기 (S5). */}
       {menu && (
         <div
           role="menu"
@@ -814,28 +902,60 @@ export function GraphPage() {
           onClick={(e) => e.stopPropagation()}
           className="min-w-[180px] rounded border border-gray-200 bg-white py-1 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-800"
         >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              navigate(`/docs/${encodeURIComponent(menu.slug)}`)
-              setMenu(null)
-            }}
-            className="block w-full px-3 py-1.5 text-left text-gray-700 hover:bg-smsg-50 dark:text-gray-200 dark:hover:bg-gray-700"
-          >
-            📄 문서 열기
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              navigate(`/graph/${encodeURIComponent(menu.slug)}?depth=${depth}`)
-              setMenu(null)
-            }}
-            className="block w-full px-3 py-1.5 text-left text-gray-700 hover:bg-smsg-50 dark:text-gray-200 dark:hover:bg-gray-700"
-          >
-            🕸 이 노드를 루트로
-          </button>
+          {menu.slug.startsWith('tag:') ? (
+            // tag 노드 메뉴 — cluster 토글 + 도메인 이동 + 검색.
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onPickTag(menu.slug)  // cluster 토글 (현재가 같으면 OFF)
+                  setMenu(null)
+                }}
+                className="block w-full px-3 py-1.5 text-left text-gray-700 hover:bg-smsg-50 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                {focusedTag === menu.slug ? '🧲 cluster 해제' : '🧲 cluster 켜기'}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  // tag 이름으로 검색 query 채움 — 같은 tag 의 문서를 filter.
+                  setQuery(menu.slug.replace(/^tag:/, ''))
+                  setMenu(null)
+                }}
+                className="block w-full px-3 py-1.5 text-left text-gray-700 hover:bg-smsg-50 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                🔍 이 tag 로 노드 검색
+              </button>
+            </>
+          ) : (
+            // doc 노드 메뉴 — 기존 (문서 열기, 그래프 루트로).
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  navigate(`/docs/${encodeURIComponent(menu.slug)}`)
+                  setMenu(null)
+                }}
+                className="block w-full px-3 py-1.5 text-left text-gray-700 hover:bg-smsg-50 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                📄 문서 열기
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  navigate(`/graph/${encodeURIComponent(menu.slug)}?depth=${depth}`)
+                  setMenu(null)
+                }}
+                className="block w-full px-3 py-1.5 text-left text-gray-700 hover:bg-smsg-50 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                🕸 이 노드를 루트로
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
