@@ -179,6 +179,12 @@ export const ko = {
   'home.trend.deltaLabel': '이번 주 +{delta}건',
   'home.filter': '필터',
   'home.filter.all': '전체',
+  'home.today.sectionLabel': '오늘의 별 — 지식 그래프',
+  'home.today.label': '오늘의 별',
+  'home.today.indegree': '{count}개 문서가 이 문서를 참조합니다',
+  'home.today.neighbors': '연결된 별 (1-hop)',
+  'home.today.exploreGraph': '그래프 탐색',
+  'home.today.openDoc': '문서 열기',
 
   // Login page
   'login.title': 'White Paper',

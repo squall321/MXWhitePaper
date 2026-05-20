@@ -14,6 +14,7 @@ import { toApiError } from '@/lib/api/envelope'
 import { useLocale } from '@/lib/i18n'
 import type { AppOutletContext } from '@/App'
 import { DomainTiles } from '@/features/home/components/DomainTiles'
+import { TodayHero } from '@/features/home/components/TodayHero'
 
 /**
  * Landing page. Hero strip + filter chips + responsive document grid:
@@ -72,7 +73,8 @@ export function HomePage() {
 
   return (
     <section className="space-y-6">
-      <DomainTiles />
+      <TodayHero />
+      <DomainTiles variant="compact" />
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>

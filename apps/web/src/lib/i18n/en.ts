@@ -174,6 +174,12 @@ export const en: Record<LocaleKey, string> = {
   'home.trend.deltaLabel': '+{delta} this week',
   'home.filter': 'Filter',
   'home.filter.all': 'All',
+  'home.today.sectionLabel': "Today's Star — Knowledge Graph",
+  'home.today.label': "Today's star",
+  'home.today.indegree': '{count} docs reference this',
+  'home.today.neighbors': 'Connected stars (1-hop)',
+  'home.today.exploreGraph': 'Explore graph',
+  'home.today.openDoc': 'Open doc',
 
   'login.title': 'White Paper',
   'login.subtitle': 'Internal knowledge base',

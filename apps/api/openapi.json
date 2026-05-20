@@ -11588,6 +11588,29 @@
         ]
       }
     },
+    "/api/v1/home/today": {
+      "get": {
+        "operationId": "get_home_today_api_v1_home_today_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Home Today Api V1 Home Today Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "오늘의 문서 — indegree top 문서 day-seed 선정 + 1-hop 그래프 (캐시 5분)",
+        "tags": [
+          "home"
+        ]
+      }
+    },
     "/api/v1/images/{identifier}": {
       "get": {
         "operationId": "get_image_api_v1_images__identifier__get",

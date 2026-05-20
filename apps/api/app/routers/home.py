@@ -1,32 +1,17 @@
-"""Home hero endpoint — 4개 super-domain 타일 데이터.
+"""Home hero / today endpoints.
 
 GET /api/v1/home/hero
+  4개 super-domain 타일 데이터 (캐시 5분).
 
-응답:
-  {
-    "data": {
-      "as_of": "2026-05-20T10:30:00Z",
-      "domains": [
-        {
-          "id": "mobile",
-          "doc_count": 86,
-          "doc_count_7d_ago": 42,
-          "trend_7d": [42, 48, 55, 60, 68, 75, 86],
-          "top_docs": [{"slug": "...", "title": "...", "indegree": 28}]
-        },
-        ...
-      ]
-    }
-  }
-
-- 빈 도메인(doc_count == 0) 은 domains 배열에서 제외.
-- Cache: in-memory dict + asyncio.Lock, TTL 5분.
+GET /api/v1/home/today
+  "오늘의 문서" — indegree 기반 day-seed rotation + 1-hop 이웃 그래프 (캐시 5분).
+  view 로그 미구현이므로 fallback (2)→(3) 순으로 선정.
 """
 from __future__ import annotations
 
 import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -177,4 +162,278 @@ async def get_home_hero(
     _user: dict = Depends(require_reader),
 ) -> dict[str, Any]:
     data = await _get_hero_data(s)
+    return envelope(data=data)
+
+
+# ---------------------------------------------------------------------------
+# Today — "오늘의 문서" 선정 + 1-hop 그래프
+# ---------------------------------------------------------------------------
+
+_TODAY_CACHE: dict[str, Any] = {}          # key -> {"ts": float, "data": dict}
+_TODAY_LOCK: asyncio.Lock | None = None
+_TODAY_CACHE_TTL = 300                     # 5분
+_TODAY_NEIGHBOR_CAP = 10                   # 1-hop 최대 개수
+
+
+def _get_today_lock() -> asyncio.Lock:
+    global _TODAY_LOCK
+    if _TODAY_LOCK is None:
+        _TODAY_LOCK = asyncio.Lock()
+    return _TODAY_LOCK
+
+
+def _extract_excerpt(content_json: dict | None) -> str:
+    """DocumentJSON sections[].blocks[] 에서 첫 paragraph text 최대 200자."""
+    if not content_json:
+        return ""
+
+    def _search_sections(sections: list) -> str:
+        for section in sections:
+            for block in section.get("blocks", []):
+                if block.get("type") == "paragraph":
+                    text_ = block.get("text", "")
+                    if text_:
+                        return text_[:200]
+            sub = _search_sections(section.get("subsections", []))
+            if sub:
+                return sub
+        return ""
+
+    return _search_sections(content_json.get("sections", []))
+
+
+def _day_seed_pick(candidates: list, seed_base: int) -> dict:
+    """day-seed (같은 날 동일 결과) 로 candidates 중 1개 선택."""
+    idx = seed_base % len(candidates)
+    return candidates[idx]
+
+
+async def _build_today_data(s: AsyncSession) -> dict[str, Any]:
+    """
+    fallback chain:
+      (2) 전역 indegree top 5 → day-seed 1개
+      (3) published ORDER BY updated_at DESC LIMIT 5 → day-seed 1개
+    """
+    seed_base = date.today().toordinal()
+
+    # --- (2) 전역 indegree top 5 ---
+    cand_rows = (await s.execute(
+        text("""
+            SELECT d.slug, d.title, d.indegree, d.updated_at,
+                   d.content_json,
+                   COALESCE(t.id::text, '') AS team_id
+            FROM documents d
+            LEFT JOIN parts p  ON p.id = d.part_id
+            LEFT JOIN groups g ON g.id = p.group_id
+            LEFT JOIN teams t  ON t.id = g.team_id
+            WHERE d.status = 'published'
+            ORDER BY d.indegree DESC
+            LIMIT 5
+        """),
+    )).mappings().all()
+
+    if not cand_rows:
+        # --- (3) 최신순 fallback ---
+        cand_rows = (await s.execute(
+            text("""
+                SELECT d.slug, d.title, d.indegree, d.updated_at,
+                       d.content_json,
+                       COALESCE(t.id::text, '') AS team_id
+                FROM documents d
+                LEFT JOIN parts p  ON p.id = d.part_id
+                LEFT JOIN groups g ON g.id = p.group_id
+                LEFT JOIN teams t  ON t.id = g.team_id
+                WHERE d.status = 'published'
+                ORDER BY d.updated_at DESC
+                LIMIT 5
+            """),
+        )).mappings().all()
+
+    if not cand_rows:
+        # 문서 자체가 없는 환경
+        return {
+            "as_of": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "doc": None,
+            "neighbors": [],
+            "graph": {"nodes": [], "edges": []},
+        }
+
+    chosen = _day_seed_pick(list(cand_rows), seed_base)
+    doc_slug: str = chosen["slug"]
+    content_json = chosen["content_json"] or {}
+    excerpt = _extract_excerpt(content_json)
+
+    doc_out = {
+        "slug": doc_slug,
+        "title": chosen["title"],
+        "excerpt": excerpt,
+        "indegree": int(chosen["indegree"] or 0),
+        "team_id": chosen["team_id"] or None,
+        "updated_at": chosen["updated_at"].isoformat() if chosen["updated_at"] else None,
+    }
+
+    # --- 1-hop neighbors ---
+    noise = list(NOISE_TAGS)
+
+    # wiki neighbors (links 테이블, 양방향)
+    wiki_rows = (await s.execute(
+        text("""
+            SELECT n.slug, n.title, SUM(w) AS weight FROM (
+                SELECT d2.slug, d2.title, COUNT(*) AS w
+                FROM links l
+                JOIN documents src ON src.id = l.source_doc_id AND src.slug = :slug
+                JOIN documents d2  ON d2.slug = l.target_slug  AND d2.status = 'published'
+                GROUP BY d2.slug, d2.title
+
+                UNION ALL
+
+                SELECT src2.slug, src2.title, COUNT(*) AS w
+                FROM links l
+                JOIN documents tgt ON tgt.slug = l.target_slug AND tgt.slug = :slug
+                JOIN documents src2 ON src2.id = l.source_doc_id AND src2.status = 'published'
+                GROUP BY src2.slug, src2.title
+            ) n
+            GROUP BY n.slug, n.title
+            ORDER BY weight DESC
+        """),
+        {"slug": doc_slug},
+    )).all()
+
+    # tag neighbors (document_tags + tags, NOISE_TAGS 제외)
+    tag_rows = (await s.execute(
+        text("""
+            SELECT t.name, COUNT(dt2.document_id) AS weight
+            FROM document_tags dt
+            JOIN documents d ON d.id = dt.document_id AND d.slug = :slug
+            JOIN tags t ON t.id = dt.tag_id
+              AND t.name != ALL(:noise)
+            LEFT JOIN document_tags dt2 ON dt2.tag_id = t.id
+            GROUP BY t.name
+            ORDER BY weight DESC
+        """),
+        {"slug": doc_slug, "noise": noise},
+    )).all()
+
+    # 합산 + cap
+    neighbors_raw: list[dict] = []
+    for r in wiki_rows:
+        neighbors_raw.append({
+            "kind": "wiki",
+            "slug": r[0],
+            "title": r[1],
+            "weight": int(r[2]),
+        })
+    for r in tag_rows:
+        neighbors_raw.append({
+            "kind": "tag",
+            "slug": f"tag:{r[0]}",
+            "title": f"#{r[0]}",
+            "weight": int(r[1]),
+        })
+
+    # weight 내림차순 + cap
+    neighbors_raw.sort(key=lambda x: x["weight"], reverse=True)
+    neighbors = neighbors_raw[:_TODAY_NEIGHBOR_CAP]
+
+    # --- graph payload (nodes + edges, /links/graph 동일 스키마) ---
+    graph_slugs: set[str] = {doc_slug}
+    for nb in neighbors:
+        if nb["kind"] == "wiki":
+            graph_slugs.add(nb["slug"])
+
+    node_rows = (await s.execute(
+        text("""
+            SELECT d.slug, d.title, d.status,
+                   COALESCE(t.slug, '') AS team_slug
+            FROM documents d
+            LEFT JOIN parts p  ON p.id = d.part_id
+            LEFT JOIN groups g ON g.id = p.group_id
+            LEFT JOIN teams t  ON t.id = g.team_id
+            WHERE d.slug = ANY(:slugs)
+        """),
+        {"slugs": list(graph_slugs)},
+    )).all()
+
+    graph_nodes: list[dict] = [
+        {
+            "kind": "doc",
+            "slug": r[0],
+            "title": r[1],
+            "status": r[2],
+            "group": r[3] or None,
+        }
+        for r in node_rows
+    ]
+
+    # tag 노드 추가
+    for nb in neighbors:
+        if nb["kind"] == "tag":
+            graph_nodes.append({
+                "kind": "tag",
+                "slug": nb["slug"],
+                "title": nb["title"],
+                "status": None,
+                "group": None,
+            })
+
+    # 엣지 (doc slug 집합 내부 wiki 링크 + doc-tag 링크)
+    wiki_slug_list = [n["slug"] for n in graph_nodes if n["kind"] == "doc"]
+    graph_edges: list[dict] = []
+
+    if len(wiki_slug_list) > 1:
+        edge_rows = (await s.execute(
+            text("""
+                SELECT src.slug AS s, l.target_slug AS t, COUNT(*) AS cnt
+                FROM links l
+                JOIN documents src ON src.id = l.source_doc_id
+                WHERE src.slug = ANY(:slugs) AND l.target_slug = ANY(:slugs)
+                GROUP BY src.slug, l.target_slug
+            """),
+            {"slugs": wiki_slug_list},
+        )).all()
+        graph_edges = [
+            {"kind": "wiki", "source": r[0], "target": r[1], "count": int(r[2])}
+            for r in edge_rows
+        ]
+
+    for nb in neighbors:
+        if nb["kind"] == "tag":
+            graph_edges.append({
+                "kind": "doc_tag",
+                "source": doc_slug,
+                "target": nb["slug"],
+                "count": nb["weight"],
+            })
+
+    return {
+        "as_of": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "doc": doc_out,
+        "neighbors": neighbors,
+        "graph": {"nodes": graph_nodes, "edges": graph_edges},
+    }
+
+
+async def _get_today_data(s: AsyncSession, cache_key: str) -> dict[str, Any]:
+    now = time.monotonic()
+    async with _get_today_lock():
+        entry = _TODAY_CACHE.get(cache_key)
+        if entry and (now - entry["ts"]) < _TODAY_CACHE_TTL:
+            return entry["data"]
+        result = await _build_today_data(s)
+        _TODAY_CACHE[cache_key] = {"ts": now, "data": result}
+        return result
+
+
+@router.get(
+    "/today",
+    summary="오늘의 문서 — indegree top 문서 day-seed 선정 + 1-hop 그래프 (캐시 5분)",
+)
+async def get_home_today(
+    s: AsyncSession = Depends(get_db),
+    _user: dict = Depends(require_reader),
+) -> dict[str, Any]:
+    # view 로그 미구현이므로 anonymous 캐시 키 사용 (fallback 2/3 경로)
+    user_id = _user.get("id") or "anon"
+    cache_key = f"home_today_{user_id}"
+    data = await _get_today_data(s, cache_key)
     return envelope(data=data)

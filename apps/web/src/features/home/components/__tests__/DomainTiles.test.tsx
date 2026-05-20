@@ -99,4 +99,29 @@ describe('<DomainTiles />', () => {
     // scope hint
     expect(html).toContain('home.hero.scopeHint')
   })
+
+  it('compact variant: renders chip row, hides top_docs, shows small sparkline', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    qc.setQueryData(['home-hero'], HERO_FIXTURE)
+
+    const html = renderWithQuery(<DomainTiles variant="compact" />, qc)
+
+    // Section landmark still present
+    expect(html).toContain('home.domain.sectionLabel')
+    // Link still navigates to graph
+    expect(html).toContain('href="/graph?domain=mobile"')
+    // Domain label key present
+    expect(html).toContain('home.domain.mobile')
+    // Doc count present
+    expect(html).toContain('72')
+    // Sparkline rendered (compact size 40x16)
+    expect(html).toContain('<svg')
+    // Delta present (72-60=12)
+    expect(html).toContain('+12')
+    // top_docs must NOT appear in compact mode
+    expect(html).not.toContain('href="/docs/android"')
+    expect(html).not.toContain('안드로이드')
+    // scopeHint not shown in compact mode
+    expect(html).not.toContain('home.hero.scopeHint')
+  })
 })

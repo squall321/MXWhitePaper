@@ -6,7 +6,11 @@ import { fetchGraph } from '@/features/graph/api'
 import { useT } from '@/lib/i18n'
 import { Sparkline } from './Sparkline'
 
-export function DomainTiles() {
+interface DomainTilesProps {
+  variant?: 'full' | 'compact'
+}
+
+export function DomainTiles({ variant = 'full' }: DomainTilesProps = {}) {
   const t = useT()
   const { data } = useQuery({
     queryKey: ['home-hero'],
@@ -27,6 +31,49 @@ export function DomainTiles() {
   }
 
   if (!data?.domains?.length) return null
+
+  if (variant === 'compact') {
+    return (
+      <section aria-label={t('home.domain.sectionLabel')}>
+        <div className="flex flex-wrap items-center gap-2">
+          {data.domains.map((d) => {
+            const meta = SUPER_DOMAINS.find((s) => s.id === d.id)
+            if (!meta) return null
+            const delta = d.doc_count - d.doc_count_7d_ago
+            return (
+              <Link
+                key={d.id}
+                to={`/graph?domain=${d.id}`}
+                onMouseEnter={() => prefetchGraph(d.id)}
+                onFocus={() => prefetchGraph(d.id)}
+                className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs hover:border-smsg-300 hover:no-underline hover:shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:hover:border-smsg-300/50"
+              >
+                <span aria-hidden="true">{meta.emoji}</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">
+                  {t(`home.domain.${d.id}`)}
+                </span>
+                <span className="text-gray-500 dark:text-gray-400">{d.doc_count}</span>
+                {delta > 0 && (
+                  <span
+                    className="font-medium text-green-600 dark:text-green-400"
+                    aria-label={t('home.trend.deltaLabel', { delta })}
+                  >
+                    ↗+{delta}
+                  </span>
+                )}
+                <Sparkline
+                  data={d.trend_7d}
+                  width={40}
+                  height={16}
+                  ariaLabel={t('home.trend.sparkLabel', { count: d.doc_count })}
+                />
+              </Link>
+            )
+          })}
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section aria-label={t('home.domain.sectionLabel')}>
