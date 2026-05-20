@@ -28,19 +28,33 @@ import {
 } from 'd3-force'
 import { select } from 'd3-selection'
 import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom'
-import { fetchGraph, type GraphEdge, type GraphNode } from '@/features/graph/api'
+import { fetchGraph, type GraphEdge, type GraphNode, type GraphNodeDoc, type GraphNodeTag } from '@/features/graph/api'
 
+/**
+ * Unified sim node — doc + tag 둘 다 표현.
+ * - kind='doc' (default): 기존 동작 (원/타원, depth 기반 크기)
+ * - kind='tag': 둥근 사각형, super-domain 색, doc_count 기반 크기
+ */
 interface SimNode extends SimulationNodeDatum {
-  slug: string
-  title: string
-  status: string
-  degree: number
-  isMissing: boolean
-  /** BFS depth from rootSlug. 0 = root, 1+ = 자식 단계. root 없으면 모두 0. */
-  depth: number
+  kind: 'doc' | 'tag'
+  slug: string          // doc.slug 또는 'tag:<name>'
+  title: string         // 표시 이름 (tag 의 경우 '#<name>')
+  // doc 전용
+  status?: string
+  degree?: number
+  isMissing?: boolean
+  /** BFS depth from rootSlug. doc only. tag 는 항상 1 (super-domain hub). */
+  depth?: number
+  // tag 전용
+  docCount?: number
+  superDomain?: string  // 'mobile' | 'software' | 'hardware' | 'telecom'
 }
 
-type SimLink = SimulationLinkDatum<SimNode> & { count: number }
+/** Edge kind 정보 보존 — 렌더 시 분기. */
+type SimLink = SimulationLinkDatum<SimNode> & {
+  kind: 'wiki' | 'doc_tag' | 'tag_cooc'
+  weight: number  // wiki=count, doc_tag=1, tag_cooc=weight
+}
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -51,25 +65,34 @@ function buildSim(
   rawEdges: GraphEdge[],
   rootSlug?: string | null,
 ): { nodes: SimNode[]; links: SimLink[] } {
-  // Degree map across the full payload first.
+  // doc 과 tag 를 분리. tag 는 *전부 유지* (개수 적음). doc 은 degree 상위 MAX_NODES 만.
+  const docNodes = rawNodes.filter((n) => (n.kind ?? 'doc') === 'doc')
+  const tagNodes = rawNodes.filter((n) => n.kind === 'tag')
+
+  // wiki edge 만 degree 계산 (doc-doc 연결도).
   const deg = new Map<string, number>()
   for (const e of rawEdges) {
-    deg.set(e.source, (deg.get(e.source) ?? 0) + e.count)
-    deg.set(e.target, (deg.get(e.target) ?? 0) + e.count)
+    if ((e.kind ?? 'wiki') !== 'wiki') continue
+    const c = e.count ?? 1
+    deg.set(e.source, (deg.get(e.source) ?? 0) + c)
+    deg.set(e.target, (deg.get(e.target) ?? 0) + c)
   }
-  const sorted = [...rawNodes].sort(
+
+  const sortedDocs = [...docNodes].sort(
     (a, b) => (deg.get(b.slug) ?? 0) - (deg.get(a.slug) ?? 0),
   )
-  const top = sorted.slice(0, MAX_NODES)
-  const keep = new Set(top.map((n) => n.slug))
+  const topDocs = sortedDocs.slice(0, MAX_NODES)
+  const keepDoc = new Set(topDocs.map((n) => n.slug))
+  const keepTag = new Set(tagNodes.map((n) => n.slug))  // tag slug = 'tag:<name>'
+  const keep = new Set([...keepDoc, ...keepTag])
 
-  // BFS depth from rootSlug. root 없으면 모두 0.
+  // BFS depth from rootSlug — doc 끼리의 wiki link 만 사용.
   const depthMap = new Map<string, number>()
-  if (rootSlug && keep.has(rootSlug)) {
-    // 인접 리스트 (무방향)
+  if (rootSlug && keepDoc.has(rootSlug)) {
     const adj = new Map<string, Set<string>>()
     for (const e of rawEdges) {
-      if (!keep.has(e.source) || !keep.has(e.target)) continue
+      if ((e.kind ?? 'wiki') !== 'wiki') continue
+      if (!keepDoc.has(e.source) || !keepDoc.has(e.target)) continue
       if (!adj.has(e.source)) adj.set(e.source, new Set())
       if (!adj.has(e.target)) adj.set(e.target, new Set())
       adj.get(e.source)!.add(e.target)
@@ -93,19 +116,40 @@ function buildSim(
     }
   }
 
-  const nodes: SimNode[] = top.map((n) => ({
-    slug: n.slug,
-    title: n.title,
-    status: n.status,
-    degree: deg.get(n.slug) ?? 0,
-    isMissing: n.status === 'missing',
-    // root 모르면 0, root 있어도 연결 안 됐으면 99 (max depth+1)
-    depth: depthMap.get(n.slug) ?? (rootSlug ? 99 : 0),
-  }))
+  const docSim: SimNode[] = topDocs.map((raw) => {
+    const n = raw as GraphNodeDoc
+    return {
+      kind: 'doc' as const,
+      slug: n.slug,
+      title: n.title,
+      status: n.status,
+      degree: deg.get(n.slug) ?? 0,
+      isMissing: n.status === 'missing',
+      depth: depthMap.get(n.slug) ?? (rootSlug ? 99 : 0),
+    }
+  })
+  const tagSim: SimNode[] = tagNodes.map((n) => {
+    const t = n as GraphNodeTag
+    return {
+      kind: 'tag' as const,
+      slug: t.slug,
+      title: `#${t.name}`,
+      docCount: t.doc_count,
+      superDomain: t.super_domain,
+    }
+  })
+
   const links: SimLink[] = rawEdges
     .filter((e) => keep.has(e.source) && keep.has(e.target))
-    .map((e) => ({ source: e.source, target: e.target, count: e.count }))
-  return { nodes, links }
+    .map((e) => {
+      const kind = (e.kind ?? 'wiki') as 'wiki' | 'doc_tag' | 'tag_cooc'
+      const weight = kind === 'wiki' ? (e.count ?? 1)
+                   : kind === 'tag_cooc' ? (e.weight ?? 1)
+                   : 1
+      return { source: e.source, target: e.target, kind, weight }
+    })
+
+  return { nodes: [...docSim, ...tagSim], links }
 }
 
 export interface GraphCanvasProps {
@@ -116,18 +160,23 @@ export interface GraphCanvasProps {
   rootSlug?: string | null
   /** false 면 root 와 연결되지 않은 (depth=99) 노드 숨김. rootSlug 가 없으면 무시. */
   showOrphans?: boolean
+  /** 표시할 edge 종류. plan v0.3 §10: wiki+doc_tag default, tag_cooc OFF. */
+  edgeKinds?: Set<'wiki' | 'doc_tag' | 'tag_cooc'>
   onPickNode?: (slug: string) => void
   onContextMenu?: (slug: string, x: number, y: number) => void
 }
 
 /** Pure rendering layer — exported so unit tests can render it without
  *  the data-fetching layer. */
+const DEFAULT_EDGE_KINDS = new Set<'wiki' | 'doc_tag' | 'tag_cooc'>(['wiki', 'doc_tag'])
+
 export function GraphCanvas({
   nodes: rawNodes,
   edges: rawEdges,
   highlight,
   rootSlug,
   showOrphans = true,
+  edgeKinds = DEFAULT_EDGE_KINDS,
   onPickNode,
   onContextMenu,
 }: GraphCanvasProps) {
@@ -137,20 +186,29 @@ export function GraphCanvas({
 
   const { nodes, links } = useMemo(() => {
     const built = buildSim(rawNodes, rawEdges, rootSlug)
+    let filteredNodes = built.nodes
+    let filteredLinks = built.links
+
     if (rootSlug && !showOrphans) {
-      // depth=99 (root 와 연결 안 됨) 노드 제거 + 해당 노드를 참조하는 link 도 제거.
-      const kept = new Set(built.nodes.filter((n) => n.depth !== 99).map((n) => n.slug))
-      return {
-        nodes: built.nodes.filter((n) => kept.has(n.slug)),
-        links: built.links.filter((l) => {
-          const s = typeof l.source === 'string' ? l.source : (l.source as SimNode).slug
-          const t = typeof l.target === 'string' ? l.target : (l.target as SimNode).slug
-          return kept.has(s) && kept.has(t)
-        }),
-      }
+      // depth=99 (root 와 연결 안 됨) doc 노드만 숨김. tag 노드는 *항상* 유지.
+      const kept = new Set(
+        built.nodes
+          .filter((n) => n.kind === 'tag' || n.depth !== 99)
+          .map((n) => n.slug),
+      )
+      filteredNodes = built.nodes.filter((n) => kept.has(n.slug))
+      filteredLinks = built.links.filter((l) => {
+        const s = typeof l.source === 'string' ? l.source : (l.source as SimNode).slug
+        const t = typeof l.target === 'string' ? l.target : (l.target as SimNode).slug
+        return kept.has(s) && kept.has(t)
+      })
     }
-    return built
-  }, [rawNodes, rawEdges, rootSlug, showOrphans])
+
+    // S3: edge type chip 필터 — 활성화된 종류만 유지.
+    filteredLinks = filteredLinks.filter((l) => edgeKinds.has(l.kind))
+
+    return { nodes: filteredNodes, links: filteredLinks }
+  }, [rawNodes, rawEdges, rootSlug, showOrphans, edgeKinds])
 
   // Force simulation tick — updates SVG attributes directly via d3-selection
   // for performance; React only owns the static SVG/g scaffolding.
@@ -167,13 +225,16 @@ export function GraphCanvas({
       )
       // -180 → -600: repulse 강화 → 글자 겹침 ↓
       .force('charge', forceManyBody<SimNode>().strength(-600).distanceMax(400))
-      // collide: 노드 ellipse 가 안 겹치게. depth 기반 rx + 약간 buffer.
-      // (SIZE_BY_DEPTH 와 일관 — 본 force 블록은 sizeFor 정의 *전* 이라 const literal 직접 사용)
+      // collide: doc 은 depth 기반 rx, tag 는 docCount 기반 rx.
       .force(
         'collide',
         forceCollide<SimNode>((d) => {
-          if (!rootSlug) return 55 + 12  // depth 2 사이즈 기본
-          const rx = ({ 0: 90, 1: 70, 2: 55, 3: 45 } as Record<number, number>)[d.depth] ?? 45
+          if (d.kind === 'tag') {
+            // tag rect 크기 ≈ √docCount × 6 + 30 → 그 절반 + buffer
+            return Math.sqrt(d.docCount ?? 1) * 3 + 28
+          }
+          if (!rootSlug) return 55 + 12
+          const rx = ({ 0: 90, 1: 70, 2: 55, 3: 45 } as Record<number, number>)[d.depth ?? 99] ?? 45
           return rx + 12
         }).strength(0.9),
       )
@@ -181,55 +242,87 @@ export function GraphCanvas({
 
     simRef.current = sim
 
+    // ── EDGES ──────────────────────────────────────────────────────────
+    // 3 종 분기 — wiki (실선, 굵기 count), doc_tag (점선), tag_cooc (실선, super-domain 색)
     const linksG = g.select<SVGGElement>('g.links')
     linksG.selectAll('*').remove()
+
+    // super-domain 색 헬퍼 (tag_cooc edge 색용)
+    const DOMAIN_COLOR: Record<string, string> = {
+      mobile:   '#3b82f6',
+      software: '#10b981',
+      hardware: '#f59e0b',
+      telecom:  '#ec4899',
+    }
+    const edgeColorFor = (l: SimLink): string => {
+      if (l.kind === 'tag_cooc') {
+        // 두 tag 의 super_domain 색을 *source* 기준으로 (gradient 는 비용 큼)
+        const src = l.source as SimNode
+        return DOMAIN_COLOR[src.superDomain ?? ''] ?? '#a78bfa'
+      }
+      return '#94a3b8'
+    }
+
     const linkSel = linksG
       .selectAll<SVGLineElement, SimLink>('line')
-      .data(links, (d) => `${(d.source as SimNode).slug ?? d.source}->${(d.target as SimNode).slug ?? d.target}`)
+      .data(links, (d) => {
+        const s = (d.source as SimNode).slug ?? d.source
+        const t = (d.target as SimNode).slug ?? d.target
+        return `${d.kind}:${s}->${t}`
+      })
       .join('line')
-      .attr('stroke', '#94a3b8')
-      .attr('stroke-opacity', 0.7)
-      .attr('stroke-width', (d) => 1 + Math.min(d.count, 5))
+      .attr('stroke', edgeColorFor)
+      .attr('stroke-opacity', (d) =>
+        d.kind === 'wiki' ? 0.7 : d.kind === 'tag_cooc' ? 0.5 : 0.3,
+      )
+      .attr('stroke-width', (d) =>
+        d.kind === 'wiki' ? 1 + Math.min(d.weight, 5)
+        : d.kind === 'tag_cooc' ? Math.max(1, d.weight / 5)
+        : 1,
+      )
+      .attr('stroke-dasharray', (d) => (d.kind === 'doc_tag' ? '2 3' : 'none'))
 
-    // 노드 ellipse 크기 = depth 기반:
-    //   depth 0 (root)    rx 90 / ry 40 / font 14
-    //   depth 1           rx 70 / ry 32 / font 12
-    //   depth 2           rx 55 / ry 26 / font 11
-    //   depth 3+ (또는 root 없음) rx 45 / ry 22 / font 10
-    // label 은 각 단계의 최대 너비에 맞춰 truncate (글자가 *항상 노드 안에*).
-    type Sz = { rx: number; ry: number; fontSize: number; maxChars: number }
-    const SIZE_BY_DEPTH: Record<number, Sz> = {
+    // ── NODES ──────────────────────────────────────────────────────────
+    // doc: ellipse (depth 기반 크기). tag: rounded rect (docCount 기반).
+    type DocSz = { rx: number; ry: number; fontSize: number; maxChars: number }
+    const SIZE_BY_DEPTH: Record<number, DocSz> = {
       0: { rx: 90, ry: 40, fontSize: 14, maxChars: 22 },
       1: { rx: 70, ry: 32, fontSize: 12, maxChars: 17 },
       2: { rx: 55, ry: 26, fontSize: 11, maxChars: 13 },
       3: { rx: 45, ry: 22, fontSize: 10, maxChars: 10 },
     }
-    const DEFAULT_SZ: Sz = SIZE_BY_DEPTH[3]!
+    const DEFAULT_SZ: DocSz = SIZE_BY_DEPTH[3]!
 
-    const sizeFor = (d: SimNode): Sz => {
-      // rootSlug 없으면 모두 depth 0 처럼 균일 — DEFAULT 보다 살짝 크게 (depth 2 사이즈).
+    const docSizeFor = (d: SimNode): DocSz => {
       if (!rootSlug) return SIZE_BY_DEPTH[2]!
-      return SIZE_BY_DEPTH[d.depth] ?? DEFAULT_SZ
+      return SIZE_BY_DEPTH[d.depth ?? 99] ?? DEFAULT_SZ
+    }
+
+    // tag rect: width = √docCount × 12 + 60, height = 28, font 12
+    const tagSizeFor = (d: SimNode) => {
+      const w = Math.sqrt(d.docCount ?? 1) * 12 + 60
+      return { w, h: 28, fontSize: 12, maxChars: Math.max(8, Math.floor(w / 9)) }
     }
 
     const labelFor = (d: SimNode) => {
-      const sz = sizeFor(d)
-      if (d.title.length <= sz.maxChars) return d.title
-      return d.title.slice(0, sz.maxChars - 1) + '…'
+      const maxChars = d.kind === 'tag' ? tagSizeFor(d).maxChars : docSizeFor(d).maxChars
+      if (d.title.length <= maxChars) return d.title
+      return d.title.slice(0, maxChars - 1) + '…'
     }
 
-    const radiusFor = (d: SimNode) => sizeFor(d).rx
-    const ryFor = (d: SimNode) => sizeFor(d).ry
-    const fontFor = (d: SimNode) => sizeFor(d).fontSize
+    const fontFor = (d: SimNode) =>
+      d.kind === 'tag' ? tagSizeFor(d).fontSize : docSizeFor(d).fontSize
 
-    // 색 결정: root → 주황, missing → 빨강, 일반 → 진청
-    const fillFor = (d: SimNode) =>
-      d.slug === rootSlug ? '#f59e0b'
-      : d.isMissing ? '#dc2626'
-      : '#0c4a6e'
+    // 색 결정 — doc: root 주황, missing 빨강, 일반 진청. tag: super-domain 팔레트.
+    const fillFor = (d: SimNode): string => {
+      if (d.kind === 'tag') {
+        return DOMAIN_COLOR[d.superDomain ?? ''] ?? '#a78bfa'
+      }
+      if (d.slug === rootSlug) return '#f59e0b'
+      if (d.isMissing) return '#dc2626'
+      return '#0c4a6e'
+    }
 
-    // 기존 노드 (stale circle 등) 모두 제거하고 fresh build — 데이터 / rootSlug 변경 시
-    // ellipse + 내부 text 가 깨끗하게 다시 그려지게.
     const nodesG = g.select<SVGGElement>('g.nodes')
     nodesG.selectAll('*').remove()
 
@@ -237,27 +330,43 @@ export function GraphCanvas({
       .selectAll<SVGGElement, SimNode>('g.node')
       .data(nodes, (d) => d.slug)
       .join((enter) => {
-        const ng = enter.append('g').attr('class', 'node').style('cursor', 'pointer')
-        ng.append('ellipse')
-          .attr('rx', (d) => radiusFor(d))
-          .attr('ry', (d) => ryFor(d))
+        const ng = enter.append('g')
+          .attr('class', (d) => `node node-${d.kind}`)
+          .style('cursor', 'pointer')
+
+        // doc → ellipse
+        ng.filter((d) => d.kind === 'doc')
+          .append('ellipse')
+          .attr('rx', (d) => docSizeFor(d).rx)
+          .attr('ry', (d) => docSizeFor(d).ry)
           .attr('fill', fillFor)
           .attr('stroke', '#fff')
           .attr('stroke-width', 2)
-        ng.append('title').text((d) => `${d.title} (${d.slug})`)  // 풀 title 은 hover tooltip
-        // SVG <text> 의 default baseline = alphabetic (글자 *아래쪽*이 y).
-        // 우리는 글자가 ellipse 의 정확한 중앙에 오기를 원하므로:
-        //  - text-anchor: middle → 가로 중앙
-        //  - dominant-baseline: central → 세로 중앙 (모든 브라우저 지원, 'middle' 보다 신뢰성 ↑)
-        //  - dy: 글자 자체의 visual centerline 보정 — alphabetic baseline 기준 약 fontSize/3 만큼 아래로
-        // 추가 안전망: y 도 0 으로 명시 (기본 0 이지만 어떤 변형도 무력화).
+
+        // tag → rounded rect
+        ng.filter((d) => d.kind === 'tag')
+          .append('rect')
+          .attr('x', (d) => -tagSizeFor(d).w / 2)
+          .attr('y', (d) => -tagSizeFor(d).h / 2)
+          .attr('width', (d) => tagSizeFor(d).w)
+          .attr('height', (d) => tagSizeFor(d).h)
+          .attr('rx', 6)
+          .attr('ry', 6)
+          .attr('fill', fillFor)
+          .attr('stroke', '#fff')
+          .attr('stroke-width', 2)
+
+        ng.append('title').text((d) =>
+          d.kind === 'tag' ? `${d.title} — ${d.docCount} docs` : `${d.title} (${d.slug})`,
+        )
+
         ng.append('text')
           .attr('x', 0)
           .attr('y', 0)
           .attr('text-anchor', 'middle')
           .attr('dominant-baseline', 'central')
           .attr('font-size', fontFor)
-          .attr('font-weight', (d) => (d.slug === rootSlug ? 700 : 500))
+          .attr('font-weight', (d) => (d.slug === rootSlug ? 700 : d.kind === 'tag' ? 600 : 500))
           .attr('fill', '#ffffff')
           .attr('pointer-events', 'none')
           .text(labelFor)
@@ -265,11 +374,16 @@ export function GraphCanvas({
       })
 
     nodeSel.on('click', (_, d) => {
+      // tag 노드 좌클릭 = no-op (plan §1.3 §3 — page navigate 안 함).
+      // S4 부터 cluster 토글로 확장 예정.
+      if (d.kind === 'tag') return
       if (!d.isMissing && onPickNode) onPickNode(d.slug)
     })
 
     nodeSel.on('contextmenu', (event: MouseEvent, d) => {
-      if (d.isMissing || !onContextMenu) return
+      // tag 노드도 context menu 는 제공 (S5 polish 에 메뉴 확장).
+      if (d.kind === 'doc' && d.isMissing) return
+      if (!onContextMenu) return
       event.preventDefault()
       onContextMenu(d.slug, event.clientX, event.clientY)
     })
@@ -356,6 +470,21 @@ export function GraphPage() {
   const rawDepth = parseInt(searchParams.get('depth') ?? '2', 10)
   const depth = Number.isFinite(rawDepth) && rawDepth >= 1 && rawDepth <= 4 ? rawDepth : 2
 
+  // S3: ?domain=X — 도메인 진입. tag 노드 + (옵션) doc_tag/tag_cooc edge 포함.
+  const domain = searchParams.get('domain') || null
+
+  // S3: edge type chip — wiki+doc_tag default ON, tag_cooc default OFF (plan §10).
+  const [edgeKinds, setEdgeKinds] = useState<Set<'wiki' | 'doc_tag' | 'tag_cooc'>>(
+    () => new Set(['wiki', 'doc_tag']),
+  )
+  const toggleEdgeKind = (k: 'wiki' | 'doc_tag' | 'tag_cooc') => {
+    setEdgeKinds((prev) => {
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k); else next.add(k)
+      return next
+    })
+  }
+
   const setDepth = (d: number) => {
     const next = new URLSearchParams(searchParams)
     next.set('depth', String(d))
@@ -408,8 +537,15 @@ export function GraphPage() {
   }, [menu])
 
   const { data, isPending, isError, error } = useQuery({
-    queryKey: ['graph', slug ?? '__global__', depth],
-    queryFn: () => fetchGraph(slug ?? null, depth),
+    queryKey: ['graph', { root: slug ?? null, depth, domain, edgeKinds: [...edgeKinds].sort() }],
+    queryFn: () => fetchGraph({
+      root: slug ?? null,
+      depth,
+      ...(domain ? { domain } : {}),
+      include_tags: !!domain,                     // domain 진입 시 tag 노드 받기
+      include_doc_tag_edges: edgeKinds.has('doc_tag'),
+      include_tag_cooc: edgeKinds.has('tag_cooc'),
+    }),
     staleTime: 30_000,
   })
 
@@ -425,7 +561,11 @@ export function GraphPage() {
         <div className="min-w-0 flex-1">
           <h1 className="text-lg font-semibold text-smsg-900 dark:text-gray-100">위키 그래프</h1>
           <p className="text-xs text-gray-500">
-            {slug ? `루트: ${slug} · 깊이 ${depth}` : '전역 그래프 (degree 상위 50)'}
+            {domain
+              ? `도메인: ${domain}${slug ? ` · 루트: ${slug}` : ''}`
+              : slug
+              ? `루트: ${slug} · 깊이 ${depth}`
+              : '전역 그래프 (degree 상위 50)'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -458,6 +598,28 @@ export function GraphPage() {
               />
               고아 표시
             </label>
+          )}
+          {/* S3: Edge type chip — wiki/doc_tag/tag_cooc 각각 토글 */}
+          {domain && (
+            <div className="flex items-center gap-1 text-xs" role="group" aria-label="엣지 종류 필터">
+              {(['wiki', 'doc_tag', 'tag_cooc'] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => toggleEdgeKind(k)}
+                  aria-pressed={edgeKinds.has(k)}
+                  data-testid={`edge-chip-${k}`}
+                  className={`rounded border px-2 py-1 transition-colors ${
+                    edgeKinds.has(k)
+                      ? 'border-smsg-500 bg-smsg-50 text-smsg-900 dark:bg-smsg-900 dark:text-smsg-100'
+                      : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800'
+                  }`}
+                  title={k === 'wiki' ? '위키 링크' : k === 'doc_tag' ? '태그 소속' : '태그 공동출현'}
+                >
+                  {k === 'wiki' ? '🔗' : k === 'doc_tag' ? '🏷' : '↔'} {k}
+                </button>
+              ))}
+            </div>
           )}
           <button
             type="button"
@@ -499,6 +661,7 @@ export function GraphPage() {
             highlight={query}
             rootSlug={slug ?? null}
             showOrphans={showOrphans}
+            edgeKinds={edgeKinds}
             onPickNode={(s) => navigate(`/docs/${encodeURIComponent(s)}`)}
             onContextMenu={(s, x, y) => setMenu({ slug: s, x, y })}
           />

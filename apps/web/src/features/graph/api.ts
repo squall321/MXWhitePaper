@@ -13,17 +13,34 @@
 import { apiClient } from '@/lib/api/client'
 import { unwrap, type ApiEnvelope } from '@/lib/api/envelope'
 
-export interface GraphNode {
+/** Doc node (default kind when missing — backward compat). */
+export interface GraphNodeDoc {
+  kind?: 'doc'
   slug: string
   title: string
   status: 'active' | 'archived' | 'missing' | string
   group: string | null
 }
 
+/** Tag node — kind='tag', slug='tag:<name>'. */
+export interface GraphNodeTag {
+  kind: 'tag'
+  slug: string          // "tag:<name>"
+  name: string          // raw tag name without prefix
+  doc_count: number
+  super_domain: string  // 'mobile' | 'software' | 'hardware' | 'telecom'
+}
+
+export type GraphNode = GraphNodeDoc | GraphNodeTag
+
 export interface GraphEdge {
+  /** Edge kind — default 'wiki' when missing (backward compat). */
+  kind?: 'wiki' | 'doc_tag' | 'tag_cooc'
   source: string
   target: string
-  count: number
+  /** count for wiki / weight for tag_cooc. doc_tag has neither. */
+  count?: number
+  weight?: number
 }
 
 export interface GraphPayload {
@@ -36,6 +53,8 @@ export interface GraphOptions {
   depth?: number
   domain?: string
   include_tags?: boolean
+  include_doc_tag_edges?: boolean
+  include_tag_cooc?: boolean
 }
 
 /**
@@ -55,6 +74,8 @@ export async function fetchGraph(
     params.depth = opts.depth ?? 2
     if (opts.domain) params.domain = opts.domain
     if (opts.include_tags) params.include_tags = true
+    if (opts.include_doc_tag_edges) params.include_doc_tag_edges = true
+    if (opts.include_tag_cooc) params.include_tag_cooc = true
   } else {
     params.depth = depth
     if (rootOrOptions) params.root = rootOrOptions as string
