@@ -22,6 +22,8 @@ import {
   forceLink,
   forceManyBody,
   forceSimulation,
+  forceX,
+  forceY,
   type Simulation,
   type SimulationLinkDatum,
   type SimulationNodeDatum,
@@ -162,7 +164,14 @@ export interface GraphCanvasProps {
   showOrphans?: boolean
   /** 표시할 edge 종류. plan v0.3 §10: wiki+doc_tag default, tag_cooc OFF. */
   edgeKinds?: Set<'wiki' | 'doc_tag' | 'tag_cooc'>
+  /** S4: 최소 연결도 (wiki degree). 이 값 미만의 doc 노드는 fade out. tag 는 무시. */
+  minDegree?: number
+  /** S4: tag click 시 그 tag 와 같은 cluster 의 doc 들을 자석으로 끌어당기는 강도. 0 = off. */
+  clusterStrength?: number
+  /** S4: 현재 focus 된 tag slug — 이 tag 가 cluster centroid 역할. null 이면 cluster off. */
+  focusedTag?: string | null
   onPickNode?: (slug: string) => void
+  onPickTag?: (slug: string) => void
   onContextMenu?: (slug: string, x: number, y: number) => void
 }
 
@@ -177,9 +186,15 @@ export function GraphCanvas({
   rootSlug,
   showOrphans = true,
   edgeKinds = DEFAULT_EDGE_KINDS,
+  minDegree = 0,
+  clusterStrength = 0.15,
+  focusedTag = null,
   onPickNode,
+  onPickTag,
   onContextMenu,
 }: GraphCanvasProps) {
+  // S4: hover focus state — null 이면 모든 노드 평소 opacity.
+  const [hoverSlug, setHoverSlug] = useState<string | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const gRef = useRef<SVGGElement | null>(null)
   const simRef = useRef<Simulation<SimNode, SimLink> | null>(null)
@@ -210,6 +225,20 @@ export function GraphCanvas({
     return { nodes: filteredNodes, links: filteredLinks }
   }, [rawNodes, rawEdges, rootSlug, showOrphans, edgeKinds])
 
+  // S4: adjacency map — focus hover 시 1-hop + cluster force 에 모두 활용. 무방향.
+  const adjacency = useMemo(() => {
+    const adj = new Map<string, Set<string>>()
+    for (const l of links) {
+      const s = typeof l.source === 'string' ? l.source : (l.source as SimNode).slug
+      const t = typeof l.target === 'string' ? l.target : (l.target as SimNode).slug
+      if (!adj.has(s)) adj.set(s, new Set())
+      if (!adj.has(t)) adj.set(t, new Set())
+      adj.get(s)!.add(t)
+      adj.get(t)!.add(s)
+    }
+    return adj
+  }, [links])
+
   // Force simulation tick — updates SVG attributes directly via d3-selection
   // for performance; React only owns the static SVG/g scaffolding.
   useEffect(() => {
@@ -239,6 +268,44 @@ export function GraphCanvas({
         }).strength(0.9),
       )
       .force('center', forceCenter(WIDTH / 2, HEIGHT / 2))
+
+    // S4: soft cluster — focusedTag 가 있으면 그 tag 의 super_domain doc 들을 tag centroid 로 끌어당김.
+    // d3 forceX/forceY 를 selective strength 로 적용. wiki link force 보다 약하게 (clusterStrength<<link.strength).
+    if (focusedTag && clusterStrength > 0) {
+      const tagNode = nodes.find((n) => n.kind === 'tag' && n.slug === focusedTag)
+      const targetDomain = tagNode?.superDomain
+      const cx = WIDTH / 2, cy = HEIGHT / 2
+      // tag 자체는 가운데로 더 강하게, 같은 domain doc 은 약하게.
+      sim.force(
+        'cluster-x',
+        forceX<SimNode>((d) => {
+          if (d.slug === focusedTag) return cx
+          // tag 의 doc_tag 엣지로 연결된 doc 도 cluster 대상으로 포함
+          // (super_domain 미보유 doc 이라도 doc_tag 로 묶이면 cluster)
+          if (d.kind === 'doc' && (adjacency.get(focusedTag)?.has(d.slug) || (targetDomain && d.kind === 'doc'))) {
+            return cx
+          }
+          return d.x ?? cx
+        }).strength((d) => {
+          if (d.slug === focusedTag) return clusterStrength * 2
+          if (d.kind === 'doc' && adjacency.get(focusedTag)?.has(d.slug)) return clusterStrength
+          return 0
+        }),
+      )
+      sim.force(
+        'cluster-y',
+        forceY<SimNode>((d) => {
+          if (d.slug === focusedTag) return cy
+          if (d.kind === 'doc' && adjacency.get(focusedTag)?.has(d.slug)) return cy
+          return d.y ?? cy
+        }).strength((d) => {
+          if (d.slug === focusedTag) return clusterStrength * 2
+          if (d.kind === 'doc' && adjacency.get(focusedTag)?.has(d.slug)) return clusterStrength
+          return 0
+        }),
+      )
+      sim.alpha(0.5).restart()  // re-energize so the pull takes effect immediately
+    }
 
     simRef.current = sim
 
@@ -374,19 +441,24 @@ export function GraphCanvas({
       })
 
     nodeSel.on('click', (_, d) => {
-      // tag 노드 좌클릭 = no-op (plan §1.3 §3 — page navigate 안 함).
-      // S4 부터 cluster 토글로 확장 예정.
-      if (d.kind === 'tag') return
+      // tag 좌클릭 → onPickTag (cluster 토글). doc 좌클릭 → onPickNode (페이지 이동).
+      if (d.kind === 'tag') {
+        if (onPickTag) onPickTag(d.slug)
+        return
+      }
       if (!d.isMissing && onPickNode) onPickNode(d.slug)
     })
 
     nodeSel.on('contextmenu', (event: MouseEvent, d) => {
-      // tag 노드도 context menu 는 제공 (S5 polish 에 메뉴 확장).
       if (d.kind === 'doc' && d.isMissing) return
       if (!onContextMenu) return
       event.preventDefault()
       onContextMenu(d.slug, event.clientX, event.clientY)
     })
+
+    // S4: hover focus — mouseenter/leave 로 1-hop 강조.
+    nodeSel.on('mouseenter', (_, d) => setHoverSlug(d.slug))
+    nodeSel.on('mouseleave', () => setHoverSlug(null))
 
     sim.on('tick', () => {
       linkSel
@@ -401,20 +473,43 @@ export function GraphCanvas({
       sim.stop()
       simRef.current = null
     }
-  }, [nodes, links, onPickNode, onContextMenu, rootSlug])
+  }, [nodes, links, onPickNode, onPickTag, onContextMenu, rootSlug, focusedTag, clusterStrength, adjacency])
 
-  // Highlight effect — overlay opacity instead of restarting the simulation.
+  // Highlight + focus + degree-filter effect.
+  // 세 가지가 결합되어 *최종 opacity* 결정. 모두 별도 useEffect 하면 깜빡임 — 합쳐서 한 번에.
   useEffect(() => {
     if (!gRef.current) return
     const g = select(gRef.current)
     const q = (highlight ?? '').trim().toLowerCase()
-    g.selectAll<SVGGElement, SimNode>('g.node')
-      .style('opacity', (d) =>
-        !q || d.slug.toLowerCase().includes(q) || d.title.toLowerCase().includes(q)
-          ? 1
-          : 0.2,
-      )
-  }, [highlight, nodes])
+
+    // hover focus 우선 — set 이 있으면 그 외 모두 fade.
+    const focusSet = hoverSlug
+      ? new Set([hoverSlug, ...(adjacency.get(hoverSlug) ?? [])])
+      : null
+
+    const isVisibleByDegree = (d: SimNode) =>
+      d.kind === 'tag' || (d.degree ?? 0) >= minDegree
+
+    const computeNodeOpacity = (d: SimNode): number => {
+      if (!isVisibleByDegree(d)) return 0.1
+      if (focusSet && !focusSet.has(d.slug)) return 0.15
+      if (q && !d.slug.toLowerCase().includes(q) && !d.title.toLowerCase().includes(q)) {
+        return 0.2
+      }
+      return 1
+    }
+
+    g.selectAll<SVGGElement, SimNode>('g.node').style('opacity', computeNodeOpacity)
+
+    // edge opacity — 양끝 노드가 다 visible 일 때만 켜짐.
+    g.selectAll<SVGLineElement, SimLink>('line').style('opacity', (l) => {
+      const s = l.source as SimNode
+      const t = l.target as SimNode
+      const sOpa = computeNodeOpacity(s)
+      const tOpa = computeNodeOpacity(t)
+      return Math.min(sOpa, tOpa)
+    })
+  }, [highlight, nodes, hoverSlug, adjacency, minDegree])
 
   // Pan + zoom.
   useEffect(() => {
@@ -477,6 +572,11 @@ export function GraphPage() {
   const [edgeKinds, setEdgeKinds] = useState<Set<'wiki' | 'doc_tag' | 'tag_cooc'>>(
     () => new Set(['wiki', 'doc_tag']),
   )
+  // S4: 최소 연결도 slider — 0 = 모두 표시, N = N+ 만.
+  const [minDegree, setMinDegree] = useState(0)
+  // S4: focused tag — null 이면 cluster off. tag 좌클릭 시 토글.
+  const [focusedTag, setFocusedTag] = useState<string | null>(null)
+  const onPickTag = (s: string) => setFocusedTag((cur) => (cur === s ? null : s))
   const toggleEdgeKind = (k: 'wiki' | 'doc_tag' | 'tag_cooc') => {
     setEdgeKinds((prev) => {
       const next = new Set(prev)
@@ -599,6 +699,34 @@ export function GraphPage() {
               고아 표시
             </label>
           )}
+          {/* S4: degree slider — 최소 연결도 N+ 만 표시 (fade 만, simulation 재시작 X) */}
+          <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300" title="최소 연결도">
+            연결≥
+            <input
+              type="range"
+              min={0}
+              max={10}
+              value={minDegree}
+              onChange={(e) => setMinDegree(parseInt(e.target.value, 10))}
+              aria-label="최소 연결도"
+              data-testid="graph-min-degree"
+              className="w-20"
+            />
+            <span className="w-4 tabular-nums">{minDegree}</span>
+          </label>
+          {/* S4: focused tag indicator + 해제 버튼 */}
+          {focusedTag && (
+            <button
+              type="button"
+              onClick={() => setFocusedTag(null)}
+              aria-label="cluster 해제"
+              data-testid="graph-cluster-clear"
+              className="rounded border border-purple-300 bg-purple-50 px-2 py-1 text-xs text-purple-700 hover:bg-purple-100 dark:border-purple-700 dark:bg-purple-900 dark:text-purple-100"
+              title="이 tag 의 cluster 해제"
+            >
+              🧲 {focusedTag.replace(/^tag:/, '#')} ✕
+            </button>
+          )}
           {/* S3: Edge type chip — wiki/doc_tag/tag_cooc 각각 토글 */}
           {domain && (
             <div className="flex items-center gap-1 text-xs" role="group" aria-label="엣지 종류 필터">
@@ -662,7 +790,11 @@ export function GraphPage() {
             rootSlug={slug ?? null}
             showOrphans={showOrphans}
             edgeKinds={edgeKinds}
+            minDegree={minDegree}
+            focusedTag={focusedTag}
+            clusterStrength={0.15}
             onPickNode={(s) => navigate(`/docs/${encodeURIComponent(s)}`)}
+            onPickTag={onPickTag}
             onContextMenu={(s, x, y) => setMenu({ slug: s, x, y })}
           />
         )}
