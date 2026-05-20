@@ -97,7 +97,11 @@ export function WorkflowRibbon({
     <div
       data-testid="workflow-ribbon"
       data-status={status}
-      className="sticky top-[var(--header-h,3rem)] z-10 -mx-4 mb-3 flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-white/95 px-3 py-2 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/95"
+      // top 을 EditorToolbar (top=header-h+2rem, h~3rem) *아래* 로 두고, z-index 도
+      // toolbar(z-10) 보다 낮게 잡아 스크롤 중 toolbar 위로 지나가지 않게 한다.
+      // calc 의 'em' 마진은 헤더+toolbar 합산 높이 추정 — 정확치 어긋나도 toolbar 가
+      // 항상 위에 오는 보장은 z 차이 (0 vs 10) 가 담당.
+      className="sticky top-[calc(var(--header-h,3rem)+5rem)] z-0 -mx-4 mb-3 flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-white/95 px-3 py-2 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/95"
     >
       <Badge
         tone={STATUS_TONE[status]}
