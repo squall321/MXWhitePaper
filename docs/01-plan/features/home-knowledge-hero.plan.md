@@ -8,9 +8,17 @@
 >
 > **Project**: MX White Paper
 > **Feature**: home-knowledge-hero
-> **Version**: 0.1.0
-> **Date**: 2026-05-20
+> **Version**: 0.2.0
+> **Date**: 2026-05-20 (v0.2 — 점검 후 위험 4건 반영 + Open Questions 8개 default 확정)
 > **Status**: Draft
+
+## Changelog
+- v0.2 (2026-05-20): 점검 라운드 반영
+  - C2 — doc-tag edge default OFF + tag 클릭 시만 on-demand 표시 (그래프 폭발 방지)
+  - C3 — `/api/v1/domains/counts` → `/api/v1/home/hero` 로 명칭/응답 schema 보강 (top_docs 포함)
+  - I1 — V2 검증 기준 하드코드 → 범위 (`mobile ≥ 50` 등) 로 완화 (import 진행 중 변동성 대응)
+  - I5 — S2 tile click = `/graph?domain=X` (BE 확장 S2 에 합류), FE 는 Cycle 1 에서 tag 노드 무시
+  - 추가 default 확정: cluster 0.15 / chip wiki+doc_tag ON, tag_cooc OFF / i18n ko+en / 빈 도메인 hidden / cache TTL 5분 / top_docs 기준 = in-degree 상위 / domain+root 동시 적용
 
 ---
 
@@ -56,6 +64,14 @@
 6. **타일 클릭 시 OR 결합**: super-domain 의 *모든* 하위 tag 가 결합되어 그래프에 노출
 7. **모바일 fallback**: lg breakpoint 미만 = 그래프 대신 super-domain 별 문서 list view
 8. **백엔드 = 기존 endpoint 확장** (별도 endpoint 신설 안 함). `/api/v1/links/graph?include_tags=1&domain=mobile` 식 옵트인
+9. **doc-tag edge default OFF + tag 클릭 시만 on-demand 표시** (v0.2 신규 — C2 대응). 200+ doc 도메인에서 600+ 점선 폭발 차단
+10. **Edge chip default**: `wiki` ON, `doc_tag` ON (tag 클릭 시에만 그려짐), `tag_cooc` **OFF** — power user 가 토글로 켬
+11. **Cluster strength default = 0.15** (link 우선, cluster 는 2차 정렬). 슬라이더 UI 는 polish 단계 (S5) 에 검토
+12. **Hero i18n**: ko/en 두 언어. `home.domain.<id>` key 로 기존 i18n 인프라 사용
+13. **빈 도메인 표시**: count 0 인 타일은 *숨김*. 타일 개수 동적 1–4
+14. **`/api/v1/home/hero` 캐시 = TTL 5분, p95 목표 < 200ms** (Q1+N4 통합)
+15. **대표 문서 (top_docs) 선정 기준 = in-degree 상위 3개** (Q2). namu-archive import 직후 view 카운트 미흡 — degree 가 의미 있는 신호
+16. **`/graph?domain=X&root=Y` 동시 지정 = 동시 적용** (I4). 그 도메인의 tag 가진 doc 들 중에서 root 의 BFS depth 검색 — 가장 강력
 
 ### 1.4 Super-Domain 매핑 (확정)
 
@@ -308,7 +324,35 @@ export function DomainTiles() {
 }
 ```
 
-도메인 카운트 endpoint 신규: `GET /api/v1/domains/counts` → `{ mobile: 86, software: 219, hardware: 109, telecom: 43 }`
+도메인 hero endpoint 신규 (v0.2 명칭 변경): `GET /api/v1/home/hero`
+
+응답 schema:
+```json
+{
+  "data": {
+    "as_of": "2026-05-20T10:30:00Z",
+    "domains": [
+      {
+        "id": "mobile",
+        "doc_count": 86,
+        "top_docs": [
+          { "slug": "안드로이드", "title": "안드로이드" },
+          { "slug": "갤럭시", "title": "갤럭시" },
+          { "slug": "ios", "title": "iOS" }
+        ]
+      },
+      { "id": "software", "doc_count": 219, "top_docs": [...] },
+      { "id": "hardware", "doc_count": 109, "top_docs": [...] },
+      { "id": "telecom",  "doc_count": 43,  "top_docs": [...] }
+    ]
+  }
+}
+```
+
+- **빈 도메인 (`doc_count === 0`)** 은 응답에서 *제외* — FE 가 렌더할 도메인만 받음 (I3 default)
+- **`as_of`** 는 cache 갱신 시각. import 진행 중 사용자 디버그용
+- **`top_docs`** = in-degree 상위 3개 (Q2 default). links 가 빈약하면 fallback = updated_at desc
+- **Cache TTL = 5분** (in-memory LRU, key = `home_hero`)
 
 ### 3.5 프론트엔드 — Home.tsx 통합
 
@@ -333,8 +377,8 @@ return (
 | # | 검증 항목 | 방법 |
 |---|---|---|
 | V1 | `SUPER_DOMAINS` 상수 FE/BE 공유 import 동작 | pnpm typecheck + apptainer exec python import |
-| V2 | `GET /api/v1/domains/counts` 응답 = `{mobile:86, software:219, hardware:109, telecom:43}` | curl |
-| V3 | `GET /api/v1/links/graph?domain=mobile&include_tags=1` 노드/엣지 count > 0 | curl + jq |
+| V2 | `GET /api/v1/home/hero` 응답에 4 domain (mobile/software/hardware/telecom), 각 doc_count >= 30 (import 진행 중 변동 허용), top_docs.length === 3 (또는 doc_count 가 < 3 이면 그 수) | curl + jq |
+| V3 | `GET /api/v1/links/graph?domain=mobile&include_tags=1` 노드 (doc+tag) count > 0, 응답 < 300ms | curl + jq + time |
 | V4 | Home 에 4 타일 렌더, 카운트 표시 | 브라우저 수동 + vitest snapshot |
 | V5 | 타일 클릭 → `/graph?domain=mobile` 라우팅 | vitest user event |
 | V6 | 기존 `/api/v1/links/graph?root=android&depth=2` backward compat | vitest + curl |
@@ -365,6 +409,10 @@ return (
 | S3 이후 BE 응답 schema 변경으로 기존 `/graph` client 깨짐 | H | `kind` 필드 *없으면* default `"doc"` 으로 해석 — backward compat 명시 |
 | 사용자가 super-domain 매핑 만족 못함 (예: AI 별도 도메인 원함) | L | `SUPER_DOMAINS` 코드 한 곳 — 매핑 변경 5분. 사용자 confirm 후 진행 |
 | 모바일에서 graph viewport 안 잡힘 | M | lg breakpoint 미만 = `<DomainTileList />` 라는 별도 list view 컴포넌트 |
+| **(v0.2 C1)** 백엔드 쿼리 N+1 / tag_cooc self-join 비용 | H | S1 첫 작업: `EXPLAIN ANALYZE` 로 인덱스 확인 — `document_tags(tag_id)`, `document_tags(document_id)`, `links(source_slug)`, `links(target_slug)`. 없으면 `CREATE INDEX` 먼저. p95 < 200ms 미달 시 cache TTL 단축 또는 응답 축소 |
+| **(v0.2 C2)** doc-tag edge 폭발 | H | default OFF + tag 클릭 on-demand (Decisions §9). BE 응답 size 검증: domain=software (219 doc) 일 때 edge ≤ 500 개 |
+| **(v0.2 I5)** tag 노드 slug=`"tag:<name>"` 가 기존 `/docs/<slug>` 라우팅에서 404 | M | FE 분기: `kind === 'tag'` 면 좌클릭 = cluster 토글, navigate 안 함. Cycle 1 = tag 노드 무시 (응답 받지만 렌더 안 함), S3 부터 정식 렌더 |
+| **(v0.2 I1)** import 진행 중 카운트 변동 | L | V2 검증 = 정확 수치 대신 범위 (≥30). `as_of` 타임스탬프 응답에 포함 |
 
 ---
 
@@ -383,8 +431,9 @@ return (
 ### Cycle 1 (S1+S2) — 본 사이클 완료 조건
 
 - [ ] `packages/shared/src/super-domains.ts` 신규, FE/BE 모두 import 가능
-- [ ] `GET /api/v1/domains/counts` 신규 endpoint, 4 도메인 카운트 반환
-- [ ] `GET /api/v1/links/graph?domain=X` 확장 동작 (BE 만 — FE 는 S3 부터 활용)
+- [ ] `GET /api/v1/home/hero` 신규 endpoint, 4 도메인 (이상) + 각 top_docs 3 반환, p95 < 200ms
+- [ ] `GET /api/v1/links/graph?domain=X&include_tags=1` 확장 동작 (BE 만 — FE 는 Cycle 1 에서 tag 노드 무시)
+- [ ] BE 인덱스 확인 + 필요 시 생성 (C1)
 - [ ] `apps/web/src/features/home/components/DomainTiles.tsx` 신규
 - [ ] Home.tsx 가 DomainTiles 를 hero 자리에 사용
 - [ ] 모바일 (sm) 2 columns / desktop (sm+) 4 columns
@@ -402,11 +451,17 @@ return (
 
 ---
 
-## 8. Open Questions
+## 8. Open Questions — 모두 해소 (v0.2)
 
-1. 도메인 카운트 cache TTL 5분이 적절한가? Namu_Archive import 중엔 더 짧게 (1분) 가 나을지?
-2. 타일 hover preview (3 대표 문서) — degree 상위 vs view count 상위? (view count 데이터 신뢰성 확인 필요)
-3. tag 노드 클릭 시 force cluster strength 0.15 가 default — 사용자 조정 가능하게 할지 (UI complexity 늘어남)?
-4. Edge type chip — 3개 다 보이는 게 default vs wiki+doc_tag 만 default (tag_cooc 는 power user 전용)?
+| # | 질문 | 결정 | 위치 |
+|---|---|---|---|
+| Q1 | cache TTL | **5분, p95 < 200ms** | Decisions §14 |
+| Q2 | top_docs 선정 | **in-degree 상위 3개** (fallback: updated_at desc) | Decisions §15 |
+| Q3 | cluster strength default | **0.15**, 슬라이더는 S5 polish 검토 | Decisions §11 |
+| Q4 | edge chip default | `wiki` ON, `doc_tag` ON (tag 클릭 시만 그려짐), `tag_cooc` **OFF** | Decisions §10 |
+| Q5 (C2) | doc_tag edge default | **OFF + tag 클릭 on-demand** | Decisions §9 |
+| Q6 (I3) | 빈 도메인 표시 | **숨김** (타일 1–4 동적) | Decisions §13 |
+| Q7 (I4) | `?domain=X&root=Y` 동시 | **동시 적용** (domain 안에서 root BFS) | Decisions §16 |
+| Q8 (N3) | i18n | **ko + en** (`home.domain.<id>` key) | Decisions §12 |
 
-위 4개는 *S3 시작 전* 사용자에 재확인.
+S3 시작 전 재확인할 항목 없음. plan 즉시 실행 가능.
