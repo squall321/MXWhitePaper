@@ -5,7 +5,8 @@
     "noEmit": true,
     "paths": {
       "@/*": ["src/*"],
-      "@mx/shared": ["../../packages/shared"]
+      "@mx/shared": ["../../packages/shared"],
+      "@mx/shared/super-domains": ["../../packages/shared/src/super-domains.ts"]
     },
     "types": ["vite/client"]
   },

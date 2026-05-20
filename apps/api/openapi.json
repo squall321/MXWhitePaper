@@ -11565,6 +11565,29 @@
         ]
       }
     },
+    "/api/v1/home/hero": {
+      "get": {
+        "operationId": "get_home_hero_api_v1_home_hero_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Home Hero Api V1 Home Hero Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Home hero — super-domain 타일 데이터 (캐시 5분)",
+        "tags": [
+          "home"
+        ]
+      }
+    },
     "/api/v1/images/{identifier}": {
       "get": {
         "operationId": "get_image_api_v1_images__identifier__get",
@@ -11854,7 +11877,7 @@
     },
     "/api/v1/links/graph": {
       "get": {
-        "description": "root 가 주어지면 depth 까지 BFS 확장. 미지정시 degree 상위 200 노드 + 그 사이의 엣지를 반환.",
+        "description": "root 가 주어지면 depth 까지 BFS 확장. 미지정시 degree 상위 200 노드 + 그 사이의 엣지를 반환.\n\ndomain 지정 시 그 super-domain 의 tag 를 가진 published doc 들 + wiki 엣지 반환. include_tags=1 이면 tag 노드 추가. include_doc_tag_edges=1 이면 doc-tag 소속 엣지 추가. include_tag_cooc=1 이면 tag-tag 공동출현 엣지 추가.",
         "operationId": "get_graph_api_v1_links_graph_get",
         "parameters": [
           {
@@ -11884,6 +11907,52 @@
               "title": "Depth",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "domain",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domain"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_tags",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Tags",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_doc_tag_edges",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Doc Tag Edges",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_tag_cooc",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Tag Cooc",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -11910,7 +11979,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Wiki link 그래프 (BFS)",
+        "summary": "Wiki link 그래프 (BFS) + 이종 그래프 (domain)",
         "tags": [
           "links"
         ]
@@ -17465,7 +17534,11 @@
       "name": "bookmarks"
     },
     {
-      "description": "위키 링크 그래프 — BFS 그래프 / 전역 그래프.",
+      "description": "Home hero — super-domain 타일 데이터 (4 도메인 × doc_count + trend_7d + top_docs).",
+      "name": "home"
+    },
+    {
+      "description": "위키 링크 그래프 — BFS 그래프 / 전역 그래프 / 이종 그래프 (domain).",
       "name": "links"
     },
     {

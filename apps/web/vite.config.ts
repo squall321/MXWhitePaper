@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
+      '@mx/shared/super-domains': path.resolve(__dirname, '../../packages/shared/src/super-domains.ts'),
     },
   },
   test: {

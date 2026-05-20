@@ -40,6 +40,7 @@ from .routers.forms import router as forms_router
 from .routers.glossary import router as glossary_router
 from .routers.health_dashboard import router as health_dashboard_router
 from .routers.imports import router as imports_router
+from .routers.home import router as home_router
 from .routers.links_graph import router as links_graph_router
 from .routers.notification_prefs import router as notification_prefs_router
 from .routers.notifications import router as notifications_router
@@ -159,8 +160,12 @@ TAGS_METADATA: list[dict[str, str]] = [
         ),
     },
     {
+        "name": "home",
+        "description": "Home hero — super-domain 타일 데이터 (4 도메인 × doc_count + trend_7d + top_docs).",
+    },
+    {
         "name": "links",
-        "description": "위키 링크 그래프 — BFS 그래프 / 전역 그래프.",
+        "description": "위키 링크 그래프 — BFS 그래프 / 전역 그래프 / 이종 그래프 (domain).",
     },
     {
         "name": "dep-graph",
@@ -538,6 +543,8 @@ def create_app() -> FastAPI:
     app.include_router(audit_retention_router)
     # Operations health dashboard — DB pool / MinIO / Meili / tickers
     app.include_router(health_dashboard_router)
+    # Home hero — super-domain 타일 + trend
+    app.include_router(home_router)
     # Tier 2C — comments workflow + wiki link graph
     app.include_router(comments_doc_router)
     app.include_router(comments_one_router)

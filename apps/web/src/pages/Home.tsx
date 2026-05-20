@@ -13,6 +13,7 @@ import { SlowFetchBanner, useSlowFetch } from '@/lib/api/useSlowFetch'
 import { toApiError } from '@/lib/api/envelope'
 import { useLocale } from '@/lib/i18n'
 import type { AppOutletContext } from '@/App'
+import { DomainTiles } from '@/features/home/components/DomainTiles'
 
 /**
  * Landing page. Hero strip + filter chips + responsive document grid:
@@ -71,11 +72,13 @@ export function HomePage() {
 
   return (
     <section className="space-y-6">
+      <DomainTiles />
+
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-smsg-900 sm:text-3xl dark:text-gray-100">
+          <h2 className="text-xl font-semibold tracking-tight text-smsg-900 dark:text-gray-100">
             {t('home.hero.title')}
-          </h1>
+          </h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t('home.hero.subtitle')}
           </p>
