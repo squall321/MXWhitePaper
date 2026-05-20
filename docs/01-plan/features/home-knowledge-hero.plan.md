@@ -8,11 +8,17 @@
 >
 > **Project**: MX White Paper
 > **Feature**: home-knowledge-hero
-> **Version**: 0.2.0
-> **Date**: 2026-05-20 (v0.2 — 점검 후 위험 4건 반영 + Open Questions 8개 default 확정)
+> **Version**: 0.3.0
+> **Date**: 2026-05-20 (v0.3 — 성능/UX 보강 3건 + Trend 섹션 추가)
 > **Status**: Draft
 
 ## Changelog
+- v0.3 (2026-05-20): 성능/UX 평가 라운드 반영
+  - 보강 1 — BE 인덱스 사전 확인 (`document_tags`, `links`) — acceptance 필수
+  - 보강 2 — 타일 hover 시 `/links/graph?domain=X` prefetch (체감 1초 → 즉시)
+  - 보강 3 — Hero 옆 한 줄 안내 "상위 50 + 도메인 태그" (사용자 기대 정렬)
+  - in-degree materialized view 또는 cache 컬럼 도입
+  - **신규**: Trend 섹션 (도메인별 7일 문서 증가 sparkline, TTL 15분)
 - v0.2 (2026-05-20): 점검 라운드 반영
   - C2 — doc-tag edge default OFF + tag 클릭 시만 on-demand 표시 (그래프 폭발 방지)
   - C3 — `/api/v1/domains/counts` → `/api/v1/home/hero` 로 명칭/응답 schema 보강 (top_docs 포함)
@@ -72,6 +78,15 @@
 14. **`/api/v1/home/hero` 캐시 = TTL 5분, p95 목표 < 200ms** (Q1+N4 통합)
 15. **대표 문서 (top_docs) 선정 기준 = in-degree 상위 3개** (Q2). namu-archive import 직후 view 카운트 미흡 — degree 가 의미 있는 신호
 16. **`/graph?domain=X&root=Y` 동시 지정 = 동시 적용** (I4). 그 도메인의 tag 가진 doc 들 중에서 root 의 BFS depth 검색 — 가장 강력
+17. **(v0.3) BE 인덱스 사전 확인** — S1 첫 작업으로 `EXPLAIN ANALYZE` 실행. 인덱스 미존재 시 `CREATE INDEX` 먼저:
+    - `idx_document_tags_tag_id ON document_tags(tag_id)` — super-domain → doc 조회
+    - `idx_document_tags_doc_id ON document_tags(document_id)` — doc → tag 역조회
+    - `idx_links_source_slug ON links(source_slug)` — wiki edge 조회
+    - `idx_links_target_slug ON links(target_slug)` — in-degree 계산
+18. **(v0.3) in-degree cache** — `documents` 테이블에 `indegree integer DEFAULT 0` 컬럼 추가. `update_links_for_document()` 가 갱신할 때 *source 와 target* 양쪽 doc 의 indegree 도 함께 갱신. matview 보다 가벼움 (REFRESH 필요 없음)
+19. **(v0.3) 타일 hover prefetch** — react-query 의 `queryClient.prefetchQuery(['graph', domain])` 를 mouseenter 시 호출. 200ms debounce 로 무분별한 prefetch 방지
+20. **(v0.3) Hero subtitle 안내** — 타일 우측에 작은 텍스트 "상위 50개 문서 + 도메인 태그를 그래프로 표시. 검색은 ⌘K". 사용자 기대 misalignment 방지
+21. **(v0.3) Trend 섹션** — Hero 아래에 7일 문서 증가 sparkline. 각 도메인 타일 *안에* mini sparkline (40×20px) 으로 통합 — 별도 섹션 X. cache TTL 15분
 
 ### 1.4 Super-Domain 매핑 (확정)
 
@@ -98,13 +113,15 @@
 
 | Sprint | 범위 | 산출물 | 예상 시간 |
 |---|---|---|---:|
-| **S1** | 데이터 + 백엔드 | `SUPER_DOMAINS` 상수, `/links/graph` 확장, tag 노드/엣지 query | 반나절 |
-| **S2** | Hero 도메인 타일 | Home 페이지 4 타일, 클릭 → `/graph?domain=X` | 반나절 |
-| **S3** | 그래프 통합 시각 | tag 노드 (사각형), doc-tag 엣지 (점선), tag-tag 엣지 (무지개) | 반나절 |
+| **S1** | 데이터 + 백엔드 | `SUPER_DOMAINS` 상수, BE 인덱스 사전 확인+생성, `indegree` 컬럼 추가, `/links/graph` 확장, `/home/hero` 신규 (trend 7d 포함) | 0.6 일 |
+| **S2** | Hero 도메인 타일 + Trend | Home 페이지 4 타일, 타일 안 sparkline (40×20), hover prefetch, 클릭 → `/graph?domain=X`, subtitle 안내 | 0.6 일 |
+| **S3** | 그래프 통합 시각 | tag 노드 (사각형), doc-tag 엣지 (점선, 클릭 on-demand), tag-tag 엣지 (무지개) | 반나절 |
 | **S4** | cluster + focus + slider | force-cluster, hover focus, degree slider | 반나절 |
 | **S5** | polish | 모바일 list fallback, 우클릭 메뉴 확장, 성능 튜닝 | 반나절 |
 
-**Cycle 1 (이번 사이클) = S1 + S2 까지**. 도메인 타일이 *눈에 보이는* 진척. S3 이후는 별도 사이클로 검토.
+**Cycle 1 (이번 사이클) = S1 + S2 까지**. 도메인 타일 + 트렌드 sparkline 까지가 *눈에 보이는* 진척. S3 이후는 별도 사이클로 검토.
+
+> **v0.3 변경**: Trend (sparkline) 가 별도 sprint 가 아닌 S2 의 도메인 타일 *안에* 통합됨. 별도 섹션 추가 대신 타일 한 컴포넌트로 끝 — UI 일관성 + 구현 비용 절약.
 
 ### 2.2 백엔드 API 확장
 
@@ -301,32 +318,143 @@ async def graph(
     return wiki_subgraph(root, depth)
 ```
 
-### 3.4 프론트엔드 — Hero 타일 컴포넌트
+### 3.4 프론트엔드 — Hero 타일 컴포넌트 (v0.3 — Sparkline + prefetch + subtitle)
 
 위치: `apps/web/src/features/home/components/DomainTiles.tsx`
 
 ```tsx
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchHomeHero, fetchGraph } from '@/features/home/api'
+import { SUPER_DOMAINS } from '@mx/shared/super-domains'
+import { Sparkline } from './Sparkline'
+import { useT } from '@/lib/i18n'
+
 export function DomainTiles() {
-  const { data: counts } = useQuery(['domain-counts'], fetchDomainCounts)
+  const t = useT()
+  const { data } = useQuery({ queryKey: ['home-hero'], queryFn: fetchHomeHero, staleTime: 5 * 60_000 })
+  const qc = useQueryClient()
+
+  // v0.3: 타일 hover 시 그래프 prefetch (체감 1초 → 즉시).
+  // 200ms debounce 는 react-query staleTime 으로 대체 — 같은 키 60s 캐시.
+  const prefetchGraph = (domainId: string) => {
+    qc.prefetchQuery({
+      queryKey: ['graph', { domain: domainId }],
+      queryFn: () => fetchGraph({ domain: domainId, include_tags: true }),
+      staleTime: 60_000,
+    })
+  }
+
+  if (!data?.domains) return null
+
   return (
-    <ul className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      {SUPER_DOMAINS.map((d) => (
-        <li key={d.id}>
-          <Link to={`/graph?domain=${d.id}`} className="...palette...">
-            <span className="text-3xl">{d.emoji}</span>
-            <h3>{d.label}</h3>
-            <p className="text-xs">{counts?.[d.id] ?? '...'} docs</p>
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <section aria-label={t('home.domain.sectionLabel')}>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {data.domains.map((d) => {
+          const meta = SUPER_DOMAINS.find((s) => s.id === d.id)!
+          const delta = d.doc_count - d.doc_count_7d_ago
+          return (
+            <Link
+              key={d.id}
+              to={`/graph?domain=${d.id}`}
+              onMouseEnter={() => prefetchGraph(d.id)}
+              onFocus={() => prefetchGraph(d.id)}
+              className={`tile tile-${d.id}`}
+            >
+              <header className="flex items-center justify-between">
+                <span className="text-3xl" aria-hidden>{meta.emoji}</span>
+                {delta > 0 && (
+                  <span className="text-xs text-green-600" aria-label={t('home.trend.deltaLabel', { delta })}>
+                    ↗ +{delta}
+                  </span>
+                )}
+              </header>
+              <h3 className="mt-1 text-sm font-semibold">{t(`home.domain.${d.id}`)}</h3>
+              <p className="text-xs text-gray-500">{d.doc_count} docs</p>
+              <Sparkline data={d.trend_7d} width={80} height={20}
+                ariaLabel={t('home.trend.sparkLabel', { count: d.doc_count })} />
+              <ul className="mt-2 space-y-0.5 text-xs">
+                {d.top_docs.map((doc) => (
+                  <li key={doc.slug} className="truncate">
+                    <Link to={`/docs/${encodeURIComponent(doc.slug)}`} onClick={(e) => e.stopPropagation()}>
+                      {doc.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Link>
+          )
+        })}
+      </div>
+      {/* v0.3 — 사용자 기대 정렬 (보강 3): 그래프 노출 범위 명시 */}
+      <p className="mt-2 text-[11px] text-gray-500">{t('home.hero.scopeHint')}</p>
+    </section>
   )
 }
 ```
 
+#### Sparkline 컴포넌트 (신규, 의존성 0)
+
+위치: `apps/web/src/features/home/components/Sparkline.tsx`
+
+```tsx
+interface SparklineProps {
+  data: number[]
+  width?: number
+  height?: number
+  ariaLabel: string
+}
+
+export function Sparkline({ data, width = 80, height = 20, ariaLabel }: SparklineProps) {
+  if (!data?.length) return null
+  const max = Math.max(...data, 1)
+  const min = Math.min(...data, 0)
+  const range = Math.max(max - min, 1)
+  const dx = width / Math.max(data.length - 1, 1)
+  const y = (v: number) => height - ((v - min) / range) * height
+  const path = data
+    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i * dx).toFixed(1)} ${y(v).toFixed(1)}`)
+    .join(' ')
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={ariaLabel}>
+      <path d={path} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+```
+
+- 의존성 0 (d3 안 씀 — sparkline 한 줄이라 직접 계산)
+- aria-label 로 스크린리더 접근성
+- `currentColor` 사용 → 부모의 도메인 팔레트 색 자동 상속
+
+#### i18n keys (신규)
+
+`apps/web/src/lib/i18n/ko.ts` / `en.ts`:
+
+```ts
+// ko
+'home.domain.sectionLabel': '도메인별 지식 영역',
+'home.domain.mobile': '모바일',
+'home.domain.software': '소프트웨어',
+'home.domain.hardware': '하드웨어',
+'home.domain.telecom': '통신',
+'home.trend.sparkLabel': '최근 7일 누적 — 현재 {{count}}건',
+'home.trend.deltaLabel': '이번 주 +{{delta}}건',
+'home.hero.scopeHint': '그래프는 연결도 상위 50개 문서 + 도메인 태그를 표시합니다. 전체 검색은 ⌘K.',
+
+// en (대응)
+'home.domain.sectionLabel': 'Knowledge by Domain',
+'home.domain.mobile': 'Mobile',
+'home.domain.software': 'Software',
+'home.domain.hardware': 'Hardware',
+'home.domain.telecom': 'Telecom',
+'home.trend.sparkLabel': '7-day cumulative — currently {{count}} docs',
+'home.trend.deltaLabel': '+{{delta}} this week',
+'home.hero.scopeHint': 'Graph shows top 50 docs by connectivity + domain tags. Full search: ⌘K.',
+```
+
 도메인 hero endpoint 신규 (v0.2 명칭 변경): `GET /api/v1/home/hero`
 
-응답 schema:
+응답 schema (v0.3 — `trend_7d` 추가):
 ```json
 {
   "data": {
@@ -335,15 +463,17 @@ export function DomainTiles() {
       {
         "id": "mobile",
         "doc_count": 86,
+        "doc_count_7d_ago": 42,                       // 7일 전 카운트 (델타 계산용)
+        "trend_7d": [42, 48, 55, 60, 68, 75, 86],     // 7일치 일별 누적 카운트 (sparkline 데이터)
         "top_docs": [
-          { "slug": "안드로이드", "title": "안드로이드" },
-          { "slug": "갤럭시", "title": "갤럭시" },
-          { "slug": "ios", "title": "iOS" }
+          { "slug": "안드로이드", "title": "안드로이드", "indegree": 28 },
+          { "slug": "갤럭시",   "title": "갤럭시",   "indegree": 21 },
+          { "slug": "ios",      "title": "iOS",      "indegree": 17 }
         ]
       },
-      { "id": "software", "doc_count": 219, "top_docs": [...] },
-      { "id": "hardware", "doc_count": 109, "top_docs": [...] },
-      { "id": "telecom",  "doc_count": 43,  "top_docs": [...] }
+      { "id": "software", "doc_count": 219, "trend_7d": [...], "top_docs": [...] },
+      { "id": "hardware", "doc_count": 109, "trend_7d": [...], "top_docs": [...] },
+      { "id": "telecom",  "doc_count": 43,  "trend_7d": [...], "top_docs": [...] }
     ]
   }
 }
@@ -351,8 +481,81 @@ export function DomainTiles() {
 
 - **빈 도메인 (`doc_count === 0`)** 은 응답에서 *제외* — FE 가 렌더할 도메인만 받음 (I3 default)
 - **`as_of`** 는 cache 갱신 시각. import 진행 중 사용자 디버그용
-- **`top_docs`** = in-degree 상위 3개 (Q2 default). links 가 빈약하면 fallback = updated_at desc
-- **Cache TTL = 5분** (in-memory LRU, key = `home_hero`)
+- **`top_docs`** = `indegree` 상위 3개 (v0.3 §18 의 cache 컬럼 사용). links 빈약 시 fallback = `updated_at desc`
+- **`trend_7d`** = `array[7]` 일별 *누적 도서 카운트* (오래된 날 → 오늘). 누적이므로 단조 증가. sparkline 이 우상향이면 성장. import 멈추면 평탄
+- **`doc_count_7d_ago`** = `trend_7d[0]` 의 alias. FE 에서 "이번 주 +44" 같은 델타 표시용
+- **Cache TTL = 5분** (hero 메인), **Trend TTL = 15분** (별도 cache key `home_hero_trend`). hero 응답에 trend 가 포함되므로 *효과적으로* 짧은 TTL 가 적용 — 즉 5분. trend 만 따로 호출하면 15분
+
+### 3.4-b (v0.3) BE 인덱스 + `indegree` 컬럼 + Trend 쿼리
+
+#### Migration (S1 첫 작업)
+
+```sql
+-- 1) 인덱스 — EXPLAIN ANALYZE 후 없으면 생성
+CREATE INDEX IF NOT EXISTS idx_document_tags_tag_id    ON document_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_document_tags_doc_id    ON document_tags(document_id);
+CREATE INDEX IF NOT EXISTS idx_links_source_slug       ON links(source_slug);
+CREATE INDEX IF NOT EXISTS idx_links_target_slug       ON links(target_slug);
+CREATE INDEX IF NOT EXISTS idx_documents_created_at    ON documents(created_at);  -- trend 일별 집계용
+
+-- 2) indegree cache 컬럼
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS indegree integer NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_documents_indegree      ON documents(indegree DESC);  -- top_docs 정렬용
+
+-- 3) 초기 백필 (한 번)
+UPDATE documents d
+SET indegree = (SELECT COUNT(*) FROM links l WHERE l.target_slug = d.slug);
+```
+
+#### update_links_for_document() 갱신 (S1)
+
+기존 함수가 source doc 의 links 를 다시 쓸 때, *영향 받는 target doc 들* 의 `indegree` 도 함께 갱신.
+
+```python
+def update_links_for_document(slug, body_text):
+    old_targets = SELECT target_slug FROM links WHERE source_slug=slug
+    new_targets = parse_wiki_links(body_text)
+
+    # 기존 link 제거 + 새 link 삽입
+    DELETE FROM links WHERE source_slug=slug
+    INSERT INTO links (source_slug, target_slug, count) VALUES ...
+
+    # 영향 받는 모든 target 의 indegree 재계산
+    touched = old_targets | new_targets
+    UPDATE documents SET indegree = (
+      SELECT COUNT(*) FROM links WHERE target_slug = documents.slug
+    ) WHERE slug = ANY(touched)
+```
+
+#### Trend SQL
+
+```sql
+-- 도메인별 7일치 일별 누적 (오래된 날 → 오늘)
+WITH days AS (
+  SELECT generate_series(
+    current_date - interval '6 days',
+    current_date,
+    interval '1 day'
+  )::date AS day
+),
+domain_docs AS (
+  SELECT d.id, d.created_at::date AS created_day, t.name AS tag_name
+  FROM documents d
+  JOIN document_tags dt ON dt.document_id = d.id
+  JOIN tags t            ON t.id = dt.tag_id
+  WHERE t.name = ANY(:tag_names)   -- super-domain 의 tag 들
+    AND d.status = 'published'
+)
+SELECT
+  d.day,
+  COUNT(dd.id) FILTER (WHERE dd.created_day <= d.day) AS cumulative_count
+FROM days d
+LEFT JOIN domain_docs dd ON true
+GROUP BY d.day
+ORDER BY d.day;
+```
+
+응답에 `trend_7d` 배열로 직렬화. cache TTL 15분 (별도 key).
 
 ### 3.5 프론트엔드 — Home.tsx 통합
 
@@ -384,6 +587,11 @@ return (
 | V6 | 기존 `/api/v1/links/graph?root=android&depth=2` backward compat | vitest + curl |
 | V7 | 모바일 (lg 미만) 에서 타일 2 columns | brower (Chrome devtools) |
 | V8 | NOISE_TAGS 차단 — `templates` 가 어떤 endpoint 에도 안 나옴 | curl + grep |
+| V9 (v0.3) | BE 인덱스 5개 존재 (`idx_document_tags_tag_id` 등) | `\di` in psql |
+| V10 (v0.3) | `documents.indegree` 컬럼 + 초기 백필 — `SELECT MAX(indegree) FROM documents > 0` | psql |
+| V11 (v0.3) | `/home/hero` 응답에 `trend_7d` (array len=7), `doc_count_7d_ago` 필드 존재 | curl + jq |
+| V12 (v0.3) | DomainTiles 의 Sparkline 렌더 (snapshot) + hover 시 `/links/graph?domain=X` 호출 발생 | vitest + msw |
+| V13 (v0.3) | `/home/hero` p95 < 200ms (cache hit) / < 500ms (miss) | curl + time, 10회 반복 |
 
 ### 4.2 S3 이후 검증 (참고)
 
@@ -413,6 +621,9 @@ return (
 | **(v0.2 C2)** doc-tag edge 폭발 | H | default OFF + tag 클릭 on-demand (Decisions §9). BE 응답 size 검증: domain=software (219 doc) 일 때 edge ≤ 500 개 |
 | **(v0.2 I5)** tag 노드 slug=`"tag:<name>"` 가 기존 `/docs/<slug>` 라우팅에서 404 | M | FE 분기: `kind === 'tag'` 면 좌클릭 = cluster 토글, navigate 안 함. Cycle 1 = tag 노드 무시 (응답 받지만 렌더 안 함), S3 부터 정식 렌더 |
 | **(v0.2 I1)** import 진행 중 카운트 변동 | L | V2 검증 = 정확 수치 대신 범위 (≥30). `as_of` 타임스탬프 응답에 포함 |
+| **(v0.3) Trend SQL** 의 `generate_series` × tag join 비용 | M | `idx_documents_created_at` + `idx_document_tags_tag_id` 둘 다 있으면 ms 단위. 없으면 seq scan 으로 느려짐 — V9 에서 강제 |
+| **(v0.3) sparkline 이 *항상 단조 증가*** (누적이라서) — 평탄해 보일 가능성 | L | 7일 누적 + 도메인별 색으로 시각 분리. 사용자가 "흐름 보임" 우선이라 OK. 향후 *일별 추가 수* (단조 X) 토글 검토 |
+| **(v0.3) indegree 갱신 비용** | M | `update_links_for_document()` 가 touched doc 만 갱신 → O(touched). 전체 재계산 X. 다만 import 폭주 시 누적 부하 — 백필 batch 화 (1000개씩) 검토 |
 
 ---
 
@@ -431,11 +642,16 @@ return (
 ### Cycle 1 (S1+S2) — 본 사이클 완료 조건
 
 - [ ] `packages/shared/src/super-domains.ts` 신규, FE/BE 모두 import 가능
-- [ ] `GET /api/v1/home/hero` 신규 endpoint, 4 도메인 (이상) + 각 top_docs 3 반환, p95 < 200ms
+- [ ] **(v0.3)** BE 인덱스 5개 (`document_tags(tag_id|document_id)`, `links(source_slug|target_slug)`, `documents(created_at)`) 적용
+- [ ] **(v0.3)** `documents.indegree integer` 컬럼 + 초기 백필 + 변경 시 갱신 로직
+- [ ] `GET /api/v1/home/hero` 신규 endpoint, 4 도메인 (이상) + 각 `top_docs` 3 + **`trend_7d` array(7) + `doc_count_7d_ago`** 반환, p95 < 200ms
 - [ ] `GET /api/v1/links/graph?domain=X&include_tags=1` 확장 동작 (BE 만 — FE 는 Cycle 1 에서 tag 노드 무시)
-- [ ] BE 인덱스 확인 + 필요 시 생성 (C1)
 - [ ] `apps/web/src/features/home/components/DomainTiles.tsx` 신규
-- [ ] Home.tsx 가 DomainTiles 를 hero 자리에 사용
+- [ ] **(v0.3)** `apps/web/src/features/home/components/Sparkline.tsx` 신규 (의존성 0)
+- [ ] **(v0.3)** 타일 hover 시 graph prefetch 동작 (`queryClient.prefetchQuery`)
+- [ ] **(v0.3)** Hero subtitle 안내 ("상위 50개 + 도메인 태그") 표시
+- [ ] **(v0.3)** i18n keys 7개 (`home.domain.*`, `home.trend.*`, `home.hero.scopeHint`) — ko + en
+- [ ] Home.tsx 가 DomainTiles 를 hero 자리에 사용 (기존 RecentSection 은 아래로 demote, 제거 X)
 - [ ] 모바일 (sm) 2 columns / desktop (sm+) 4 columns
 - [ ] NOISE_TAGS 가 어떤 endpoint 에도 노출 안 됨
 - [ ] tsc + vitest 모두 통과
