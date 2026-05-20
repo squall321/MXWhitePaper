@@ -8,7 +8,6 @@ import { SavedViewsList } from '@/features/saved-views/SavedViewsList'
 import { Drawer } from '@/components/ui/Drawer'
 import { Modal } from '@/components/ui/Modal'
 import { RailBoundary } from '@/components/blocks/BlockBoundary'
-import { EmailVerifyBanner } from '@/components/EmailVerifyBanner'
 import { useFavoritesStore } from '@/features/favorites/store'
 import { useRecentStore } from '@/features/recent/store'
 import { useSettingsStore } from '@/features/settings/store'
@@ -167,7 +166,6 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
           className="min-w-0 px-4 py-4 sm:px-6 sm:py-6 lg:px-8 isolate"
         >
           <div className="w-full">
-            <EmailVerifyBanner />
             {children}
           </div>
         </main>
