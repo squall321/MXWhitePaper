@@ -754,6 +754,8 @@ export const ko = {
   // AppShell — landmarks / drawers
   'shell.skipToContent': '본문으로 건너뛰기',
   'shell.orgTree': '조직 트리',
+  'shell.collapseSidebar': '사이드바 접기',
+  'shell.expandSidebar': '사이드바 펴기',
   'shell.rightPanel': '우측 패널',
   'shell.openSidePanel': '측면 패널 열기',
   'shell.sidePanel': '측면 패널',

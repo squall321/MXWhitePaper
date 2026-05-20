@@ -13,8 +13,9 @@
  *   - Clicking a node navigates to `/docs/<slug>` (only for non-missing).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import type { AppOutletContext } from '@/App'
 import {
   forceCenter,
   forceCollide,
@@ -113,7 +114,10 @@ export interface GraphCanvasProps {
   highlight?: string
   /** BFS root slug — 별도 색 + 더 큰 노드로 강조. */
   rootSlug?: string | null
+  /** false 면 root 와 연결되지 않은 (depth=99) 노드 숨김. rootSlug 가 없으면 무시. */
+  showOrphans?: boolean
   onPickNode?: (slug: string) => void
+  onContextMenu?: (slug: string, x: number, y: number) => void
 }
 
 /** Pure rendering layer — exported so unit tests can render it without
@@ -123,16 +127,30 @@ export function GraphCanvas({
   edges: rawEdges,
   highlight,
   rootSlug,
+  showOrphans = true,
   onPickNode,
+  onContextMenu,
 }: GraphCanvasProps) {
   const svgRef = useRef<SVGSVGElement | null>(null)
   const gRef = useRef<SVGGElement | null>(null)
   const simRef = useRef<Simulation<SimNode, SimLink> | null>(null)
 
-  const { nodes, links } = useMemo(
-    () => buildSim(rawNodes, rawEdges, rootSlug),
-    [rawNodes, rawEdges, rootSlug],
-  )
+  const { nodes, links } = useMemo(() => {
+    const built = buildSim(rawNodes, rawEdges, rootSlug)
+    if (rootSlug && !showOrphans) {
+      // depth=99 (root 와 연결 안 됨) 노드 제거 + 해당 노드를 참조하는 link 도 제거.
+      const kept = new Set(built.nodes.filter((n) => n.depth !== 99).map((n) => n.slug))
+      return {
+        nodes: built.nodes.filter((n) => kept.has(n.slug)),
+        links: built.links.filter((l) => {
+          const s = typeof l.source === 'string' ? l.source : (l.source as SimNode).slug
+          const t = typeof l.target === 'string' ? l.target : (l.target as SimNode).slug
+          return kept.has(s) && kept.has(t)
+        }),
+      }
+    }
+    return built
+  }, [rawNodes, rawEdges, rootSlug, showOrphans])
 
   // Force simulation tick — updates SVG attributes directly via d3-selection
   // for performance; React only owns the static SVG/g scaffolding.
@@ -250,6 +268,12 @@ export function GraphCanvas({
       if (!d.isMissing && onPickNode) onPickNode(d.slug)
     })
 
+    nodeSel.on('contextmenu', (event: MouseEvent, d) => {
+      if (d.isMissing || !onContextMenu) return
+      event.preventDefault()
+      onContextMenu(d.slug, event.clientX, event.clientY)
+    })
+
     sim.on('tick', () => {
       linkSel
         .attr('x1', (d) => (d.source as SimNode).x ?? 0)
@@ -263,7 +287,7 @@ export function GraphCanvas({
       sim.stop()
       simRef.current = null
     }
-  }, [nodes, links, onPickNode])
+  }, [nodes, links, onPickNode, onContextMenu, rootSlug])
 
   // Highlight effect — overlay opacity instead of restarting the simulation.
   useEffect(() => {
@@ -311,11 +335,22 @@ export function GraphCanvas({
   )
 }
 
+/** 우클릭 컨텍스트 메뉴 상태. */
+interface NodeMenu {
+  slug: string
+  x: number
+  y: number
+}
+
 export function GraphPage() {
   const { slug } = useParams<{ slug?: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
+  const [showOrphans, setShowOrphans] = useState(true)
+  const [menu, setMenu] = useState<NodeMenu | null>(null)
+  const [fullscreen, setFullscreen] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
 
   // BFS depth — URL ?depth=N 로 공유 가능, 1~4 (BE 가 강제). default 2.
   const rawDepth = parseInt(searchParams.get('depth') ?? '2', 10)
@@ -327,31 +362,82 @@ export function GraphPage() {
     setSearchParams(next, { replace: true })
   }
 
+  // 그래프 페이지에서는 좌측 조직도 column 자체를 숨겨 본문이 화면을 풍부히 사용.
+  // (사용자는 TopBar 햄버거 → MobileNavDrawer 로 여전히 조직도 접근 가능.)
+  const ctx = useOutletContext<AppOutletContext | undefined>()
+  useEffect(() => {
+    if (!ctx) return
+    ctx.setLeftRail(null)
+    return () => ctx.setLeftRail(undefined)
+  }, [ctx])
+
+  // F11 키 = 그래프만 보이는 fullscreen 토글 (브라우저 기본 F11 가로채기).
+  // 브라우저 fullscreen API 대신 자체 fixed overlay — 다른 브라우저 UI 가 사라지지 않도록
+  // 의도 (사용자가 익숙한 키만 빌려쓰는 패턴).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // 입력 중에는 가로채지 않음
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return
+      if (e.key === 'F11') {
+        e.preventDefault()
+        setFullscreen((v) => !v)
+      } else if (e.key === 'Escape' && fullscreen) {
+        e.preventDefault()
+        setFullscreen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fullscreen])
+
+  // 컨텍스트 메뉴: 바깥 클릭 / Esc 로 닫기.
+  useEffect(() => {
+    if (!menu) return
+    const onClick = () => setMenu(null)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenu(null)
+    }
+    window.addEventListener('click', onClick)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('click', onClick)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [menu])
+
   const { data, isPending, isError, error } = useQuery({
     queryKey: ['graph', slug ?? '__global__', depth],
     queryFn: () => fetchGraph(slug ?? null, depth),
     staleTime: 30_000,
   })
 
+  // fullscreen 모드: position fixed overlay 로 화면 전체 차지.
+  const rootCls = fullscreen
+    ? 'fixed inset-0 z-modal flex flex-col bg-white p-3 dark:bg-gray-950'
+    : 'flex flex-col gap-3'
+
   return (
-    <div className="space-y-3" data-testid="graph-page">
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-semibold text-smsg-900">위키 그래프</h1>
+    <div ref={containerRef} className={rootCls} data-testid="graph-page">
+      {/* 컨트롤 바 — 가로 한 줄. depth / orphan / fullscreen / search. */}
+      <header className="flex flex-wrap items-center gap-3 border-b border-gray-200 pb-2 dark:border-gray-800">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg font-semibold text-smsg-900 dark:text-gray-100">위키 그래프</h1>
           <p className="text-xs text-gray-500">
             {slug ? `루트: ${slug} · 깊이 ${depth}` : '전역 그래프 (degree 상위 50)'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {slug && (
-            <label className="flex items-center gap-1 text-xs text-gray-600">
+            <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
               깊이
               <select
                 value={depth}
                 onChange={(e) => setDepth(parseInt(e.target.value, 10))}
                 aria-label="그래프 깊이"
                 data-testid="graph-depth"
-                className="rounded border border-gray-200 bg-white px-1 py-1 text-sm focus:border-smsg-500 focus:outline-none"
+                className="rounded border border-gray-200 bg-white px-1 py-1 text-sm focus:border-smsg-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800"
               >
                 <option value={1}>1</option>
                 <option value={2}>2</option>
@@ -360,6 +446,29 @@ export function GraphPage() {
               </select>
             </label>
           )}
+          {slug && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={showOrphans}
+                onChange={(e) => setShowOrphans(e.target.checked)}
+                aria-label="고아 노드 표시"
+                data-testid="graph-orphan-toggle"
+                className="h-3.5 w-3.5"
+              />
+              고아 표시
+            </label>
+          )}
+          <button
+            type="button"
+            onClick={() => setFullscreen((v) => !v)}
+            aria-label={fullscreen ? '전체화면 해제' : '전체화면'}
+            title="F11"
+            data-testid="graph-fullscreen-toggle"
+            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+          >
+            {fullscreen ? '⤡ 해제' : '⛶ F11'}
+          </button>
           <input
             type="search"
             value={query}
@@ -367,35 +476,73 @@ export function GraphPage() {
             placeholder="노드 검색…"
             aria-label="노드 검색"
             data-testid="graph-search"
-            className="w-48 rounded border border-gray-200 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none"
+            className="w-48 rounded border border-gray-200 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800"
           />
         </div>
       </header>
 
-      {isPending ? (
-        <p className="text-sm text-gray-500">불러오는 중…</p>
-      ) : isError ? (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          그래프를 불러오지 못했습니다: {(error as Error).message}
-        </p>
-      ) : !data ? (
-        <p className="text-sm text-gray-500">데이터 없음.</p>
-      ) : data.nodes.length === 0 ? (
-        <p className="text-sm text-gray-500">표시할 노드가 없습니다.</p>
-      ) : (
-        <GraphCanvas
-          nodes={data.nodes}
-          edges={data.edges}
-          highlight={query}
-          rootSlug={slug ?? null}
-          onPickNode={(s) => navigate(`/docs/${encodeURIComponent(s)}`)}
-        />
-      )}
+      <div className={fullscreen ? 'min-h-0 flex-1' : ''}>
+        {isPending ? (
+          <p className="text-sm text-gray-500">불러오는 중…</p>
+        ) : isError ? (
+          <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            그래프를 불러오지 못했습니다: {(error as Error).message}
+          </p>
+        ) : !data ? (
+          <p className="text-sm text-gray-500">데이터 없음.</p>
+        ) : data.nodes.length === 0 ? (
+          <p className="text-sm text-gray-500">표시할 노드가 없습니다.</p>
+        ) : (
+          <GraphCanvas
+            nodes={data.nodes}
+            edges={data.edges}
+            highlight={query}
+            rootSlug={slug ?? null}
+            showOrphans={showOrphans}
+            onPickNode={(s) => navigate(`/docs/${encodeURIComponent(s)}`)}
+            onContextMenu={(s, x, y) => setMenu({ slug: s, x, y })}
+          />
+        )}
+      </div>
 
       <p className="text-[11px] text-gray-500">
-        스크롤로 줌, 드래그로 이동, 노드 클릭으로 문서 열기. 빨간 노드는 아직 작성되지 않은
-        링크입니다.
+        스크롤로 줌, 드래그로 이동, 좌클릭 = 문서, 우클릭 = 메뉴. F11 = 전체화면. 빨간 노드는 아직 작성되지 않은 링크입니다.
       </p>
+
+      {/* 우클릭 컨텍스트 메뉴: 문서 열기 vs 그래프 루트로 이동. */}
+      {menu && (
+        <div
+          role="menu"
+          aria-label="노드 메뉴"
+          data-testid="graph-context-menu"
+          style={{ position: 'fixed', left: menu.x, top: menu.y, zIndex: 9999 }}
+          onClick={(e) => e.stopPropagation()}
+          className="min-w-[180px] rounded border border-gray-200 bg-white py-1 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-800"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              navigate(`/docs/${encodeURIComponent(menu.slug)}`)
+              setMenu(null)
+            }}
+            className="block w-full px-3 py-1.5 text-left text-gray-700 hover:bg-smsg-50 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            📄 문서 열기
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              navigate(`/graph/${encodeURIComponent(menu.slug)}?depth=${depth}`)
+              setMenu(null)
+            }}
+            className="block w-full px-3 py-1.5 text-left text-gray-700 hover:bg-smsg-50 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            🕸 이 노드를 루트로
+          </button>
+        </div>
+      )}
     </div>
   )
 }

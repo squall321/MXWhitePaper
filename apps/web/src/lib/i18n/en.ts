@@ -717,6 +717,8 @@ export const en: Record<LocaleKey, string> = {
 
   'shell.skipToContent': 'Skip to main content',
   'shell.orgTree': 'Org tree',
+  'shell.collapseSidebar': 'Collapse sidebar',
+  'shell.expandSidebar': 'Expand sidebar',
   'shell.rightPanel': 'Right panel',
   'shell.openSidePanel': 'Open side panel',
   'shell.sidePanel': 'Side panel',

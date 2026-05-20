@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState, type ReactNode } from 'react'
+import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
 import { TopBar } from './TopBar'
 import { Breadcrumb } from './Breadcrumb'
 import { useGChord } from './useGChord'
@@ -69,12 +69,32 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
   // Wire vim-style "G then key" navigation chords.
   useGChord()
 
+  // 좌측 sidebar 접기 — localStorage 에 상태 영구화 (페이지 새로고침 / 이동 후에도 유지).
+  const [leftCollapsed, setLeftCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return window.localStorage.getItem('mxwp.shell.leftCollapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem('mxwp.shell.leftCollapsed', leftCollapsed ? '1' : '0')
+    } catch {
+      // ignore quota / private mode
+    }
+  }, [leftCollapsed])
+
   // Resolve the actual node to render.
   const leftNode: ReactNode = left === undefined ? DEFAULT_LEFT : left
   const hasLeft = leftNode != null
   const hasRight = right != null
+  // 사용자가 접었으면 left column 자체를 제거 — main 이 그 자리를 차지.
+  const showLeft = hasLeft && !leftCollapsed
 
-  const gridCls = hasLeft
+  const gridCls = showLeft
     ? 'grid-cols-1 md:grid-cols-[var(--layout-tablet-sidebar-w)_1fr]' +
       (hasRight ? ' lg:grid-cols-[var(--layout-sidebar-w)_1fr_var(--layout-toc-w)]' : ' lg:grid-cols-[var(--layout-sidebar-w)_1fr]')
     : hasRight
@@ -104,17 +124,40 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
       </div>
 
       <div className={`relative z-content grid min-h-[calc(100vh-var(--header-h))] pt-[calc(var(--header-h)+2rem)] ${gridCls}`}>
-        {/* Left tree — visible md+ only when the page provides a left slot. */}
-        {hasLeft && (
+        {/* Left tree — visible md+ only when the page provides a left slot.
+            사용자가 토글을 접으면 (leftCollapsed=true) column 자체가 grid 에서
+            사라지고 main 이 그 자리를 차지. 토글 버튼은 항상 화면 좌측 가장자리에. */}
+        {showLeft && (
           <aside
             role="complementary"
             aria-label={t('shell.orgTree')}
-            className="hidden border-r border-gray-200 bg-white md:block dark:border-gray-800 dark:bg-gray-900"
+            className="relative hidden border-r border-gray-200 bg-white md:block dark:border-gray-800 dark:bg-gray-900"
           >
             <div className="sticky top-[calc(var(--header-h)+2rem)] max-h-[calc(100vh-var(--header-h)-2rem)] overflow-y-auto py-3">
               <RailBoundary name={t('shell.orgTree')}>{leftNode}</RailBoundary>
             </div>
           </aside>
+        )}
+        {/* 접기/펴기 토글 — 좌측 sidebar 가 표시 가능한 페이지 (hasLeft) 에서만, 그리고 md+ 에서만.
+            sidebar 가 펼쳐져 있으면 그 column 의 우측 가장자리에, 접혀 있으면 화면 좌측 가장자리에 띄움. */}
+        {hasLeft && (
+          <button
+            type="button"
+            onClick={() => setLeftCollapsed((v) => !v)}
+            aria-label={leftCollapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}
+            aria-expanded={!leftCollapsed}
+            title={leftCollapsed ? '사이드바 펴기' : '사이드바 접기'}
+            data-testid="sidebar-toggle"
+            style={{
+              top: 'calc(var(--header-h) + 2rem + 0.5rem)',
+              left: leftCollapsed
+                ? '0.25rem'
+                : 'calc(var(--layout-sidebar-w, var(--layout-tablet-sidebar-w)) - 0.75rem)',
+            }}
+            className="fixed z-sticky hidden h-7 w-6 items-center justify-center rounded-r border border-l-0 border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-smsg-50 md:inline-flex dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+          >
+            {leftCollapsed ? '›' : '‹'}
+          </button>
         )}
 
         <main
