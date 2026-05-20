@@ -10,6 +10,7 @@ import io
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 # Windows runners default to cp1252 which can't encode the → / ✓ chars
@@ -29,12 +30,24 @@ OUT = ROOT / "apps" / "api" / "app" / "schemas" / "document.py"
 
 OUT.parent.mkdir(parents=True, exist_ok=True)
 
+# Generate into a tempfile, post-process, then write to OUT only when the
+# *final* content differs from what's already on disk. This makes the codegen
+# idempotent: re-running it without schema changes leaves OUT.mtime untouched,
+# so uvicorn --reload (WatchFiles) doesn't trip on every git commit's
+# pre-commit `schema:gen` invocation. The previous behaviour (datamodel-codegen
+# writing OUT directly) caused a reload-loop where worker shutdown stuck on
+# keepalive connections.
+with tempfile.NamedTemporaryFile(
+    mode="w", suffix=".py", prefix="document-codegen-", delete=False, encoding="utf-8",
+) as _tmp:
+    TMP = Path(_tmp.name)
+
 # datamodel-code-generator must be installed (apps/api dev deps)
 cmd = [
     "datamodel-codegen",
     "--input", str(SCHEMA),
     "--input-file-type", "jsonschema",
-    "--output", str(OUT),
+    "--output", str(TMP),
     "--output-model-type", "pydantic_v2.BaseModel",
     "--target-python-version", "3.12",
     "--use-schema-description",
@@ -51,6 +64,7 @@ print(f"→ {' '.join(cmd)}")
 try:
     subprocess.run(cmd, check=True)
 except FileNotFoundError:
+    TMP.unlink(missing_ok=True)
     sys.exit(
         "ERROR: datamodel-codegen not found.\n"
         "Install with:  pip install datamodel-code-generator\n"
@@ -64,7 +78,7 @@ except FileNotFoundError:
 # model_dump() because it can't tell which variant to use up front. Every
 # Block subclass carries `type: Literal[...]`, so a `Field(discriminator=
 # 'type')` annotation makes the union deterministic and silences the noise.
-src = OUT.read_text(encoding="utf-8")
+src = TMP.read_text(encoding="utf-8")
 
 # Ensure `Annotated` is imported. The codegen output already imports
 # `Field` from pydantic, but rarely brings in typing.Annotated.
@@ -223,9 +237,20 @@ if not (ok1 and ok2):
 
 # Force LF on every platform — Path.write_text uses os.linesep otherwise,
 # which on Windows would yield CRLF and make the codegen-drift gate fire.
-with OUT.open("w", encoding="utf-8", newline="\n") as _f:
-    _f.write(src)
-print(f"✓ Pydantic models generated → {OUT}")
+# Write-if-different: only touch OUT when the post-processed content actually
+# changes. Compare bytes (not text) to avoid mtime churn on a no-op rerun.
+# This is what stops the uvicorn --reload loop on every pre-commit schema:gen.
+new_bytes = src.encode("utf-8")
+existing_bytes = OUT.read_bytes() if OUT.exists() else None
+
+if existing_bytes == new_bytes:
+    print(f"= unchanged → {OUT}")
+else:
+    with OUT.open("wb") as _f:
+        _f.write(new_bytes)
+    print(f"✓ Pydantic models generated → {OUT}")
+
+TMP.unlink(missing_ok=True)
 print("✓ Block union annotated with discriminator='type'")
 print(f"✓ Enum defaults normalized ({len(enum_names)} enum classes scanned)")
 print("✓ IframeBlock XOR validator injected (src ↔ html)")

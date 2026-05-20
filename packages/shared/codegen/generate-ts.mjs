@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Generate TypeScript types from packages/shared/schemas/document.json
 // Output: apps/web/src/types/document.ts
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compile } from 'json-schema-to-typescript'
@@ -46,5 +46,17 @@ const compatFooter = [
   '',
 ].join('\n')
 
-writeFileSync(OUT, ts + compatFooter)
-console.log(`✓ TS types generated → ${OUT}`)
+// Write-if-different: only touch OUT when the final content actually changes.
+// Re-running `schema:gen` (e.g. from pre-commit hook) on an unchanged schema
+// would otherwise update OUT.mtime, which triggers Vite HMR / WatchFiles
+// reloads downstream for no reason. Compare bytes to avoid encoding drift.
+const finalText = ts + compatFooter
+const newBuf = Buffer.from(finalText, 'utf-8')
+const existingBuf = existsSync(OUT) ? readFileSync(OUT) : null
+
+if (existingBuf && existingBuf.equals(newBuf)) {
+  console.log(`= unchanged → ${OUT}`)
+} else {
+  writeFileSync(OUT, newBuf)
+  console.log(`✓ TS types generated → ${OUT}`)
+}
