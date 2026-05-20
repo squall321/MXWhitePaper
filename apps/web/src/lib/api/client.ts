@@ -23,6 +23,11 @@ export interface AuthHooks {
   refresh(): Promise<boolean>
   /** Called when refresh failed and we should redirect to /login. */
   onUnauthenticated(): void
+  /** Called right before a silent refresh starts. Optional — sets a "hydrating"
+   *  signal so route guards (AuthGuard) don't bounce to /login mid-refresh. */
+  beginRehydrating?(): void
+  /** Pair with `beginRehydrating` — called once the refresh promise settles. */
+  endRehydrating?(): void
 }
 
 let authHooks: AuthHooks | null = null
@@ -158,11 +163,15 @@ apiClient.interceptors.response.use(
 
       if (!refreshInFlight) {
         const hooks = authHooks
+        // refresh 도는 동안 AuthGuard 가 user=null 을 *유효한 unauth* 로 오인해
+        // /login 으로 깜박 redirect 하는 걸 막기 위해 hydrating=true 시그널.
+        hooks.beginRehydrating?.()
         const p = hooks.refresh().catch(() => false)
         refreshInFlight = p
         // Reset the slot only once the in-flight promise resolves.
         void p.finally(() => {
           if (refreshInFlight === p) refreshInFlight = null
+          hooks.endRehydrating?.()
         })
       }
 

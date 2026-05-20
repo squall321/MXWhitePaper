@@ -26,7 +26,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const devBypass = import.meta.env.DEV && params.has('dev')
   if (devBypass) return <>{children}</>
 
-  if (hydrating) {
+  // 1차 hydration (앱 시작 직후) — user 없으면 짧은 "세션 확인 중" 표시.
+  // 2차 hydration (silent refresh 중) — *이미 user 가 있으면* children 그대로 보여줘서
+  // 화면이 깜박이지 않게. user 가 새로 들어오는 케이스 (재로그인 직후) 만 텍스트.
+  if (hydrating && !user) {
     return (
       <div className="px-6 py-3 text-sm text-gray-500">세션 확인 중…</div>
     )

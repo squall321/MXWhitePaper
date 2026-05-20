@@ -82,6 +82,10 @@ export function bootstrapAuth() {
       const here = window.location.pathname + window.location.search
       window.location.assign(`/login?return=${encodeURIComponent(here)}`)
     },
+    // 401 silent refresh 중 AuthGuard 가 user=null 을 보고 /login 으로
+    // 깜박 redirect 하지 않도록 hydrating 시그널을 빌려 씀.
+    beginRehydrating: () => useAuthStore.getState().setHydrating(true),
+    endRehydrating: () => useAuthStore.getState().setHydrating(false),
   })
 
   registerConnectionHooks({
