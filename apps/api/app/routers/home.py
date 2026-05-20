@@ -405,6 +405,74 @@ async def _build_today_data(s: AsyncSession) -> dict[str, Any]:
                 "count": nb["weight"],
             })
 
+    # --- contextual edges: ctx_author / ctx_part (1-hop) + ctx_tag (2-hop, cap 10) ---
+    # ctx_author / ctx_part 는 distinct 값이 2개 이상일 때만 의미 있는 신호.
+    # 단일 owner / 거의 NULL part 인 상황에서는 거미줄 폭발 → query 자체 skip.
+    doc_slugs_for_ctx = [n["slug"] for n in graph_nodes if n["kind"] == "doc"]
+    if len(doc_slugs_for_ctx) > 1:
+        distinct_owners = (await s.execute(
+            text("SELECT COUNT(DISTINCT owner_id) FROM documents WHERE slug = ANY(:slugs) AND owner_id IS NOT NULL"),
+            {"slugs": doc_slugs_for_ctx},
+        )).scalar_one()
+        if distinct_owners >= 2:
+            ctx_author_rows = (await s.execute(
+                text("""
+                    SELECT d1.slug AS source, d2.slug AS target
+                    FROM documents d1
+                    JOIN documents d2
+                      ON d2.owner_id = d1.owner_id AND d2.id > d1.id
+                    WHERE d1.slug = ANY(:slugs)
+                      AND d2.slug = ANY(:slugs)
+                      AND d1.owner_id IS NOT NULL
+                """),
+                {"slugs": doc_slugs_for_ctx},
+            )).all()
+            for r in ctx_author_rows:
+                graph_edges.append({"kind": "ctx_author", "source": r[0], "target": r[1], "weight": 1})
+
+        distinct_parts = (await s.execute(
+            text("SELECT COUNT(DISTINCT part_id) FROM documents WHERE slug = ANY(:slugs) AND part_id IS NOT NULL"),
+            {"slugs": doc_slugs_for_ctx},
+        )).scalar_one()
+        if distinct_parts >= 2:
+            ctx_part_rows = (await s.execute(
+                text("""
+                    SELECT d1.slug AS source, d2.slug AS target
+                    FROM documents d1
+                    JOIN documents d2
+                      ON d2.part_id = d1.part_id AND d2.id > d1.id
+                    WHERE d1.slug = ANY(:slugs)
+                      AND d2.slug = ANY(:slugs)
+                      AND d1.part_id IS NOT NULL
+                """),
+                {"slugs": doc_slugs_for_ctx},
+            )).all()
+            for r in ctx_part_rows:
+                graph_edges.append({"kind": "ctx_part", "source": r[0], "target": r[1], "weight": 1})
+
+        ctx_tag_rows = (await s.execute(
+            text("""
+                SELECT a.slug AS source, b.slug AS target, COUNT(*) AS weight
+                FROM documents a
+                JOIN document_tags dta ON dta.document_id = a.id
+                JOIN document_tags dtb ON dta.tag_id = dtb.tag_id
+                  AND dtb.document_id != a.id
+                JOIN documents b ON b.id = dtb.document_id
+                JOIN tags tg ON tg.id = dta.tag_id
+                WHERE a.slug = ANY(:slugs)
+                  AND b.slug = ANY(:slugs)
+                  AND a.id < b.id
+                  AND tg.name != ALL(:noise)
+                GROUP BY a.slug, b.slug
+                HAVING COUNT(*) >= 2
+                ORDER BY COUNT(*) DESC
+                LIMIT 10
+            """),
+            {"slugs": doc_slugs_for_ctx, "noise": noise},
+        )).all()
+        for r in ctx_tag_rows:
+            graph_edges.append({"kind": "ctx_tag", "source": r[0], "target": r[1], "weight": int(r[2])})
+
     return {
         "as_of": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "doc": doc_out,

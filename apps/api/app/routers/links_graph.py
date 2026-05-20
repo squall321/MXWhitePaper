@@ -9,13 +9,14 @@ GET /api/v1/links/graph?domain=<id>&include_tags=1&include_doc_tag_edges=1&inclu
   - include_tags=1: tag 노드 추가 (kind="tag").
   - include_doc_tag_edges=1: doc-tag 소속 엣지 추가 (kind="doc_tag").
   - include_tag_cooc=1: tag-tag 공동출현 엣지 추가 (kind="tag_cooc").
+  - include_context=1: contextual 약한 관계 엣지 추가 (kind="ctx_author"|"ctx_part"|"ctx_tag").
   - domain + root 동시 지정: 도메인 doc 집합 안에서 root BFS depth 적용.
   - NOISE_TAGS 는 어떤 응답에도 노출 안 됨.
 
 응답 shape (신규 필드 `kind` 추가, backward compat):
   {
     nodes: [{kind, slug, title, status, group}],          # kind: "doc"|"tag"
-    edges: [{kind, source, target, count, weight}]        # kind: "wiki"|"doc_tag"|"tag_cooc"
+    edges: [{kind, source, target, count, weight}]        # kind: "wiki"|"doc_tag"|"tag_cooc"|"ctx_author"|"ctx_part"|"ctx_tag"
   }
 """
 from __future__ import annotations
@@ -80,6 +81,90 @@ async def _fetch_nodes(
     return out
 
 
+async def _ctx_edges(
+    s: AsyncSession,
+    slugs: list[str],
+    noise: list[str],
+) -> list[dict]:
+    """domain 내부 contextual edge 3종 반환 (include_context=1 시 호출).
+
+    ctx_author: 같은 owner_id 공유 doc 쌍
+    ctx_part:   같은 part_id 공유 doc 쌍 (part_id NOT NULL 인 doc 만)
+    ctx_tag:    2개 이상 tag 공유 doc 쌍 (weight = 공유 tag 수)
+    """
+    if not slugs:
+        return []
+
+    edges: list[dict] = []
+
+    # ctx_author / ctx_part 는 distinct 값이 2개 이상일 때만 의미 있는 신호.
+    # 단일 owner / 거의 NULL part 인 데이터 상태에서는 *모든 doc 쌍* 이 연결돼
+    # 거미줄 폭발. 사전 분포 확인 후 의미 있을 때만 query.
+    distinct_owners = (await s.execute(
+        text("SELECT COUNT(DISTINCT owner_id) FROM documents WHERE slug = ANY(:slugs) AND owner_id IS NOT NULL"),
+        {"slugs": slugs},
+    )).scalar_one()
+    if distinct_owners >= 2:
+        author_rows = (await s.execute(
+            text("""
+                SELECT d1.slug AS source, d2.slug AS target, 1 AS weight
+                FROM documents d1
+                JOIN documents d2
+                  ON d2.owner_id = d1.owner_id AND d2.id > d1.id
+                WHERE d1.slug = ANY(:slugs)
+                  AND d2.slug = ANY(:slugs)
+                  AND d1.owner_id IS NOT NULL
+            """),
+            {"slugs": slugs},
+        )).all()
+        for r in author_rows:
+            edges.append({"kind": "ctx_author", "source": r[0], "target": r[1], "weight": 1})
+
+    distinct_parts = (await s.execute(
+        text("SELECT COUNT(DISTINCT part_id) FROM documents WHERE slug = ANY(:slugs) AND part_id IS NOT NULL"),
+        {"slugs": slugs},
+    )).scalar_one()
+    if distinct_parts >= 2:
+        part_rows = (await s.execute(
+            text("""
+                SELECT d1.slug AS source, d2.slug AS target, 1 AS weight
+                FROM documents d1
+                JOIN documents d2
+                  ON d2.part_id = d1.part_id AND d2.id > d1.id
+                WHERE d1.slug = ANY(:slugs)
+                  AND d2.slug = ANY(:slugs)
+                  AND d1.part_id IS NOT NULL
+            """),
+            {"slugs": slugs},
+        )).all()
+        for r in part_rows:
+            edges.append({"kind": "ctx_part", "source": r[0], "target": r[1], "weight": 1})
+
+    # --- ctx_tag (>=2 공동 tag, noise 제외) ---
+    tag_rows = (await s.execute(
+        text("""
+            SELECT a.slug AS source, b.slug AS target, COUNT(*) AS weight
+            FROM documents a
+            JOIN document_tags dta ON dta.document_id = a.id
+            JOIN document_tags dtb ON dta.tag_id = dtb.tag_id
+              AND dtb.document_id != a.id
+            JOIN documents b ON b.id = dtb.document_id
+            JOIN tags tg ON tg.id = dta.tag_id
+            WHERE a.slug = ANY(:slugs)
+              AND b.slug = ANY(:slugs)
+              AND a.id < b.id
+              AND tg.name != ALL(:noise)
+            GROUP BY a.slug, b.slug
+            HAVING COUNT(*) >= 2
+        """),
+        {"slugs": slugs, "noise": noise},
+    )).all()
+    for r in tag_rows:
+        edges.append({"kind": "ctx_tag", "source": r[0], "target": r[1], "weight": int(r[2])})
+
+    return edges
+
+
 async def _domain_subgraph(
     s: AsyncSession,
     domain_id: str,
@@ -89,6 +174,7 @@ async def _domain_subgraph(
     include_tags: bool,
     include_doc_tag_edges: bool,
     include_tag_cooc: bool,
+    include_context: bool,
 ) -> dict[str, Any]:
     """super-domain 의 하위 tag 가 가진 published doc 들 + 옵트인 엣지 반환."""
     domain = by_id(domain_id)
@@ -250,6 +336,11 @@ async def _domain_subgraph(
                 "weight": int(r[2]),
             })
 
+    # --- contextual edges (ctx_author / ctx_part / ctx_tag) ---
+    if include_context and domain_slugs:
+        ctx = await _ctx_edges(s, list(domain_slugs), noise)
+        edges_out.extend(ctx)
+
     return {
         "nodes": nodes_out,
         "edges": edges_out,
@@ -264,7 +355,9 @@ async def _domain_subgraph(
         "+ 그 사이의 엣지를 반환.\n\n"
         "domain 지정 시 그 super-domain 의 tag 를 가진 published doc 들 + wiki 엣지 반환. "
         "include_tags=1 이면 tag 노드 추가. include_doc_tag_edges=1 이면 doc-tag 소속 엣지 추가. "
-        "include_tag_cooc=1 이면 tag-tag 공동출현 엣지 추가."
+        "include_tag_cooc=1 이면 tag-tag 공동출현 엣지 추가. "
+        "include_context=1 이면 contextual 약한 관계 엣지 추가 "
+        "(kind=ctx_author/ctx_part/ctx_tag). 기본 OFF — 도메인 규모에 따라 비용 있음."
     ),
 )
 async def get_graph(
@@ -274,6 +367,7 @@ async def get_graph(
     include_tags: bool = Query(default=False),
     include_doc_tag_edges: bool = Query(default=False),
     include_tag_cooc: bool = Query(default=False),
+    include_context: bool = Query(default=False),
     s: AsyncSession = Depends(get_db),
     _user: dict = Depends(require_reader),
 ) -> dict[str, Any]:
@@ -288,6 +382,7 @@ async def get_graph(
             include_tags=include_tags,
             include_doc_tag_edges=include_doc_tag_edges,
             include_tag_cooc=include_tag_cooc,
+            include_context=include_context,
         )
         meta: dict[str, Any] = {
             "domain": domain,

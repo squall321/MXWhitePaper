@@ -11900,7 +11900,7 @@
     },
     "/api/v1/links/graph": {
       "get": {
-        "description": "root 가 주어지면 depth 까지 BFS 확장. 미지정시 degree 상위 200 노드 + 그 사이의 엣지를 반환.\n\ndomain 지정 시 그 super-domain 의 tag 를 가진 published doc 들 + wiki 엣지 반환. include_tags=1 이면 tag 노드 추가. include_doc_tag_edges=1 이면 doc-tag 소속 엣지 추가. include_tag_cooc=1 이면 tag-tag 공동출현 엣지 추가.",
+        "description": "root 가 주어지면 depth 까지 BFS 확장. 미지정시 degree 상위 200 노드 + 그 사이의 엣지를 반환.\n\ndomain 지정 시 그 super-domain 의 tag 를 가진 published doc 들 + wiki 엣지 반환. include_tags=1 이면 tag 노드 추가. include_doc_tag_edges=1 이면 doc-tag 소속 엣지 추가. include_tag_cooc=1 이면 tag-tag 공동출현 엣지 추가. include_context=1 이면 contextual 약한 관계 엣지 추가 (kind=ctx_author/ctx_part/ctx_tag). 기본 OFF — 도메인 규모에 따라 비용 있음.",
         "operationId": "get_graph_api_v1_links_graph_get",
         "parameters": [
           {
@@ -11974,6 +11974,16 @@
             "schema": {
               "default": false,
               "title": "Include Tag Cooc",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_context",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Context",
               "type": "boolean"
             }
           }
