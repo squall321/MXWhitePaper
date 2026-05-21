@@ -144,6 +144,28 @@ echo
 # ── Step 3: pnpm via corepack (또는 npm fallback) ──────────────────────────
 log "step 3/5 — pnpm"
 
+# 회사 SSL 가로채기 (MITM) proxy 환경에서 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' 발생.
+# .env 의 MXWP_NODE_TLS_VERIFY=0 (default) 이면 NODE_TLS_REJECT_UNAUTHORIZED=0 적용.
+# NODE_EXTRA_CA_CERTS 가 .env 에 있으면 그것도 자동 export.
+_repo_root="$(cd "$(dirname "$(realpath "$0")")/../.." && pwd)"
+_env_file=""
+[ -f "$_repo_root/.env" ] && _env_file="$_repo_root/.env"
+[ -z "$_env_file" ] && [ -f "$(pwd)/.env" ] && _env_file="$(pwd)/.env"
+if [ -n "$_env_file" ]; then
+  set -a; . "$_env_file"; set +a
+  if [ "${MXWP_NODE_TLS_VERIFY:-0}" = "0" ]; then
+    export NODE_TLS_REJECT_UNAUTHORIZED=0
+    warn "MXWP_NODE_TLS_VERIFY=0 — NODE_TLS_REJECT_UNAUTHORIZED=0 (MITM proxy 우회)"
+    # pip 도 같은 MITM 환경이라 PyPI 호출도 검증 실패. 회사 host 를
+    # trusted-host 로 등록 (proxy 자체 + pypi.org 둘 다).
+    export PIP_TRUSTED_HOST="pypi.org files.pythonhosted.org pypi.python.org"
+  fi
+  if [ -n "${NODE_EXTRA_CA_CERTS:-}" ] && [ -f "$NODE_EXTRA_CA_CERTS" ]; then
+    export NODE_EXTRA_CA_CERTS
+    ok "NODE_EXTRA_CA_CERTS=$NODE_EXTRA_CA_CERTS"
+  fi
+fi
+
 # sudo 로 실행 시, corepack 의 cache 가 root 소유 ~/.cache 에 만들어져서 일반 사용자가
 # 못 쓰는 사례를 방지. SUDO_USER 가 있으면 그 user 의 home 의 .cache 를 미리 만들고
 # 권한 부여.
