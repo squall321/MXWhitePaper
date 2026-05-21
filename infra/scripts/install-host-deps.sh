@@ -248,22 +248,77 @@ else
   else
     miss "datamodel-code-generator 미설치"
     if [ "$CHECK_ONLY" -eq 0 ]; then
-      # PEP 668 시스템 (Ubuntu 23.04+, Debian 12+) 에선 --break-system-packages 필요.
-      # 안전하게 --user 시도 → 안 되면 break-system-packages.
-      if python3 -m pip install --user --quiet 'datamodel-code-generator>=0.26' 2>&1 \
-        | grep -vE '^Looking|^Requirement|^Collecting|^Downloading|^Installing|^Successfully'; then
-        :
+      # 우선순위 (가장 안전한 격리 → 위험):
+      #   1) pipx (격리 venv, PEP 668 안전)
+      #   2) python3 -m venv ~/.venvs/mxwp-tools (수동 venv)
+      #   3) --user (구식 시스템)
+      #   4) --break-system-packages (마지막 수단)
+      _installed=0
+
+      # SUDO_USER 가 있으면 그 user 환경에 설치 (root home 에 설치되면 다음 단계 못 찾음)
+      _run_as_user() {
+        if [ -n "${SUDO_USER:-}" ]; then
+          sudo -u "$SUDO_USER" -H "$@"
+        else
+          "$@"
+        fi
+      }
+
+      # 1) pipx
+      if ! command -v pipx >/dev/null 2>&1; then
+        apt_install pipx 2>/dev/null || true
       fi
-      if ! python3 -c "import datamodel_code_generator" 2>/dev/null; then
+      if command -v pipx >/dev/null 2>&1; then
+        log "pipx 로 설치 시도"
+        if _run_as_user pipx install 'datamodel-code-generator>=0.26' 2>&1 | tail -5; then
+          _run_as_user pipx ensurepath 2>/dev/null || true
+          _installed=1
+          ok "datamodel-code-generator (via pipx)"
+        fi
+      fi
+
+      # 2) venv fallback
+      if [ "$_installed" -eq 0 ]; then
+        log "pipx 실패 — venv 로 fallback"
+        _venv_dir="${SUDO_USER:+/home/$SUDO_USER}/.venvs/mxwp-tools"
+        [ -z "${SUDO_USER:-}" ] && _venv_dir="$HOME/.venvs/mxwp-tools"
+        if _run_as_user python3 -m venv "$_venv_dir" 2>/dev/null; then
+          if _run_as_user "$_venv_dir/bin/pip" install --quiet 'datamodel-code-generator>=0.26' 2>&1 | tail -3; then
+            _installed=1
+            ok "datamodel-code-generator (venv: $_venv_dir)"
+            warn "PATH 추가 필요 — ~/.bashrc 에 다음 한 줄:"
+            echo "    export PATH=\"$_venv_dir/bin:\$PATH\""
+          fi
+        fi
+      fi
+
+      # 3) --user fallback (오래된 시스템)
+      if [ "$_installed" -eq 0 ]; then
+        log "venv 실패 — pip --user 로 fallback"
+        _run_as_user python3 -m pip install --user --quiet 'datamodel-code-generator>=0.26' 2>&1 \
+          | grep -vE '^Looking|^Requirement|^Collecting|^Downloading|^Installing|^Successfully' || true
+        if _run_as_user python3 -c "import datamodel_code_generator" 2>/dev/null; then
+          _installed=1
+          ok "datamodel-code-generator (pip --user)"
+        fi
+      fi
+
+      # 4) --break-system-packages (가장 위험, 마지막 수단)
+      if [ "$_installed" -eq 0 ]; then
         warn "--user 실패 → --break-system-packages 로 재시도"
         python3 -m pip install --break-system-packages --quiet 'datamodel-code-generator>=0.26' 2>&1 \
           | grep -vE '^Looking|^Requirement|^Collecting|^Downloading|^Installing|^Successfully' || true
+        if python3 -c "import datamodel_code_generator" 2>/dev/null; then
+          _installed=1
+          ok "datamodel-code-generator (--break-system-packages)"
+        fi
       fi
-      if python3 -c "import datamodel_code_generator" 2>/dev/null; then
-        ok "datamodel-code-generator installed"
-      else
+
+      if [ "$_installed" -eq 0 ]; then
         miss "datamodel-code-generator 설치 실패 — 수동 시도:"
-        echo "    sudo HTTPS_PROXY=\$HTTPS_PROXY python3 -m pip install --break-system-packages 'datamodel-code-generator>=0.26'"
+        echo "    sudo apt-get install -y pipx"
+        echo "    pipx install 'datamodel-code-generator>=0.26'"
+        echo "    pipx ensurepath"
         exit 1
       fi
     fi
