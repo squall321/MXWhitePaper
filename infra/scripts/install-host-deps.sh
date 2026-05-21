@@ -143,19 +143,33 @@ echo
 
 # ── Step 3: pnpm via corepack (또는 npm fallback) ──────────────────────────
 log "step 3/5 — pnpm"
+
+# sudo 로 실행 시, corepack 의 cache 가 root 소유 ~/.cache 에 만들어져서 일반 사용자가
+# 못 쓰는 사례를 방지. SUDO_USER 가 있으면 그 user 의 home 의 .cache 를 미리 만들고
+# 권한 부여.
+if [ "$CHECK_ONLY" -eq 0 ] && [ -n "${SUDO_USER:-}" ]; then
+  _user_home="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+  if [ -n "$_user_home" ]; then
+    install -d -m 755 -o "$SUDO_USER" -g "$(id -gn "$SUDO_USER")" \
+      "$_user_home/.cache" "$_user_home/.cache/node" "$_user_home/.cache/node/corepack" 2>/dev/null || true
+    chown -R "$SUDO_USER:$(id -gn "$SUDO_USER")" "$_user_home/.cache/node" 2>/dev/null || true
+    ok "cache dir prepared for $SUDO_USER: $_user_home/.cache/node/corepack"
+  fi
+fi
+
 if command -v pnpm >/dev/null 2>&1; then
-  ok "pnpm: $(pnpm --version)"
+  ok "pnpm: $(pnpm --version 2>/dev/null || echo '?')"
 else
   miss "pnpm 미설치"
   if [ "$CHECK_ONLY" -eq 0 ]; then
     # corepack 가 registry 에 도달 못 하면 npm 으로 fallback.
     # 두 방법 다 인터넷/proxy 필요 — 둘 다 실패하면 사용자에게 안내.
     if corepack enable 2>/dev/null && corepack prepare pnpm@9 --activate 2>/dev/null; then
-      ok "pnpm: $(pnpm --version) (via corepack)"
+      ok "pnpm: $(pnpm --version 2>/dev/null || echo '?') (via corepack)"
     else
       warn "corepack 실패 — npm 으로 fallback"
       if npm install -g pnpm@9 2>&1 | tail -5; then
-        ok "pnpm: $(pnpm --version) (via npm)"
+        ok "pnpm: $(pnpm --version 2>/dev/null || echo '?') (via npm)"
       else
         miss "pnpm 설치 실패 — 다음 중 하나 시도:"
         echo "    1) proxy 명시:"
@@ -187,27 +201,71 @@ else
 fi
 echo
 
-# ── Step 5: Python + pip + datamodel-code-generator ─────────────────────────
-log "step 5/5 — Python + datamodel-code-generator"
+# ── Step 5: Python + pip + venv + datamodel-code-generator ────────────────
+log "step 5/5 — Python + pip + datamodel-code-generator"
 if [ "$SKIP_PYTHON" -eq 1 ]; then
   ok "python — skipped (--skip-python)"
 else
+  # python3
   if command -v python3 >/dev/null 2>&1; then
     ok "python: $(python3 --version)"
   else
     miss "python3 미설치"
-    [ "$CHECK_ONLY" -eq 0 ] && apt_install python3 python3-pip
+    [ "$CHECK_ONLY" -eq 0 ] && apt_install python3
   fi
 
-  # datamodel-code-generator 는 schema codegen 에서 필요 (pre-commit hook 등)
+  # pip — python3 -m pip 가 import 되는지로 판정 (별도 'pip' 명령 없어도 OK).
+  if python3 -m pip --version >/dev/null 2>&1; then
+    ok "pip: $(python3 -m pip --version | awk '{print $2}')"
+  else
+    miss "pip 미설치"
+    if [ "$CHECK_ONLY" -eq 0 ]; then
+      if [ "$PKG" = "apt" ]; then
+        apt_install python3-pip
+      else
+        apt_install python3-pip || apt_install python-pip
+      fi
+      python3 -m pip --version >/dev/null 2>&1 \
+        && ok "pip: $(python3 -m pip --version | awk '{print $2}')" \
+        || { miss "pip 설치 후에도 import 안 됨"; exit 1; }
+    fi
+  fi
+
+  # python3-venv — pip install --user 사용 시 일부 배포판 PEP 668 차단 (externally-managed).
+  # venv 가 있어야 그쪽 회피 가능. 설치 안 됐어도 --break-system-packages 로 진행.
+  if [ "$CHECK_ONLY" -eq 0 ] && [ "$PKG" = "apt" ]; then
+    if ! dpkg -s python3-venv >/dev/null 2>&1; then
+      apt_install python3-venv 2>/dev/null || true
+    fi
+  fi
+
+  # datamodel-code-generator
   if python3 -c "import datamodel_code_generator" 2>/dev/null; then
-    ok "datamodel-code-generator 모듈 import OK"
+    DMC_VER="$(python3 -c 'import datamodel_code_generator as m; print(m.__version__)' 2>/dev/null || echo '?')"
+    ok "datamodel-code-generator: $DMC_VER"
+  elif [ "$CHECK_ONLY" -eq 1 ]; then
+    miss "datamodel-code-generator 미설치 (check 모드 — 실제 install 시 자동)"
   else
     miss "datamodel-code-generator 미설치"
     if [ "$CHECK_ONLY" -eq 0 ]; then
-      python3 -m pip install --user --quiet 'datamodel-code-generator>=0.26' 2>&1 \
-        | grep -vE '^Looking|^Requirement|^Collecting|^Downloading|^Installing|^Successfully' || true
-      ok "datamodel-code-generator installed"
+      # PEP 668 시스템 (Ubuntu 23.04+, Debian 12+) 에선 --break-system-packages 필요.
+      # 안전하게 --user 시도 → 안 되면 break-system-packages.
+      if python3 -m pip install --user --quiet 'datamodel-code-generator>=0.26' 2>&1 \
+        | grep -vE '^Looking|^Requirement|^Collecting|^Downloading|^Installing|^Successfully'; then
+        :
+      fi
+      if ! python3 -c "import datamodel_code_generator" 2>/dev/null; then
+        warn "--user 실패 → --break-system-packages 로 재시도"
+        python3 -m pip install --break-system-packages --quiet 'datamodel-code-generator>=0.26' 2>&1 \
+          | grep -vE '^Looking|^Requirement|^Collecting|^Downloading|^Installing|^Successfully' || true
+      fi
+      if python3 -c "import datamodel_code_generator" 2>/dev/null; then
+        ok "datamodel-code-generator installed"
+      else
+        miss "datamodel-code-generator 설치 실패 — 수동 시도:"
+        echo "    sudo HTTPS_PROXY=\$HTTPS_PROXY python3 -m pip install --break-system-packages 'datamodel-code-generator>=0.26'"
+        exit 1
+      fi
     fi
   fi
 fi
@@ -220,11 +278,12 @@ FINAL[node]="$(command -v node >/dev/null 2>&1 && echo "✓ $(node --version)" |
 FINAL[pnpm]="$(command -v pnpm >/dev/null 2>&1 && echo "✓ $(pnpm --version)" || echo '✗')"
 FINAL[rclone]="$(command -v rclone >/dev/null 2>&1 && echo "✓ $(rclone version 2>/dev/null | head -1 | awk '{print $2}')" || echo '✗')"
 FINAL[python3]="$(command -v python3 >/dev/null 2>&1 && echo "✓ $(python3 --version | awk '{print $2}')" || echo '✗')"
+FINAL[pip]="$(python3 -m pip --version >/dev/null 2>&1 && echo "✓ $(python3 -m pip --version | awk '{print $2}')" || echo '✗')"
 FINAL[git]="$(command -v git >/dev/null 2>&1 && echo "✓ $(git --version | awk '{print $3}')" || echo '✗')"
-_dmc_ver="$(python3 -c 'import datamodel_code_generator as m; print(m.__version__)' 2>/dev/null || echo '')"
+_dmc_ver="$(python3 -c 'import datamodel_code_generator as m; print(m.__version__)' 2>/dev/null || true)"
 FINAL[datamodel-codegen]="$([ -n "$_dmc_ver" ] && echo "✓ $_dmc_ver" || echo '✗')"
 
-for k in git node pnpm python3 datamodel-codegen rclone; do
+for k in git node pnpm python3 pip datamodel-codegen rclone; do
   printf '  %-22s %s\n' "$k" "${FINAL[$k]}"
 done
 
