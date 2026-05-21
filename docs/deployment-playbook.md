@@ -4,6 +4,9 @@
 `apptainer-cross-host-deployment.md` 가 카테고리별 깊이 있는 문서라면, 이 문서는
 **실전 순서대로** 정리한 cheat sheet.
 
+> **데이터만 옮기거나 합치고 싶다면** → [data-transfer.md](data-transfer.md) — snapshot
+> (전체 wipe+restore) vs data-merge (additive) 가이드.
+
 ---
 
 ## 1. 번들 만들기 (dev 서버에서)
