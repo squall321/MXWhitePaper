@@ -314,6 +314,12 @@ else
           _run_as_user pipx ensurepath 2>/dev/null || true
           _installed=1
           ok "datamodel-code-generator (via pipx)"
+          # 현재 shell 에도 즉시 적용 + 안내 (sudo 안에선 정작 user shell 에 반영
+          # 안 되므로 한 줄 사용자 안내).
+          export PATH="${SUDO_USER:+/home/$SUDO_USER}/.local/bin:$PATH"
+          [ -z "${SUDO_USER:-}" ] && export PATH="$HOME/.local/bin:$PATH"
+          warn "이 shell 의 PATH 에 ~/.local/bin 추가됨. 새 shell 에선:"
+          echo "    source ~/.bashrc   (또는 새 터미널)"
         fi
       fi
 
