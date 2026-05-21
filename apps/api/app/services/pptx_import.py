@@ -87,6 +87,34 @@ def is_pptx_content(buf: bytes) -> bool:
         return False
 
 
+def try_unwrap_drm_pptx(buf: bytes) -> bytes | None:
+    """DRM wrap 된 pptx 의 내부 진짜 pptx 추출. docx 와 동일 패턴."""
+    import zipfile
+
+    if not is_pptx_zip_magic(buf):
+        return None
+    if is_pptx_content(buf):
+        return None  # 이미 정상 pptx
+    try:
+        with zipfile.ZipFile(io.BytesIO(buf)) as outer:
+            inner_candidates = [
+                n for n in outer.namelist()
+                if n.lower().endswith(".pptx") and not n.endswith("/")
+            ]
+            if not inner_candidates:
+                return None
+            inner_candidates.sort(
+                key=lambda n: outer.getinfo(n).file_size, reverse=True,
+            )
+            for cand in inner_candidates:
+                inner_buf = outer.read(cand)
+                if is_pptx_content(inner_buf):
+                    return inner_buf
+            return None
+    except zipfile.BadZipFile:
+        return None
+
+
 def _new_id() -> str:
     return str(ulid.new())
 

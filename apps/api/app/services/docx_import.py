@@ -1949,6 +1949,47 @@ def is_docx_content(buf: bytes) -> bool:
         return False
 
 
+def try_unwrap_drm_docx(buf: bytes) -> bytes | None:
+    """DRM 등으로 *한 번 더 zip wrap* 된 docx 의 내부 진짜 docx bytes 를 추출.
+
+    배경: 사내 DRM 솔루션이 원본 .docx 를 다시 ZIP 으로 감싸 배포하는 경우가 있다
+    (예: drm.zip → 안에 진짜 doc.docx). `python-docx` 는 그런 wrapper 를 못 읽으므로
+    *업로드 시점* 에 한 번 까서 진짜 docx bytes 를 꺼낸다.
+
+    탐지 규칙:
+      1) outer 가 PK zip 인데 word/document.xml 없음
+      2) outer 안에 .docx 확장자 파일이 *하나만* 있음 → 그게 진짜 docx 후보
+      3) 그 후보 bytes 가 다시 is_docx_content() == True 면 unwrap 성공
+
+    실패 시 None — 호출자가 ValidationFailed 로 진행.
+    """
+    if not is_docx_zip_magic(buf):
+        return None
+    if is_docx_content(buf):
+        return None  # 이미 정상 docx — unwrap 불필요
+    try:
+        with zipfile.ZipFile(io.BytesIO(buf)) as outer:
+            # outer 의 멤버 중 .docx 로 끝나는 후보들
+            inner_candidates = [
+                n for n in outer.namelist()
+                if n.lower().endswith(".docx") and not n.endswith("/")
+            ]
+            if not inner_candidates:
+                return None
+            # 가장 큰 .docx 파일을 진짜 본문으로 — DRM wrapper 는 보통 작은 메타 외
+            # 본 docx 가 가장 크다. 여러 개여도 가장 큰 것 우선.
+            inner_candidates.sort(
+                key=lambda n: outer.getinfo(n).file_size, reverse=True,
+            )
+            for cand in inner_candidates:
+                inner_buf = outer.read(cand)
+                if is_docx_content(inner_buf):
+                    return inner_buf
+            return None
+    except zipfile.BadZipFile:
+        return None
+
+
 # ── 미니 .docx 생성기 (테스트 픽스처용) ──────────────────────────────
 def build_minimal_docx(
     *,

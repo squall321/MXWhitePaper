@@ -287,7 +287,12 @@ async def import_docx(
     if not docx_import.is_docx_zip_magic(buf):
         raise ValidationFailed("file is not a valid zip (.docx must be PK zip)")
     if not docx_import.is_docx_content(buf):
-        raise ValidationFailed("zip does not contain word/document.xml")
+        # DRM wrapper 추정: outer zip 안에 진짜 docx 가 들어있는지 한 번 unwrap.
+        # 사내 DRM 솔루션이 .docx 를 다시 ZIP 으로 감싸는 경우 호환.
+        unwrapped = docx_import.try_unwrap_drm_docx(buf)
+        if unwrapped is None:
+            raise ValidationFailed("zip does not contain word/document.xml")
+        buf = unwrapped
 
     final_slug = slug or _derive_slug(file.filename or "imported.docx")
     sha_to_ulid = await _preprocess_zip_images(
@@ -423,7 +428,11 @@ async def roundtrip_docx_endpoint(
     if not docx_import.is_docx_zip_magic(buf):
         raise ValidationFailed("file is not a valid zip (.docx must be PK zip)")
     if not docx_import.is_docx_content(buf):
-        raise ValidationFailed("zip does not contain word/document.xml")
+        # DRM unwrap 시도 (사내 솔루션의 ZIP-in-ZIP 패턴).
+        unwrapped = docx_import.try_unwrap_drm_docx(buf)
+        if unwrapped is None:
+            raise ValidationFailed("zip does not contain word/document.xml")
+        buf = unwrapped
 
     strip_toc_b = _bool_form(strip_toc, default=True)
     verify_toc_b = _bool_form(verify_toc, default=True)
@@ -554,7 +563,11 @@ async def import_pptx(
     if not pptx_import.is_pptx_zip_magic(buf):
         raise ValidationFailed("file is not a valid zip (.pptx must be PK zip)")
     if not pptx_import.is_pptx_content(buf):
-        raise ValidationFailed("zip does not contain ppt/presentation.xml")
+        # DRM unwrap 시도 (사내 솔루션의 ZIP-in-ZIP 패턴).
+        unwrapped = pptx_import.try_unwrap_drm_pptx(buf)
+        if unwrapped is None:
+            raise ValidationFailed("zip does not contain ppt/presentation.xml")
+        buf = unwrapped
 
     final_slug = slug or _derive_slug(file.filename or "imported.pptx")
     sha_to_ulid = await _preprocess_zip_images(
