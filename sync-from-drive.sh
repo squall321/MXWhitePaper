@@ -168,7 +168,11 @@ if [ "$SKIP_MERGE" -eq 0 ]; then
 
   MERGE_ARGS=("--on-conflict=$ON_CONFLICT")
   [ "$DRY_RUN" -eq 1 ] && MERGE_ARGS+=("--dry-run")
-  MERGE_ARGS+=("${EXTRA_MERGE_ARGS[@]:-}")
+  # 빈 배열일 때 ${arr[@]:-} 는 빈 토큰 1개를 만들어 receiving 측에 unknown arg 오류.
+  # 길이 체크 후에만 expand.
+  if [ "${#EXTRA_MERGE_ARGS[@]}" -gt 0 ]; then
+    MERGE_ARGS+=("${EXTRA_MERGE_ARGS[@]}")
+  fi
 
   if ! ./infra/scripts/data-merge-from-drive.sh "${MERGE_ARGS[@]}"; then
     err "data merge failed"
