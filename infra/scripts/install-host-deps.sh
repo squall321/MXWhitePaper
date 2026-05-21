@@ -51,9 +51,20 @@ fi
 
 # ── 권한 확인 (check-only 가 아니면 sudo 필요) ───────────────────────────────
 if [ "$CHECK_ONLY" -eq 0 ] && [ "$(id -u)" -ne 0 ]; then
-  echo "✗ 설치는 sudo 필요. 다시:"
-  echo "    sudo $0 $*"
+  echo "✗ 설치는 sudo 필요. proxy 환경 변수도 같이 전달:"
+  echo "    sudo -E $0 $*"
+  echo "  또는 명시:"
+  echo "    sudo HTTPS_PROXY=http://168.219.61.252:8080 HTTP_PROXY=http://168.219.61.252:8080 $0 $*"
   exit 1
+fi
+
+# ── proxy 환경 변수 알림 ────────────────────────────────────────────────────
+if [ -n "${HTTPS_PROXY:-}${HTTP_PROXY:-}" ]; then
+  log "proxy 감지: HTTPS_PROXY=${HTTPS_PROXY:-} HTTP_PROXY=${HTTP_PROXY:-}"
+else
+  log "proxy 환경 없음 — 사내망이면 다음으로 다시 시도:"
+  log "  sudo -E $0    (caller env 보존)"
+  log "  또는 sudo HTTPS_PROXY=http://proxy:8080 $0"
 fi
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -69,7 +80,7 @@ apt_install() {
 
 # ── Step 1: OS 기본 도구 ───────────────────────────────────────────────────
 log "step 1/5 — OS 기본 도구"
-for cmd in git curl ca-certificates; do
+for cmd in git curl; do
   if need_install "$cmd"; then
     miss "$cmd 미설치"
     [ "$CHECK_ONLY" -eq 0 ] && apt_install "$cmd"
@@ -77,7 +88,15 @@ for cmd in git curl ca-certificates; do
     ok "$cmd: $(command -v "$cmd")"
   fi
 done
-[ "$CHECK_ONLY" -eq 0 ] && [ "$PKG" = "apt" ] && apt-get update -qq
+# ca-certificates 는 library 라 command 가 없음 → dpkg 로 확인
+if [ "$PKG" = "apt" ]; then
+  if dpkg -s ca-certificates >/dev/null 2>&1; then
+    ok "ca-certificates: installed"
+  else
+    miss "ca-certificates 미설치"
+    [ "$CHECK_ONLY" -eq 0 ] && apt_install ca-certificates
+  fi
+fi
 echo
 
 # ── Step 2: Node + corepack ─────────────────────────────────────────────────
@@ -122,16 +141,31 @@ else
 fi
 echo
 
-# ── Step 3: pnpm via corepack ───────────────────────────────────────────────
-log "step 3/5 — pnpm via corepack"
+# ── Step 3: pnpm via corepack (또는 npm fallback) ──────────────────────────
+log "step 3/5 — pnpm"
 if command -v pnpm >/dev/null 2>&1; then
   ok "pnpm: $(pnpm --version)"
 else
   miss "pnpm 미설치"
   if [ "$CHECK_ONLY" -eq 0 ]; then
-    corepack enable
-    corepack prepare pnpm@9 --activate
-    ok "pnpm: $(pnpm --version)"
+    # corepack 가 registry 에 도달 못 하면 npm 으로 fallback.
+    # 두 방법 다 인터넷/proxy 필요 — 둘 다 실패하면 사용자에게 안내.
+    if corepack enable 2>/dev/null && corepack prepare pnpm@9 --activate 2>/dev/null; then
+      ok "pnpm: $(pnpm --version) (via corepack)"
+    else
+      warn "corepack 실패 — npm 으로 fallback"
+      if npm install -g pnpm@9 2>&1 | tail -5; then
+        ok "pnpm: $(pnpm --version) (via npm)"
+      else
+        miss "pnpm 설치 실패 — 다음 중 하나 시도:"
+        echo "    1) proxy 명시:"
+        echo "       sudo HTTPS_PROXY=http://proxy:8080 npm install -g pnpm@9"
+        echo "    2) 사내 npm 미러 설정:"
+        echo "       sudo npm config set registry https://npm.corp.com/"
+        echo "    3) 다른 머신에서 pnpm bin 받아 scp"
+        exit 1
+      fi
+    fi
   fi
 fi
 echo
