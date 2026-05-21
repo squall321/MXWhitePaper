@@ -217,13 +217,31 @@ fi
 
 # ── Post-processing ──────────────────────────────────────────────────────────
 if [ "$DRY_RUN" -eq 0 ]; then
+  # NO_PROXY 자동 보강 — 회사 HTTPS_PROXY 가 설정된 환경에서 LAN/localhost 호출
+  # (postgres, meili) 까지 proxy 거치려 해서 실패하는 케이스 방지.
+  # MEILI_HOST 의 host 부분도 NO_PROXY 에 포함시킨다.
+  _MEILI_HOST_ONLY="$(echo "${MEILI_HOST:-http://127.0.0.1:7700}" \
+    | sed -E 's|^https?://||; s|:[0-9]+$||; s|/.*$||')"
+  AUTO_NO_PROXY="localhost,127.0.0.1,$_MEILI_HOST_ONLY,postgres,meili,minio,api"
+  if [ -n "${NO_PROXY:-}" ]; then
+    AUTO_NO_PROXY="$NO_PROXY,$AUTO_NO_PROXY"
+  fi
+
   echo
   echo "→ post-processing: refresh_links"
-  "$APPTAINER" exec instance://"$INST_API" \
+  "$APPTAINER" exec \
+    --env NO_PROXY="$AUTO_NO_PROXY" \
+    --env no_proxy="$AUTO_NO_PROXY" \
+    instance://"$INST_API" \
     /bin/sh -c "cd /workspace/apps/api && python -m app.scripts.refresh_links"
 
   echo "→ post-processing: reindex"
-  "$APPTAINER" exec instance://"$INST_API" \
+  "$APPTAINER" exec \
+    --env MEILI_HOST="${MEILI_HOST:-http://127.0.0.1:7700}" \
+    --env MEILI_MASTER_KEY="${MEILI_MASTER_KEY:-}" \
+    --env NO_PROXY="$AUTO_NO_PROXY" \
+    --env no_proxy="$AUTO_NO_PROXY" \
+    instance://"$INST_API" \
     /bin/sh -c "cd /workspace/apps/api && python -m app.scripts.reindex"
 fi
 
