@@ -261,9 +261,27 @@ else
     fi
   fi
 
-  # datamodel-code-generator
-  if python3 -c "import datamodel_code_generator" 2>/dev/null; then
-    DMC_VER="$(python3 -c 'import datamodel_code_generator as m; print(m.__version__)' 2>/dev/null || echo '?')"
+  # datamodel-code-generator — import / CLI / SUDO_USER 환경 3중 체크
+  _dmc_user_check() {
+    if [ -n "${SUDO_USER:-}" ]; then
+      sudo -u "$SUDO_USER" -H python3 -c "import datamodel_code_generator" 2>/dev/null
+    else
+      python3 -c "import datamodel_code_generator" 2>/dev/null
+    fi
+  }
+  _dmc_user_ver() {
+    local v
+    if [ -n "${SUDO_USER:-}" ]; then
+      v="$(sudo -u "$SUDO_USER" -H python3 -c 'import datamodel_code_generator as m; print(m.__version__)' 2>/dev/null || true)"
+      [ -z "$v" ] && v="$(sudo -u "$SUDO_USER" -H bash -lc 'command -v datamodel-codegen >/dev/null && datamodel-codegen --version' 2>/dev/null | head -1 || true)"
+    else
+      v="$(python3 -c 'import datamodel_code_generator as m; print(m.__version__)' 2>/dev/null || true)"
+      [ -z "$v" ] && v="$(command -v datamodel-codegen >/dev/null 2>&1 && datamodel-codegen --version 2>/dev/null | head -1 || true)"
+    fi
+    echo "${v:-?}"
+  }
+  if _dmc_user_check || command -v datamodel-codegen >/dev/null 2>&1; then
+    DMC_VER="$(_dmc_user_ver)"
     ok "datamodel-code-generator: $DMC_VER"
   elif [ "$CHECK_ONLY" -eq 1 ]; then
     miss "datamodel-code-generator 미설치 (check 모드 — 실제 install 시 자동)"
@@ -357,8 +375,19 @@ FINAL[rclone]="$(command -v rclone >/dev/null 2>&1 && echo "✓ $(rclone version
 FINAL[python3]="$(command -v python3 >/dev/null 2>&1 && echo "✓ $(python3 --version | awk '{print $2}')" || echo '✗')"
 FINAL[pip]="$(python3 -m pip --version >/dev/null 2>&1 && echo "✓ $(python3 -m pip --version | awk '{print $2}')" || echo '✗')"
 FINAL[git]="$(command -v git >/dev/null 2>&1 && echo "✓ $(git --version | awk '{print $3}')" || echo '✗')"
+# datamodel-codegen 의 version 표시: 3 단계 fallback (직접 import, CLI binary, file path)
 _dmc_ver="$(python3 -c 'import datamodel_code_generator as m; print(m.__version__)' 2>/dev/null || true)"
-FINAL[datamodel-codegen]="$([ -n "$_dmc_ver" ] && echo "✓ $_dmc_ver" || echo '✗')"
+if [ -z "$_dmc_ver" ] && command -v datamodel-codegen >/dev/null 2>&1; then
+  _dmc_ver="$(datamodel-codegen --version 2>/dev/null | head -1 || true)"
+fi
+if [ -z "$_dmc_ver" ]; then
+  # pipx venv 안 / SUDO_USER 환경 — root 가 아닌 user 의 환경에서 다시 시도
+  if [ -n "${SUDO_USER:-}" ]; then
+    _dmc_ver="$(sudo -u "$SUDO_USER" -H python3 -c 'import datamodel_code_generator as m; print(m.__version__)' 2>/dev/null || true)"
+    [ -z "$_dmc_ver" ] && _dmc_ver="$(sudo -u "$SUDO_USER" -H bash -lc 'command -v datamodel-codegen >/dev/null && datamodel-codegen --version' 2>/dev/null | head -1 || true)"
+  fi
+fi
+FINAL[datamodel-codegen]="$([ -n "$_dmc_ver" ] && echo "✓ $_dmc_ver" || echo '✗ (모듈 미확인 — pipx ensurepath; source ~/.bashrc 시도)')"
 
 for k in git node pnpm python3 pip datamodel-codegen rclone; do
   printf '  %-22s %s\n' "$k" "${FINAL[$k]}"
