@@ -249,4 +249,9 @@ fi
 
 echo
 echo "✓ data-merge complete"
-[ "$DRY_RUN" -eq 1 ] && echo "  (dry-run — no data was modified)"
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "  (dry-run — no data was modified)"
+fi
+# 명시적 success exit — 이전 `[ ] && echo` 패턴은 DRY_RUN=0 시 exit code 1 을 반환해
+# 호출자가 'data-merge failed' 로 잘못 판정했다.
+exit 0
