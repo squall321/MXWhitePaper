@@ -79,6 +79,36 @@ apt_install() {
 }
 
 # ── Step 1: OS 기본 도구 ───────────────────────────────────────────────────
+log "step 0 — Ubuntu 24+ unprivileged userns 자동 처리"
+# Ubuntu 24.04 부터 apparmor 가 *unprivileged user namespace* 를 default 차단해
+# apptainer rootless instance 가 "Operation not permitted" 로 실패.
+# 우리 스택은 rootless 가 표준이라 그 차단을 풀어야 함.
+if [ "$CHECK_ONLY" -eq 0 ] && [ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+  _restrict="$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo '?')"
+  if [ "$_restrict" = "1" ]; then
+    warn "Ubuntu 24+: apparmor_restrict_unprivileged_userns=1 차단 — 자동 해제"
+    sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+    # 영구화
+    if [ ! -f /etc/sysctl.d/99-userns.conf ] \
+       || ! grep -q 'apparmor_restrict_unprivileged_userns' /etc/sysctl.d/99-userns.conf; then
+      echo 'kernel.apparmor_restrict_unprivileged_userns=0' >> /etc/sysctl.d/99-userns.conf
+      ok "영구화: /etc/sysctl.d/99-userns.conf"
+    fi
+  elif [ "$_restrict" = "0" ]; then
+    ok "apparmor_restrict_unprivileged_userns 이미 0"
+  fi
+fi
+# 또 하나 — unprivileged_userns_clone (구식 Ubuntu/Debian) 도 확인
+if [ "$CHECK_ONLY" -eq 0 ] && [ -r /proc/sys/kernel/unprivileged_userns_clone ]; then
+  _clone="$(cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || echo '?')"
+  if [ "$_clone" = "0" ]; then
+    warn "unprivileged_userns_clone=0 — 자동 활성"
+    sysctl -w kernel.unprivileged_userns_clone=1
+    echo 'kernel.unprivileged_userns_clone=1' >> /etc/sysctl.d/99-userns.conf
+  fi
+fi
+echo
+
 log "step 1/5 — OS 기본 도구"
 for cmd in git curl; do
   if need_install "$cmd"; then
