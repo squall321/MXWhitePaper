@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { App } from './App'
+import { SigmaDemo } from './pages/SigmaDemo'
 import { AuthGuard } from './components/AuthGuard'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { RouteBoundary } from './components/RouteBoundary'
@@ -235,6 +236,9 @@ const GraphPage = lazyLogged('Graph', () =>
 const DepGraphPage = lazyLogged('DepGraph', () =>
   import('./pages/DepGraph').then((m) => ({ default: m.DepGraphPage })),
 )
+const GraphAllPage = lazyLogged('GraphAll', () =>
+  import('./pages/GraphAll').then((m) => ({ default: m.GraphAllPage })),
+)
 const DiagPage = lazyLogged('Diag', () =>
   import('./pages/Diag').then((m) => ({ default: m.DiagPage })),
 )
@@ -410,8 +414,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="series" element={<Boundaried name="series"><SeriesManagerPage /></Boundaried>} />
                 <Route path="series/:slug" element={<Boundaried name="series/:slug"><SeriesDetailPage /></Boundaried>} />
                 <Route path="graph" element={<Boundaried name="graph"><GraphPage /></Boundaried>} />
+                <Route path="graph/all" element={<Boundaried name="graph/all"><GraphAllPage /></Boundaried>} />
                 <Route path="graph/:slug" element={<Boundaried name="graph/:slug"><GraphPage /></Boundaried>} />
                 <Route path="dep-graph" element={<Boundaried name="dep-graph"><DepGraphPage /></Boundaried>} />
+                <Route path="sigma-demo" element={<Boundaried name="sigma-demo"><SigmaDemo /></Boundaried>} />
                 <Route path="tags/:tag" element={<Boundaried name="tags"><TagPage mode="tag" /></Boundaried>} />
                 <Route path="category/:cat" element={<Boundaried name="category"><TagPage mode="category" /></Boundaried>} />
                 <Route path="*" element={<Boundaried name="not-found"><NotFoundPage /></Boundaried>} />

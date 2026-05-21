@@ -1,6 +1,13 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
+
+// sigma 가 jsdom 의 WebGL 미지원 환경에서 import 만 해도 throws → stub.
+// Graph.tsx 가 KnowledgeGraph 를 import 하므로 transitive 영향 차단.
+vi.mock('@/features/graph/components/KnowledgeGraph', () => ({
+  KnowledgeGraph: () => null,
+}))
+
 import { GraphCanvas } from '@/pages/Graph'
 import type { GraphEdge, GraphNode } from '../api'
 

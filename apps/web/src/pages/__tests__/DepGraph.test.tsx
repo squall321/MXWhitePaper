@@ -3,6 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
+// sigma 는 jsdom 의 WebGL 미지원 환경에서 import 만 해도 throws → stub.
+// DepGraphCanvas 가 KnowledgeGraph 를 import 하므로 transitive 영향 차단.
+vi.mock('@/features/graph/components/KnowledgeGraph', () => ({
+  KnowledgeGraph: () => null,
+}))
+
 // Stub the dep-graph API so the page doesn't hit the network during SSR
 // rendering. This mirrors the AdminDashboard test pattern.
 vi.mock('@/features/dep-graph/api', () => ({
@@ -46,16 +52,15 @@ function withProviders(node: React.ReactNode, search = '') {
 }
 
 describe('<DepGraphCanvas />', () => {
-  it('renders an SVG scaffold for a small fixture', () => {
+  // cycle 21 이후 캔버스는 KnowledgeGraph (sigma/WebGL) 가 그린다 — jsdom 에선
+  // mock 으로 대체되므로 내부 노드는 렌더링되지 않고 외곽 marker div 만 확인.
+  it('renders the canvas marker for a small fixture', () => {
     const html = renderToStaticMarkup(
       withProviders(
         <DepGraphCanvas nodes={NODES} edges={EDGES} rootSlug="root" />,
       ),
     )
     expect(html).toContain('data-testid="dep-graph-svg"')
-    expect(html).toContain('class="links"')
-    expect(html).toContain('class="nodes"')
-    expect(html).toContain('viewBox="0 0 800 600"')
   })
 
   it('does not crash with an empty graph', () => {

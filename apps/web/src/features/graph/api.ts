@@ -55,6 +55,8 @@ export interface GraphOptions {
   include_tags?: boolean
   include_doc_tag_edges?: boolean
   include_tag_cooc?: boolean
+  /** 전역 (root/domain 없음) 경로의 노드 cap. 기본 200 — /graph/all 은 5000. */
+  limit?: number
 }
 
 /**
@@ -76,6 +78,7 @@ export async function fetchGraph(
     if (opts.include_tags) params.include_tags = true
     if (opts.include_doc_tag_edges) params.include_doc_tag_edges = true
     if (opts.include_tag_cooc) params.include_tag_cooc = true
+    if (opts.limit) params.limit = opts.limit
   } else {
     params.depth = depth
     if (rootOrOptions) params.root = rootOrOptions as string

@@ -368,6 +368,10 @@ async def get_graph(
     include_doc_tag_edges: bool = Query(default=False),
     include_tag_cooc: bool = Query(default=False),
     include_context: bool = Query(default=False),
+    # 전역 (root/domain 없음) 경로의 노드 cap.
+    # 기본 200 (기존 동작 보존) — `/graph/all` 같은 전체 보기 페이지에선 충분히
+    # 크게 (5000+) 호출. wiki edge 가 있는 doc 만 후보라서 실제로는 훨씬 적음.
+    limit: int = Query(default=200, ge=10, le=20000),
     s: AsyncSession = Depends(get_db),
     _user: dict = Depends(require_reader),
 ) -> dict[str, Any]:
@@ -435,12 +439,12 @@ async def get_graph(
             meta={"root": root, "depth": depth, "count": len(visited)},
         )
 
-    # 전역 — degree 상위 200
+    # 전역 — degree 상위 `limit` (기본 200, /graph/all 에선 5000+).
     deg: dict[str, int] = {}
     for src, tgt, cnt in edges:
         deg[src] = deg.get(src, 0) + cnt
         deg[tgt] = deg.get(tgt, 0) + cnt
-    top = sorted(deg.items(), key=lambda kv: kv[1], reverse=True)[:200]
+    top = sorted(deg.items(), key=lambda kv: kv[1], reverse=True)[:limit]
     keep: set[str] = {k for k, _ in top}
     kept_edges = [
         {"kind": "wiki", "source": src, "target": tgt, "count": cnt}

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { GraphCanvas } from '@/pages/Graph'
+import { KnowledgeGraph } from '@/features/graph/components/KnowledgeGraph'
 import { fetchHomeToday } from '@/features/home/api'
 import { useT } from '@/lib/i18n'
 
@@ -52,11 +52,12 @@ export function TodayHero() {
     >
       {/* 좌: 그래프 */}
       <div className="min-h-[280px] overflow-hidden rounded-lg border border-gray-100 bg-white dark:border-gray-800 dark:bg-gray-900">
-        <GraphCanvas
+        <KnowledgeGraph
           nodes={graph.nodes}
           edges={graph.edges}
           rootSlug={doc.slug}
           edgeKinds={TODAY_EDGE_KINDS}
+          height={280}
           onPickNode={(s) => navigate(`/docs/${encodeURIComponent(s)}`)}
         />
       </div>

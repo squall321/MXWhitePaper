@@ -11986,6 +11986,18 @@
               "title": "Include Context",
               "type": "boolean"
             }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 20000,
+              "minimum": 10,
+              "title": "Limit",
+              "type": "integer"
+            }
           }
         ],
         "responses": {

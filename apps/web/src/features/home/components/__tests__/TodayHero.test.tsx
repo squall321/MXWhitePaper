@@ -4,6 +4,15 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
+// sigma 가 jsdom 의 WebGL 미지원 환경에서 import 만 해도 throws → stub.
+// TodayHero 가 KnowledgeGraph 를 import 하므로 transitive 영향 차단.
+// 기존 GraphCanvas 어설션 (data-testid="graph-svg") 호환을 위해 같은 marker 를 출력.
+vi.mock('@/features/graph/components/KnowledgeGraph', () => ({
+  KnowledgeGraph: () => (
+    <div data-testid="graph-svg" />
+  ),
+}))
+
 // Mock home/today API so tests don't hit the network.
 vi.mock('@/features/home/api', () => ({
   fetchHomeToday: vi.fn(),

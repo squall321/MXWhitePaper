@@ -13,7 +13,7 @@
  *   - Clicking a node navigates to `/docs/<slug>` (only for non-missing).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import type { AppOutletContext } from '@/App'
 import {
@@ -31,6 +31,7 @@ import {
 import { select } from 'd3-selection'
 import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom'
 import { fetchGraph, type GraphEdge, type GraphNode, type GraphNodeDoc, type GraphNodeTag } from '@/features/graph/api'
+import { KnowledgeGraph } from '@/features/graph/components/KnowledgeGraph'
 
 /**
  * Unified sim node — doc + tag 둘 다 표현.
@@ -824,6 +825,14 @@ export function GraphPage() {
               ))}
             </div>
           )}
+          <Link
+            to="/graph/all"
+            data-testid="graph-all-link"
+            title="전체 지식그래프 보기"
+            className="rounded border border-smsg-200 bg-smsg-50 px-2 py-1 text-xs text-smsg-800 hover:bg-smsg-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+          >
+            🌐 전체 보기
+          </Link>
           <button
             type="button"
             onClick={() => setFullscreen((v) => !v)}
@@ -861,7 +870,7 @@ export function GraphPage() {
           <>
             {/* 데스크탑: 그래프 렌더 (lg+). 모바일/태블릿: 아래 list fallback */}
             <div className="hidden lg:block">
-              <GraphCanvas
+              <KnowledgeGraph
                 nodes={data.nodes}
                 edges={data.edges}
                 highlight={query}
