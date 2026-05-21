@@ -149,7 +149,12 @@ fi
 # ── Step 2: host-side deps ──────────────────────────────────────────
 if run_step 2; then
   step 2 "host-side dependencies"
-  if [ -d node_modules ] && [ -d apps/web/node_modules ]; then
+  # node_modules 디렉토리 존재만으로 skip 하지 말고, *핵심 의존성 하나* 까지 확인.
+  # 첫 install 이 중간에 끊겼으면 디렉토리는 있지만 내부 dep 누락 — fast-deep-equal 같은
+  # transitive dep 결락이 그 신호.
+  if [ -d node_modules ] \
+     && [ -d apps/web/node_modules ] \
+     && [ -d packages/shared/node_modules/fast-deep-equal ]; then
     ok "node_modules present (skip pnpm install)"
   else
     note "running: pnpm install"
