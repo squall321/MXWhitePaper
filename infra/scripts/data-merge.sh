@@ -50,10 +50,10 @@ if [ "${CONFIRM:-}" = "yes" ]; then
   SKIP_CONFIRM=1
 fi
 
-# Validate on-conflict value
+# Validate on-conflict value (skip / overwrite / newest)
 case "$ON_CONFLICT" in
-  skip|overwrite) ;;
-  *) echo "✗ --on-conflict must be 'skip' or 'overwrite'"; exit 1 ;;
+  skip|overwrite|newest) ;;
+  *) echo "✗ --on-conflict must be 'skip', 'overwrite', or 'newest'"; exit 1 ;;
 esac
 
 # ── Resolve archive path ─────────────────────────────────────────────────────

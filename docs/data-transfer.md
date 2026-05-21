@@ -7,7 +7,8 @@
 | 도구 | 동작 | 기존 데이터 | 용도 |
 |---|---|---|---|
 | **`snapshot.sh` + `restore-snapshot.sh`** | 완전 백업 / 복원 | **덮어씀** (DROP+CREATE) | 새 서버 초기 설치, 서버 이전, 백업 복구 |
-| **`data-dump.sh` + `data-merge.sh`** | 컨텐츠만 추출 / 추가 | **보존** (skip/overwrite/version 선택) | 이미 운영 중 서버에 다른 서버 데이터 합치기 |
+| **`data-dump.sh` + `data-merge.sh`** | 컨텐츠만 추출 / 추가 | **보존** (skip/overwrite/newest 선택) | 이미 운영 중 서버에 다른 서버 데이터 합치기 |
+| **`data-dump-to-drive.sh` + `data-merge-from-drive.sh`** | Drive 경유 자동화 (rclone) | 동일 | 두 서버 정기 동기화 (예: cron) |
 
 핵심 차이: `restore-snapshot` 은 *모든 테이블을 비우고* 백업으로 채워넣는다. `data-merge` 는 *기존 row 는 그대로 두고* 새 row 만 추가하거나 정책에 따라 덮어쓴다.
 
@@ -154,8 +155,8 @@ CONFIRM=yes ./infra/scripts/data-merge.sh latest
 | 옵션 | 동작 | 언제 쓸지 |
 |---|---|---|
 | `--on-conflict=skip` (**default**) | source 무시, 대상 서버 row 유지 | 대상 서버가 마스터. 안전. *재실행해도 멱등* |
-| `--on-conflict=overwrite` | source 가 대상 row 를 덮어씀 (content_json, title, status, updated_at) | source 가 마스터. 표준화/통합 |
-| `--on-conflict=version` | 대상 row 유지 + source 를 새 version 으로 추가 | 양쪽 보존, 수동 머지 트레일 |
+| `--on-conflict=overwrite` | source 가 대상 row 를 덮어씀 (content_json, title, status, updated_at=NOW) | source 가 마스터. 표준화/통합 |
+| `--on-conflict=newest` | 양쪽 updated_at 비교 → *더 최신* 쪽으로 덮어씀. source.updated_at 보존 | 양쪽 모두 작업 진행 중. 두 서버 cross-sync. **Drive 자동화의 default** |
 
 ### 2.5 다른 옵션
 
@@ -206,7 +207,96 @@ curl http://127.0.0.1:8800/api/v1/home/hero | jq '.data.domains[].doc_count'
 
 ---
 
-## 3. 자주 묻는 질문
+## 3. Google Drive 경유 자동화
+
+매번 scp 하기 귀찮을 때, *rclone + Google Drive* 로 두 서버를 잇는다.
+한 서버가 *dump → Drive 업로드*, 다른 서버가 *Drive 다운 → 자동 merge*. cron 으로 정기 동기화 가능.
+
+### 3.1 사전 준비 (양쪽 서버 1회)
+
+```bash
+# rclone 설치
+apt-get install -y rclone           # Ubuntu/Debian
+# 또는: https://rclone.org/install/ 의 install.sh
+
+# Drive remote 설정 — 대화식
+rclone config
+# → n (new remote)
+# → name: MxwpDrive  (편한 이름)
+# → storage: drive
+# → client_id / secret: blank (rclone 기본 사용)
+# → scope: drive  (full access)
+# → 인증: 헤드리스면 'auto config: n' → 로컬에서 token 얻고 paste
+# → team drive: 보통 n
+# → 검증 → quit
+
+# .env 에 변수 추가 (양쪽 서버 같은 값)
+echo 'MXWP_DRIVE_REMOTE=MxwpDrive:MXWhitePaper/data-dumps' >> .env
+echo 'MXWP_DRIVE_RETAIN=5' >> .env   # 가장 최근 5개만 Drive 에 유지
+```
+
+### 3.2 export 서버 — Drive 로 업로드
+
+```bash
+./infra/scripts/data-dump-to-drive.sh
+# 또는 메모 첨부
+MXWP_DUMP_NOTE="weekly-sync" ./infra/scripts/data-dump-to-drive.sh
+```
+
+자동 동작:
+1. `data-dump.sh` 실행 → tar.gz 생성
+2. *복원 가이드 md* 도 같이 생성 (어떤 archive 인지, 어떻게 복원하는지 — 다른 사람도 받아서 바로 사용)
+3. tar.gz + 가이드 md 둘 다 Drive 로 업로드
+4. shareable link 출력
+5. retention 적용 — 오래된 archive 자동 삭제 (MXWP_DRIVE_RETAIN 기준)
+
+### 3.3 import 서버 — Drive 에서 받아 자동 merge
+
+```bash
+# 가장 최근 dump 자동 선택 → 다운로드 → newest 정책으로 merge
+./infra/scripts/data-merge-from-drive.sh
+
+# dry-run 먼저
+./infra/scripts/data-merge-from-drive.sh --dry-run
+
+# 정책 변경
+MXWP_MERGE_POLICY=skip ./infra/scripts/data-merge-from-drive.sh
+# 또는
+./infra/scripts/data-merge-from-drive.sh --on-conflict=overwrite
+```
+
+자동 동작:
+1. Drive `$MXWP_DRIVE_REMOTE/` 에서 최신 `mxwp-data-*.tar.gz` 찾기
+2. `infra/backups/data-dumps/` 로 다운로드 (이미 있으면 skip — 멱등)
+3. 가이드 md 도 같이 다운 (있으면)
+4. `data-merge.sh` 호출 — 정책 + dry-run/no-minio/owner-email 그대로 전달
+
+### 3.4 cron 으로 정기 동기화
+
+export 서버 — 매일 새벽 3시 dump+upload:
+```cron
+0 3 * * * cd /opt/MXWhitePaper && ./infra/scripts/data-dump-to-drive.sh >> /var/log/mxwp-dump.log 2>&1
+```
+
+import 서버 — 매일 새벽 4시 download+merge:
+```cron
+0 4 * * * cd /opt/MXWhitePaper && ./infra/scripts/data-merge-from-drive.sh >> /var/log/mxwp-merge.log 2>&1
+```
+
+`newest` 정책이라 *양쪽이 따로 작업* 해도 두 서버가 결국 *같은 최신 상태* 로 수렴.
+
+### 3.5 양방향 sync
+
+서버 A·B 가 *각자 작업하면서 서로 동기화* 하려면:
+
+- A: dump-to-drive (자기 변경 업로드) → B: merge-from-drive (받아서 합침, newest)
+- B: dump-to-drive (B 의 변경 — 합쳐진 결과 포함 업로드) → A: merge-from-drive
+
+각 cycle 끝나면 *양쪽 다 같은 최신 컨텐츠*. `newest` 가 *각 doc 별로* 더 최신 쪽 선택.
+
+---
+
+## 4. 자주 묻는 질문
 
 ### Q1. 두 서버의 user 계정이 다른데?
 
@@ -258,13 +348,14 @@ MinIO 는 sha256 content-addressed — 같은 객체 path 는 같은 내용. `mc
 
 ---
 
-## 4. 안전 수칙
+## 5. 안전 수칙
 
 | 상황 | 권장 |
 |---|---|
 | 처음 새 서버 깔 때 | `snapshot.sh` + `restore-snapshot.sh` |
 | 운영 중 다른 서버에서 데이터 가져올 때 | `data-merge.sh --dry-run` 먼저, *반드시* |
 | 같은 데이터를 여러 서버에 동기화 | `data-merge.sh --on-conflict=overwrite` (마스터 서버 → 다른 서버들) |
+| **두 서버 cross-sync (양쪽 작업)** | **`--on-conflict=newest`** + Drive 자동화 (cron) |
 | 시점 백업 (재해 대비) | `snapshot.sh` 매일 cron |
 | 큰 변경 직전 보험 | `snapshot.sh --note "before-XXX"` |
 
@@ -276,7 +367,7 @@ MinIO 는 sha256 content-addressed — 같은 객체 path 는 같은 내용. `mc
 
 ---
 
-## 5. 관련 스크립트
+## 6. 관련 스크립트
 
 | 파일 | 역할 |
 |---|---|
@@ -286,6 +377,8 @@ MinIO 는 sha256 content-addressed — 같은 객체 path 는 같은 내용. `mc
 | `infra/scripts/restore-db.sh` | DB만 복원 |
 | `infra/scripts/data-dump.sh` | 컨텐츠 jsonl 추출 |
 | `infra/scripts/data-merge.sh` | jsonl additive 적용 |
+| `infra/scripts/data-dump-to-drive.sh` | dump + rclone 으로 Drive 업로드 + 가이드 md |
+| `infra/scripts/data-merge-from-drive.sh` | Drive 에서 최신 dump 받아 자동 merge |
 | `apps/api/app/scripts/dump_data.py` | data-dump 의 BE 부분 (직접 호출 가능) |
 | `apps/api/app/scripts/import_dump.py` | data-merge 의 BE 부분 (직접 호출 가능) |
 | `apps/api/app/scripts/refresh_links.py` | links 테이블 재계산 |

@@ -309,16 +309,48 @@ async def _import_documents(
                 part_id = None
 
         existing = (await s.execute(
-            text("SELECT id FROM documents WHERE slug = :slug"),
+            text("SELECT id, updated_at FROM documents WHERE slug = :slug"),
             {"slug": slug},
         )).first()
 
         if existing:
             local_id = str(existing[0])
+            local_updated_at = existing[1]
             id_map[src_id] = local_id
-            if on_conflict == "skip":
+
+            # 'newest' 정책: source.updated_at > local.updated_at 이면 overwrite,
+            # 아니면 skip. 각 항목의 *최신 버전* 으로 자동 정렬.
+            effective_policy = on_conflict
+            if on_conflict == "newest":
+                src_updated_at_raw = row.get("updated_at")
+                if src_updated_at_raw and local_updated_at:
+                    # source 는 ISO 문자열, local 은 datetime — 비교 위해 같은 타입으로.
+                    from datetime import datetime
+                    try:
+                        src_dt = datetime.fromisoformat(
+                            src_updated_at_raw.replace("Z", "+00:00")
+                            if isinstance(src_updated_at_raw, str)
+                            else src_updated_at_raw.isoformat()
+                        )
+                    except (ValueError, AttributeError):
+                        src_dt = None
+                    if src_dt is None:
+                        effective_policy = "skip"
+                    else:
+                        # local_updated_at 도 tz-aware 로 normalize
+                        if local_updated_at.tzinfo is None:
+                            from datetime import timezone as _tz
+                            local_updated_at = local_updated_at.replace(tzinfo=_tz.utc)
+                        if src_dt.tzinfo is None:
+                            from datetime import timezone as _tz
+                            src_dt = src_dt.replace(tzinfo=_tz.utc)
+                        effective_policy = "overwrite" if src_dt > local_updated_at else "skip"
+                else:
+                    effective_policy = "skip"
+
+            if effective_policy == "skip":
                 skipped += 1
-            elif on_conflict == "overwrite":
+            elif effective_policy == "overwrite":
                 if not dry_run:
                     content = row.get("content_json")
                     content_str = (
@@ -326,24 +358,47 @@ async def _import_documents(
                         if isinstance(content, (dict, list))
                         else content
                     )
-                    await s.execute(
-                        text("""
-                            UPDATE documents
-                            SET title       = :title,
-                                summary     = :summary,
-                                status      = :status,
-                                content_json = CAST(:body AS JSONB),
-                                updated_at  = NOW()
-                            WHERE id = :id
-                        """),
-                        {
-                            "id": local_id,
-                            "title": row.get("title"),
-                            "summary": row.get("summary"),
-                            "status": row.get("status", "published"),
-                            "body": content_str,
-                        },
-                    )
+                    # newest 정책일 때는 source 의 updated_at 을 그대로 보존 (다음 merge 비교용).
+                    # 일반 overwrite 는 NOW() 로 갱신.
+                    if on_conflict == "newest":
+                        await s.execute(
+                            text("""
+                                UPDATE documents
+                                SET title       = :title,
+                                    summary     = :summary,
+                                    status      = :status,
+                                    content_json = CAST(:body AS JSONB),
+                                    updated_at  = COALESCE(:uat, NOW())
+                                WHERE id = :id
+                            """),
+                            {
+                                "id": local_id,
+                                "title": row.get("title"),
+                                "summary": row.get("summary"),
+                                "status": row.get("status", "published"),
+                                "body": content_str,
+                                "uat": row.get("updated_at"),
+                            },
+                        )
+                    else:
+                        await s.execute(
+                            text("""
+                                UPDATE documents
+                                SET title       = :title,
+                                    summary     = :summary,
+                                    status      = :status,
+                                    content_json = CAST(:body AS JSONB),
+                                    updated_at  = NOW()
+                                WHERE id = :id
+                            """),
+                            {
+                                "id": local_id,
+                                "title": row.get("title"),
+                                "summary": row.get("summary"),
+                                "status": row.get("status", "published"),
+                                "body": content_str,
+                            },
+                        )
                 overwritten += 1
             else:
                 skipped += 1
@@ -514,7 +569,7 @@ def main() -> None:
     parser.add_argument("--dir", required=True, help="Extracted dump directory")
     parser.add_argument(
         "--on-conflict",
-        choices=["skip", "overwrite"],
+        choices=["skip", "overwrite", "newest"],
         default="skip",
         help="What to do when a slug already exists locally (default: skip)",
     )
