@@ -102,3 +102,4 @@ infra/packages/sif/*
 
 # user-local apptainer install (project-internal, see infra/scripts/install-apptainer-*.sh)
 infra/apptainer/bin-1.3.6/
+.tmp/
