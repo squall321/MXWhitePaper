@@ -22,8 +22,27 @@ import argparse
 import asyncio
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+def _parse_dt(value: Any) -> datetime | None:
+    """JSONL 의 datetime 필드는 ISO string. asyncpg 는 datetime 객체만 받음.
+
+    None / 빈 문자열 / 이미 datetime → 안전 처리.
+    'Z' suffix 도 +00:00 으로 정규화.
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -318,33 +337,17 @@ async def _import_documents(
             local_updated_at = existing[1]
             id_map[src_id] = local_id
 
-            # 'newest' 정책: source.updated_at > local.updated_at 이면 overwrite,
-            # 아니면 skip. 각 항목의 *최신 버전* 으로 자동 정렬.
+            # 'newest' 정책: source.updated_at > local.updated_at 이면 overwrite, 아니면 skip.
             effective_policy = on_conflict
             if on_conflict == "newest":
-                src_updated_at_raw = row.get("updated_at")
-                if src_updated_at_raw and local_updated_at:
-                    # source 는 ISO 문자열, local 은 datetime — 비교 위해 같은 타입으로.
-                    from datetime import datetime
-                    try:
-                        src_dt = datetime.fromisoformat(
-                            src_updated_at_raw.replace("Z", "+00:00")
-                            if isinstance(src_updated_at_raw, str)
-                            else src_updated_at_raw.isoformat()
-                        )
-                    except (ValueError, AttributeError):
-                        src_dt = None
-                    if src_dt is None:
-                        effective_policy = "skip"
-                    else:
-                        # local_updated_at 도 tz-aware 로 normalize
-                        if local_updated_at.tzinfo is None:
-                            from datetime import timezone as _tz
-                            local_updated_at = local_updated_at.replace(tzinfo=_tz.utc)
-                        if src_dt.tzinfo is None:
-                            from datetime import timezone as _tz
-                            src_dt = src_dt.replace(tzinfo=_tz.utc)
-                        effective_policy = "overwrite" if src_dt > local_updated_at else "skip"
+                src_dt = _parse_dt(row.get("updated_at"))
+                if src_dt and local_updated_at:
+                    # tz-aware 로 normalize 후 비교
+                    if local_updated_at.tzinfo is None:
+                        local_updated_at = local_updated_at.replace(tzinfo=timezone.utc)
+                    if src_dt.tzinfo is None:
+                        src_dt = src_dt.replace(tzinfo=timezone.utc)
+                    effective_policy = "overwrite" if src_dt > local_updated_at else "skip"
                 else:
                     effective_policy = "skip"
 
@@ -377,7 +380,7 @@ async def _import_documents(
                                 "summary": row.get("summary"),
                                 "status": row.get("status", "published"),
                                 "body": content_str,
-                                "uat": row.get("updated_at"),
+                                "uat": _parse_dt(row.get("updated_at")),
                             },
                         )
                     else:
@@ -433,8 +436,8 @@ async def _import_documents(
                         "schema_ver": row.get("schema_ver", 1),
                         "version": row.get("version", 1),
                         "owner": owner_id,
-                        "cat": row.get("created_at"),
-                        "uat": row.get("updated_at"),
+                        "cat": _parse_dt(row.get("created_at")) or datetime.now(timezone.utc),
+                        "uat": _parse_dt(row.get("updated_at")) or datetime.now(timezone.utc),
                     },
                 )).scalar_one()
                 id_map[src_id] = str(new_id)
