@@ -219,10 +219,12 @@ fi
 if [ "$DRY_RUN" -eq 0 ]; then
   # NO_PROXY 자동 보강 — 회사 HTTPS_PROXY 가 설정된 환경에서 LAN/localhost 호출
   # (postgres, meili) 까지 proxy 거치려 해서 실패하는 케이스 방지.
-  # MEILI_HOST 의 host 부분도 NO_PROXY 에 포함시킨다.
+  # 사내 LAN 의 *전체 10.252.39.0/24* 와 MEILI_HOST 의 host 부분 모두 우회.
   _MEILI_HOST_ONLY="$(echo "${MEILI_HOST:-http://127.0.0.1:7700}" \
     | sed -E 's|^https?://||; s|:[0-9]+$||; s|/.*$||')"
-  AUTO_NO_PROXY="localhost,127.0.0.1,$_MEILI_HOST_ONLY,postgres,meili,minio,api"
+  AUTO_NO_PROXY="localhost,127.0.0.1,$_MEILI_HOST_ONLY"
+  AUTO_NO_PROXY="$AUTO_NO_PROXY,10.252.39.181,10.252.39.140"
+  AUTO_NO_PROXY="$AUTO_NO_PROXY,postgres,meili,minio,api"
   if [ -n "${NO_PROXY:-}" ]; then
     AUTO_NO_PROXY="$NO_PROXY,$AUTO_NO_PROXY"
   fi
