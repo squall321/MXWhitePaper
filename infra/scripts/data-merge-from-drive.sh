@@ -67,13 +67,14 @@ echo "  no-minio: $NO_MINIO"
 echo
 
 # ── 1) Find most recent archive on Drive ────────────────────────────────────
+# 파일 이름이 mxwp-data-YYYYMMDD-HHMMSSZ.tar.gz 형식이라 *이름 sort 만으로* 시간순.
+# (rclone lsf 의 modtime 포맷이 버전마다 달라 신뢰성 떨어져서 이름 기반으로 통일)
 echo "→ listing $DRIVE_REMOTE/"
 LATEST_NAME="$(
-  rclone lsf --format "tp" --files-only "$DRIVE_REMOTE/" 2>/dev/null \
-    | grep '^[0-9-]*T[0-9:.]*Z;mxwp-data-.*\.tar\.gz$' \
+  rclone lsf --files-only "$DRIVE_REMOTE/" 2>/dev/null \
+    | grep '^mxwp-data-.*\.tar\.gz$' \
     | sort \
-    | tail -n 1 \
-    | awk -F';' '{print $2}' || true
+    | tail -n 1 || true
 )"
 
 if [ -z "$LATEST_NAME" ]; then

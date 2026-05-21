@@ -205,13 +205,13 @@ echo "  guide   : $GUIDE_LINK"
 if [ "$RETAIN" -gt 0 ]; then
   echo
   echo "→ retention: keep last $RETAIN archives on remote"
-  # List sorted by modtime (oldest first), drop the most-recent N
+  # 파일 이름이 mxwp-data-YYYYMMDD-HHMMSSZ.tar.gz 라 이름 기준 sort = 시간순.
+  # (rclone lsf 의 modtime 포맷이 버전마다 달라 이름 기반으로 통일)
   TO_DELETE="$(
-    rclone lsf --format "tp" --files-only "$DRIVE_REMOTE/" 2>/dev/null \
-      | grep '^[0-9-]*T[0-9:.]*Z;mxwp-data-' \
+    rclone lsf --files-only "$DRIVE_REMOTE/" 2>/dev/null \
+      | grep '^mxwp-data-.*\.tar\.gz$' \
       | sort \
-      | head -n -"$RETAIN" \
-      | awk -F';' '{print $2}' || true
+      | head -n -"$RETAIN" || true
   )"
   if [ -n "$TO_DELETE" ]; then
     echo "$TO_DELETE" | while IFS= read -r old; do
