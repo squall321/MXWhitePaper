@@ -657,7 +657,11 @@ export function KnowledgeGraph({
 
     // long-press 감지 — 500ms 이상 같은 노드를 누르고 있고 드래그가 아니면
     // focus 진입 (= toggle: 이미 focus 상태면 해제).
+    // long-press 가 발동한 직후의 mouse-up 은 sigma 가 'clickNode' 를 그대로
+    // emit 하므로 doc 이 열려버린다. longPressFired 플래그로 그 다음 click 만
+    // 무시하고, 정상 클릭 (long-press 전에 손 떼는 경우) 는 그대로 통과.
     let longPressTimer: number | null = null
+    let longPressFired = false
     const cancelLongPress = () => {
       if (longPressTimer) {
         window.clearTimeout(longPressTimer)
@@ -697,12 +701,10 @@ export function KnowledgeGraph({
           focusedNode = node
           focusedNeighbors = buildFocusedNeighbors(node)
           applyReducers()
-          // focus 진입 시 그 노드 중심으로 1-hop 노드들을 끌어모아 재배치
-          // (방사형 반대 방향 — 안쪽으로 모음).
           reshuffleAround(node)
         }
-        // long-press 가 발동했으니 mouseUp 이후 click 이벤트가 잘못 doc 을
-        // 열지 않도록 isDragging=true 로 가장: 사용자가 정말 클릭한 게 아님.
+        // 곧 발생할 mouse-up 의 clickNode 를 소비할 플래그 + drag 가장.
+        longPressFired = true
         isDragging = true
       }, 500) as unknown as number
     })
@@ -751,6 +753,11 @@ export function KnowledgeGraph({
     // ── Click ─────────────────────────────────────────────────────────────────
     renderer.on('clickNode', ({ node }) => {
       if (isDragging) return
+      // long-press 가 방금 발동했다면 그에 따라온 click 은 무시 (1회 소비).
+      if (longPressFired) {
+        longPressFired = false
+        return
+      }
       const kind = g.getNodeAttribute(node, 'kind') as string
       if (kind === 'tag') {
         if (onPickTag) onPickTag(node)
@@ -1101,7 +1108,7 @@ export function KnowledgeGraph({
       const cy0 = g.getNodeAttribute(centerNode, 'y') as number
       const neighbors = Array.from(focusedNeighbors).filter((n) => n !== centerNode)
 
-      // bbox 기반으로 적절한 원 반지름 추정 — focus 시 화면 일부에 모이게.
+      // bbox 기반으로 단위 거리 추정.
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
       g.forEachNode((node) => {
         const x = g.getNodeAttribute(node, 'x') as number
@@ -1112,13 +1119,38 @@ export function KnowledgeGraph({
         if (y > maxY) maxY = y
       })
       const diag = Math.hypot(maxX - minX, maxY - minY)
-      const r = Math.max(diag * 0.08, 50)
+      // 이웃 수에 따라 동심원 몇 겹으로 나눌지 결정 — 너무 등거리로 한 줄에
+      // 늘어놓으면 다 겹쳐 보임. 한 ring 당 적정 수는 ~8-12.
+      const N = Math.max(1, neighbors.length)
+      const PER_RING = 10
+      const rings = Math.max(1, Math.ceil(N / PER_RING))
+      // 각 ring 의 반지름: 내부 ring 은 짧게, 바깥일수록 크게.
+      const ringBase = Math.max(diag * 0.06, 40)
+      const ringStep = Math.max(diag * 0.05, 35)
+
+      // size 가 큰 노드를 바깥 ring 으로 (더 멀리 → 시각적 균형).
+      const sortedNb = neighbors.slice().sort((a, b) => {
+        const sa = g.getNodeAttribute(a, 'size') as number
+        const sb = g.getNodeAttribute(b, 'size') as number
+        return sa - sb
+      })
 
       const targets: Record<string, { x: number; y: number; sx: number; sy: number }> = {}
-      neighbors.forEach((nb, i) => {
-        const ang = (i / Math.max(1, neighbors.length)) * Math.PI * 2 + Math.random() * 0.3
-        // 이웃 수가 많을수록 반지름을 키워 안 겹치게.
-        const rr = r * (1 + Math.sqrt(neighbors.length) * 0.08)
+      sortedNb.forEach((nb, i) => {
+        const ringIdx = Math.min(rings - 1, Math.floor(i / PER_RING))
+        const ringStart = ringIdx * PER_RING
+        const ringSize = Math.min(PER_RING, sortedNb.length - ringStart)
+        const inRingIdx = i - ringStart
+        // 인접 ring 끼리 각도를 절반 오프셋해서 방사상으로 겹치지 않게.
+        const angOffset = (ringIdx % 2) * (Math.PI / Math.max(ringSize, 1))
+        const ang =
+          (inRingIdx / Math.max(1, ringSize)) * Math.PI * 2
+          + angOffset
+          + (Math.random() - 0.5) * 0.25
+        const rr =
+          ringBase
+          + ringIdx * ringStep
+          + (Math.random() - 0.5) * ringStep * 0.2
         targets[nb] = {
           sx: g.getNodeAttribute(nb, 'x') as number,
           sy: g.getNodeAttribute(nb, 'y') as number,
@@ -1142,6 +1174,45 @@ export function KnowledgeGraph({
           focusAnimTimer = window.requestAnimationFrame(step)
         } else {
           focusAnimTimer = null
+          // 도착 후 1-hop 노드들끼리만 충돌 해소 — center 는 고정.
+          // 좌표 공간 기준 분리 반경 = ringBase 의 30% 정도, 4 pass.
+          const sepBase = ringBase * 0.5
+          const visible = neighbors
+          const px = new Float64Array(visible.length)
+          const py = new Float64Array(visible.length)
+          const pr = new Float64Array(visible.length)
+          for (let i = 0; i < visible.length; i++) {
+            px[i] = g.getNodeAttribute(visible[i]!, 'x') as number
+            py[i] = g.getNodeAttribute(visible[i]!, 'y') as number
+            const sz = g.getNodeAttribute(visible[i]!, 'size') as number
+            pr[i] = sepBase * (0.7 + 0.6 * (sz / 24))
+          }
+          const RATIO = 1.5
+          for (let pass = 0; pass < 6; pass++) {
+            for (let i = 0; i < visible.length; i++) {
+              for (let j = i + 1; j < visible.length; j++) {
+                let dx = px[j]! - px[i]!
+                let dy = py[j]! - py[i]!
+                let d = Math.hypot(dx, dy)
+                const minDist = (pr[i]! + pr[j]!) * RATIO
+                if (d < minDist) {
+                  if (d < 1e-6) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d = Math.hypot(dx, dy) }
+                  const push = (minDist - d) / 2
+                  const nx = dx / d
+                  const ny = dy / d
+                  px[i]! -= nx * push
+                  py[i]! -= ny * push
+                  px[j]! += nx * push
+                  py[j]! += ny * push
+                }
+              }
+            }
+          }
+          for (let i = 0; i < visible.length; i++) {
+            g.setNodeAttribute(visible[i]!, 'x', px[i]!)
+            g.setNodeAttribute(visible[i]!, 'y', py[i]!)
+          }
+          renderer.refresh()
         }
       }
       focusAnimTimer = window.requestAnimationFrame(step)

@@ -109,7 +109,7 @@ export function TodayHero() {
 
         <div className="mt-auto flex items-center gap-2 text-xs">
           <Link
-            to={`/graph/${encodeURIComponent(doc.slug)}?depth=2`}
+            to={`/graph/${encodeURIComponent(doc.slug)}?depth=1`}
             className="rounded border border-smsg-300 bg-smsg-50 px-2 py-1 text-smsg-700 hover:bg-smsg-100 dark:border-smsg-700 dark:bg-smsg-900 dark:text-smsg-100"
           >
             🌐 {t('home.today.exploreGraph')}

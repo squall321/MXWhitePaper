@@ -546,12 +546,16 @@ function groupHits(q: string, hits: DocSearchHit[]): GroupedDocs {
   const title: DocSearchHit[] = []
   const body: DocSearchHit[] = []
   const tag: DocSearchHit[] = []
+  // meili 응답의 hilight tag 는 BE 설정상 `<mark>` 가 기본 — 과거 `<em>` 도
+  // 호환되도록 둘 다 검사.
+  const hasMark = (s: string | null | undefined) =>
+    typeof s === 'string' && (s.includes('<em>') || s.includes('<mark>'))
   for (const h of hits) {
     const tHit =
-      (h._formatted?.title && h._formatted.title.includes('<em>')) ||
+      hasMark(h._formatted?.title) ||
       (h.title ?? '').toLowerCase().includes(needle)
     const tagHit =
-      (Array.isArray(h._formatted?.tags) && h._formatted!.tags!.some((t) => (t ?? '').includes('<em>'))) ||
+      (Array.isArray(h._formatted?.tags) && h._formatted!.tags!.some(hasMark)) ||
       (Array.isArray(h.tags) && h.tags.some((t) => (t ?? '').toLowerCase().includes(needle)))
     if (tHit) title.push(h)
     else if (tagHit) tag.push(h)
@@ -1157,8 +1161,9 @@ function formatRelativeShort(ts: number, now: number = Date.now()): string {
 }
 
 /**
- * Allow only `<em>` and `</em>` in highlight strings (MeiliSearch-style).
- * Everything else is HTML-escaped.
+ * Allow only `<em>`/`</em>` and `<mark>`/`</mark>` in highlight strings.
+ * (BE 의 meili 설정은 `highlightPreTag=<mark>` 이지만, 과거 응답이나 fallback
+ * 데이터에서 `<em>` 이 섞여올 수 있어 둘 다 허용.) 나머지는 모두 escape.
  */
 function sanitizeHighlight(input: string): string {
   if (!input) return ''
@@ -1170,4 +1175,6 @@ function sanitizeHighlight(input: string): string {
   return escaped
     .replace(/&lt;em&gt;/g, '<em class="bg-smsg-100 not-italic font-semibold">')
     .replace(/&lt;\/em&gt;/g, '</em>')
+    .replace(/&lt;mark&gt;/g, '<mark class="bg-smsg-100 not-italic font-semibold rounded-sm px-0.5">')
+    .replace(/&lt;\/mark&gt;/g, '</mark>')
 }

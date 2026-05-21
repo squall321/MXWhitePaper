@@ -172,7 +172,7 @@ export function DepGraphPage() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const root = params.get('root') ?? ''
-  const [depth, setDepth] = useState(2)
+  const [depth, setDepth] = useState(1)
   const [showOrphans, setShowOrphans] = useState(false)
   const [draftRoot, setDraftRoot] = useState('')
 

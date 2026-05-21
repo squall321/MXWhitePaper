@@ -637,30 +637,28 @@ export function GraphPage() {
   const [fullscreen, setFullscreen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
-  // BFS depth — URL ?depth=N 로 공유 가능, 1~4 (BE 가 강제). default 2.
+  // BFS depth — URL ?depth=N 로 공유 가능, 1~4 (BE 가 강제). default 1.
   const rawDepth = parseInt(searchParams.get('depth') ?? '2', 10)
-  const depth = Number.isFinite(rawDepth) && rawDepth >= 1 && rawDepth <= 4 ? rawDepth : 2
+  const depth = Number.isFinite(rawDepth) && rawDepth >= 1 && rawDepth <= 4 ? rawDepth : 1
 
   // S3: ?domain=X — 도메인 진입. tag 노드 + (옵션) doc_tag/tag_cooc edge 포함.
   const domain = searchParams.get('domain') || null
 
-  // S3: edge type chip — wiki+doc_tag default ON, tag_cooc default OFF (plan §10).
-  const [edgeKinds, setEdgeKinds] = useState<Set<'wiki' | 'doc_tag' | 'tag_cooc'>>(
-    () => new Set(['wiki', 'doc_tag']),
-  )
+  // 엣지 모드 — wiki / tag / 모두. domain 그래프에서 doc_tag 양이 압도적이라
+  // 기본은 wiki 만. 사용자가 모드 토글로 명시적으로 전환.
+  // (내부 표현은 기존 Set<edgeKind> 유지 — buildGraph/fetchGraph 와 호환.)
+  type EdgeMode = 'wiki' | 'tag' | 'all'
+  const [edgeMode, setEdgeMode] = useState<EdgeMode>('wiki')
+  const edgeKinds = useMemo<Set<'wiki' | 'doc_tag' | 'tag_cooc'>>(() => {
+    if (edgeMode === 'wiki') return new Set(['wiki'])
+    if (edgeMode === 'tag') return new Set(['doc_tag', 'tag_cooc'])
+    return new Set(['wiki', 'doc_tag', 'tag_cooc'])
+  }, [edgeMode])
   // S4: 최소 연결도 slider — 0 = 모두 표시, N = N+ 만.
   const [minDegree, setMinDegree] = useState(0)
   // S4: focused tag — null 이면 cluster off. tag 좌클릭 시 토글.
   const [focusedTag, setFocusedTag] = useState<string | null>(null)
   const onPickTag = (s: string) => setFocusedTag((cur) => (cur === s ? null : s))
-  const toggleEdgeKind = (k: 'wiki' | 'doc_tag' | 'tag_cooc') => {
-    setEdgeKinds((prev) => {
-      const next = new Set(prev)
-      if (next.has(k)) next.delete(k); else next.add(k)
-      return next
-    })
-  }
-
   const setDepth = (d: number) => {
     const next = new URLSearchParams(searchParams)
     next.set('depth', String(d))
@@ -803,24 +801,33 @@ export function GraphPage() {
               🧲 {focusedTag.replace(/^tag:/, '#')} ✕
             </button>
           )}
-          {/* S3: Edge type chip — wiki/doc_tag/tag_cooc 각각 토글 */}
+          {/* 엣지 모드 segmented control — domain 그래프에서만 노출 (단일
+              문서 그래프는 wiki 만 의미 있어 모드 변경 불필요). */}
           {domain && (
-            <div className="flex items-center gap-1 text-xs" role="group" aria-label="엣지 종류 필터">
-              {(['wiki', 'doc_tag', 'tag_cooc'] as const).map((k) => (
+            <div
+              className="inline-flex overflow-hidden rounded border border-gray-200 text-xs dark:border-gray-700"
+              role="group"
+              aria-label="엣지 모드"
+            >
+              {([
+                { k: 'wiki', label: '🔗 wiki', title: '문서간 [[링크]] 만' },
+                { k: 'tag', label: '🏷 tag', title: '문서-태그 소속 + 태그 공동출현' },
+                { k: 'all', label: '🔀 모두', title: '위키 + 태그 모두' },
+              ] as const).map(({ k, label, title }, i, arr) => (
                 <button
                   key={k}
                   type="button"
-                  onClick={() => toggleEdgeKind(k)}
-                  aria-pressed={edgeKinds.has(k)}
-                  data-testid={`edge-chip-${k}`}
-                  className={`rounded border px-2 py-1 transition-colors ${
-                    edgeKinds.has(k)
-                      ? 'border-smsg-500 bg-smsg-50 text-smsg-900 dark:bg-smsg-900 dark:text-smsg-100'
-                      : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800'
-                  }`}
-                  title={k === 'wiki' ? '위키 링크' : k === 'doc_tag' ? '태그 소속' : '태그 공동출현'}
+                  onClick={() => setEdgeMode(k)}
+                  aria-pressed={edgeMode === k}
+                  data-testid={`edge-mode-${k}`}
+                  title={title}
+                  className={`px-2.5 py-1 transition-colors ${
+                    edgeMode === k
+                      ? 'bg-smsg-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200'
+                  } ${i < arr.length - 1 ? 'border-r border-gray-200 dark:border-gray-700' : ''}`}
                 >
-                  {k === 'wiki' ? '🔗' : k === 'doc_tag' ? '🏷' : '↔'} {k}
+                  {label}
                 </button>
               ))}
             </div>

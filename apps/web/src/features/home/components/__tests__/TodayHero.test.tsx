@@ -129,7 +129,7 @@ describe('<TodayHero />', () => {
 
     // Explore graph link
     expect(html).toContain('home.today.exploreGraph')
-    expect(html).toContain('href="/graph/android-architecture?depth=2"')
+    expect(html).toContain('href="/graph/android-architecture?depth=1"')
 
     // Open doc link
     expect(html).toContain('home.today.openDoc')
