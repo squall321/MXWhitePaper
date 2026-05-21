@@ -118,6 +118,17 @@ for cmd in git curl; do
     ok "$cmd: $(command -v "$cmd")"
   fi
 done
+
+# apptainer fakeroot 가 의존하는 newuidmap/newgidmap (uidmap 패키지).
+# 빠지면 'meili / minio' 같은 추가 instance 가 'newuidmap was not found' 로 실패.
+if command -v newuidmap >/dev/null 2>&1 && command -v newgidmap >/dev/null 2>&1; then
+  ok "newuidmap/newgidmap (uidmap pkg): $(command -v newuidmap)"
+else
+  miss "newuidmap/newgidmap 미설치 (apptainer fakeroot 에 필요)"
+  if [ "$CHECK_ONLY" -eq 0 ] && [ "$PKG" = "apt" ]; then
+    apt_install uidmap
+  fi
+fi
 # ca-certificates 는 library 라 command 가 없음 → dpkg 로 확인
 if [ "$PKG" = "apt" ]; then
   if dpkg -s ca-certificates >/dev/null 2>&1; then
