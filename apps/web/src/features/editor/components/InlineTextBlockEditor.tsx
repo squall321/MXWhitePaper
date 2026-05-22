@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ParagraphBlock, Slug, Ulid } from '@/types/document'
+import type { Block, ParagraphBlock, Slug, Ulid } from '@/types/document'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { useEditorStore } from '../state'
 import { htmlToBlocks } from '../paste/htmlPaste'
+import { textToBlocks, looksLikeStructuredText } from '../paste/textToBlocks'
 import {
   detectLang,
   useSpellcheckPref,
@@ -290,17 +291,41 @@ export function InlineTextBlockEditor({
    * a CSV into a paragraph is unusual; we don't want to surprise users with
    * a table modal mid-sentence).
    */
+  // 멀티 블록을 parent SimpleStackEditor 에 위임 (HTML·plain-text 공용 경로).
+  const delegateMultiBlocks = (
+    e: React.ClipboardEvent<HTMLDivElement>,
+    blocks: Block[],
+  ) => {
+    e.preventDefault()
+    const root = ref.current?.closest('[data-simple-stack-editor]') as HTMLElement | null
+    const sectionId = root?.getAttribute('data-section-id') ?? null
+    if (!sectionId) return
+    window.dispatchEvent(
+      new CustomEvent('mxwp:paste-multi-blocks', {
+        detail: { blocks, sectionId },
+      }),
+    )
+  }
+
   const onPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     const html = e.clipboardData.getData('text/html')
-    if (!html) return
-    // Skip the parser for trivial single-span Slack-style pastes — they have
-    // no block-level tags so htmlToBlocks would emit a single paragraph
-    // anyway, and the native paste already preserves inline formatting.
-    if (
-      !/<(p|h[1-6]|ul|ol|li|table|tr|blockquote|pre|img|figure|hr|div)\b/i.test(
+    const hasBlockTags =
+      !!html &&
+      /<(p|h[1-6]|ul|ol|li|table|tr|blockquote|pre|img|figure|hr|div)\b/i.test(
         html,
       )
-    ) {
+    // text/html 이 없거나 block-level 태그가 없으면 plain text 를 본다.
+    // 구조적 (목록·헤딩·여러 문단) 이면 블록 분해해 parent 에 위임.
+    if (!hasBlockTags) {
+      const plain = e.clipboardData.getData('text/plain')
+      if (plain && looksLikeStructuredText(plain)) {
+        const { blocks } = textToBlocks(plain)
+        if (blocks.length > 1) {
+          delegateMultiBlocks(e, blocks)
+          return
+        }
+      }
+      // 비구조적 단일 줄 plain text — 기존대로 브라우저 기본.
       return
     }
     const { blocks } = htmlToBlocks(html)
@@ -321,15 +346,7 @@ export function InlineTextBlockEditor({
       return
     }
     // Multi-block — hand off to the parent section editor.
-    e.preventDefault()
-    const root = ref.current?.closest('[data-simple-stack-editor]') as HTMLElement | null
-    const sectionId = root?.getAttribute('data-section-id') ?? null
-    if (!sectionId) return
-    window.dispatchEvent(
-      new CustomEvent('mxwp:paste-multi-blocks', {
-        detail: { blocks, sectionId },
-      }),
-    )
+    delegateMultiBlocks(e, blocks)
   }
 
   return (

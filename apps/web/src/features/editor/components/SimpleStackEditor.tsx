@@ -32,6 +32,7 @@ import { BlockRenderer } from '@/components/blocks/BlockRenderer'
 import { useSectionCollapseStore } from '../sectionCollapseStore'
 import { cloneBlockWithNewIds, looksLikeBlockArray } from './BulkActionsBar'
 import { htmlToBlocks } from '../paste/htmlPaste'
+import { textToBlocks, looksLikeStructuredText } from '../paste/textToBlocks'
 import { rehydratePastedImages } from '../paste/imageRehydrate'
 import { looksLikeCsv, parseCsv } from '../extensions/csv-paste'
 import { extractUrl } from '@/lib/urlDetect'
@@ -626,6 +627,17 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
           await insertManyAtEnd([tableBlock], 'CSV 붙여넣기')
           return
         }
+      }
+
+      // 3.5. 구조적 plain text — 번호목록/불릿/헤딩/여러 문단. CSV 분기 뒤에
+      //      두어 표 모양 텍스트는 이미 표로 처리됨. 구조가 없으면 (단순
+      //      한 줄/한 문단) 이 분기를 건너뛰어 기존 fallthrough 유지.
+      if (text && looksLikeStructuredText(text)) {
+        ev.preventDefault()
+        const { blocks } = textToBlocks(text)
+        if (blocks.length === 0) return
+        await insertManyAtEnd(blocks, '구조 텍스트 붙여넣기')
+        return
       }
 
       // 4. Single URL on the clipboard. Internal `/docs/<slug>` → offer to

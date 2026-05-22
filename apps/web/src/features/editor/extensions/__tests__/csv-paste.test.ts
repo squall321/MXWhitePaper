@@ -56,3 +56,47 @@ describe('parseCsv', () => {
     expect(r!.rows[1]).toEqual(['3', '4', '5'])
   })
 })
+
+describe('parseCsv — TSV/CSV regression (editor-paste-improvements)', () => {
+  it('parses TSV (tab-separated) headers and rows', () => {
+    const r = parseCsv('Name\tAge\tCity\nAlice\t30\tSeoul\nBob\t25\tBusan')
+    expect(r).not.toBeNull()
+    expect(r!.delimiter).toBe('\t')
+    expect(r!.headers).toEqual(['Name', 'Age', 'City'])
+    expect(r!.rows).toEqual([
+      ['Alice', '30', 'Seoul'],
+      ['Bob', '25', 'Busan'],
+    ])
+  })
+
+  it('parses CSV (comma-separated) headers and rows', () => {
+    const r = parseCsv('Name,Age,City\nAlice,30,Seoul\nBob,25,Busan')
+    expect(r).not.toBeNull()
+    expect(r!.delimiter).toBe(',')
+    expect(r!.headers).toEqual(['Name', 'Age', 'City'])
+    expect(r!.rows).toEqual([
+      ['Alice', '30', 'Seoul'],
+      ['Bob', '25', 'Busan'],
+    ])
+  })
+
+  it('prefers tab when cells contain commas but tabs separate columns', () => {
+    const r = parseCsv('Name\tNote\nAlice\thi, there\nBob\tplain')
+    expect(r).not.toBeNull()
+    expect(r!.delimiter).toBe('\t')
+    expect(r!.headers).toEqual(['Name', 'Note'])
+    expect(r!.rows).toEqual([
+      ['Alice', 'hi, there'],
+      ['Bob', 'plain'],
+    ])
+  })
+
+  it('TSV and CSV of the same data yield identical headers and rows', () => {
+    const tsv = parseCsv('Name\tAge\tCity\nAlice\t30\tSeoul\nBob\t25\tBusan')
+    const csv = parseCsv('Name,Age,City\nAlice,30,Seoul\nBob,25,Busan')
+    expect(tsv).not.toBeNull()
+    expect(csv).not.toBeNull()
+    expect(tsv!.headers).toEqual(csv!.headers)
+    expect(tsv!.rows).toEqual(csv!.rows)
+  })
+})
