@@ -143,3 +143,43 @@ describe('looksLikeStructuredText', () => {
     expect(looksLikeStructuredText('line one\nline two\nline three')).toBe(false)
   })
 })
+
+/**
+ * 점검 — 단일 줄짜리 구조 입력. InlineTextBlockEditor 가 "1 블록이라도
+ * paragraph 가 아니면 위임" 하도록 고쳤으므로, 단일 list item / 단일 heading
+ * 이 정확히 1 개의 non-paragraph 블록으로 나오는지 보장해야 한다.
+ */
+describe('textToBlocks — single structured line', () => {
+  it('one numbered item → 1 list block (not paragraph)', () => {
+    const { blocks } = textToBlocks('1. only one')
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0]!.type).toBe('list')
+    expect((blocks[0] as ListBlock).items).toEqual(['only one'])
+  })
+
+  it('one bullet item → 1 list block', () => {
+    const { blocks } = textToBlocks('- single bullet')
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0]!.type).toBe('list')
+  })
+
+  it('one markdown heading → 1 heading block (not paragraph)', () => {
+    const { blocks } = textToBlocks('## Section title')
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0]!.type).toBe('heading-4')
+    expect((blocks[0] as Heading4Block).level).toBe(2)
+  })
+
+  it('non-consecutive numbers still group into one list', () => {
+    // 번호 값은 무시 — style 만 본다. 5, 12 처럼 안 이어져도 한 list.
+    const { blocks } = textToBlocks('1. a\n5. b\n12. c')
+    expect(blocks).toHaveLength(1)
+    expect((blocks[0] as ListBlock).items).toEqual(['a', 'b', 'c'])
+  })
+
+  it('indented heading is still a heading (depth ignored)', () => {
+    const { blocks } = textToBlocks('   # Indented')
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0]!.type).toBe('heading-4')
+  })
+})

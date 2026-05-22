@@ -292,9 +292,11 @@ export function InlineTextBlockEditor({
    * a table modal mid-sentence).
    */
   // 멀티 블록을 parent SimpleStackEditor 에 위임 (HTML·plain-text 공용 경로).
+  // label 은 undo 히스토리 표시용 — HTML/plain-text 경로를 구분해 전달.
   const delegateMultiBlocks = (
     e: React.ClipboardEvent<HTMLDivElement>,
     blocks: Block[],
+    label = 'HTML 붙여넣기',
   ) => {
     e.preventDefault()
     const root = ref.current?.closest('[data-simple-stack-editor]') as HTMLElement | null
@@ -302,7 +304,7 @@ export function InlineTextBlockEditor({
     if (!sectionId) return
     window.dispatchEvent(
       new CustomEvent('mxwp:paste-multi-blocks', {
-        detail: { blocks, sectionId },
+        detail: { blocks, sectionId, label },
       }),
     )
   }
@@ -320,12 +322,17 @@ export function InlineTextBlockEditor({
       const plain = e.clipboardData.getData('text/plain')
       if (plain && looksLikeStructuredText(plain)) {
         const { blocks } = textToBlocks(plain)
-        if (blocks.length > 1) {
-          delegateMultiBlocks(e, blocks)
+        // 블록이 여럿이거나, 1 개라도 paragraph 가 아니면 (= list/heading)
+        // parent 에 위임. 텍스트 블록 안에 목록 1 줄을 붙여도 list 블록으로
+        // 바뀌어야 일관적 — paragraph 1 개일 때만 inline 으로 떨군다.
+        const onlyInlinePara =
+          blocks.length === 1 && blocks[0]!.type === 'paragraph'
+        if (blocks.length > 0 && !onlyInlinePara) {
+          delegateMultiBlocks(e, blocks, '구조 텍스트 붙여넣기')
           return
         }
       }
-      // 비구조적 단일 줄 plain text — 기존대로 브라우저 기본.
+      // 비구조적 단일 줄 / 단일 문단 plain text — 기존대로 브라우저 기본.
       return
     }
     const { blocks } = htmlToBlocks(html)

@@ -704,12 +704,17 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
    */
   useEffect(() => {
     function onMulti(ev: Event) {
-      const ce = ev as CustomEvent<{ blocks: Block[]; sectionId: Ulid }>
+      const ce = ev as CustomEvent<{
+        blocks: Block[]
+        sectionId: Ulid
+        label?: string
+      }>
       if (!ce.detail || ce.detail.sectionId !== section.id) return
       const arr = ce.detail.blocks
       if (!Array.isArray(arr) || arr.length === 0) return
+      const label = ce.detail.label ?? 'HTML 붙여넣기'
       void (async () => {
-        const inserted = await insertManyAtEnd(arr, 'HTML 붙여넣기')
+        const inserted = await insertManyAtEnd(arr, label)
         rehydratePastedImages(slug, inserted)
       })()
     }
