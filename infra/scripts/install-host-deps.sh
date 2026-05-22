@@ -413,6 +413,22 @@ else
 fi
 echo
 
+# ── Step 6: LLM provider (GPU 있으면 ollama 자동 셋업) ──────────────────────
+# triple 추출용 로컬 LLM. GPU 가 있으면 ollama 설치 + 모델 pull, 없으면 mock.
+# setup-llm.sh 가 자체적으로 GPU 감지 + .env 갱신을 한다.
+if [ "$CHECK_ONLY" -eq 0 ]; then
+  log "Step 6 — LLM provider 셋업 (GPU 자동 감지)"
+  _SETUP_LLM="$(dirname "$(realpath "$0")")/setup-llm.sh"
+  if [ -x "$_SETUP_LLM" ]; then
+    # setup-llm 실패해도 (ollama pull 실패 등) 전체 설치를 막지 않음 —
+    # setup-llm 이 그 경우 .env 를 mock 으로 폴백시킨다.
+    "$_SETUP_LLM" || warn "LLM 셋업 비정상 종료 — triple 추출은 mock 으로 동작"
+  else
+    warn "setup-llm.sh 없음/실행불가 — LLM 셋업 건너뜀"
+  fi
+  echo
+fi
+
 # ── 결과 요약 ────────────────────────────────────────────────────────────────
 log "summary"
 declare -A FINAL
@@ -435,8 +451,14 @@ if [ -z "$_dmc_ver" ]; then
   fi
 fi
 FINAL[datamodel-codegen]="$([ -n "$_dmc_ver" ] && echo "✓ $_dmc_ver" || echo '✗ (모듈 미확인 — pipx ensurepath; source ~/.bashrc 시도)')"
+# ollama 는 GPU 있을 때만 — 없으면 '— (GPU 없음, mock)' 으로 표시.
+if command -v ollama >/dev/null 2>&1; then
+  FINAL[ollama]="✓ $(ollama --version 2>/dev/null | head -1 | awk '{print $NF}')"
+else
+  FINAL[ollama]="— (GPU 없음 → triple 추출 mock)"
+fi
 
-for k in git node pnpm python3 pip datamodel-codegen rclone; do
+for k in git node pnpm python3 pip datamodel-codegen rclone ollama; do
   printf '  %-22s %s\n' "$k" "${FINAL[$k]}"
 done
 

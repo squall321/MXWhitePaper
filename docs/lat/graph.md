@@ -127,6 +127,11 @@ links_graph 와 달리 `content_json` 을 매 요청 walk 하므로 새로 추�
 (연결 실패 / 8s 타임아웃 / 비-200 / JSON 파싱 실패) 시 `_mock_extract` 로 자동
 폴백 + `logging.warning`. 즉 LLM 없는 환경에서도 `/extract` 가 깨지지 않는다.
 
+**자동 셋업** — `infra/scripts/setup-llm.sh` 가 GPU (`nvidia-smi`) 를 감지해서
+있으면 ollama 설치 + 모델 pull + `.env` 를 `provider=ollama` 로, 없으면 `mock`
+으로 둔다. `install-host-deps.sh` 의 Step 6 에서 자동 호출 — 새 서버에 GPU 만
+있으면 LLM provider 가 자동으로 켜진다.
+
 `include_triples=1` 시 `_triple_edges` 가 `doc_triples` 에서 **subject/object 가
 둘 다 현재 그래프 노드인** triple 만 골라 `{kind:"triple", source, target,
 predicate, triple_source, confidence}` 형태로 합류시킨다. 존재하지 않는 slug 의
