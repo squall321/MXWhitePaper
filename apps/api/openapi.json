@@ -441,6 +441,37 @@
         "title": "BulkDocsIn",
         "type": "object"
       },
+      "BulkExtractRequest": {
+        "properties": {
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "slugs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slugs"
+          }
+        },
+        "title": "BulkExtractRequest",
+        "type": "object"
+      },
       "ChainCreate": {
         "properties": {
           "description": {
@@ -894,6 +925,21 @@
           }
         },
         "title": "DivisionUpdate",
+        "type": "object"
+      },
+      "ExtractRequest": {
+        "properties": {
+          "subject_slug": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Subject Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_slug"
+        ],
+        "title": "ExtractRequest",
         "type": "object"
       },
       "ForgotPasswordIn": {
@@ -2911,6 +2957,53 @@
           "target_language"
         ],
         "title": "TranslateBody",
+        "type": "object"
+      },
+      "TripleCreate": {
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "object_slug": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Object Slug",
+            "type": "string"
+          },
+          "predicate": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Predicate",
+            "type": "string"
+          },
+          "source": {
+            "default": "manual",
+            "title": "Source",
+            "type": "string"
+          },
+          "subject_slug": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Subject Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_slug",
+          "predicate",
+          "object_slug"
+        ],
+        "title": "TripleCreate",
         "type": "object"
       },
       "UserPatch": {
@@ -11989,6 +12082,16 @@
           },
           {
             "in": "query",
+            "name": "include_triples",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Triples",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
@@ -15867,6 +15970,281 @@
         "summary": "Update Team",
         "tags": [
           "orgs"
+        ]
+      }
+    },
+    "/api/v1/triples": {
+      "get": {
+        "description": "필터 조회. 인자 미지정 시 전체 반환.",
+        "operationId": "list_triples_api_v1_triples_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "subject",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject"
+            }
+          },
+          {
+            "in": "query",
+            "name": "object",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Object"
+            }
+          },
+          {
+            "in": "query",
+            "name": "predicate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Predicate"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Triples Api V1 Triples Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Triples",
+        "tags": [
+          "triples"
+        ]
+      },
+      "post": {
+        "description": "단건 생성 (manual / system-internal). source 기본 'manual'.",
+        "operationId": "create_triple_api_v1_triples_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripleCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Triple Api V1 Triples Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Triple",
+        "tags": [
+          "triples"
+        ]
+      }
+    },
+    "/api/v1/triples/extract": {
+      "post": {
+        "description": "문서 단건 LLM 추출. 기존 source='llm' triple 을 교체 (manual 보존).",
+        "operationId": "extract_triple_api_v1_triples_extract_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtractRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Extract Triple Api V1 Triples Extract Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Extract Triple",
+        "tags": [
+          "triples"
+        ]
+      }
+    },
+    "/api/v1/triples/extract/bulk": {
+      "post": {
+        "description": "일괄 추출. slugs 명시 시 그 목록, domain 시 도메인 published 문서,\n둘 다 없으면 published 문서 전체를 대상으로 직렬 추출한다.",
+        "operationId": "extract_bulk_api_v1_triples_extract_bulk_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkExtractRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Extract Bulk Api V1 Triples Extract Bulk Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Extract Bulk",
+        "tags": [
+          "triples"
+        ]
+      }
+    },
+    "/api/v1/triples/{triple_id}": {
+      "delete": {
+        "description": "단건 삭제. created_by 가 본인이거나 admin 이면 허용.\n\ncreated_by 가 NULL (=llm) 인 triple 은 admin 만 삭제 가능.",
+        "operationId": "delete_triple_api_v1_triples__triple_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "triple_id",
+            "required": true,
+            "schema": {
+              "title": "Triple Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Triple Api V1 Triples  Triple Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Triple",
+        "tags": [
+          "triples"
         ]
       }
     },

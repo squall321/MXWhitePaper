@@ -43,6 +43,7 @@ from .routers.imports import router as imports_router
 from .routers.home import router as home_router
 from .routers.links_graph import router as links_graph_router
 from .routers.notification_prefs import router as notification_prefs_router
+from .routers.triples import router as triples_router
 from .routers.notifications import router as notifications_router
 from .routers.oembed import router as oembed_router
 from .routers.orgs import router as orgs_router
@@ -551,6 +552,8 @@ def create_app() -> FastAPI:
     app.include_router(links_graph_router)
     # Cycle 7 — dep-graph (content_json 본문 기반 의존성 그래프 + orphans).
     app.include_router(dep_graph_router)
+    # graph-edge-predicates — (subject, predicate, object) 의미 엣지 triple.
+    app.include_router(triples_router)
     # 멘션 등 BE 푸시 알림
     app.include_router(notifications_router)
     # Cycle 0019 — per-event-per-channel notification preferences.

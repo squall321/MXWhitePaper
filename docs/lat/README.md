@@ -41,6 +41,7 @@ Read 하는 패턴을 피한다.
 | [storage](storage.md) | 이미지 업로드 파이프라인, MinIO, sha256 dedup | `app/services/upload_service.py`, `app/routers/uploads.py`, `app/routers/files.py` |
 | [snapshots](snapshots.md) | PostgreSQL + MinIO 시점 백업/복원 | `app/services/snapshots.py`, `app/routers/snapshots.py`, `infra/scripts/snapshot.sh`, `infra/scripts/restore-snapshot.sh` |
 | [core](core.md) | 인증 (`require_role`), 에러 envelope, 설정 (pydantic-settings) | `app/core/auth.py`, `app/core/errors.py`, `app/core/config.py`, `app/core/db.py` |
+| [graph](graph.md) | 위키 링크 그래프, 의존성 그래프, 의미 triple (subject/predicate/object) | `app/routers/links_graph.py`, `app/routers/dep_graph.py`, `app/routers/triples.py`, `app/services/triple_extractor.py` |
 
 > 백엔드 외부 도구 — LLM 이 docx 룰을 따라 작성하도록 돕는 standalone toolkit
 > (validator + RAG CLI + MCP 서버) 은 별도 트리에서 산다:

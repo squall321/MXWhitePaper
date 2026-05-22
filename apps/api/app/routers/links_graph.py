@@ -81,6 +81,39 @@ async def _fetch_nodes(
     return out
 
 
+async def _triple_edges(
+    s: AsyncSession, node_slugs: set[str]
+) -> list[dict]:
+    """doc_triples 에서 subject/object 가 모두 node_slugs 안에 있는 triple 만
+    엣지 형태로 반환 (graph-edge-predicates, include_triples=true 시 호출).
+
+    존재하지 않는 slug 의 triple 은 자동 제외 — node_slugs 양쪽 멤버십으로 필터.
+    """
+    if not node_slugs:
+        return []
+    rows = (await s.execute(
+        text("""
+            SELECT subject_slug, object_slug, predicate, source, confidence
+            FROM doc_triples
+            WHERE subject_slug = ANY(:slugs)
+              AND object_slug = ANY(:slugs)
+        """),
+        {"slugs": list(node_slugs)},
+    )).all()
+    out: list[dict] = []
+    for r in rows:
+        if r[0] in node_slugs and r[1] in node_slugs:
+            out.append({
+                "kind": "triple",
+                "source": r[0],
+                "target": r[1],
+                "predicate": r[2],
+                "triple_source": r[3],
+                "confidence": r[4],
+            })
+    return out
+
+
 async def _ctx_edges(
     s: AsyncSession,
     slugs: list[str],
@@ -175,6 +208,7 @@ async def _domain_subgraph(
     include_doc_tag_edges: bool,
     include_tag_cooc: bool,
     include_context: bool,
+    include_triples: bool = False,
 ) -> dict[str, Any]:
     """super-domain 의 하위 tag 가 가진 published doc 들 + 옵트인 엣지 반환."""
     domain = by_id(domain_id)
@@ -341,6 +375,10 @@ async def _domain_subgraph(
         ctx = await _ctx_edges(s, list(domain_slugs), noise)
         edges_out.extend(ctx)
 
+    # --- triple 엣지 (graph-edge-predicates) ---
+    if include_triples and domain_slugs:
+        edges_out.extend(await _triple_edges(s, set(domain_slugs)))
+
     return {
         "nodes": nodes_out,
         "edges": edges_out,
@@ -368,6 +406,7 @@ async def get_graph(
     include_doc_tag_edges: bool = Query(default=False),
     include_tag_cooc: bool = Query(default=False),
     include_context: bool = Query(default=False),
+    include_triples: bool = Query(default=False),
     # 전역 (root/domain 없음) 경로의 노드 cap.
     # 기본 200 (기존 동작 보존) — `/graph/all` 같은 전체 보기 페이지에선 충분히
     # 크게 (5000+) 호출. wiki edge 가 있는 doc 만 후보라서 실제로는 훨씬 적음.
@@ -387,6 +426,7 @@ async def get_graph(
             include_doc_tag_edges=include_doc_tag_edges,
             include_tag_cooc=include_tag_cooc,
             include_context=include_context,
+            include_triples=include_triples,
         )
         meta: dict[str, Any] = {
             "domain": domain,
@@ -429,6 +469,8 @@ async def get_graph(
             for src, tgt, cnt in edges
             if src in visited and tgt in visited
         ]
+        if include_triples:
+            kept_edges = kept_edges + await _triple_edges(s, visited)
         nodes_map = await _fetch_nodes(s, visited)
         nodes_list = [dict(kind="doc", **v) for v in nodes_map.values()]
         return envelope(
@@ -451,6 +493,8 @@ async def get_graph(
         for src, tgt, cnt in edges
         if src in keep and tgt in keep
     ]
+    if include_triples:
+        kept_edges = kept_edges + await _triple_edges(s, keep)
     nodes_map = await _fetch_nodes(s, keep)
     nodes_list = [dict(kind="doc", **v) for v in nodes_map.values()]
     return envelope(
