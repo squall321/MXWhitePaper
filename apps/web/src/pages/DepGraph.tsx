@@ -200,6 +200,24 @@ export function DepGraphPage() {
                 : '루트 슬러그를 입력해 그래프를 시작하세요.'}
             </p>
           </div>
+          {/* triple 표시 토글 — /dep-graph endpoint 는 아직 의미 엣지를 반환하지
+              않는다 (content_json wiki link 만 walk). BE 가 include_triples 를
+              지원하면 활성화. 그때까지 disabled 로 노출만 유지 (/graph 와 일관성). */}
+          <label
+            className="flex items-center gap-1.5 text-xs text-gray-400"
+            title="의존성 그래프 endpoint 는 아직 triple 을 지원하지 않습니다"
+          >
+            <input
+              type="checkbox"
+              checked={false}
+              disabled
+              readOnly
+              aria-label="triple 표시 (지원 예정)"
+              data-testid="dep-graph-triple-toggle"
+              className="h-3.5 w-3.5"
+            />
+            🔗 triple
+          </label>
           <Link
             to="/graph/all"
             data-testid="dep-graph-all-link"

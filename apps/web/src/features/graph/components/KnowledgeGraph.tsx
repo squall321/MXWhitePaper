@@ -42,6 +42,23 @@ const ROOT_COLOR = '#f59e0b'
 // highlight 매치 노드 색
 const HIGHLIGHT_COLOR = '#22d3ee'  // cyan-400
 
+// triple(술어) 엣지 색 — wiki(회색)/tag(도메인색)/highlight(cyan) 와 구분되는 보라 톤
+const TRIPLE_COLOR = '#c084fc'  // purple-400
+
+/**
+ * triple 엣지 — BE 가 include_triples 켜졌을 때 보내는 술어 엣지.
+ * api.ts 의 GraphEdge 타입에는 아직 'triple' kind 가 없어서 (다른 에이전트 담당),
+ * 여기서 로컬로 정의하고 buildGraph 가 런타임 필드로 분기한다.
+ */
+interface GraphEdgeTriple {
+  kind: 'triple'
+  source: string
+  target: string
+  predicate: string
+  triple_source: 'llm' | 'manual'
+  confidence: number | null
+}
+
 export interface KnowledgeGraphProps {
   nodes: GraphNode[]
   edges: GraphEdge[]
@@ -293,12 +310,18 @@ function buildGraph(
 
   let edgeId = 0
   for (const e of edges) {
-    if (!edgeKinds.has((e.kind ?? 'wiki') as 'wiki' | 'doc_tag' | 'tag_cooc')) continue
+    // kind 를 string 으로 받아 'triple' 비교를 허용 — api.ts 의 GraphEdge 타입에는
+    // 아직 'triple' 이 없어서(다른 에이전트 담당) 런타임 값으로 분기한다.
+    const kind: string = (e as { kind?: string }).kind ?? 'wiki'
+    // triple 엣지는 edgeKinds(wiki/doc_tag/tag_cooc) 필터 대상이 아니다 —
+    // include_triples 토글이 별도로 BE fetch 단계에서 결정한다.
+    const isTriple = kind === 'triple'
+    if (!isTriple && !edgeKinds.has(kind as 'wiki' | 'doc_tag' | 'tag_cooc')) continue
     if (!g.hasNode(e.source) || !g.hasNode(e.target)) continue
     if (e.source === e.target) continue
-    const kind = e.kind ?? 'wiki'
     let color: string
     let size: number
+    let label: string | undefined
     if (kind === 'wiki') {
       color = 'rgba(148,163,184,0.35)'
       size = 1 + Math.min(e.count ?? 1, 5) * 0.25
@@ -307,12 +330,25 @@ function buildGraph(
       const base = DOMAIN_COLOR[srcDomain ?? ''] ?? '#a78bfa'
       color = base + '66'
       size = Math.max(0.8, (e.weight ?? 1) / 5)
+    } else if (isTriple) {
+      const t = e as unknown as GraphEdgeTriple
+      // llm 추출은 흐리게(alpha 낮춤), manual 입력은 진하게 — 출처 시각 구분.
+      color = TRIPLE_COLOR + (t.triple_source === 'llm' ? '66' : 'ee')
+      size = 1.2
+      // predicate 라벨 — 30자 초과 시 잘라서 … 붙임 (sigma 도 자르지만 과도하게 길면 미리 정리)
+      const p = t.predicate ?? ''
+      label = p.length > 30 ? p.slice(0, 30) + '…' : p
     } else {
       color = 'rgba(203,213,225,0.2)'
       size = 0.5
     }
     try {
-      g.addEdgeWithKey(`e${edgeId++}`, e.source, e.target, { kind, color, size, _baseColor: color })
+      // label 은 triple 엣지에만 부여 — sigma 는 label 있는 엣지만 라벨을 그리므로
+      // renderEdgeLabels:true 여도 wiki/tag 엣지는 라벨이 안 뜬다.
+      g.addEdgeWithKey(`e${edgeId++}`, e.source, e.target, {
+        kind, color, size, _baseColor: color,
+        ...(label !== undefined ? { label } : {}),
+      })
     } catch {
       // 중복 edge skip
     }
@@ -513,7 +549,9 @@ export function KnowledgeGraph({
       labelRenderedSizeThreshold: 6,
       minCameraRatio: 0.05,
       maxCameraRatio: 10,
-      renderEdgeLabels: false,
+      // label attribute 가 있는 엣지(=triple)만 라벨이 그려진다 — wiki/tag 엣지엔
+      // label 을 안 넣었으므로 triple predicate 만 화면에 표시된다.
+      renderEdgeLabels: true,
       defaultEdgeColor: 'rgba(148,163,184,0.3)',
       zIndex: true,
     })

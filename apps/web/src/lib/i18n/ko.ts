@@ -667,6 +667,16 @@ export const ko = {
   'page.adminDashboard.maintenance.success': '정리 완료 — pending {p}, versions {v}',
   'page.adminDashboard.maintenance.last': '마지막 실행: {at} — pending {p}, versions {v}',
 
+  // Page — Admin Dashboard, 지식 그래프 (triple 일괄 추출)
+  'page.adminDashboard.tab.triples': '지식 그래프',
+  'page.adminDashboard.triples.title': '지식 그래프 — Triple 추출',
+  'page.adminDashboard.triples.description': '전체 게시 문서의 본문에서 (subject, predicate, object) triple 을 LLM 으로 일괄 추출해 그래프 엣지로 저장합니다. provider 가 mock 이면 placeholder 결과만 생성됩니다.',
+  'page.adminDashboard.triples.run': '전체 문서에서 triple 추출',
+  'page.adminDashboard.triples.running': '추출 중…',
+  'page.adminDashboard.triples.fail': 'triple 추출 실패',
+  'page.adminDashboard.triples.success': '추출 완료 — 문서 {documents}, 저장 {stored}, 교체 {replaced}',
+  'page.adminDashboard.triples.last': '마지막 추출 — 문서 {documents}, 저장 {stored}, 교체 {replaced}',
+
   // Page — Audit Log viewer (admin only)
   'page.auditLog.title': '감사 로그',
   'page.auditLog.subtitle': '모든 쓰기 이벤트가 기록됩니다. 필터로 좁히거나 CSV 로 내보내세요.',

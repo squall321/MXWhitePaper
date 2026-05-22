@@ -31,6 +31,7 @@ import {
   patchAdminUser,
   runMaintenance,
 } from '@/features/admin/api'
+import { type BulkExtractResult, extractBulk } from '@/features/graph/triplesApi'
 
 type TabKey =
   | 'users'
@@ -50,6 +51,7 @@ type TabKey =
   | 'backups'
   | 'import-csv'
   | 'archive'
+  | 'triples'
 
 /** Tabs reference an i18n key; the visible label is resolved at render. */
 const TABS: Array<{ key: TabKey; labelKey: string }> = [
@@ -70,6 +72,7 @@ const TABS: Array<{ key: TabKey; labelKey: string }> = [
   { key: 'backups', labelKey: 'page.adminDashboard.tab.backups' },
   { key: 'import-csv', labelKey: 'page.adminDashboard.tab.importCsv' },
   { key: 'archive', labelKey: 'page.adminDashboard.tab.archive' },
+  { key: 'triples', labelKey: 'page.adminDashboard.tab.triples' },
 ]
 
 const ROLE_OPTIONS = [
@@ -207,6 +210,7 @@ export function AdminDashboardPage() {
           <ArchivedDocsPage />
         </div>
       )}
+      {tab === 'triples' && <TriplesTab />}
     </div>
   )
 }
@@ -520,6 +524,72 @@ function MaintenanceTab() {
               at: new Date(last.at).toLocaleString(),
               p: last.purged,
               v: last.compacted,
+            })}
+          </p>
+        )}
+      </Card>
+    </section>
+  )
+}
+
+// ── Triples (지식 그래프 일괄 추출) ──────────────────────────────────────
+function TriplesTab() {
+  const t = useT()
+  const [busy, setBusy] = useState(false)
+  const [last, setLast] = useState<BulkExtractResult | null>(null)
+
+  const onRun = useCallback(async () => {
+    setBusy(true)
+    try {
+      const res = await extractBulk({})
+      setLast(res)
+      toast.success(
+        t('page.adminDashboard.triples.success', {
+          documents: res.documents,
+          stored: res.stored,
+          replaced: res.replaced,
+        }),
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('page.adminDashboard.triples.fail'))
+    } finally {
+      setBusy(false)
+    }
+  }, [t])
+
+  return (
+    <section data-testid="admin-triples-tab" className="space-y-4">
+      <Card padded="lg">
+        <h2 className="text-lg font-semibold text-smsg-900">
+          {t('page.adminDashboard.triples.title')}
+        </h2>
+        <p className="mt-1 text-sm text-gray-600">
+          {t('page.adminDashboard.triples.description')}
+        </p>
+        <div className="mt-4">
+          <Button
+            size="lg"
+            variant="primary"
+            onClick={onRun}
+            disabled={busy}
+            data-testid="admin-triples-run"
+          >
+            {busy
+              ? t('page.adminDashboard.triples.running')
+              : t('page.adminDashboard.triples.run')}
+          </Button>
+        </div>
+        {last && (
+          <p
+            className="mt-4 text-xs text-gray-500"
+            data-testid="admin-triples-last"
+            role="status"
+            aria-live="polite"
+          >
+            {t('page.adminDashboard.triples.last', {
+              documents: last.documents,
+              stored: last.stored,
+              replaced: last.replaced,
             })}
           </p>
         )}

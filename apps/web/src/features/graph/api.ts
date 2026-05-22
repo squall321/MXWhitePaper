@@ -35,12 +35,16 @@ export type GraphNode = GraphNodeDoc | GraphNodeTag
 
 export interface GraphEdge {
   /** Edge kind — default 'wiki' when missing (backward compat). */
-  kind?: 'wiki' | 'doc_tag' | 'tag_cooc'
+  kind?: 'wiki' | 'doc_tag' | 'tag_cooc' | 'triple'
   source: string
   target: string
   /** count for wiki / weight for tag_cooc. doc_tag has neither. */
   count?: number
   weight?: number
+  /** triple 엣지 전용 — 술어 라벨. */
+  predicate?: string
+  /** triple 엣지 전용 — 출처 (llm 자동추출 / manual 사용자입력). */
+  triple_source?: 'llm' | 'manual'
 }
 
 export interface GraphPayload {
@@ -55,6 +59,8 @@ export interface GraphOptions {
   include_tags?: boolean
   include_doc_tag_edges?: boolean
   include_tag_cooc?: boolean
+  /** true 일 때만 triple (의미 엣지) 을 그래프에 포함. */
+  include_triples?: boolean
   /** 전역 (root/domain 없음) 경로의 노드 cap. 기본 200 — /graph/all 은 5000. */
   limit?: number
 }
@@ -78,6 +84,7 @@ export async function fetchGraph(
     if (opts.include_tags) params.include_tags = true
     if (opts.include_doc_tag_edges) params.include_doc_tag_edges = true
     if (opts.include_tag_cooc) params.include_tag_cooc = true
+    if (opts.include_triples) params.include_triples = true
     if (opts.limit) params.limit = opts.limit
   } else {
     params.depth = depth

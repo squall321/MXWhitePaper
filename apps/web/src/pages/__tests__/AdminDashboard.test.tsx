@@ -46,6 +46,12 @@ vi.mock('@/features/org/hooks/useOrgTree', () => ({
   useOrgTree: () => ({ data: [], isPending: false, isError: false, error: null, refetch: () => {} }),
 }))
 
+// Triple API stub — the knowledge-graph tab imports it.
+vi.mock('@/features/graph/triplesApi', () => ({
+  extractBulk: () =>
+    Promise.resolve({ documents: 0, stored: 0, replaced: 0, results: [], source: 'llm' }),
+}))
+
 // Auth store stub — admin user.
 const authState = {
   current: { user: { id: 'u1', email: 'admin@mx.local', role: 'admin' } as
@@ -87,6 +93,12 @@ describe('<AdminDashboardPage />', () => {
     expect(html).toContain('시스템 상태')
     expect(html).toContain('유지보수')
     expect(html).toContain('조직')
+  })
+
+  it('exposes the knowledge-graph triple extraction tab', () => {
+    const html = render(<AdminDashboardPage />)
+    expect(html).toContain('admin-tab-triples')
+    expect(html).toContain('지식 그래프')
   })
 
   it('redirects non-admin users away from the dashboard', () => {

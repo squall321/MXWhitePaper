@@ -634,6 +634,16 @@ export const en: Record<LocaleKey, string> = {
   'page.adminDashboard.maintenance.success': 'Done — pending {p}, versions {v}',
   'page.adminDashboard.maintenance.last': 'Last run: {at} — pending {p}, versions {v}',
 
+  // Page — Admin Dashboard, knowledge graph (bulk triple extraction)
+  'page.adminDashboard.tab.triples': 'Knowledge Graph',
+  'page.adminDashboard.triples.title': 'Knowledge Graph — Triple Extraction',
+  'page.adminDashboard.triples.description': 'Runs LLM extraction over every published document to pull (subject, predicate, object) triples and store them as graph edges. With the mock provider only placeholder results are produced.',
+  'page.adminDashboard.triples.run': 'Extract triples from all documents',
+  'page.adminDashboard.triples.running': 'Extracting…',
+  'page.adminDashboard.triples.fail': 'Triple extraction failed',
+  'page.adminDashboard.triples.success': 'Done — documents {documents}, stored {stored}, replaced {replaced}',
+  'page.adminDashboard.triples.last': 'Last extraction — documents {documents}, stored {stored}, replaced {replaced}',
+
   // Page — Audit Log viewer (admin only)
   'page.auditLog.title': 'Audit log',
   'page.auditLog.subtitle': 'Every mutation is recorded. Narrow with filters or export to CSV.',

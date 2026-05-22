@@ -14,8 +14,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { AppOutletContext } from '@/App'
+import { useAuthStore } from '@/features/auth/store'
+import { createTriple } from '@/features/graph/triplesApi'
 import {
   forceCenter,
   forceCollide,
@@ -627,15 +629,142 @@ function GraphListFallback({
   )
 }
 
+/**
+ * 의미 엣지(triple) 추가 dialog.
+ *
+ * subject 는 우클릭한 노드로 고정. predicate 자유 텍스트 (max 200),
+ * object_slug 텍스트 입력 (자동완성 없음). 저장 → POST /triples {source:'manual'}.
+ */
+function AddEdgeDialog({
+  subject,
+  onClose,
+  onCreated,
+}: {
+  subject: string
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const [predicate, setPredicate] = useState('')
+  const [objectSlug, setObjectSlug] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const pred = predicate.trim()
+    const obj = objectSlug.trim()
+    if (!pred || !obj) {
+      setErr('술어와 대상 노드를 모두 입력하세요.')
+      return
+    }
+    setSaving(true)
+    setErr(null)
+    try {
+      await createTriple({
+        subject_slug: subject,
+        predicate: pred,
+        object_slug: obj,
+        source: 'manual',
+      })
+      onCreated()
+    } catch (ex) {
+      setErr((ex as Error).message || '엣지 추가에 실패했습니다.')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-modal flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="엣지 추가"
+      data-testid="graph-add-edge-dialog"
+      onClick={onClose}
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={submit}
+        className="w-full max-w-sm space-y-3 rounded border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+      >
+        <h2 className="text-sm font-semibold text-smsg-900 dark:text-gray-100">
+          🔗 의미 엣지 추가
+        </h2>
+        <p className="text-xs text-gray-500">
+          주어: <span className="font-mono text-gray-700 dark:text-gray-300">{subject}</span>
+        </p>
+        <label className="block text-xs text-gray-600 dark:text-gray-300">
+          술어 (predicate)
+          <input
+            type="text"
+            value={predicate}
+            onChange={(e) => setPredicate(e.target.value)}
+            maxLength={200}
+            placeholder="예: 에서_사용된다"
+            aria-label="술어"
+            data-testid="graph-add-edge-predicate"
+            className="mt-1 w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900"
+          />
+        </label>
+        <label className="block text-xs text-gray-600 dark:text-gray-300">
+          대상 노드 슬러그 (object)
+          <input
+            type="text"
+            value={objectSlug}
+            onChange={(e) => setObjectSlug(e.target.value)}
+            placeholder="예: android"
+            aria-label="대상 노드 슬러그"
+            data-testid="graph-add-edge-object"
+            className="mt-1 w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900"
+          />
+        </label>
+        {err && (
+          <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
+            {err}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+          >
+            취소
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            data-testid="graph-add-edge-submit"
+            className="rounded bg-smsg-700 px-3 py-1 text-xs text-white hover:bg-smsg-800 disabled:opacity-50"
+          >
+            {saving ? '저장 중…' : '추가'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 export function GraphPage() {
   const { slug } = useParams<{ slug?: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
   const [showOrphans, setShowOrphans] = useState(true)
   const [menu, setMenu] = useState<NodeMenu | null>(null)
   const [fullscreen, setFullscreen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
+
+  // triple (의미 엣지) 표시 토글 — edgeMode 와 직교 (어느 모드에서든 on/off).
+  const [showTriples, setShowTriples] = useState(false)
+
+  // 엣지 추가 권한 — editor 이상에게만 우클릭 메뉴/dialog 노출.
+  const user = useAuthStore((s) => s.user)
+  const canEdit = !!user && ['editor', 'owner', 'admin'].includes(user.role)
+
+  // 엣지 추가 dialog — null 이면 닫힘. subject 는 우클릭한 노드로 고정.
+  const [addEdge, setAddEdge] = useState<{ subject: string } | null>(null)
 
   // BFS depth — URL ?depth=N 로 공유 가능, 1~4 (BE 가 강제). default 1.
   const rawDepth = parseInt(searchParams.get('depth') ?? '2', 10)
@@ -711,7 +840,7 @@ export function GraphPage() {
   }, [menu])
 
   const { data, isPending, isError, error } = useQuery({
-    queryKey: ['graph', { root: slug ?? null, depth, domain, edgeKinds: [...edgeKinds].sort() }],
+    queryKey: ['graph', { root: slug ?? null, depth, domain, edgeKinds: [...edgeKinds].sort(), triples: showTriples }],
     queryFn: () => fetchGraph({
       root: slug ?? null,
       depth,
@@ -719,6 +848,7 @@ export function GraphPage() {
       include_tags: !!domain,                     // domain 진입 시 tag 노드 받기
       include_doc_tag_edges: edgeKinds.has('doc_tag'),
       include_tag_cooc: edgeKinds.has('tag_cooc'),
+      include_triples: showTriples,
     }),
     staleTime: 30_000,
   })
@@ -801,6 +931,18 @@ export function GraphPage() {
               🧲 {focusedTag.replace(/^tag:/, '#')} ✕
             </button>
           )}
+          {/* triple 표시 토글 — edgeMode 와 직교. 어느 모드에서든 의미 엣지 on/off. */}
+          <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300" title="술어(predicate) 엣지 표시">
+            <input
+              type="checkbox"
+              checked={showTriples}
+              onChange={(e) => setShowTriples(e.target.checked)}
+              aria-label="triple 표시"
+              data-testid="graph-triple-toggle"
+              className="h-3.5 w-3.5"
+            />
+            🔗 triple
+          </label>
           {/* 엣지 모드 segmented control — domain 그래프에서만 노출 (단일
               문서 그래프는 wiki 만 의미 있어 모드 변경 불필요). */}
           {domain && (
@@ -970,9 +1112,37 @@ export function GraphPage() {
               >
                 🕸 이 노드를 루트로
               </button>
+              {/* editor 이상만 의미 엣지(triple) 추가 가능. */}
+              {canEdit && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid="graph-add-edge"
+                  onClick={() => {
+                    setAddEdge({ subject: menu.slug })
+                    setMenu(null)
+                  }}
+                  className="block w-full px-3 py-1.5 text-left text-gray-700 hover:bg-smsg-50 dark:text-gray-200 dark:hover:bg-gray-700"
+                >
+                  🔗 엣지 추가
+                </button>
+              )}
             </>
           )}
         </div>
+      )}
+
+      {/* 의미 엣지(triple) 추가 dialog — subject 는 우클릭 노드로 고정. */}
+      {addEdge && (
+        <AddEdgeDialog
+          subject={addEdge.subject}
+          onClose={() => setAddEdge(null)}
+          onCreated={() => {
+            setAddEdge(null)
+            // triple 표시가 켜져 있으면 새 엣지가 보이도록 그래프 refetch.
+            void queryClient.invalidateQueries({ queryKey: ['graph'] })
+          }}
+        />
       )}
     </div>
   )

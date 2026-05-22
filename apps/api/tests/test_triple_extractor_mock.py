@@ -122,16 +122,25 @@ async def test_mock_returns_empty_for_missing_doc() -> None:
 
 
 @pytest.mark.asyncio
-async def test_non_mock_provider_returns_empty() -> None:
-    """provider='openai' 등 — 실 호출은 다음 사이클, 지금은 no-op 빈 list."""
+async def test_llm_provider_unreachable_falls_back_to_mock() -> None:
+    """provider='openai'/'ollama' 라도 LLM 엔드포인트 도달 실패 시 mock 폴백.
+
+    graph-triple-fe 사이클 (§1.2b) — 실 LLM provider 추가. LLM 없는 환경에서도
+    extract_for_doc 이 예외 없이 동작해야 하므로, 도달 불가 endpoint 면
+    mock placeholder 로 폴백한다. (도달 불가 endpoint 로 폴백 경로만 검증.)
+    """
     slug = f"tx-openai-{uuid.uuid4().hex[:8]}"
     await _make_doc(slug, _content_with_links("oled"))
     try:
         os.environ["TRIPLE_EXTRACTOR_PROVIDER"] = "openai"
+        os.environ["TRIPLE_EXTRACTOR_ENDPOINT"] = "http://127.0.0.1:1"
         async with session_scope() as s:
             ex = TripleExtractor(s)
             out = await ex.extract_for_doc(slug)
-        assert out == []
+        # 폴백한 mock 결과 — 본문에 링크 1 개 있으므로 placeholder 1 개.
+        assert len(out) == 1
+        assert out[0].object_slug == "oled"
     finally:
         await _drop_doc(slug)
         os.environ.pop("TRIPLE_EXTRACTOR_PROVIDER", None)
+        os.environ.pop("TRIPLE_EXTRACTOR_ENDPOINT", None)

@@ -8,6 +8,7 @@
  * BE 의 `/api/v1/links/graph?limit=N` 호출 — 전역 경로는 degree 상위 N 개
  * doc 노드 + 그 사이 wiki 엣지를 반환한다 (root/domain 미지정 시).
  */
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { KnowledgeGraph } from '@/features/graph/components/KnowledgeGraph'
@@ -17,9 +18,11 @@ const ALL_LIMIT = 5000
 
 export function GraphAllPage() {
   const navigate = useNavigate()
+  // triple (의미 엣지) 표시 토글.
+  const [showTriples, setShowTriples] = useState(false)
   const { data, isPending, isError, error } = useQuery({
-    queryKey: ['graph-all', ALL_LIMIT],
-    queryFn: () => fetchGraph({ limit: ALL_LIMIT }),
+    queryKey: ['graph-all', ALL_LIMIT, showTriples],
+    queryFn: () => fetchGraph({ limit: ALL_LIMIT, include_triples: showTriples }),
     staleTime: 60_000,
   })
 
@@ -36,6 +39,18 @@ export function GraphAllPage() {
               : '전체 wiki 의존성 양상 — degree 가 클수록 원이 큼.'}
           </p>
         </div>
+        {/* triple 표시 토글 — 술어(predicate) 엣지 on/off. */}
+        <label className="flex items-center gap-1.5 text-xs text-gray-600" title="술어(predicate) 엣지 표시">
+          <input
+            type="checkbox"
+            checked={showTriples}
+            onChange={(e) => setShowTriples(e.target.checked)}
+            aria-label="triple 표시"
+            data-testid="graph-all-triple-toggle"
+            className="h-3.5 w-3.5"
+          />
+          🔗 triple
+        </label>
       </header>
 
       {isPending ? (

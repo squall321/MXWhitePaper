@@ -119,7 +119,13 @@ links_graph 와 달리 `content_json` 을 매 요청 walk 하므로 새로 추�
 
 - `mock` (기본) — 본문의 `[[slug]]` 앞 1~2 개를 `는_<obj>_와_관련있다` 술어로
   반환. 외부 호출 부수효과 없음.
-- `openai` — 다음 사이클에서 실 구현. 현재는 빈 list (no-op).
+- `ollama` / `openai` — `TRIPLE_EXTRACTOR_ENDPOINT` 의 ollama 호환 HTTP API
+  (`POST /api/chat`) 로 실 추출. 본문 + `[[slug]]` 후보를 주고 `(predicate,
+  object_slug, confidence)` JSON 회수. 후보 밖 slug / `MIN_CONFIDENCE` 미만 drop.
+
+**Graceful fallback** — provider 가 ollama/openai 라도 엔드포인트 도달 실패
+(연결 실패 / 8s 타임아웃 / 비-200 / JSON 파싱 실패) 시 `_mock_extract` 로 자동
+폴백 + `logging.warning`. 즉 LLM 없는 환경에서도 `/extract` 가 깨지지 않는다.
 
 `include_triples=1` 시 `_triple_edges` 가 `doc_triples` 에서 **subject/object 가
 둘 다 현재 그래프 노드인** triple 만 골라 `{kind:"triple", source, target,
@@ -139,8 +145,20 @@ triple 은 런타임 제외.
 - **`include_triples` 기본 OFF** — graph 응답 크기 보호. FE 가 명시적으로 켜야 함.
 - triple 의 predicate 는 자유 텍스트 → FE 표시 시 escape 필수 (XSS).
 
-## FE 측 (다음 사이클 예정)
+## FE — triple 표시 + 입력
 
-이번 사이클은 DB+API 만. FE 의 sigma `renderEdgeLabels` 로 predicate 표시 +
-그래프 우클릭 "엣지 추가" 입력 UI 는 다음 PDCA 사이클.
-계획: [`docs/01-plan/features/graph-edge-predicates.plan.md`](../01-plan/features/graph-edge-predicates.plan.md)
+| 파일 | 책임 |
+| --- | --- |
+| [[src/features/graph/triplesApi.ts]] | triples API 클라이언트 — `fetchTriples` / `createTriple` / `deleteTriple` / `extractBulk` |
+| [[src/features/graph/components/KnowledgeGraph.tsx]] | `kind="triple"` 엣지를 predicate 라벨 + 출처별 스타일로 렌더 (`renderEdgeLabels`) |
+| [[src/pages/Graph.tsx]] | "🔗 triple" 표시 토글, 우클릭 "엣지 추가" dialog → `createTriple` |
+| [[src/pages/AdminDashboard.tsx]] | triple 탭 — `extractBulk` 일괄 추출 버튼 |
+
+- triple 엣지 색: 보라 (`#c084fc`). `triple_source='llm'` 흐림 / `'manual'` 진함.
+- `renderEdgeLabels: true` — wiki/tag 엣지엔 label 미부여라 triple 만 라벨 보임.
+- `include_triples` 토글은 `edgeMode` (wiki/tag/모두) 와 **직교** — 어느 모드에서든
+  triple on/off 가능.
+- `/dep-graph` 는 BE endpoint 가 triple 미지원 → 토글이 disabled 로 노출만.
+
+계획: [`docs/01-plan/features/graph-edge-predicates.plan.md`](../01-plan/features/graph-edge-predicates.plan.md) (1차 DB+API),
+[`docs/01-plan/features/graph-triple-fe.plan.md`](../01-plan/features/graph-triple-fe.plan.md) (2차 FE)
