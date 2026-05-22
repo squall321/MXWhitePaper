@@ -553,6 +553,7 @@ export const en: Record<LocaleKey, string> = {
   'editor.ia.tool.arrow': 'Arrow',
   'editor.ia.tool.rect': 'Rectangle',
   'editor.ia.tool.callout': 'Callout',
+  'editor.ia.tool.textbox': 'Text box',
   'editor.ia.colorGroup': 'Color',
   'editor.ia.colorLabel': 'Color {color}',
   'editor.ia.undo': 'Undo',
@@ -563,6 +564,8 @@ export const en: Record<LocaleKey, string> = {
   'editor.ia.replaceImage': 'Replace image',
   'editor.ia.canvasLabel': 'Image annotation canvas',
   'editor.ia.calloutInput': 'Callout text input',
+  'editor.ia.textboxInput': 'Text box body',
+  'editor.ia.textboxPlaceholder': 'Describe this region… (Ctrl+Enter to save, Esc to cancel)',
   'editor.ia.changeLog': 'Edit image annotation',
 
   'page.recent.title': 'Recently viewed',

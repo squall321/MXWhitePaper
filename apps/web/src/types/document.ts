@@ -146,6 +146,30 @@ export type AnnotationElement =
       label: string
       color: string
     }
+  | {
+      kind: 'textbox'
+      id: string
+      x: number
+      y: number
+      w: number
+      h: number
+      /**
+       * Multi-line plain text. \n 으로 줄 구분.
+       */
+      text: string
+      /**
+       * 텍스트 색.
+       */
+      color: string
+      /**
+       * 정규화 좌표계 기준 글자 크기 (기본 0.025). 좌표가 0-1 이라 일반적으로 0.015~0.06.
+       */
+      fontSize?: number
+      /**
+       * 박스 배경색 (선택). 미지정 시 반투명 흰색 폴백.
+       */
+      bg?: string
+    }
 
 /**
  * MX White Paper 단일 진실 공급원(SSOT). Section 트리(level 1~3) + Block 배열 본문. PROJECT_PLAN.md / Plan / Design / Do 문서의 모든 데이터 모델 참조처.

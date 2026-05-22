@@ -21,6 +21,7 @@ import {
   buildArrow,
   buildCallout,
   buildRect,
+  buildTextbox,
   clientToNorm,
   nextAnnotationId,
   pickElement,
@@ -39,7 +40,27 @@ function harness(node: React.ReactNode) {
 
 describe('IA_TOOLS / IA_COLORS', () => {
   it('exposes the documented toolset', () => {
-    expect(IA_TOOLS).toEqual(['select', 'arrow', 'rect', 'callout'])
+    expect(IA_TOOLS).toEqual(['select', 'arrow', 'rect', 'callout', 'textbox'])
+  })
+
+  it('buildTextbox produces a normalized textbox element', () => {
+    const el = buildTextbox([0.2, 0.3], [0.5, 0.6], '한 줄\n두 줄', '#7c3aed')
+    expect(el.kind).toBe('textbox')
+    expect(el.x).toBe(0.2)
+    expect(el.y).toBe(0.3)
+    expect(el.w).toBeCloseTo(0.3, 5)
+    expect(el.h).toBeCloseTo(0.3, 5)
+    expect(el.text).toBe('한 줄\n두 줄')
+    expect(el.color).toBe('#7c3aed')
+    expect(el.id).toMatch(/^ann-/)
+  })
+
+  it('buildTextbox enforces minimum size for tiny drags', () => {
+    // 거의 0 길이 드래그 — 박스가 보이지 않을 정도로 작아지면 사용자가 못 씀.
+    // 최소 w=0.05, h=0.04 보장.
+    const el = buildTextbox([0.5, 0.5], [0.5, 0.5], '', '#000')
+    expect(el.w).toBeGreaterThanOrEqual(0.05)
+    expect(el.h).toBeGreaterThanOrEqual(0.04)
   })
   it('exposes 8 preset colors', () => {
     expect(IA_COLORS.length).toBe(8)

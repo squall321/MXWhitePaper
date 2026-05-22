@@ -584,6 +584,7 @@ export const ko = {
   'editor.ia.tool.arrow': '화살표',
   'editor.ia.tool.rect': '사각형',
   'editor.ia.tool.callout': '콜아웃',
+  'editor.ia.tool.textbox': '텍스트 박스',
   'editor.ia.colorGroup': '색상',
   'editor.ia.colorLabel': '색상 {color}',
   'editor.ia.undo': '되돌리기',
@@ -594,6 +595,8 @@ export const ko = {
   'editor.ia.replaceImage': '이미지 교체',
   'editor.ia.canvasLabel': '이미지 주석 캔버스',
   'editor.ia.calloutInput': '콜아웃 텍스트 입력',
+  'editor.ia.textboxInput': '텍스트 박스 본문',
+  'editor.ia.textboxPlaceholder': '이 영역 설명… (Ctrl+Enter 저장, Esc 취소)',
   'editor.ia.changeLog': '이미지 주석 편집',
 
   // Page — Recent

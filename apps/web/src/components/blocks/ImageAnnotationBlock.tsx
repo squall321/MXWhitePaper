@@ -137,6 +137,41 @@ export function AnnotationElementView({ ann }: { ann: AnnotationElement }) {
       </g>
     )
   }
+  if (ann.kind === 'textbox') {
+    // foreignObject 안에 HTML div 를 박아 multi-line wrap 을 브라우저에 맡김.
+    // SVG <text>+<tspan> 으로 줄바꿈을 수동 계산하는 것보다 훨씬 정확.
+    // 좌표/크기는 정규화 [0..1] 공간 — foreignObject 의 width/height 가
+    // 그 비율을 그대로 받는다 (부모 SVG viewBox 가 0 0 1 1).
+    const fontSize = ann.fontSize ?? 0.025
+    const bg = ann.bg ?? 'rgba(255,255,255,0.85)'
+    return (
+      <g data-el-id={ann.id}>
+        <foreignObject x={ann.x} y={ann.y} width={ann.w} height={ann.h}>
+          <div
+            // SVG namespace 안의 HTML — React 가 xmlns 를 자동 처리.
+            // pointer-events: none — 본문 읽기 모드에선 클릭/선택 방지.
+            style={{
+              width: '100%',
+              height: '100%',
+              padding: `${fontSize * 0.3}px`,
+              background: bg,
+              color: ann.color,
+              fontSize: `${fontSize}px`,
+              lineHeight: 1.25,
+              borderRadius: `${fontSize * 0.2}px`,
+              overflow: 'hidden',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              boxSizing: 'border-box',
+              border: `${fontSize * 0.04}px solid ${ann.color}`,
+            }}
+          >
+            {ann.text}
+          </div>
+        </foreignObject>
+      </g>
+    )
+  }
   // callout
   return (
     <g data-el-id={ann.id}>

@@ -50,7 +50,7 @@ interface Props {
   block: ImageAnnotationBlock
 }
 
-export const IA_TOOLS = ['select', 'arrow', 'rect', 'callout'] as const
+export const IA_TOOLS = ['select', 'arrow', 'rect', 'callout', 'textbox'] as const
 export type IAnnotationTool = (typeof IA_TOOLS)[number]
 
 export const IA_COLORS = [
@@ -155,6 +155,33 @@ export function buildCallout(
   }
 }
 
+/**
+ * Multi-line 텍스트 박스. rect 와 같은 (start, end) 드래그로 박스를 만든 뒤
+ * 그 자리에 textarea 가 떠서 사용자가 본문을 입력한다. callout 과 달리
+ * 짧은 라벨이 아니라 단락성 설명용 — 이미지의 특정 부분에 대한 보강 자료.
+ */
+export function buildTextbox(
+  start: readonly [number, number],
+  end: readonly [number, number],
+  text: string,
+  color: string,
+): Extract<AnnotationElement, { kind: 'textbox' }> {
+  const x = Math.min(start[0], end[0])
+  const y = Math.min(start[1], end[1])
+  const w = Math.max(0.05, Math.abs(end[0] - start[0]))
+  const h = Math.max(0.04, Math.abs(end[1] - start[1]))
+  return {
+    kind: 'textbox',
+    id: nextAnnotationId(),
+    x,
+    y,
+    w,
+    h,
+    text,
+    color,
+  }
+}
+
 /** Eraser-style hit-test for the "select" tool. Returns the *last* (top-most)
  *  element whose bounding region contains `(cx, cy)` within `radius`. Pure. */
 export function pickElement(
@@ -191,6 +218,13 @@ export function pickElement(
         dist = Math.hypot(cx - px, cy - py)
       }
       if (dist <= radius) return el
+      continue
+    }
+    if (el.kind === 'textbox') {
+      // multi-line 텍스트 박스 — 명시적 w/h 로 bbox 검사.
+      if (cx >= el.x - radius && cx <= el.x + el.w + radius && cy >= el.y - radius && cy <= el.y + el.h + radius) {
+        return el
+      }
       continue
     }
     // callout — bubble bbox roughly label.length * 0.014
@@ -231,6 +265,14 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
   // anchor and shows the input until the user commits / Esc.
   const [calloutPos, setCalloutPos] = useState<[number, number] | null>(null)
   const [calloutText, setCalloutText] = useState('')
+
+  // Textbox 편집 상태 — 사용자가 텍스트박스 도구로 박스를 드래그-그린 직후
+  // (pointerUp) 에 활성화. 그 자리에 textarea 가 떠서 multi-line 본문을 받음.
+  // Esc / 외부 클릭 / Ctrl+Enter 로 저장.
+  const [textboxDraft, setTextboxDraft] = useState<{
+    x: number; y: number; w: number; h: number
+  } | null>(null)
+  const [textboxText, setTextboxText] = useState('')
 
   const undoStack = useRef<AnnotationElement[][]>([])
   const redoStack = useRef<AnnotationElement[][]>([])
@@ -348,6 +390,10 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
     startNorm.current = pos
     if (tool === 'arrow') {
       draft.current = buildArrow(pos, pos, color)
+    } else if (tool === 'textbox') {
+      // textbox 도 rect 처럼 박스를 드래그로 그림 — buildTextbox 로 draft.
+      // 본문 text 는 pointerUp 후 textarea 에서 입력받는다.
+      draft.current = buildTextbox(pos, pos, '', color)
     } else {
       draft.current = buildRect(pos, pos, color)
     }
@@ -362,18 +408,52 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
       draft.current = buildArrow(startNorm.current, pos, color)
     } else if (draft.current.kind === 'rect') {
       draft.current = buildRect(startNorm.current, pos, color)
+    } else if (draft.current.kind === 'textbox') {
+      draft.current = buildTextbox(startNorm.current, pos, '', color)
     }
     // tickle a state update so the preview <g> re-renders
     setAnnotations((cur) => [...cur])
   }
 
   const onPointerUp = () => {
-    if (draft.current) {
-      const next = [...annotations, draft.current]
+    if (!draft.current) return
+    if (draft.current.kind === 'textbox') {
+      // 드래그 끝 — 박스 좌표만 저장하고 textarea 로 본문 입력 받음.
+      // 사용자가 텍스트 입력 후 Ctrl+Enter / 외부 클릭으로 commit.
+      const d = draft.current
+      setTextboxDraft({ x: d.x, y: d.y, w: d.w, h: d.h })
+      setTextboxText('')
       draft.current = null
       startNorm.current = null
-      commit(next)
+      // preview 가 사라지도록 한번 더 re-render
+      setAnnotations((cur) => [...cur])
+      return
     }
+    const next = [...annotations, draft.current]
+    draft.current = null
+    startNorm.current = null
+    commit(next)
+  }
+
+  const commitTextbox = () => {
+    if (!textboxDraft) return
+    const txt = textboxText.trim()
+    if (txt) {
+      const el = buildTextbox(
+        [textboxDraft.x, textboxDraft.y],
+        [textboxDraft.x + textboxDraft.w, textboxDraft.y + textboxDraft.h],
+        txt,
+        color,
+      )
+      commit([...annotations, el])
+    }
+    setTextboxDraft(null)
+    setTextboxText('')
+  }
+
+  const cancelTextbox = () => {
+    setTextboxDraft(null)
+    setTextboxText('')
   }
 
   const commitCallout = () => {
@@ -403,6 +483,7 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
         <ToolButton tool={tool} setTool={setTool} value="arrow" label={t('editor.ia.tool.arrow')} />
         <ToolButton tool={tool} setTool={setTool} value="rect" label={t('editor.ia.tool.rect')} />
         <ToolButton tool={tool} setTool={setTool} value="callout" label={t('editor.ia.tool.callout')} />
+        <ToolButton tool={tool} setTool={setTool} value="textbox" label={t('editor.ia.tool.textbox')} />
 
         <span className="mx-1 h-5 w-px bg-gray-300" aria-hidden="true" />
 
@@ -524,6 +605,38 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
             style={{
               left: `${calloutPos[0] * 100}%`,
               top: `${calloutPos[1] * 100}%`,
+            }}
+          />
+        )}
+
+        {textboxDraft && (
+          // 드래그-그린 박스 위에 정확히 같은 위치/크기로 textarea overlay.
+          // 좌표는 SVG viewport 와 동일한 비율 (이미지가 컨테이너를 꽉 채움).
+          // Ctrl+Enter = 저장, Esc = 취소, blur = 저장.
+          <textarea
+            autoFocus
+            aria-label={t('editor.ia.textboxInput')}
+            value={textboxText}
+            onChange={(e) => setTextboxText(e.target.value)}
+            onBlur={commitTextbox}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault()
+                commitTextbox()
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                cancelTextbox()
+              }
+            }}
+            placeholder={t('editor.ia.textboxPlaceholder')}
+            className="absolute resize-none rounded border-2 bg-white px-1.5 py-1 text-sm shadow outline-none"
+            style={{
+              left: `${textboxDraft.x * 100}%`,
+              top: `${textboxDraft.y * 100}%`,
+              width: `${textboxDraft.w * 100}%`,
+              height: `${textboxDraft.h * 100}%`,
+              borderColor: color,
+              color,
             }}
           />
         )}

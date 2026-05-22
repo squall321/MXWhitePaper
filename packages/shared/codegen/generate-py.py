@@ -145,9 +145,24 @@ src = re.sub(
 )
 
 # Pattern 2: the `root:` annotation that follows the class header.
+# 주의 — Block 클래스 *안* 의 root: 만 매칭해야 함. 다른 RootModel-기반 union
+# (예: AnnotationElement) 에 잘못 적용되면 그쪽은 'type' 이 아닌 'kind' 로
+# discriminate 하므로 PydanticUserError 발생. `class Block(...):` 블록 내부로
+# 컨텍스트를 한정한다.
+def _wrap_with_discriminator_g2(match: re.Match[str]) -> str:
+    """group(2) 가 union body — group(1) 은 class header 캡처."""
+    union_body = match.group(2)
+    return (
+        "Annotated[\n"
+        f"{union_body}"
+        "        ,\n"
+        "        Field(discriminator='type'),\n"
+        "    ]"
+    )
+
 src = re.sub(
-    r"    root: \(\n" + _UNION_LINES + r"    \)\n",
-    lambda m: f"    root: {_wrap_with_discriminator(m)}\n",
+    r"(class Block\(\n[^)]+\)\n\):\n)    root: \(\n" + _UNION_LINES + r"    \)\n",
+    lambda m: f"{m.group(1)}    root: {_wrap_with_discriminator_g2(m)}\n",
     src,
     count=1,
 )

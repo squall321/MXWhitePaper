@@ -1123,10 +1123,52 @@ class AnnotationElement3(BaseModel):
     color: str
 
 
+class AnnotationElement4(BaseModel):
+    """
+    이미지 위 자유 위치 multi-line 텍스트 박스. callout(짧은 라벨) 과 달리 박스 크기 (w, h) 와 줄바꿈을 가진 본문성 주석. 이미지의 특정 영역을 설명하는 글을 직접 얹는 용도.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['textbox']
+    id: str
+    x: float
+    y: float
+    w: float
+    h: float
+    text: str
+    """
+    Multi-line plain text. \\n 으로 줄 구분.
+    """
+    color: str
+    """
+    텍스트 색.
+    """
+    font_size: float | None = Field(None, alias='fontSize')
+    """
+    정규화 좌표계 기준 글자 크기 (기본 0.025). 좌표가 0-1 이라 일반적으로 0.015~0.06.
+    """
+    bg: str | None = None
+    """
+    박스 배경색 (선택). 미지정 시 반투명 흰색 폴백.
+    """
+
+
 class AnnotationElement(
-    RootModel[AnnotationElement1 | AnnotationElement2 | AnnotationElement3]
+    RootModel[
+        AnnotationElement1
+        | AnnotationElement2
+        | AnnotationElement3
+        | AnnotationElement4
+    ]
 ):
-    root: AnnotationElement1 | AnnotationElement2 | AnnotationElement3
+    root: (
+        AnnotationElement1
+        | AnnotationElement2
+        | AnnotationElement3
+        | AnnotationElement4
+    )
 
 
 class Options1(BaseModel):
@@ -1553,7 +1595,7 @@ class Block(
     ]
     ]
 ):
-    root: Annotated[
+    root: (
         ParagraphBlock
         | Heading4Block
         | ListBlock
@@ -1589,9 +1631,7 @@ class Block(
         | BibliographyBlock
         | SpacerBlock
         | FigureIndexBlock
-        ,
-        Field(discriminator='type'),
-    ]
+    )
 
 
 OrgChartNode.model_rebuild()

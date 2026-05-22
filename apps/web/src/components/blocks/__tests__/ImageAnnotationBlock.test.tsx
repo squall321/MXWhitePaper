@@ -51,6 +51,16 @@ const block: ImageAnnotationBlock = {
       label: '여기 마감 확인',
       color: '#16a34a',
     },
+    {
+      kind: 'textbox',
+      id: 'ann-text-1',
+      x: 0.1,
+      y: 0.6,
+      w: 0.3,
+      h: 0.15,
+      text: '첫 줄\n두 번째 줄',
+      color: '#7c3aed',
+    },
   ],
 }
 
@@ -85,6 +95,18 @@ describe('<ImageAnnotationBlockView />', () => {
     expect(html).toContain('여기 마감 확인')
     // anchor connecting line uses dashed stroke
     expect(html).toMatch(/stroke-dasharray="0\.01 0\.005"/)
+  })
+
+  it('renders a textbox with foreignObject + multi-line text', () => {
+    const html = renderToStaticMarkup(harness(<ImageAnnotationBlockView block={block} />))
+    expect(html).toContain('data-el-id="ann-text-1"')
+    // 정규화 좌표가 그대로 foreignObject 의 width/height 에.
+    expect(html).toContain('<foreignObject')
+    expect(html).toMatch(/width="0\.3"/)
+    expect(html).toMatch(/height="0\.15"/)
+    // multi-line — \n 이 텍스트로 보존 (white-space: pre-wrap 으로 시각 줄바꿈).
+    expect(html).toContain('첫 줄')
+    expect(html).toContain('두 번째 줄')
   })
 
   it('emits the arrow-marker <defs> exactly once', () => {
