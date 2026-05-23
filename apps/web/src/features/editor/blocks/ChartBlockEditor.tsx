@@ -136,6 +136,8 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
   const t = useT()
   const draft = useEditorStore((s) => s.draft)
   const [convertHint, setConvertHint] = useState<string | null>(null)
+  // 차트 타입 분기 — xy-line 은 series.points 기반 별도 편집 UI 를 그린다.
+  const isXyLine = block.chartType === 'xy-line'
 
   const setLabel = (idx: number, label: string) => {
     const labels = [...block.data.labels]
@@ -279,7 +281,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
       className="space-y-3 rounded border border-smsg-100 bg-smsg-100/40 p-3"
       onPaste={onWrapperPaste}
     >
-      {block.chartType === 'xy-line' && (
+      {isXyLine && (
         <div
           role="toolbar"
           aria-label={t('editor.chart.toolbar')}
@@ -450,58 +452,142 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
         })}
       </div>
 
-      <div className="overflow-x-auto rounded border border-gray-200 bg-white">
-        <table className="w-full text-xs">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-2 py-1 text-left font-semibold">label</th>
-              {block.data.series.map((s, i) => (
-                <th key={i} className="px-2 py-1 text-left font-semibold">
+      {/* xy-line 은 labels/values 가 아닌 series.points 기반 — 시리즈마다
+          별도 (X, Y) 두 컬럼 미니 테이블. 다른 chartType 은 기존 labels +
+          시리즈별 values 그리드. paste 가 자동으로 데이터를 넣어주므로 이
+          편집 UI 는 검토/미세 조정용. */}
+      {isXyLine ? (
+        <div className="space-y-3">
+          {block.data.series.length === 0 ? (
+            <div className="rounded border border-dashed border-gray-300 bg-gray-50 px-3 py-6 text-center text-xs text-gray-500">
+              엑셀에서 두 컬럼 (또는 헤더 + 데이터) 을 복사해 차트 위에
+              붙여넣으면 시리즈가 자동 추가됩니다.
+            </div>
+          ) : (
+            block.data.series.map((s, sIdx) => (
+              <div
+                key={sIdx}
+                className="overflow-x-auto rounded border border-gray-200 bg-white"
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-2 py-1">
                   <input
                     value={s.name}
-                    onChange={(e) => setSeriesName(i, e.target.value)}
-                    className="w-full bg-transparent outline-none"
+                    onChange={(e) => setSeriesName(sIdx, e.target.value)}
+                    placeholder={`Series ${sIdx + 1}`}
+                    className="flex-1 bg-transparent text-xs font-semibold outline-none"
                   />
-                </th>
-              ))}
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {block.data.labels.map((label, lIdx) => (
-              <tr key={lIdx} className="border-t border-gray-100">
-                <td className="px-2 py-1">
-                  <input
-                    value={label}
-                    onChange={(e) => setLabel(lIdx, e.target.value)}
-                    className="w-full bg-transparent outline-none"
-                  />
-                </td>
-                {block.data.series.map((s, sIdx) => (
-                  <td key={sIdx} className="px-2 py-1">
+                  <span className="text-[10px] text-gray-500">
+                    {(s.points ?? []).length} pts
+                  </span>
+                </div>
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-2 py-1 text-left font-semibold">x</th>
+                      <th className="px-2 py-1 text-left font-semibold">y</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(s.points ?? []).map((p, pIdx) => (
+                      <tr key={pIdx} className="border-t border-gray-100">
+                        <td className="px-2 py-1">
+                          <input
+                            type="number"
+                            value={p.x}
+                            onChange={(e) => {
+                              const nx = Number(e.target.value)
+                              if (!Number.isFinite(nx)) return
+                              const points = (s.points ?? []).map((q, i) =>
+                                i === pIdx ? { ...q, x: nx } : q,
+                              )
+                              const series = block.data.series.map((ss, i) =>
+                                i === sIdx ? { ...ss, points } : ss,
+                              )
+                              onChange({ ...block, data: { ...block.data, series } })
+                            }}
+                            className="w-24 bg-transparent outline-none"
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <input
+                            type="number"
+                            value={p.y}
+                            onChange={(e) => {
+                              const ny = Number(e.target.value)
+                              if (!Number.isFinite(ny)) return
+                              const points = (s.points ?? []).map((q, i) =>
+                                i === pIdx ? { ...q, y: ny } : q,
+                              )
+                              const series = block.data.series.map((ss, i) =>
+                                i === sIdx ? { ...ss, points } : ss,
+                              )
+                              onChange({ ...block, data: { ...block.data, series } })
+                            }}
+                            className="w-24 bg-transparent outline-none"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded border border-gray-200 bg-white">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-2 py-1 text-left font-semibold">label</th>
+                {block.data.series.map((s, i) => (
+                  <th key={i} className="px-2 py-1 text-left font-semibold">
                     <input
-                      type="number"
-                      value={s.values?.[lIdx] ?? 0}
-                      onChange={(e) => setValue(sIdx, lIdx, e.target.value)}
-                      className="w-20 bg-transparent outline-none"
+                      value={s.name}
+                      onChange={(e) => setSeriesName(i, e.target.value)}
+                      className="w-full bg-transparent outline-none"
+                    />
+                  </th>
+                ))}
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {block.data.labels.map((label, lIdx) => (
+                <tr key={lIdx} className="border-t border-gray-100">
+                  <td className="px-2 py-1">
+                    <input
+                      value={label}
+                      onChange={(e) => setLabel(lIdx, e.target.value)}
+                      className="w-full bg-transparent outline-none"
                     />
                   </td>
-                ))}
-                <td className="px-2 py-1">
-                  <button
-                    type="button"
-                    aria-label={t('editor.chart.removeRow', { n: lIdx + 1 })}
-                    onClick={() => removeRow(lIdx)}
-                    className="text-gray-400 hover:text-red-600"
-                  >
-                    <span aria-hidden="true">×</span>
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  {block.data.series.map((s, sIdx) => (
+                    <td key={sIdx} className="px-2 py-1">
+                      <input
+                        type="number"
+                        value={s.values?.[lIdx] ?? 0}
+                        onChange={(e) => setValue(sIdx, lIdx, e.target.value)}
+                        className="w-20 bg-transparent outline-none"
+                      />
+                    </td>
+                  ))}
+                  <td className="px-2 py-1">
+                    <button
+                      type="button"
+                      aria-label={t('editor.chart.removeRow', { n: lIdx + 1 })}
+                      onClick={() => removeRow(lIdx)}
+                      className="text-gray-400 hover:text-red-600"
+                    >
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 text-xs">
         <button
