@@ -156,6 +156,65 @@ export function buildCallout(
 }
 
 /**
+ * 요소를 (dx, dy) 만큼 평행이동한 새 요소 반환 (pure). 좌표는 정규화 [0..1] 이라
+ * dx/dy 도 같은 단위. 이미지 경계 밖으로 나가지 않도록 clamp 는 호출 측 담당
+ * (드래그 도중 부분 노출 허용 — 사용자가 의도적으로 살짝 걸칠 수 있음).
+ */
+export function moveAnnotation(
+  el: AnnotationElement,
+  dx: number,
+  dy: number,
+): AnnotationElement {
+  if (el.kind === 'arrow') {
+    return {
+      ...el,
+      from: { x: el.from.x + dx, y: el.from.y + dy },
+      to: { x: el.to.x + dx, y: el.to.y + dy },
+    }
+  }
+  if (el.kind === 'rect') {
+    return { ...el, x: el.x + dx, y: el.y + dy }
+  }
+  if (el.kind === 'textbox') {
+    return { ...el, x: el.x + dx, y: el.y + dy }
+  }
+  // callout — anchor 도 같이 옮김 (있을 때).
+  return {
+    ...el,
+    x: el.x + dx,
+    y: el.y + dy,
+    anchor: el.anchor
+      ? { x: el.anchor.x + dx, y: el.anchor.y + dy }
+      : el.anchor,
+  }
+}
+
+/**
+ * 우하단 핸들 드래그로 리사이즈 가능한 kind 인지 — rect / textbox 만.
+ * arrow 는 from/to 끝점 별도 편집 (후속), callout 은 bubble 크기 라벨 길이로
+ * 자동이라 리사이즈 의미 없음.
+ */
+export function isResizable(
+  el: AnnotationElement,
+): el is Extract<AnnotationElement, { kind: 'rect' | 'textbox' }> {
+  return el.kind === 'rect' || el.kind === 'textbox'
+}
+
+/**
+ * rect/textbox 우하단을 (cx, cy) 로 끌어 리사이즈. 최소 크기 보장 (w >= 0.02,
+ * h >= 0.02 — 핸들이 시각적으로 살아있을 정도).
+ */
+export function resizeAnnotation(
+  el: Extract<AnnotationElement, { kind: 'rect' | 'textbox' }>,
+  cx: number,
+  cy: number,
+): AnnotationElement {
+  const w = Math.max(0.02, cx - el.x)
+  const h = Math.max(0.02, cy - el.y)
+  return { ...el, w, h }
+}
+
+/**
  * Multi-line 텍스트 박스. rect 와 같은 (start, end) 드래그로 박스를 만든 뒤
  * 그 자리에 textarea 가 떠서 사용자가 본문을 입력한다. callout 과 달리
  * 짧은 라벨이 아니라 단락성 설명용 — 이미지의 특정 부분에 대한 보강 자료.
@@ -260,6 +319,16 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
   // the persisted array.
   const draft = useRef<AnnotationElement | null>(null)
   const startNorm = useRef<[number, number] | null>(null)
+
+  // Select-tool 의 이동/리사이즈 드래그 상태. mode='move' 면 평행이동,
+  // mode='resize' 면 우하단 핸들을 끌어 w/h 조정. originalEl 은 드래그 시작
+  // 시점의 요소 스냅샷 — 매 프레임 그 원본 기준 이동/리사이즈해야 누적 오차 없음.
+  // pointerStart 는 드래그 시작 시 마우스 정규화 좌표.
+  const dragState = useRef<{
+    mode: 'move' | 'resize'
+    originalEl: AnnotationElement
+    pointerStart: [number, number]
+  } | null>(null)
 
   // Inline callout text input — when tool is "callout", a click drops an
   // anchor and shows the input until the user commits / Esc.
@@ -377,8 +446,25 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
     e.currentTarget.setPointerCapture(e.pointerId)
 
     if (tool === 'select') {
+      // 1) 이미 선택된 요소가 있고 그 우하단 핸들 위면 resize 모드.
+      if (selectedId) {
+        const sel = annotations.find((a) => a.id === selectedId)
+        if (sel && isResizable(sel)) {
+          const hx = sel.x + sel.w
+          const hy = sel.y + sel.h
+          const HANDLE_R = 0.025  // 핸들 클릭 허용 반경
+          if (Math.abs(pos[0] - hx) <= HANDLE_R && Math.abs(pos[1] - hy) <= HANDLE_R) {
+            dragState.current = { mode: 'resize', originalEl: sel, pointerStart: pos }
+            return
+          }
+        }
+      }
+      // 2) 요소 본체 위면 그 요소 선택 + move 모드 시작.
       const hit = pickElement(annotations, pos[0], pos[1])
       setSelectedId(hit?.id ?? null)
+      if (hit) {
+        dragState.current = { mode: 'move', originalEl: hit, pointerStart: pos }
+      }
       return
     }
     if (tool === 'callout') {
@@ -402,8 +488,29 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
   }
 
   const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>) => {
-    if (!draft.current || !startNorm.current) return
     const pos = norm(e)
+
+    // 선택-도구 드래그 (이동/리사이즈) — 원본 스냅샷 기준 좌표 갱신.
+    if (dragState.current) {
+      const ds = dragState.current
+      const next = annotations.map((a) => {
+        if (a.id !== ds.originalEl.id) return a
+        if (ds.mode === 'move') {
+          const dx = pos[0] - ds.pointerStart[0]
+          const dy = pos[1] - ds.pointerStart[1]
+          return moveAnnotation(ds.originalEl, dx, dy)
+        }
+        // resize — 우하단을 mouse 로
+        if (isResizable(ds.originalEl)) {
+          return resizeAnnotation(ds.originalEl, pos[0], pos[1])
+        }
+        return a
+      })
+      setAnnotations(next)
+      return
+    }
+
+    if (!draft.current || !startNorm.current) return
     if (draft.current.kind === 'arrow') {
       draft.current = buildArrow(startNorm.current, pos, color)
     } else if (draft.current.kind === 'rect') {
@@ -416,6 +523,20 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
   }
 
   const onPointerUp = () => {
+    // 이동/리사이즈 드래그 마무리 — 현재 상태를 undo 기록과 함께 commit.
+    // 이동량이 0 이면 (= 클릭만) commit 안 함 (불필요한 history 누적 방지).
+    if (dragState.current) {
+      const ds = dragState.current
+      dragState.current = null
+      const current = annotations.find((a) => a.id === ds.originalEl.id)
+      if (current && current !== ds.originalEl) {
+        // moveAnnotation/resizeAnnotation 이 새 객체를 만들므로 참조 비교로
+        // 변동 여부 판단. 같은 객체 (즉 변동 없음) 면 commit skip.
+        commit(annotations)
+      }
+      return
+    }
+
     if (!draft.current) return
     if (draft.current.kind === 'textbox') {
       // 드래그 끝 — 박스 좌표만 저장하고 textarea 로 본문 입력 받음.
@@ -565,6 +686,10 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
           aria-label={t('editor.ia.canvasLabel')}
           data-image-annotation-canvas
           data-tool={tool}
+          // 도구별 cursor 힌트 — 그리기 도구는 crosshair, select 는 default.
+          // 요소/핸들 위 cursor 는 각 요소 SVG 가 자체 처리 (resize 핸들은
+          // 위에서 nwse-resize 로 표시).
+          style={{ cursor: tool === 'select' ? 'default' : 'crosshair' }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -580,6 +705,26 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
               <AnnotationElementView ann={ann} />
             </g>
           ))}
+          {/* 선택된 rect/textbox 의 우하단 리사이즈 핸들. 다른 요소 위에 그려야
+              가시성 확보 — annotations.map 보다 뒤. cursor:nwse-resize 로 의미 전달. */}
+          {(() => {
+            if (!selectedId) return null
+            const sel = annotations.find((a) => a.id === selectedId)
+            if (!sel || !isResizable(sel)) return null
+            return (
+              <rect
+                x={sel.x + sel.w - 0.012}
+                y={sel.y + sel.h - 0.012}
+                width={0.024}
+                height={0.024}
+                fill="#fff"
+                stroke="#0ea5e9"
+                strokeWidth={0.004}
+                style={{ cursor: 'nwse-resize' }}
+                data-testid="ia-resize-handle"
+              />
+            )
+          })()}
           {/* live draft preview */}
           {draft.current ? <AnnotationElementView ann={draft.current} /> : null}
         </svg>

@@ -23,9 +23,12 @@ import {
   buildRect,
   buildTextbox,
   clientToNorm,
+  isResizable,
+  moveAnnotation,
   nextAnnotationId,
   pickElement,
   popUndo,
+  resizeAnnotation,
   pushUndo,
 } from '../ImageAnnotationBlockEditor'
 import { useEditorStore } from '@/features/editor/state'
@@ -64,6 +67,87 @@ describe('IA_TOOLS / IA_COLORS', () => {
   })
   it('exposes 8 preset colors', () => {
     expect(IA_COLORS.length).toBe(8)
+  })
+})
+
+describe('moveAnnotation', () => {
+  it('translates rect by (dx, dy)', () => {
+    const r = buildRect([0.1, 0.2], [0.3, 0.4], '#000')
+    const moved = moveAnnotation(r, 0.05, -0.02)
+    if (moved.kind !== 'rect') throw new Error('expected rect')
+    expect(moved.x).toBeCloseTo(0.15, 5)
+    expect(moved.y).toBeCloseTo(0.18, 5)
+    // w/h 는 보존.
+    expect(moved.w).toBeCloseTo(r.w, 5)
+    expect(moved.h).toBeCloseTo(r.h, 5)
+  })
+
+  it('translates textbox by (dx, dy)', () => {
+    const tb = buildTextbox([0.2, 0.3], [0.5, 0.6], '본문', '#000')
+    const moved = moveAnnotation(tb, 0.1, 0.1)
+    if (moved.kind !== 'textbox') throw new Error('expected textbox')
+    expect(moved.x).toBeCloseTo(0.3, 5)
+    expect(moved.y).toBeCloseTo(0.4, 5)
+    expect(moved.text).toBe('본문')  // 본문 보존
+  })
+
+  it('translates arrow from + to together', () => {
+    const a = buildArrow([0.1, 0.1], [0.5, 0.5], '#000')
+    const moved = moveAnnotation(a, 0.2, 0.0)
+    if (moved.kind !== 'arrow') throw new Error('expected arrow')
+    expect(moved.from.x).toBeCloseTo(0.3, 5)
+    expect(moved.from.y).toBeCloseTo(0.1, 5)
+    expect(moved.to.x).toBeCloseTo(0.7, 5)
+    expect(moved.to.y).toBeCloseTo(0.5, 5)
+  })
+
+  it('translates callout (and anchor when present)', () => {
+    const c = buildCallout([0.3, 0.3], 'hi', '#000')
+    // build 시 anchor 없음 — 그대로 이동.
+    const moved = moveAnnotation(c, 0.1, 0.1)
+    if (moved.kind !== 'callout') throw new Error('expected callout')
+    expect(moved.x).toBeCloseTo(0.4, 5)
+    expect(moved.y).toBeCloseTo(0.4, 5)
+    expect(moved.anchor).toBeUndefined()
+
+    // anchor 가 있는 경우 — 같이 이동.
+    const c2 = { ...c, anchor: { x: 0.5, y: 0.5 } }
+    const m2 = moveAnnotation(c2, 0.05, -0.05)
+    if (m2.kind !== 'callout') throw new Error('expected callout')
+    expect(m2.anchor?.x).toBeCloseTo(0.55, 5)
+    expect(m2.anchor?.y).toBeCloseTo(0.45, 5)
+  })
+})
+
+describe('isResizable', () => {
+  it('rect / textbox 만 true', () => {
+    expect(isResizable(buildRect([0, 0], [0.1, 0.1], '#000'))).toBe(true)
+    expect(isResizable(buildTextbox([0, 0], [0.1, 0.1], '', '#000'))).toBe(true)
+    expect(isResizable(buildArrow([0, 0], [0.1, 0.1], '#000'))).toBe(false)
+    expect(isResizable(buildCallout([0.3, 0.3], 'x', '#000'))).toBe(false)
+  })
+})
+
+describe('resizeAnnotation', () => {
+  it('rect — 우하단을 (cx, cy) 로 끌면 w/h 갱신', () => {
+    const r = buildRect([0.1, 0.1], [0.3, 0.3], '#000')
+    if (!isResizable(r)) throw new Error('expected resizable')
+    const out = resizeAnnotation(r, 0.5, 0.4)
+    if (out.kind !== 'rect') throw new Error('expected rect')
+    expect(out.x).toBeCloseTo(0.1, 5)  // 좌상단 고정
+    expect(out.y).toBeCloseTo(0.1, 5)
+    expect(out.w).toBeCloseTo(0.4, 5)
+    expect(out.h).toBeCloseTo(0.3, 5)
+  })
+
+  it('최소 크기 0.02 보장 — 좌상단 안쪽 좌표여도 음수 안 됨', () => {
+    const r = buildRect([0.3, 0.3], [0.5, 0.5], '#000')
+    if (!isResizable(r)) throw new Error('expected resizable')
+    // cx/cy 가 x/y 보다 작은 (= 안쪽) 케이스 — clamp 으로 0.02 유지.
+    const out = resizeAnnotation(r, 0.1, 0.1)
+    if (out.kind !== 'rect') throw new Error('expected rect')
+    expect(out.w).toBeCloseTo(0.02, 5)
+    expect(out.h).toBeCloseTo(0.02, 5)
   })
 })
 
