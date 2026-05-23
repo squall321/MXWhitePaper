@@ -300,8 +300,10 @@ export function pickElement(
       }
       continue
     }
-    // callout — bubble bbox roughly label.length * 0.014
-    const bw = Math.max(0.08, el.label.length * 0.014)
+    // callout — bubble bbox roughly label.length * 0.014. label 이 없는 legacy
+    // row (text 필드만 있는 옛 데이터) 도 안전하게 처리.
+    const labelLen = (el.label ?? (el as unknown as { text?: string }).text ?? '').length
+    const bw = Math.max(0.08, labelLen * 0.014)
     const bh = 0.045
     if (cx >= el.x - radius && cx <= el.x + bw + radius && cy >= el.y - radius && cy <= el.y + bh + radius) {
       return el

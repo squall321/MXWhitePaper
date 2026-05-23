@@ -172,7 +172,10 @@ export function AnnotationElementView({ ann }: { ann: AnnotationElement }) {
       </g>
     )
   }
-  // callout
+  // callout — 옛 row 는 `text` 필드만 있고 `label` 이 없는 경우가 있다 (pre-pass-2).
+  // BE 의 _normalise_image_annotation_labels 가 save 시점에만 변환해서, read 시점
+  // 응답에는 그대로 나온다. 여기선 양쪽 다 받아서 깨지지 않게 한다.
+  const calloutLabel = ann.label ?? (ann as unknown as { text?: string }).text ?? ''
   return (
     <g data-el-id={ann.id}>
       {ann.anchor ? (
@@ -189,7 +192,7 @@ export function AnnotationElementView({ ann }: { ann: AnnotationElement }) {
       <rect
         x={ann.x}
         y={ann.y}
-        width={Math.max(0.08, ann.label.length * 0.014)}
+        width={Math.max(0.08, calloutLabel.length * 0.014)}
         height={0.045}
         rx={0.01}
         stroke={ann.color}
@@ -204,7 +207,7 @@ export function AnnotationElementView({ ann }: { ann: AnnotationElement }) {
         fontSize={0.025}
         dominantBaseline="middle"
       >
-        {ann.label}
+        {calloutLabel}
       </text>
     </g>
   )

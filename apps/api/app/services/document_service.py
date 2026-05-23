@@ -129,7 +129,19 @@ def scrub_for_response(
     Thin wrapper around `scrub_blocks_for_role`. `role=None` is treated as the
     lowest tier ('reader') — used by anonymous paths such as `/share/:token`
     where the viewer has no authenticated role.
+
+    Also normalises legacy image-annotation shapes (callout.text → label,
+    snake_case image_id) in place — pre-pass-2 rows on disk still carry the
+    old keys, and FE assumes the canonical post-pass-2 shape. validate_documentjson
+    does this on the save path; we mirror it on the read path so the response
+    is canonical regardless of when the row was written.
     """
+    # 응답 전에 legacy shape 보정 — content_json 의 (deep) 사본을 만들 비용을
+    # 피하기 위해 in-place. scrub_blocks_for_role 가 어차피 새 사본을 만들지만,
+    # 이 normaliser 가 그 전에 호출돼도 무해 (callout label 만 손봄).
+    if isinstance(content_json, dict):
+        _normalise_image_annotation_ids(content_json)
+        _normalise_image_annotation_labels(content_json)
     return scrub_blocks_for_role(content_json, role or "reader")
 
 
