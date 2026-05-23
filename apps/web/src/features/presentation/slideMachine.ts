@@ -26,6 +26,22 @@ export interface SectionSlide {
   title: string
   level: 1 | 2
   section: SectionLevel1 | SectionLevel2
+  /**
+   * 한 섹션이 여러 슬라이드로 분할됐을 때 *이 슬라이드에만* 렌더할 body
+   * 블록 부분집합. 미정이면 호출 측이 section.blocks 전체를 본다 (legacy).
+   * speaker-note 는 제외된 상태 — splitSpeakerNotes 후의 body 만 담는다.
+   */
+  bodyBlocks?: Block[]
+  /**
+   * 0 = 섹션의 첫 슬라이드 (제목 그대로 표시), 1+ = "(계속)" 슬라이드.
+   * 미정이면 0 으로 간주.
+   */
+  continuation?: number
+  /**
+   * 같은 section.id 에서 갈라진 슬라이드의 총 개수. UI 에서 "2/3" 같이 표시
+   * 가능. 미정이면 분할 없음.
+   */
+  totalContinuations?: number
 }
 export type Slide = TitleSlide | SectionSlide
 
@@ -35,6 +51,144 @@ export interface BuildSlidesOptions {
    * after their parent (Reveal.js "vertical" feel). Default false.
    */
   nested?: boolean
+  /**
+   * Auto-split a section into multiple slides when its blocks won't fit one
+   * screen comfortably. Default true. Pure heuristic — see SLIDE_WEIGHT_*.
+   */
+  autoSplit?: boolean
+}
+
+// ── Block-weight 휴리스틱 ───────────────────────────────────────────────────
+//
+// 한 슬라이드에 들어가는 컨텐츠가 화면을 넘치지 않게 — 정확한 측정이 아니라
+// 합리적 추정 (DOM 없이 순수 함수). 각 block 의 "시각 무게" 를 점수로 환산해
+// 누적이 SLIDE_BUDGET 을 넘으면 새 슬라이드를 연다.
+//
+// 단위 감각:
+//   - 빈 paragraph 1 = ~50 점 정도 가정
+//   - 1 줄 문단 (~50자) ≈ 50, 4 줄 문단 (~200자) ≈ 200
+//   - heading-4 = 100 (제목 + 줄바꿈)
+//   - table 작은 거 (~5x3) = 250, 큰 거 (>10 행) = 500+
+//   - chart/kpi/gantt/flow/org/whiteboard 같은 시각 위주 = 400~500 (단독에 가까움)
+//   - image = 300 (대형 시각 자료)
+const SLIDE_BUDGET = 700
+
+/** block 별 weight 점수. 시각 위주 (chart 등) 는 단독 슬라이드에 가깝게. */
+function _blockWeight(b: Block | undefined): number {
+  if (!b) return 0
+  const t = b.type as string
+
+  // 텍스트 위주 — 글자 수 기반 추정. 너무 길면 cap.
+  if (t === 'paragraph') {
+    const text = ((b as { text?: string }).text ?? '').length
+    // 50자 ≈ 50점, 200자 ≈ 200점, 그 이상은 cap.
+    return Math.min(300, Math.max(40, text * 1.0))
+  }
+  if (t === 'heading-4') {
+    return 100
+  }
+  if (t === 'quote' || t === 'callout' || t === 'code' || t === 'math') {
+    const text = ((b as { text?: string }).text ?? '').length
+    return Math.min(400, Math.max(120, text * 1.0 + 80))
+  }
+  if (t === 'list') {
+    const items = ((b as { items?: unknown[] }).items ?? []) as string[]
+    // 각 항목 50점 + 평균 글자 가중.
+    const charSum = items.reduce(
+      (a, it) => a + (typeof it === 'string' ? it.length : 0),
+      0,
+    )
+    return Math.min(600, items.length * 50 + charSum * 0.5)
+  }
+  if (t === 'table') {
+    const rows = ((b as { rows?: unknown[] }).rows ?? []).length
+    const headers = ((b as { headers?: unknown[] }).headers ?? []).length
+    // 표는 행수 + 컬럼 폭에 따라 무게 결정.
+    return Math.min(900, 150 + rows * 50 + headers * 20)
+  }
+  if (t === 'image' || t === 'gallery' || t === 'pdf' || t === 'image-annotation') {
+    return 450  // 큰 시각 자료 — 거의 단독.
+  }
+  if (
+    t === 'chart' || t === 'kpi-cards' || t === 'gantt' || t === 'flow' ||
+    t === 'org-chart' || t === 'whiteboard' || t === 'spreadsheet'
+  ) {
+    return 500  // 단독에 가까움.
+  }
+  if (t === 'iframe' || t === 'video') {
+    return 500
+  }
+  if (t === 'columns' || t === 'tabs' || t === 'accordion') {
+    // 자식 합을 적당히 가중 — children walk 는 비용 커서 conservative cap.
+    return 500
+  }
+  // 그 외 unknown — 보수적으로.
+  return 200
+}
+
+/**
+ * 자기만의 슬라이드를 갖는 게 자연스러운 시각-중심 블록인지. 이 종류가 한 번
+ * 등장하면 그 직전 paragraph 1개 (있으면) 와 함께 단독 슬라이드로 분리.
+ */
+function _isSoloVisual(b: Block | undefined): boolean {
+  if (!b) return false
+  const t = b.type as string
+  return (
+    t === 'chart' || t === 'kpi-cards' || t === 'gantt' || t === 'flow' ||
+    t === 'org-chart' || t === 'whiteboard' || t === 'spreadsheet' ||
+    t === 'image-annotation' || t === 'gallery' || t === 'iframe' ||
+    t === 'video' || t === 'pdf'
+  )
+}
+
+/**
+ * 한 섹션의 body blocks 를 슬라이드용 청크 배열로 분할. 순수 함수.
+ *
+ * 규칙 (우선순위 순):
+ *   1. solo-visual 블록은 자기만의 슬라이드. 직전 블록이 paragraph 면 같이 (캡션 역할).
+ *   2. 그 외 블록은 누적 weight ≤ SLIDE_BUDGET 까지 한 청크에 모음.
+ *   3. 단일 블록 weight 가 BUDGET 초과여도 단독 슬라이드로 (분할 안 함 — block 내부 자를 수 없으니).
+ *
+ * 빈 입력 → 빈 배열. 한 슬라이드에 들어가는 경우 → 길이 1.
+ */
+export function chunkBlocksForSlides(blocks: readonly Block[]): Block[][] {
+  if (blocks.length === 0) return []
+  const chunks: Block[][] = []
+  let cur: Block[] = []
+  let curW = 0
+  const flush = () => {
+    if (cur.length > 0) {
+      chunks.push(cur)
+      cur = []
+      curW = 0
+    }
+  }
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i]!
+    if (_isSoloVisual(b)) {
+      // solo-visual: 직전 paragraph 가 현재 청크의 마지막이면 그것까지 같이.
+      let caption: Block | null = null
+      if (cur.length > 0) {
+        const last = cur[cur.length - 1]!
+        if (last.type === 'paragraph') {
+          caption = last
+          cur = cur.slice(0, -1)
+        }
+      }
+      flush()
+      chunks.push(caption ? [caption, b] : [b])
+      continue
+    }
+    const w = _blockWeight(b)
+    // 현재 청크가 비어있지 않은데 합치면 BUDGET 초과 → flush 후 새 청크.
+    if (cur.length > 0 && curW + w > SLIDE_BUDGET) {
+      flush()
+    }
+    cur.push(b)
+    curW += w
+  }
+  flush()
+  return chunks
 }
 
 /**
@@ -63,29 +217,67 @@ export function buildSlides(
       },
     },
   ]
+  const autoSplit = opts.autoSplit ?? true
   const sections = Array.isArray(doc.sections) ? doc.sections : []
+
+  // 섹션 → 1 개 이상의 SectionSlide. autoSplit 가 켜졌고 본문 weight 가
+  // SLIDE_BUDGET 초과면 chunkBlocksForSlides 로 나눠 continuation 슬라이드 생성.
+  const pushSection = (
+    sec: SectionLevel1 | SectionLevel2,
+    level: 1 | 2,
+  ) => {
+    const baseKey = `sec:${sec.id ?? Math.random().toString(36)}`
+    if (!autoSplit) {
+      slides.push({
+        kind: 'section',
+        key: baseKey,
+        number: sec.number ?? '',
+        title: sec.title ?? '',
+        level,
+        section: sec,
+      })
+      return
+    }
+    const allBlocks = Array.isArray(sec.blocks) ? sec.blocks : []
+    const { body } = splitSpeakerNotes(allBlocks)
+    const chunks = chunkBlocksForSlides(body)
+    if (chunks.length <= 1) {
+      // 분할 불필요 — 기존과 동일 (bodyBlocks 미정 = legacy 렌더).
+      slides.push({
+        kind: 'section',
+        key: baseKey,
+        number: sec.number ?? '',
+        title: sec.title ?? '',
+        level,
+        section: sec,
+      })
+      return
+    }
+    // 분할 — 각 chunk 가 자기만의 SectionSlide. 첫 슬라이드만 원제목, 이후는
+    // "(계속)". key 끝에 인덱스 붙여 React 키 충돌 방지.
+    for (let i = 0; i < chunks.length; i++) {
+      slides.push({
+        kind: 'section',
+        key: `${baseKey}#${i}`,
+        number: sec.number ?? '',
+        title: sec.title ?? '',
+        level,
+        section: sec,
+        bodyBlocks: chunks[i]!,
+        continuation: i,
+        totalContinuations: chunks.length,
+      })
+    }
+  }
+
   for (const section of sections) {
     if (!section) continue
-    slides.push({
-      kind: 'section',
-      key: `sec:${section.id ?? Math.random().toString(36)}`,
-      number: section.number ?? '',
-      title: section.title ?? '',
-      level: 1,
-      section,
-    })
+    pushSection(section, 1)
     if (opts.nested) {
       const subs = Array.isArray(section.subsections) ? section.subsections : []
       for (const sub of subs) {
         if (!sub) continue
-        slides.push({
-          kind: 'section',
-          key: `sec:${sub.id ?? Math.random().toString(36)}`,
-          number: sub.number ?? '',
-          title: sub.title ?? '',
-          level: 2,
-          section: sub,
-        })
+        pushSection(sub, 2)
       }
     }
   }

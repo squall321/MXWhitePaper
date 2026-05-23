@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSlides,
+  chunkBlocksForSlides,
   keyToNav,
   navigate,
   speakerNotesFor,
@@ -216,5 +217,178 @@ describe('speaker notes', () => {
     const slides = buildSlides(makeDoc())
     const titleSlide = slides[0]!
     expect(speakerNotesFor(titleSlide)).toBe('')
+  })
+})
+
+/* ── 자동 분할 (autoSplit) ────────────────────────────────────────────────── */
+
+describe('chunkBlocksForSlides', () => {
+  // 헬퍼: 긴 paragraph (charLen 글자) 생성.
+  const longPara = (id: string, charLen: number): Block => ({
+    type: 'paragraph',
+    id,
+    text: 'x'.repeat(charLen),
+  })
+  const chart = (id: string): Block => ({
+    type: 'chart',
+    id,
+    data: { columns: [{ key: 'a', label: 'A', type: 'number' }], rows: [] },
+  } as unknown as Block)
+
+  it('빈 입력은 빈 배열', () => {
+    expect(chunkBlocksForSlides([])).toEqual([])
+  })
+
+  it('작은 본문은 1 청크로 유지 (기존 동작 보존)', () => {
+    const blocks = [longPara('p1', 50), longPara('p2', 100)]
+    const out = chunkBlocksForSlides(blocks)
+    expect(out).toHaveLength(1)
+    expect(out[0]).toHaveLength(2)
+  })
+
+  it('누적 weight 가 budget 초과하면 새 청크', () => {
+    // 각 ~300 글자 paragraph 5 개 → 누적 ~1500 — 2 개 이상 청크.
+    const blocks = Array.from({ length: 5 }, (_, i) => longPara(`p${i}`, 300))
+    const out = chunkBlocksForSlides(blocks)
+    expect(out.length).toBeGreaterThan(1)
+    // 모든 블록이 정확히 한 번씩 등장.
+    expect(out.flat()).toHaveLength(5)
+  })
+
+  it('solo-visual (chart 등) 은 자기만의 청크', () => {
+    const blocks = [longPara('p1', 50), chart('c1'), longPara('p2', 50)]
+    const out = chunkBlocksForSlides(blocks)
+    // 3 청크: [p1+c1 캡션], [p2] ... 실제론 chart 가 자기 청크, 직전 p1 캡션처럼 같이.
+    // 결과: [[p1, c1], [p2]] 또는 [[p1, c1], [p2]] 형태.
+    expect(out).toEqual([[blocks[0], blocks[1]], [blocks[2]]])
+  })
+
+  it('solo-visual 직전이 paragraph 아니면 단독으로', () => {
+    const blocks = [chart('c1'), chart('c2')]
+    const out = chunkBlocksForSlides(blocks)
+    expect(out).toEqual([[blocks[0]], [blocks[1]]])
+  })
+
+  it('단일 블록이 budget 초과해도 분할 안 함', () => {
+    // 한 블록만 있으면 무게 무관하게 단독 청크.
+    const huge = longPara('p1', 5000)
+    const out = chunkBlocksForSlides([huge])
+    expect(out).toHaveLength(1)
+    expect(out[0]).toEqual([huge])
+  })
+})
+
+describe('buildSlides — autoSplit 통합', () => {
+  // 큰 섹션 본문 → 여러 SectionSlide 로.
+  const para = (id: string, charLen: number): Block => ({
+    type: 'paragraph',
+    id,
+    text: 'x'.repeat(charLen),
+  })
+
+  it('autoSplit (기본 true) — 본문이 길면 continuation 슬라이드 생성', () => {
+    const doc: DocumentJSONV10 = {
+      schema_version: '1.0',
+      id: '01TESTDOC0000000000000000Z',
+      slug: 'fixture',
+      title: '덱',
+      summary: '',
+      metadata: {
+        division: 'MX',
+        owners: ['x@example.com'],
+        tags: [],
+        confidentiality: 'internal',
+      },
+      sections: [
+        {
+          id: '01SEC00000000000000000000A',
+          number: '1',
+          level: 1,
+          title: '긴 섹션',
+          blocks: Array.from({ length: 8 }, (_, i) => para(`p${i}`, 300)),
+          subsections: [],
+        },
+      ] as DocumentJSONV10['sections'],
+    }
+    const slides = buildSlides(doc)
+    const sectionSlides = slides.filter((s) => s.kind === 'section')
+    expect(sectionSlides.length).toBeGreaterThan(1)
+    // 각각 totalContinuations 가 동일해야.
+    const totals = new Set(
+      sectionSlides
+        .map((s) => (s.kind === 'section' ? s.totalContinuations : null))
+        .filter(Boolean),
+    )
+    expect(totals.size).toBe(1)
+    // 첫 번째는 continuation=0, 그 다음 1, 2... 순차.
+    sectionSlides.forEach((s, i) => {
+      if (s.kind === 'section') {
+        expect(s.continuation).toBe(i)
+        expect(Array.isArray(s.bodyBlocks)).toBe(true)
+      }
+    })
+  })
+
+  it('autoSplit=false 면 한 섹션은 1 슬라이드 (legacy)', () => {
+    const doc: DocumentJSONV10 = {
+      schema_version: '1.0',
+      id: '01TESTDOC0000000000000000Z',
+      slug: 'fixture',
+      title: '덱',
+      summary: '',
+      metadata: {
+        division: 'MX',
+        owners: ['x@example.com'],
+        tags: [],
+        confidentiality: 'internal',
+      },
+      sections: [
+        {
+          id: '01SEC00000000000000000000A',
+          number: '1',
+          level: 1,
+          title: '긴 섹션',
+          blocks: Array.from({ length: 8 }, (_, i) => para(`p${i}`, 300)),
+          subsections: [],
+        },
+      ] as DocumentJSONV10['sections'],
+    }
+    const slides = buildSlides(doc, { autoSplit: false })
+    expect(slides.filter((s) => s.kind === 'section')).toHaveLength(1)
+  })
+
+  it('작은 섹션은 분할 없이 1 슬라이드 (bodyBlocks 미정 = legacy 렌더)', () => {
+    const doc: DocumentJSONV10 = {
+      schema_version: '1.0',
+      id: '01TESTDOC0000000000000000Z',
+      slug: 'fixture',
+      title: '덱',
+      summary: '',
+      metadata: {
+        division: 'MX',
+        owners: ['x@example.com'],
+        tags: [],
+        confidentiality: 'internal',
+      },
+      sections: [
+        {
+          id: '01SEC00000000000000000000A',
+          number: '1',
+          level: 1,
+          title: '짧은 섹션',
+          blocks: [para('p1', 50), para('p2', 80)],
+          subsections: [],
+        },
+      ] as DocumentJSONV10['sections'],
+    }
+    const slides = buildSlides(doc)
+    const sectionSlides = slides.filter((s) => s.kind === 'section')
+    expect(sectionSlides).toHaveLength(1)
+    // 분할 없음 → bodyBlocks / continuation 미정 (legacy 호환).
+    const s = sectionSlides[0]!
+    if (s.kind === 'section') {
+      expect(s.bodyBlocks).toBeUndefined()
+      expect(s.continuation).toBeUndefined()
+    }
   })
 })

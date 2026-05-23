@@ -433,6 +433,12 @@ function SlideContent({
   }
   const allBlocks = Array.isArray(slide.section?.blocks) ? slide.section.blocks : []
   const { body } = splitSpeakerNotes(allBlocks)
+  // 자동 분할 (buildSlides 의 autoSplit) 결과로 이 슬라이드가 부분 body 만 받은
+  // 경우 — bodyBlocks 가 우선. 그러면 subsections walk 도 skip (전체 슬라이드
+  // 흐름은 buildSlides 단계에서 이미 펼쳐졌으므로 여기서 다시 펼치면 중복).
+  const usingSplit = Array.isArray(slide.bodyBlocks)
+  const effectiveBody = usingSplit ? (slide.bodyBlocks as typeof body) : body
+
   const layout = slide.section?.layout
   // `title-only` is a deliberate cover-style slide: render only the heading,
   // hide all body blocks. Other layouts go through SectionLayout for the
@@ -445,22 +451,28 @@ function SlideContent({
   // level-2 / level-3 subsections shows ONLY its direct blocks, and the
   // user's writing inside subsections vanishes from the deck. We render
   // each subsection as an inline mini-section (h3 + body + recurse).
-  const subsections = Array.isArray(slide.section?.subsections)
-    ? slide.section.subsections
-    : []
+  const subsections = usingSplit
+    ? []
+    : (Array.isArray(slide.section?.subsections) ? slide.section.subsections : [])
   // Honor per-block `meta.audience`: drop blocks that opted out of the
   // slide view. `wiki-only` blocks stay in the wiki article but vanish
   // from every deck the user generates.
   const cleanBody = filterForAudience(
-    body.filter((b): b is NonNullable<typeof b> => Boolean(b)),
+    effectiveBody.filter((b): b is NonNullable<typeof b> => Boolean(b)),
     'slide',
   )
+
+  // 자동 분할된 continuation 슬라이드면 제목에 "(계속 N/M)" 표시.
+  const contLabel =
+    usingSplit && (slide.continuation ?? 0) > 0 && slide.totalContinuations
+      ? ` (계속 ${(slide.continuation ?? 0) + 1}/${slide.totalContinuations})`
+      : ''
 
   return (
     <div className="slide-body slide-section">
       <header className="slide-heading">
         {slide.number && <span className="num">{slide.number}</span>}
-        <h2>{slide.title || '(제목 없음)'}</h2>
+        <h2>{(slide.title || '(제목 없음)') + contLabel}</h2>
       </header>
       {!isTitleOnly && (
         <div className="slide-blocks">

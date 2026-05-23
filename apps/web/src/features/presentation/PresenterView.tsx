@@ -197,14 +197,20 @@ function SlideMini({ slide, compact = false }: { slide: Slide; compact?: boolean
   }
   const allBlocks = Array.isArray(slide.section?.blocks) ? slide.section.blocks : []
   const { body } = splitSpeakerNotes(allBlocks)
+  // autoSplit 결과로 부분 body 가 들어온 경우 그것 우선.
+  const effectiveBody = Array.isArray(slide.bodyBlocks) ? slide.bodyBlocks : body
   // In the compact (next-slide) preview, only show first 3 blocks to keep it
   // glanceable.
-  const blocks = compact ? body.slice(0, 3) : body
+  const blocks = compact ? effectiveBody.slice(0, 3) : effectiveBody
+  const contLabel =
+    slide.bodyBlocks && (slide.continuation ?? 0) > 0 && slide.totalContinuations
+      ? ` (계속 ${(slide.continuation ?? 0) + 1}/${slide.totalContinuations})`
+      : ''
   return (
     <div className={`pv-slide-mini${compact ? ' pv-slide-mini-compact' : ''}`}>
       <header>
         {slide.number && <span className="pv-num">{slide.number}</span>}
-        <h2>{slide.title || '(제목 없음)'}</h2>
+        <h2>{(slide.title || '(제목 없음)') + contLabel}</h2>
       </header>
       <div className="pv-blocks">
         {blocks.map((b) => (
