@@ -442,10 +442,22 @@ export function BlockInsertPalette({ anchor, onPick, onClose }: Props) {
     first?.focus()
   }, [])
 
-  // Clamp the popover so it never spills off the right edge of the viewport.
-  // Keeps the layout sane even when the user clicks near the right rail.
-  const left = Math.max(8, Math.min(window.innerWidth - 296, anchor.x - 12))
-  const top = Math.max(8, anchor.y + 4)
+  // 클릭 위치가 메뉴의 좌상단이 되도록 — 이전엔 (anchor.x-12, anchor.y+4)
+  // 로 임의 오프셋을 줘서 사용자가 어색하게 느꼈다 (커서 위치와 메뉴의 좌상단
+  // 모서리가 어긋남). 양방향으로 viewport 안에 가두는 clamp 도 추가:
+  // 화면 우측 가까이 클릭하면 오른쪽 가장자리에서 안쪽으로, 화면 아래쪽이면
+  // 위로 올려서 메뉴가 잘리지 않게 한다. 메뉴 폭은 w-72 (288px), 높이는
+  // 동적이라 보수적으로 360px 추정.
+  const PALETTE_W = 288
+  const PALETTE_H_GUESS = 360
+  const left = Math.max(
+    8,
+    Math.min(anchor.x, window.innerWidth - PALETTE_W - 8),
+  )
+  const top = Math.max(
+    8,
+    Math.min(anchor.y, window.innerHeight - PALETTE_H_GUESS - 8),
+  )
 
   const onTileKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     const tiles = Array.from(

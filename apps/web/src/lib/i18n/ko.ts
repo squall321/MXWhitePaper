@@ -430,6 +430,7 @@ export const ko = {
   'editor.chart.type.area': '면적',
   'editor.chart.type.radar': '레이더',
   'editor.chart.type.scatter': '산점',
+  'editor.chart.type.xyLine': 'XY 선 (자유 좌표)',
   'editor.chart.addRow': '+ 행',
   'editor.chart.addSeries': '+ 시리즈',
   'editor.chart.fromTable': '표 → 차트',

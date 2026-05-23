@@ -26,6 +26,7 @@ const CHART_TYPES: ChartBlock['chartType'][] = [
   'area',
   'radar',
   'scatter',
+  'xy-line',
 ]
 
 /**
@@ -39,6 +40,9 @@ const CHART_TYPE_META: ReadonlyArray<ChartTypeMeta> = [
   { type: 'area', labelKey: 'editor.chart.type.area', thumb: '▁▃▅▇' },
   { type: 'radar', labelKey: 'editor.chart.type.radar', thumb: '⌬' },
   { type: 'scatter', labelKey: 'editor.chart.type.scatter', thumb: '· · · ·' },
+  // xy-line — 시리즈마다 자유 (x, y). stress-strain 같은 측정 데이터용.
+  // 엑셀에서 두 컬럼 paste 하면 자동 시리즈 생성.
+  { type: 'xy-line', labelKey: 'editor.chart.type.xyLine', thumb: '⤴⤵' },
 ]
 
 /**

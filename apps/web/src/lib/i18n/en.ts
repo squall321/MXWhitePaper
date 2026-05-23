@@ -408,6 +408,7 @@ export const en: Record<LocaleKey, string> = {
   'editor.chart.type.area': 'Area',
   'editor.chart.type.radar': 'Radar',
   'editor.chart.type.scatter': 'Scatter',
+  'editor.chart.type.xyLine': 'XY Line (free coords)',
   'editor.chart.addRow': '+ Row',
   'editor.chart.addSeries': '+ Series',
   'editor.chart.fromTable': 'Table → chart',
