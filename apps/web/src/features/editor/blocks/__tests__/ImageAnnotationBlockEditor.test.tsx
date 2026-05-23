@@ -25,6 +25,7 @@ import {
   clientToNorm,
   isResizable,
   moveAnnotation,
+  moveArrowEndpoint,
   nextAnnotationId,
   pickElement,
   popUndo,
@@ -125,6 +126,24 @@ describe('isResizable', () => {
     expect(isResizable(buildTextbox([0, 0], [0.1, 0.1], '', '#000'))).toBe(true)
     expect(isResizable(buildArrow([0, 0], [0.1, 0.1], '#000'))).toBe(false)
     expect(isResizable(buildCallout([0.3, 0.3], 'x', '#000'))).toBe(false)
+  })
+})
+
+describe('moveArrowEndpoint', () => {
+  it('updates only `from` when which="from"', () => {
+    const a = buildArrow([0.1, 0.1], [0.5, 0.5], '#000')
+    const out = moveArrowEndpoint(a, 'from', 0.2, 0.3)
+    if (out.kind !== 'arrow') throw new Error('expected arrow')
+    expect(out.from).toEqual({ x: 0.2, y: 0.3 })
+    expect(out.to).toEqual({ x: 0.5, y: 0.5 })  // 다른 끝점 고정
+  })
+
+  it('updates only `to` when which="to"', () => {
+    const a = buildArrow([0.1, 0.1], [0.5, 0.5], '#000')
+    const out = moveArrowEndpoint(a, 'to', 0.9, 0.9)
+    if (out.kind !== 'arrow') throw new Error('expected arrow')
+    expect(out.from).toEqual({ x: 0.1, y: 0.1 })  // 다른 끝점 고정
+    expect(out.to).toEqual({ x: 0.9, y: 0.9 })
   })
 })
 

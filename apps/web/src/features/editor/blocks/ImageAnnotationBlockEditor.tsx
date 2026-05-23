@@ -215,6 +215,20 @@ export function resizeAnnotation(
 }
 
 /**
+ * arrow 의 from/to 한쪽 끝점만 (cx, cy) 로 옮긴 새 arrow 반환. 다른 끝점은
+ * 고정. 선택된 arrow 의 끝점 핸들 드래그에서 사용.
+ */
+export function moveArrowEndpoint(
+  el: Extract<AnnotationElement, { kind: 'arrow' }>,
+  which: 'from' | 'to',
+  cx: number,
+  cy: number,
+): AnnotationElement {
+  if (which === 'from') return { ...el, from: { x: cx, y: cy } }
+  return { ...el, to: { x: cx, y: cy } }
+}
+
+/**
  * Multi-line 텍스트 박스. rect 와 같은 (start, end) 드래그로 박스를 만든 뒤
  * 그 자리에 textarea 가 떠서 사용자가 본문을 입력한다. callout 과 달리
  * 짧은 라벨이 아니라 단락성 설명용 — 이미지의 특정 부분에 대한 보강 자료.
@@ -310,7 +324,41 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
   const [annotations, setAnnotations] = useState<AnnotationElement[]>(block.annotations)
   const [tool, setTool] = useState<IAnnotationTool>('arrow')
   const [color, setColor] = useState<string>(IA_COLORS[0])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // 선택된 요소들 — Shift+클릭으로 다중 선택. 단일 선택 코드 경로 보존을 위해
+  // primary (가장 최근에 더해진) id 를 selectedId 로 derive.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  // 마지막 클릭한 요소를 primary 로 — 핸들 표시·삭제 버튼 활성·우하단 리사이즈
+  // 등 단일-요소 UI 는 이걸로. 다중 선택 시에도 핸들은 primary 에만 표시.
+  const [primaryId, setPrimaryId] = useState<string | null>(null)
+  const selectedId = primaryId  // 기존 코드와의 호환 별칭.
+
+  // primary/selectedIds 동기화 — Set 에 없는 primary 는 정리.
+  const setSelectionSingle = (id: string | null) => {
+    if (id === null) {
+      setSelectedIds(new Set())
+      setPrimaryId(null)
+    } else {
+      setSelectedIds(new Set([id]))
+      setPrimaryId(id)
+    }
+  }
+  const toggleSelectionMulti = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+        // primary 가 빠진 경우 — 다른 요소를 새 primary 로.
+        if (primaryId === id) {
+          const remaining = Array.from(next)
+          setPrimaryId(remaining[remaining.length - 1] ?? null)
+        }
+      } else {
+        next.add(id)
+        setPrimaryId(id)
+      }
+      return next
+    })
+  }
   const [error, setError] = useState<string | null>(null)
   const [savedOnce, setSavedOnce] = useState(false)
 
@@ -320,13 +368,16 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
   const draft = useRef<AnnotationElement | null>(null)
   const startNorm = useRef<[number, number] | null>(null)
 
-  // Select-tool 의 이동/리사이즈 드래그 상태. mode='move' 면 평행이동,
-  // mode='resize' 면 우하단 핸들을 끌어 w/h 조정. originalEl 은 드래그 시작
-  // 시점의 요소 스냅샷 — 매 프레임 그 원본 기준 이동/리사이즈해야 누적 오차 없음.
-  // pointerStart 는 드래그 시작 시 마우스 정규화 좌표.
+  // Select-tool 의 드래그 상태. mode:
+  //   'move'       — 선택된 요소(들) 평행이동. 다중 선택 시 originalEls 전부 같이.
+  //   'resize'     — rect/textbox 우하단 핸들로 w/h 조정 (primary 1 개만).
+  //   'arrow-from' — arrow from 끝점만 이동.
+  //   'arrow-to'   — arrow to 끝점만 이동.
+  // originalEls 는 드래그 시작 시점의 요소 스냅샷(들) — 매 프레임 그 원본 기준
+  // 계산해야 누적 오차 없음. pointerStart 는 시작 시 마우스 정규화 좌표.
   const dragState = useRef<{
-    mode: 'move' | 'resize'
-    originalEl: AnnotationElement
+    mode: 'move' | 'resize' | 'arrow-from' | 'arrow-to'
+    originalEls: Map<string, AnnotationElement>
     pointerStart: [number, number]
   } | null>(null)
 
@@ -415,24 +466,58 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
   }
 
   const onDeleteSelected = useCallback(() => {
-    if (!selectedId) return
-    const next = annotations.filter((a) => a.id !== selectedId)
+    if (selectedIds.size === 0) return
+    const next = annotations.filter((a) => !selectedIds.has(a.id))
     if (next.length === annotations.length) return
-    setSelectedId(null)
+    setSelectionSingle(null)
     commit(next)
-  }, [annotations, commit, selectedId])
+    // setSelectionSingle 은 컴포넌트 안 함수라 deps 누락 경고 가능 — 안정 참조라
+    // 동작은 무관, 린트 무시.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [annotations, commit, selectedIds])
 
-  // Backspace deletes the selected element while focus is inside the editor.
+  // 키보드 단축키 — Backspace/Delete = 삭제, 방향키 = 미세 이동 (Shift = 큼).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.key === 'Backspace' || e.key === 'Delete') && selectedId && wrapperRef.current?.contains(document.activeElement)) {
+      // 에디터 안에 포커스가 있을 때만 작동 — textarea/input 안 입력 가로채지
+      // 않도록 활성 요소가 SVG 캔버스 본체 영역인 경우로 제한.
+      if (!wrapperRef.current?.contains(document.activeElement)) return
+
+      if ((e.key === 'Backspace' || e.key === 'Delete') && selectedId) {
         e.preventDefault()
         onDeleteSelected()
+        return
       }
+
+      // 방향키 미세 이동 — 정규화 좌표 [0..1] 에서 1단위 = 0.005 (대략 1%).
+      // Shift = 5배 (0.025). 다중 선택 시 전부 같이 이동.
+      // textarea 안에 포커스 있으면 이 핸들러 진입 조건 (contains activeElement)
+      // 은 통과하지만 e.target 이 textarea 면 native 동작 우선.
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return
+      }
+
+      if (selectedIds.size === 0) return
+      const isArrow =
+        e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
+        e.key === 'ArrowLeft' || e.key === 'ArrowRight'
+      if (!isArrow) return
+
+      const step = e.shiftKey ? 0.025 : 0.005
+      const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0
+      const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0
+      if (dx === 0 && dy === 0) return
+
+      e.preventDefault()
+      const next = annotations.map((a) =>
+        selectedIds.has(a.id) ? moveAnnotation(a, dx, dy) : a,
+      )
+      commit(next)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onDeleteSelected, selectedId])
+  }, [onDeleteSelected, selectedId, selectedIds, annotations, commit])
 
   const norm = (e: ReactPointerEvent<SVGSVGElement>): [number, number] => {
     const svg = e.currentTarget
@@ -446,24 +531,81 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
     e.currentTarget.setPointerCapture(e.pointerId)
 
     if (tool === 'select') {
-      // 1) 이미 선택된 요소가 있고 그 우하단 핸들 위면 resize 모드.
+      const HANDLE_R = 0.025  // 핸들 클릭 허용 반경 (정규화 좌표).
+      // 1) 이미 선택된 요소의 핸들 위면 — kind 에 따라 resize / arrow-from /
+      //    arrow-to 모드 진입. 핸들 hit 이 본체 hit 보다 우선해야 핸들 위에서
+      //    드래그 시작 시 의도대로 동작 (그 위치는 본체 안이기도 하므로).
       if (selectedId) {
         const sel = annotations.find((a) => a.id === selectedId)
-        if (sel && isResizable(sel)) {
-          const hx = sel.x + sel.w
-          const hy = sel.y + sel.h
-          const HANDLE_R = 0.025  // 핸들 클릭 허용 반경
-          if (Math.abs(pos[0] - hx) <= HANDLE_R && Math.abs(pos[1] - hy) <= HANDLE_R) {
-            dragState.current = { mode: 'resize', originalEl: sel, pointerStart: pos }
-            return
+        if (sel) {
+          if (isResizable(sel)) {
+            const hx = sel.x + sel.w
+            const hy = sel.y + sel.h
+            if (Math.abs(pos[0] - hx) <= HANDLE_R && Math.abs(pos[1] - hy) <= HANDLE_R) {
+              dragState.current = {
+                mode: 'resize',
+                originalEls: new Map([[sel.id, sel]]),
+                pointerStart: pos,
+              }
+              return
+            }
+          }
+          if (sel.kind === 'arrow') {
+            // from 핸들 검사 — to 보다 먼저 (start point 가 보통 의미적 origin).
+            if (Math.abs(pos[0] - sel.from.x) <= HANDLE_R && Math.abs(pos[1] - sel.from.y) <= HANDLE_R) {
+              dragState.current = {
+                mode: 'arrow-from',
+                originalEls: new Map([[sel.id, sel]]),
+                pointerStart: pos,
+              }
+              return
+            }
+            if (Math.abs(pos[0] - sel.to.x) <= HANDLE_R && Math.abs(pos[1] - sel.to.y) <= HANDLE_R) {
+              dragState.current = {
+                mode: 'arrow-to',
+                originalEls: new Map([[sel.id, sel]]),
+                pointerStart: pos,
+              }
+              return
+            }
           }
         }
       }
-      // 2) 요소 본체 위면 그 요소 선택 + move 모드 시작.
+      // 2) 요소 본체 위면 — Shift 면 다중 토글, 아니면 단일 선택. hit 이 있으면
+      //    move 모드 시작.
       const hit = pickElement(annotations, pos[0], pos[1])
-      setSelectedId(hit?.id ?? null)
-      if (hit) {
-        dragState.current = { mode: 'move', originalEl: hit, pointerStart: pos }
+
+      // 다중 선택을 이어가야 하는 경우 — hit 이 이미 selectedIds 안에 있으면
+      // 그 그룹 전체를 그대로 들고 이동. Shift+클릭은 토글 후 새 그룹으로 이동.
+      let groupIds: string[]
+      if (e.shiftKey && hit) {
+        // Shift 토글 — 이미 있으면 빼고, 없으면 더하기. 토글 후 멤버십에 따라
+        // 그룹 결정. 더해진 경우 → 새 그룹 전체로 즉시 드래그 가능.
+        const alreadyIn = selectedIds.has(hit.id)
+        toggleSelectionMulti(hit.id)
+        if (alreadyIn) {
+          // 빠진 경우 — drag 시작 안 함 (방금 deselect 한 것을 또 옮기는 건 어색).
+          groupIds = []
+        } else {
+          // 추가된 경우 — 기존 + hit 으로 그룹 이동.
+          groupIds = [...Array.from(selectedIds), hit.id]
+        }
+      } else if (hit && selectedIds.has(hit.id)) {
+        // hit 가 기존 그룹 멤버 → 그룹 전체 이동.
+        groupIds = Array.from(selectedIds)
+      } else {
+        // 새 요소 선택 (또는 빈 곳).
+        setSelectionSingle(hit?.id ?? null)
+        groupIds = hit ? [hit.id] : []
+      }
+
+      if (hit && groupIds.length > 0) {
+        const originals = new Map<string, AnnotationElement>()
+        for (const id of groupIds) {
+          const el = annotations.find((a) => a.id === id)
+          if (el) originals.set(id, el)
+        }
+        dragState.current = { mode: 'move', originalEls: originals, pointerStart: pos }
       }
       return
     }
@@ -490,19 +632,23 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
   const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>) => {
     const pos = norm(e)
 
-    // 선택-도구 드래그 (이동/리사이즈) — 원본 스냅샷 기준 좌표 갱신.
+    // 선택-도구 드래그 (이동/리사이즈/끝점) — 원본 스냅샷 기준 좌표 갱신.
     if (dragState.current) {
       const ds = dragState.current
+      const dx = pos[0] - ds.pointerStart[0]
+      const dy = pos[1] - ds.pointerStart[1]
       const next = annotations.map((a) => {
-        if (a.id !== ds.originalEl.id) return a
+        const orig = ds.originalEls.get(a.id)
+        if (!orig) return a
         if (ds.mode === 'move') {
-          const dx = pos[0] - ds.pointerStart[0]
-          const dy = pos[1] - ds.pointerStart[1]
-          return moveAnnotation(ds.originalEl, dx, dy)
+          return moveAnnotation(orig, dx, dy)
         }
-        // resize — 우하단을 mouse 로
-        if (isResizable(ds.originalEl)) {
-          return resizeAnnotation(ds.originalEl, pos[0], pos[1])
+        if (ds.mode === 'resize' && isResizable(orig)) {
+          return resizeAnnotation(orig, pos[0], pos[1])
+        }
+        if ((ds.mode === 'arrow-from' || ds.mode === 'arrow-to') && orig.kind === 'arrow') {
+          const which = ds.mode === 'arrow-from' ? 'from' : 'to'
+          return moveArrowEndpoint(orig, which, pos[0], pos[1])
         }
         return a
       })
@@ -524,16 +670,16 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
 
   const onPointerUp = () => {
     // 이동/리사이즈 드래그 마무리 — 현재 상태를 undo 기록과 함께 commit.
-    // 이동량이 0 이면 (= 클릭만) commit 안 함 (불필요한 history 누적 방지).
+    // 변동 없는 클릭만 (어떤 요소도 새 객체가 아니면) commit skip — history 보호.
     if (dragState.current) {
       const ds = dragState.current
       dragState.current = null
-      const current = annotations.find((a) => a.id === ds.originalEl.id)
-      if (current && current !== ds.originalEl) {
-        // moveAnnotation/resizeAnnotation 이 새 객체를 만들므로 참조 비교로
-        // 변동 여부 판단. 같은 객체 (즉 변동 없음) 면 commit skip.
-        commit(annotations)
+      let changed = false
+      for (const [id, orig] of ds.originalEls) {
+        const cur = annotations.find((a) => a.id === id)
+        if (cur && cur !== orig) { changed = true; break }
       }
+      if (changed) commit(annotations)
       return
     }
 
@@ -696,34 +842,67 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
           onPointerCancel={onPointerUp}
         >
           <AnnotationArrowMarker />
-          {annotations.map((ann) => (
-            <g
-              key={ann.id}
-              opacity={selectedId === ann.id ? 0.6 : 1}
-              data-selected={selectedId === ann.id ? '' : undefined}
-            >
-              <AnnotationElementView ann={ann} />
-            </g>
-          ))}
-          {/* 선택된 rect/textbox 의 우하단 리사이즈 핸들. 다른 요소 위에 그려야
-              가시성 확보 — annotations.map 보다 뒤. cursor:nwse-resize 로 의미 전달. */}
+          {annotations.map((ann) => {
+            const isSelected = selectedIds.has(ann.id)
+            return (
+              <g
+                key={ann.id}
+                opacity={isSelected ? 0.6 : 1}
+                data-selected={isSelected ? '' : undefined}
+              >
+                <AnnotationElementView ann={ann} />
+              </g>
+            )
+          })}
+          {/* 선택된 요소의 편집 핸들. annotations.map 뒤에 그려야 위에 보임. */}
           {(() => {
             if (!selectedId) return null
             const sel = annotations.find((a) => a.id === selectedId)
-            if (!sel || !isResizable(sel)) return null
-            return (
-              <rect
-                x={sel.x + sel.w - 0.012}
-                y={sel.y + sel.h - 0.012}
-                width={0.024}
-                height={0.024}
-                fill="#fff"
-                stroke="#0ea5e9"
-                strokeWidth={0.004}
-                style={{ cursor: 'nwse-resize' }}
-                data-testid="ia-resize-handle"
-              />
-            )
+            if (!sel) return null
+            // rect/textbox — 우하단 리사이즈 핸들.
+            if (isResizable(sel)) {
+              return (
+                <rect
+                  x={sel.x + sel.w - 0.012}
+                  y={sel.y + sel.h - 0.012}
+                  width={0.024}
+                  height={0.024}
+                  fill="#fff"
+                  stroke="#0ea5e9"
+                  strokeWidth={0.004}
+                  style={{ cursor: 'nwse-resize' }}
+                  data-testid="ia-resize-handle"
+                />
+              )
+            }
+            // arrow — from/to 양 끝점 핸들 (동그라미).
+            if (sel.kind === 'arrow') {
+              return (
+                <g data-testid="ia-arrow-handles">
+                  <circle
+                    cx={sel.from.x}
+                    cy={sel.from.y}
+                    r={0.012}
+                    fill="#fff"
+                    stroke="#0ea5e9"
+                    strokeWidth={0.004}
+                    style={{ cursor: 'move' }}
+                    data-testid="ia-arrow-handle-from"
+                  />
+                  <circle
+                    cx={sel.to.x}
+                    cy={sel.to.y}
+                    r={0.012}
+                    fill="#fff"
+                    stroke="#0ea5e9"
+                    strokeWidth={0.004}
+                    style={{ cursor: 'move' }}
+                    data-testid="ia-arrow-handle-to"
+                  />
+                </g>
+              )
+            }
+            return null
           })()}
           {/* live draft preview */}
           {draft.current ? <AnnotationElementView ann={draft.current} /> : null}
