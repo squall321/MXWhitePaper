@@ -447,12 +447,17 @@ class KpiCardsBlock(BaseModel):
 
 
 class ChartType(Enum):
+    """
+    차트 타입. 'xy-line' 은 시리즈마다 자유로운 (x, y) 쌍 — labels 공유 안 함. 두 stress-strain 곡선처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교할 때 사용. data.labels 는 무시되고 각 series 의 points: [{x, y}] 가 그려진다.
+    """
+
     line = 'line'
     bar = 'bar'
     pie = 'pie'
     area = 'area'
     radar = 'radar'
     scatter = 'scatter'
+    xy_line = 'xy-line'
 
 
 class Engine(Enum):
@@ -464,14 +469,41 @@ class Engine(Enum):
     echarts = 'echarts'
 
 
+class Point(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    x: float
+    y: float
+
+
 class Series(BaseModel):
     name: str
-    values: list[float]
+    values: list[float] | None = None
+    """
+    labels 와 동일 길이의 y 값. chartType=='xy-line' 이면 무시되고 points 사용.
+    """
+    points: list[Point] | None = None
+    """
+    자유 (x, y) 쌍. chartType=='xy-line' 에서 사용. 시리즈마다 x 가 다를 수 있어 stress-strain 곡선처럼 측정점이 다른 데이터 비교 가능.
+    """
+    caption: str | None = None
+    """
+    시리즈 추가 설명 — hover/legend 에 표시. 캡션은 사용자가 paste 시 헤더에서 추출하거나 직접 입력.
+    """
 
 
 class Data(BaseModel):
     labels: list[str]
     series: list[Series]
+    x_axis_label: str | None = Field(None, alias='xAxisLabel')
+    """
+    x 축 라벨. xy-line 처럼 카테고리가 아닌 연속값일 때 의미. paste 의 'x' 헤더 컬럼명에서 자동 추출 가능.
+    """
+    y_axis_label: str | None = Field(None, alias='yAxisLabel')
+    """
+    y 축 라벨. paste 의 'y' 헤더 컬럼명에서 자동 추출 가능.
+    """
 
 
 class KeyPoint(BaseModel):
@@ -513,6 +545,68 @@ class Interactions(BaseModel):
     """
 
 
+class FitType(Enum):
+    """
+    피팅 모델. P1 은 linear 만, P3 에서 나머지.
+    """
+
+    linear = 'linear'
+    poly2 = 'poly2'
+    poly3 = 'poly3'
+    exp = 'exp'
+    power = 'power'
+
+
+class FitRange(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    x_min: float = Field(..., alias='xMin')
+    x_max: float = Field(..., alias='xMax')
+
+
+class Sampling(Enum):
+    none = 'none'
+    lttb = 'lttb'
+
+
+class Display1(BaseModel):
+    """
+    사용자 시각화 토글 상태. 차트 블록과 함께 저장되어 재방문 시 동일 상태 복원. P1 에서 gridOn/xLog/yLog/showFit + 자동 zoom 지원, P2 에서 fitRange/축범위/stats, P3 에서 fitType/도메인 옵션 확장.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    grid_on: bool | None = Field(None, alias='gridOn')
+    """
+    격자 표시 (기본 true).
+    """
+    x_log: bool | None = Field(None, alias='xLog')
+    """
+    x 축 log 스케일.
+    """
+    y_log: bool | None = Field(None, alias='yLog')
+    """
+    y 축 log 스케일.
+    """
+    show_fit: bool | None = Field(None, alias='showFit')
+    """
+    linear fit + R² markLine 표시.
+    """
+    x_min: float | None = Field(None, alias='xMin')
+    x_max: float | None = Field(None, alias='xMax')
+    y_min: float | None = Field(None, alias='yMin')
+    y_max: float | None = Field(None, alias='yMax')
+    fit_type: FitType | None = Field(None, alias='fitType')
+    """
+    피팅 모델. P1 은 linear 만, P3 에서 나머지.
+    """
+    fit_range: FitRange | None = Field(None, alias='fitRange')
+    show_stats: bool | None = Field(None, alias='showStats')
+    sampling: Sampling | None = None
+
+
 class ChartBlock(BaseModel):
     """
     Chart block — `engine` selects the renderer. 'recharts' (default) uses our existing simple chart UI; 'echarts' unlocks rich interaction (zoom, brush, hover slope, markPoint annotations, markArea regions). With 'echarts' the data fields below still drive the dataset, but `options` accepts any ECharts EChartsOption fragment that gets merged on top.
@@ -524,6 +618,9 @@ class ChartBlock(BaseModel):
     type: Literal['chart']
     id: Ulid
     chart_type: ChartType = Field(..., alias='chartType')
+    """
+    차트 타입. 'xy-line' 은 시리즈마다 자유로운 (x, y) 쌍 — labels 공유 안 함. 두 stress-strain 곡선처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교할 때 사용. data.labels 는 무시되고 각 series 의 points: [{x, y}] 가 그려진다.
+    """
     engine: Engine | None = None
     """
     Chart renderer. Default 'recharts' for back-compat; choose 'echarts' for rich interactivity (markPoint / markArea / brush / dataZoom).
@@ -537,6 +634,10 @@ class ChartBlock(BaseModel):
     options: dict[str, Any] | None = None
     """
     Raw ECharts EChartsOption fragment, merged after `interactions` so power users can override anything.
+    """
+    display: Display1 | None = None
+    """
+    사용자 시각화 토글 상태. 차트 블록과 함께 저장되어 재방문 시 동일 상태 복원. P1 에서 gridOn/xLog/yLog/showFit + 자동 zoom 지원, P2 에서 fitRange/축범위/stats, P3 에서 fitType/도메인 옵션 확장.
     """
     meta: BlockMeta | None = None
 
@@ -850,6 +951,16 @@ class Render(Enum):
     kpi_cards = 'kpi-cards'
 
 
+class ChartType1(Enum):
+    line = 'line'
+    bar = 'bar'
+    pie = 'pie'
+    area = 'area'
+    radar = 'radar'
+    scatter = 'scatter'
+    xy_line = 'xy-line'
+
+
 class Engine2(Enum):
     recharts = 'recharts'
     echarts = 'echarts'
@@ -871,7 +982,7 @@ class ChartOptions(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    chart_type: ChartType | None = Field(None, alias='chartType')
+    chart_type: ChartType1 | None = Field(None, alias='chartType')
     engine: Engine2 | None = None
     title: str | None = None
     interactions: Interactions1 | None = None
@@ -956,7 +1067,7 @@ class Viewbox(BaseModel):
     h: int = Field(..., ge=100, le=4000)
 
 
-class Point(RootModel[list[float]]):
+class Point1(RootModel[list[float]]):
     root: list[float] = Field(..., max_length=2, min_length=2)
 
 
@@ -966,7 +1077,7 @@ class WhiteboardElement1(BaseModel):
     )
     kind: Literal['stroke']
     id: str
-    points: list[Point]
+    points: list[Point1]
     stroke: str
     stroke_width: float = Field(..., alias='strokeWidth', ge=1.0, le=32.0)
 

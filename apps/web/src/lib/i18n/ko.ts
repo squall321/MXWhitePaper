@@ -446,6 +446,13 @@ export const ko = {
   'editor.chart.loadExample': '예시 채우기',
   'editor.chart.clear': '지우기',
   'editor.chart.removeRow': '{n}행 제거',
+  // xy-line 차트 toolbar (P1)
+  'editor.chart.toolbar': '차트 도구',
+  'editor.chart.gridOn': '격자',
+  'editor.chart.xLog': 'X log',
+  'editor.chart.yLog': 'Y log',
+  'editor.chart.fitLinear': '선형 피팅',
+  'editor.chart.resetZoom': '⟲ 줌 초기화',
 
   // Editor — KPI cards
   'editor.kpi.empty': '이 블록은 핵심 지표(KPI) 카드를 보여줍니다.',

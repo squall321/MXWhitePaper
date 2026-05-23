@@ -46,7 +46,7 @@ function rowData(block: ChartBlock) {
   return labels.map((label, idx) => {
     const row: Record<string, string | number> = { label }
     for (const s of series) {
-      row[s.name] = s.values[idx] ?? 0
+      row[s.name] = s.values?.[idx] ?? 0
     }
     return row
   })
@@ -58,12 +58,12 @@ function pieData(block: ChartBlock) {
   if (!s0) return [] as { name: string; value: number }[]
   return block.data.labels.map((label, idx) => ({
     name: label,
-    value: s0.values[idx] ?? 0,
+    value: s0.values?.[idx] ?? 0,
   }))
 }
 
 function scatterPoints(series: ChartBlock['data']['series'][number]) {
-  return series.values.map((y, i) => ({ x: i, y }))
+  return (series.values ?? []).map((y, i) => ({ x: i, y }))
 }
 
 export function ChartBlockView({ block }: { block: ChartBlock }) {

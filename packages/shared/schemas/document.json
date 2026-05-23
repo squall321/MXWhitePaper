@@ -434,7 +434,10 @@
       "properties": {
         "type":      { "const": "chart" },
         "id":        { "$ref": "#/$defs/Ulid" },
-        "chartType": { "enum": ["line", "bar", "pie", "area", "radar", "scatter"] },
+        "chartType": {
+          "enum": ["line", "bar", "pie", "area", "radar", "scatter", "xy-line"],
+          "description": "차트 타입. 'xy-line' 은 시리즈마다 자유로운 (x, y) 쌍 — labels 공유 안 함. 두 stress-strain 곡선처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교할 때 사용. data.labels 는 무시되고 각 series 의 points: [{x, y}] 가 그려진다."
+        },
         "engine":    {
           "description": "Chart renderer. Default 'recharts' for back-compat; choose 'echarts' for rich interactivity (markPoint / markArea / brush / dataZoom).",
           "enum": ["recharts", "echarts"]
@@ -449,12 +452,40 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["name", "values"],
+                "required": ["name"],
                 "properties": {
                   "name":   { "type": "string" },
-                  "values": { "type": "array", "items": { "type": "number" } }
+                  "values": {
+                    "type": "array", "items": { "type": "number" },
+                    "description": "labels 와 동일 길이의 y 값. chartType=='xy-line' 이면 무시되고 points 사용."
+                  },
+                  "points": {
+                    "type": "array",
+                    "description": "자유 (x, y) 쌍. chartType=='xy-line' 에서 사용. 시리즈마다 x 가 다를 수 있어 stress-strain 곡선처럼 측정점이 다른 데이터 비교 가능.",
+                    "items": {
+                      "type": "object",
+                      "required": ["x", "y"],
+                      "additionalProperties": false,
+                      "properties": {
+                        "x": { "type": "number" },
+                        "y": { "type": "number" }
+                      }
+                    }
+                  },
+                  "caption": {
+                    "type": "string",
+                    "description": "시리즈 추가 설명 — hover/legend 에 표시. 캡션은 사용자가 paste 시 헤더에서 추출하거나 직접 입력."
+                  }
                 }
               }
+            },
+            "xAxisLabel": {
+              "type": "string",
+              "description": "x 축 라벨. xy-line 처럼 카테고리가 아닌 연속값일 때 의미. paste 의 'x' 헤더 컬럼명에서 자동 추출 가능."
+            },
+            "yAxisLabel": {
+              "type": "string",
+              "description": "y 축 라벨. paste 의 'y' 헤더 컬럼명에서 자동 추출 가능."
             }
           }
         },
@@ -497,6 +528,36 @@
         "options": {
           "type": "object",
           "description": "Raw ECharts EChartsOption fragment, merged after `interactions` so power users can override anything."
+        },
+        "display": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "사용자 시각화 토글 상태. 차트 블록과 함께 저장되어 재방문 시 동일 상태 복원. P1 에서 gridOn/xLog/yLog/showFit + 자동 zoom 지원, P2 에서 fitRange/축범위/stats, P3 에서 fitType/도메인 옵션 확장.",
+          "properties": {
+            "gridOn":  { "type": "boolean", "description": "격자 표시 (기본 true)." },
+            "xLog":    { "type": "boolean", "description": "x 축 log 스케일." },
+            "yLog":    { "type": "boolean", "description": "y 축 log 스케일." },
+            "showFit": { "type": "boolean", "description": "linear fit + R² markLine 표시." },
+            "xMin":    { "type": "number" },
+            "xMax":    { "type": "number" },
+            "yMin":    { "type": "number" },
+            "yMax":    { "type": "number" },
+            "fitType": {
+              "enum": ["linear", "poly2", "poly3", "exp", "power"],
+              "description": "피팅 모델. P1 은 linear 만, P3 에서 나머지."
+            },
+            "fitRange": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["xMin", "xMax"],
+              "properties": {
+                "xMin": { "type": "number" },
+                "xMax": { "type": "number" }
+              }
+            },
+            "showStats": { "type": "boolean" },
+            "sampling":  { "enum": ["none", "lttb"] }
+          }
         },
         "meta":    { "$ref": "#/$defs/BlockMeta" }
       }
@@ -831,7 +892,7 @@
           "additionalProperties": false,
           "description": "Per-document chart styling overrides (only for render=chart). Deep-merged ON TOP of widget-provided defaults — set just the fields you want to change.",
           "properties": {
-            "chartType": { "enum": ["line", "bar", "pie", "area", "radar", "scatter"] },
+            "chartType": { "enum": ["line", "bar", "pie", "area", "radar", "scatter", "xy-line"] },
             "engine":    { "enum": ["recharts", "echarts"] },
             "title":     { "type": "string" },
             "interactions": {

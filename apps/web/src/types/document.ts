@@ -501,7 +501,10 @@ export interface KpiCardsBlock {
 export interface ChartBlock {
   type: 'chart'
   id: Ulid
-  chartType: 'line' | 'bar' | 'pie' | 'area' | 'radar' | 'scatter'
+  /**
+   * 차트 타입. 'xy-line' 은 시리즈마다 자유로운 (x, y) 쌍 — labels 공유 안 함. 두 stress-strain 곡선처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교할 때 사용. data.labels 는 무시되고 각 series 의 points: [{x, y}] 가 그려진다.
+   */
+  chartType: 'line' | 'bar' | 'pie' | 'area' | 'radar' | 'scatter' | 'xy-line'
   /**
    * Chart renderer. Default 'recharts' for back-compat; choose 'echarts' for rich interactivity (markPoint / markArea / brush / dataZoom).
    */
@@ -511,8 +514,30 @@ export interface ChartBlock {
     labels: string[]
     series: {
       name: string
-      values: number[]
+      /**
+       * labels 와 동일 길이의 y 값. chartType=='xy-line' 이면 무시되고 points 사용.
+       */
+      values?: number[]
+      /**
+       * 자유 (x, y) 쌍. chartType=='xy-line' 에서 사용. 시리즈마다 x 가 다를 수 있어 stress-strain 곡선처럼 측정점이 다른 데이터 비교 가능.
+       */
+      points?: {
+        x: number
+        y: number
+      }[]
+      /**
+       * 시리즈 추가 설명 — hover/legend 에 표시. 캡션은 사용자가 paste 시 헤더에서 추출하거나 직접 입력.
+       */
+      caption?: string
     }[]
+    /**
+     * x 축 라벨. xy-line 처럼 카테고리가 아닌 연속값일 때 의미. paste 의 'x' 헤더 컬럼명에서 자동 추출 가능.
+     */
+    xAxisLabel?: string
+    /**
+     * y 축 라벨. paste 의 'y' 헤더 컬럼명에서 자동 추출 가능.
+     */
+    yAxisLabel?: string
   }
   /**
    * Friendly knobs for ECharts interactivity that map onto markPoint / markArea / dataZoom without requiring users to write raw EChartsOption.
@@ -548,6 +573,41 @@ export interface ChartBlock {
    * Raw ECharts EChartsOption fragment, merged after `interactions` so power users can override anything.
    */
   options?: {}
+  /**
+   * 사용자 시각화 토글 상태. 차트 블록과 함께 저장되어 재방문 시 동일 상태 복원. P1 에서 gridOn/xLog/yLog/showFit + 자동 zoom 지원, P2 에서 fitRange/축범위/stats, P3 에서 fitType/도메인 옵션 확장.
+   */
+  display?: {
+    /**
+     * 격자 표시 (기본 true).
+     */
+    gridOn?: boolean
+    /**
+     * x 축 log 스케일.
+     */
+    xLog?: boolean
+    /**
+     * y 축 log 스케일.
+     */
+    yLog?: boolean
+    /**
+     * linear fit + R² markLine 표시.
+     */
+    showFit?: boolean
+    xMin?: number
+    xMax?: number
+    yMin?: number
+    yMax?: number
+    /**
+     * 피팅 모델. P1 은 linear 만, P3 에서 나머지.
+     */
+    fitType?: 'linear' | 'poly2' | 'poly3' | 'exp' | 'power'
+    fitRange?: {
+      xMin: number
+      xMax: number
+    }
+    showStats?: boolean
+    sampling?: 'none' | 'lttb'
+  }
   meta?: BlockMeta
 }
 export interface GanttBlock {
@@ -714,7 +774,7 @@ export interface DataSourceBlock {
    * Per-document chart styling overrides (only for render=chart). Deep-merged ON TOP of widget-provided defaults — set just the fields you want to change.
    */
   chartOptions?: {
-    chartType?: 'line' | 'bar' | 'pie' | 'area' | 'radar' | 'scatter'
+    chartType?: 'line' | 'bar' | 'pie' | 'area' | 'radar' | 'scatter' | 'xy-line'
     engine?: 'recharts' | 'echarts'
     title?: string
     interactions?: {

@@ -5,6 +5,7 @@ import { useEditorStore } from '@/features/editor/state'
 import { parseCsv } from '@/features/editor/extensions/csv-paste'
 import { tableToChartData } from '@/features/editor/tableToChart'
 import { useT } from '@/lib/i18n'
+import { parseChartPaste, type ChartPasteResult } from './_chartPaste'
 
 interface ChartBlockEditorProps {
   block: ChartBlock
@@ -54,6 +55,69 @@ const SAMPLE_DATA: ChartBlock['data'] = {
 }
 
 /**
+ * paste 결과를 기존 ChartBlock 에 합쳐 새 block 을 반환하는 순수 함수.
+ *
+ * 규칙:
+ *  - chartType === 'xy-line' 이고 기존 series 가 있으면 **append** (시리즈 누적)
+ *  - 그 외엔 chartType 을 'xy-line' 으로 전환하고 series 전체 교체
+ *    (사용자가 다른 차트 위에 의도적으로 데이터 paste 했다고 본다)
+ *  - title / xAxisLabel / yAxisLabel: 기존 값이 비어 있을 때만 paste 결과로 채운다
+ *
+ * onPaste 핸들러와 단위 테스트 양쪽이 같은 경로를 쓰도록 export.
+ */
+export function applyChartPasteToBlock(
+  block: ChartBlock,
+  parsed: ChartPasteResult,
+): ChartBlock {
+  const isXyLine = block.chartType === 'xy-line'
+  const hasExistingSeries = (block.data.series ?? []).length > 0
+
+  // paste 결과 시리즈를 ChartBlock 의 series shape (points 기반) 으로 사상.
+  const pastedSeries = parsed.series.map((s) => {
+    const out: ChartBlock['data']['series'][number] = {
+      name: s.name,
+      points: s.points,
+    }
+    if (s.caption !== undefined) out.caption = s.caption
+    return out
+  })
+
+  // append vs 교체.
+  const nextSeries =
+    isXyLine && hasExistingSeries
+      ? [...block.data.series, ...pastedSeries]
+      : pastedSeries
+
+  // title / 축 라벨 — 기존 값이 비어 있을 때만 paste 결과로 채운다.
+  const nextTitle =
+    block.title && block.title.trim() !== '' ? block.title : parsed.title
+
+  const data = block.data
+  const nextXAxisLabel =
+    data.xAxisLabel && data.xAxisLabel.trim() !== ''
+      ? data.xAxisLabel
+      : parsed.xAxisLabel
+  const nextYAxisLabel =
+    data.yAxisLabel && data.yAxisLabel.trim() !== ''
+      ? data.yAxisLabel
+      : parsed.yAxisLabel
+
+  return {
+    ...block,
+    chartType: 'xy-line',
+    title: nextTitle,
+    data: {
+      ...data,
+      // xy-line 은 labels 를 사용하지 않지만 스키마상 필수이므로 기존 값 유지.
+      labels: data.labels ?? [],
+      series: nextSeries,
+      xAxisLabel: nextXAxisLabel,
+      yAxisLabel: nextYAxisLabel,
+    },
+  }
+}
+
+/**
  * Edit-mode surface for `chart` blocks. Sprint 6 minimum:
  *   - title input
  *   - chart-type dropdown
@@ -78,7 +142,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
     const value = Number(raw)
     const series = block.data.series.map((s, i) => {
       if (i !== sIdx) return s
-      const values = [...s.values]
+      const values = [...(s.values ?? [])]
       values[lIdx] = Number.isFinite(value) ? value : 0
       return { ...s, values }
     })
@@ -92,7 +156,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
   }
   const addRow = () => {
     const labels = [...block.data.labels, `Row ${block.data.labels.length + 1}`]
-    const series = block.data.series.map((s) => ({ ...s, values: [...s.values, 0] }))
+    const series = block.data.series.map((s) => ({ ...s, values: [...(s.values ?? []), 0] }))
     onChange({ ...block, data: { ...block.data, labels, series } })
   }
   const addSeries = () => {
@@ -106,7 +170,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
     const labels = block.data.labels.filter((_, i) => i !== idx)
     const series = block.data.series.map((s) => ({
       ...s,
-      values: s.values.filter((_, i) => i !== idx),
+      values: (s.values ?? []).filter((_, i) => i !== idx),
     }))
     onChange({ ...block, data: { ...block.data, labels, series } })
   }
@@ -156,6 +220,42 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
     if (applyCsvText(text)) e.preventDefault()
   }
 
+  // 차트 블록 wrapper 위에서 받은 paste 이벤트.
+  // input/textarea/contentEditable 이 target 이면 가로채지 않는다 (셀 편집 우선).
+  const onWrapperPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null
+    if (target) {
+      const tag = (target.tagName ?? '').toLowerCase()
+      if (
+        tag === 'input' ||
+        tag === 'textarea' ||
+        target.isContentEditable
+      ) {
+        return
+      }
+    }
+    const text = e.clipboardData.getData('text/plain')
+    if (!text) return
+    const parsed = parseChartPaste(text)
+    if (!parsed) return // non-csv: 기본 paste 동작 유지 (preventDefault 안 함)
+    e.preventDefault()
+    onChange(applyChartPasteToBlock(block, parsed))
+    setConvertHint(
+      t('editor.chart.csvApplied', {
+        rows: parsed.series[0]?.points.length ?? 0,
+        cols: parsed.series.length,
+      }),
+    )
+  }
+
+  // toolbar — display 토글 update 헬퍼.
+  const display = block.display ?? {}
+  const setDisplay = (patch: Partial<NonNullable<ChartBlock['display']>>) => {
+    onChange({ ...block, display: { ...display, ...patch } })
+  }
+  // gridOn: 명시되지 않으면 true 로 본다.
+  const gridOn = display.gridOn !== false
+
   const [csvDraft, setCsvDraft] = useState('')
   const onApplyClick = () => {
     if (!csvDraft.trim()) {
@@ -171,7 +271,83 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
   }
 
   return (
-    <div className="space-y-3 rounded border border-smsg-100 bg-smsg-100/40 p-3">
+    <div
+      className="space-y-3 rounded border border-smsg-100 bg-smsg-100/40 p-3"
+      onPaste={onWrapperPaste}
+    >
+      {block.chartType === 'xy-line' && (
+        <div
+          role="toolbar"
+          aria-label={t('editor.chart.toolbar')}
+          className="flex flex-wrap items-center gap-1 text-[11px]"
+        >
+          <button
+            type="button"
+            aria-pressed={gridOn}
+            data-toolbar="grid"
+            onClick={() => setDisplay({ gridOn: !gridOn })}
+            className={`rounded border px-2 py-0.5 ${
+              gridOn
+                ? 'border-smsg-500 bg-smsg-50 text-smsg-900'
+                : 'border-gray-300 bg-white text-gray-600'
+            }`}
+          >
+            # {t('editor.chart.gridOn')}
+          </button>
+          <button
+            type="button"
+            aria-pressed={!!display.xLog}
+            data-toolbar="xlog"
+            onClick={() => setDisplay({ xLog: !display.xLog })}
+            className={`rounded border px-2 py-0.5 ${
+              display.xLog
+                ? 'border-smsg-500 bg-smsg-50 text-smsg-900'
+                : 'border-gray-300 bg-white text-gray-600'
+            }`}
+          >
+            {t('editor.chart.xLog')}
+          </button>
+          <button
+            type="button"
+            aria-pressed={!!display.yLog}
+            data-toolbar="ylog"
+            onClick={() => setDisplay({ yLog: !display.yLog })}
+            className={`rounded border px-2 py-0.5 ${
+              display.yLog
+                ? 'border-smsg-500 bg-smsg-50 text-smsg-900'
+                : 'border-gray-300 bg-white text-gray-600'
+            }`}
+          >
+            {t('editor.chart.yLog')}
+          </button>
+          <button
+            type="button"
+            aria-pressed={!!display.showFit}
+            data-toolbar="fit"
+            onClick={() => setDisplay({ showFit: !display.showFit })}
+            className={`rounded border px-2 py-0.5 ${
+              display.showFit
+                ? 'border-smsg-500 bg-smsg-50 text-smsg-900'
+                : 'border-gray-300 bg-white text-gray-600'
+            }`}
+          >
+            {t('editor.chart.fitLinear')}
+          </button>
+          <button
+            type="button"
+            data-toolbar="reset-zoom"
+            // P1 단계에서는 placeholder — 실제 dataZoom reset 은 P3 에서
+            // EChartsView 의 instance handle 을 통해 수행한다.
+            onClick={() => {
+              /* no-op placeholder */
+            }}
+            className="rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-600"
+          >
+            {t('editor.chart.resetZoom')}
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2 text-xs">
         <label className="block">
           <span className="mb-1 block text-gray-600">{t('editor.chart.title')}</span>
@@ -301,7 +477,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
                   <td key={sIdx} className="px-2 py-1">
                     <input
                       type="number"
-                      value={s.values[lIdx] ?? 0}
+                      value={s.values?.[lIdx] ?? 0}
                       onChange={(e) => setValue(sIdx, lIdx, e.target.value)}
                       className="w-20 bg-transparent outline-none"
                     />

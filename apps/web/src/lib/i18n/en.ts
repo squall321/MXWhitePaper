@@ -424,6 +424,13 @@ export const en: Record<LocaleKey, string> = {
   'editor.chart.loadExample': 'Insert example',
   'editor.chart.clear': 'Clear',
   'editor.chart.removeRow': 'Remove row {n}',
+  // xy-line chart toolbar (P1)
+  'editor.chart.toolbar': 'Chart tools',
+  'editor.chart.gridOn': 'Grid',
+  'editor.chart.xLog': 'X log',
+  'editor.chart.yLog': 'Y log',
+  'editor.chart.fitLinear': 'Fit linear',
+  'editor.chart.resetZoom': '⟲ Reset zoom',
 
   'editor.kpi.empty': 'This block shows key performance indicator (KPI) cards.',
   'editor.kpi.addCard': '+ Add card',

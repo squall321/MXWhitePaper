@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-22T22:31:06.585137+00:00",
+  "generated_at": "2026-05-23T23:36:00.426883+00:00",
   "source_hashes": {
-    "packages/shared/schemas/document.json": "e7523411ba11e0c88119ff89b8bef905cbf5e713940bcd2eea485d321fa07299",
+    "packages/shared/schemas/document.json": "a3bb7cfd05316a16248c5cf12e2e6d68e340c89d780037b4133f475e80ef1e84",
     "apps/api/app/services/widget_markers.py": "29b9da045c859288c6bcb1195176ee9ebb9b50c2c5376c419d5c293632a5658e",
     "apps/api/app/services/docx_import.py": "a3e9a0afb4e221e12afafbd4db2f0b3360b445d4ea03869eadfd590945cb7f59",
     "docs/llm-input-rules.md": "174e43573dcff08000fd050d959bfacc5a47c6ced180338cb69ab93a11456ebc",
@@ -30,5 +30,5 @@
   ],
   "chunk_count": 132,
   "embedding_backend_fingerprint": "chunks-only:v1",
-  "chunks_sha256": "4ef9fe932b2ed4f9f058eed6b1095ae4c78ef590da732509c1b45103b9c40573"
+  "chunks_sha256": "258c0d97e383899d2e9ada9f27475525153094ea8e9ee822cd4e6a1c22cf7f5f"
 }

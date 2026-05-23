@@ -20,6 +20,9 @@ import {
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { ChartBlock } from '@/types/document'
+// xy-line 의 선형 회귀선/표기는 동일 함수를 에디터/뷰어가 공유하기 위해
+// 별도 순수 모듈에 분리되어 있다 (chart-xy-line.plan §2.5).
+import { fitLine, formatFit } from '@/features/editor/blocks/_fits'
 
 // Register only the pieces we use to keep the bundle slim. Adding a new
 // chart type later means importing it here too.
@@ -110,6 +113,9 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
   const labels = block.data?.labels ?? []
   const series = block.data?.series ?? []
   const interactions = block.interactions ?? {}
+  // display 토글 — gridOn 기본 true, 나머지는 명시적 true 일 때만 ON.
+  const display = block.display ?? {}
+  const gridOn = display.gridOn !== false
 
   // markPoint coords use the series' (x, y) pair. We resolve `xIndex` to
   // the label at that index + the y from the FIRST series — that mirrors
@@ -159,7 +165,7 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
             radius: ['35%', '65%'],
             data: labels.map((label, i) => ({
               name: label,
-              value: series[0]?.values[i] ?? 0,
+              value: series[0]?.values?.[i] ?? 0,
             })),
             itemStyle: { borderColor: '#fff', borderWidth: 2 },
             label: { show: true, formatter: '{b}\n{d}%' },
@@ -192,15 +198,140 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
       typedOption = {
         tooltip: { trigger: 'item' },
         legend: { bottom: 0 },
-        xAxis: { type: 'value' },
-        yAxis: { type: 'value' },
+        xAxis: {
+          type: 'value',
+          splitLine: { show: gridOn },
+        },
+        yAxis: {
+          type: 'value',
+          splitLine: { show: gridOn },
+        },
         series: series.map((s, i) => ({
           name: s.name,
           type: 'scatter',
-          data: s.values.map((y, j) => [j, y]),
+          data: (s.values ?? []).map((y, j) => [j, y]),
           itemStyle: { color: PALETTE[i % PALETTE.length] },
           markPoint: markPoints.length > 0 ? { data: markPoints } : undefined,
         })),
+      }
+      break
+    }
+    case 'xy-line': {
+      // 시리즈마다 자유 (x,y) 쌍 — labels 무시. stress-strain 같이 시료별
+      // 측정점이 다른 데이터를 한 그림에 겹쳐 비교.
+      const xName = block.data?.xAxisLabel ?? ''
+      const yName = block.data?.yAxisLabel ?? ''
+      // 데이터 시리즈
+      const dataSeries = series.map((s, i) => {
+        const color = PALETTE[i % PALETTE.length]
+        return {
+          name: s.name,
+          type: 'line' as const,
+          smooth: false,
+          showSymbol: false,
+          data: (s.points ?? []).map((p) => [p.x, p.y]),
+          lineStyle: { color },
+          itemStyle: { color },
+        }
+      })
+      // showFit=true 면 시리즈마다 선형 회귀선을 별도 line 시리즈로 추가.
+      // 같은 색의 dashed line + 끝점 label 로 fit 식/R² 표시.
+      const fitSeries: any[] = []
+      if (display.showFit === true) {
+        series.forEach((s, i) => {
+          const result = fitLine(s.points ?? [])
+          if (!result) return
+          const color = PALETTE[i % PALETTE.length]
+          const label = formatFit(result.fit)
+          fitSeries.push({
+            // legend 와 충돌 안 나도록 fit 시리즈에는 별도 이름.
+            name: `${s.name} (fit)`,
+            type: 'line',
+            smooth: false,
+            showSymbol: false,
+            // 회귀선 위에 라벨이 겹치지 않게 마지막 점에만 라벨 표시.
+            data: [
+              [result.line[0].x, result.line[0].y],
+              [result.line[1].x, result.line[1].y, label],
+            ],
+            lineStyle: { color, type: 'dashed', width: 1.5 },
+            itemStyle: { color },
+            label: {
+              show: true,
+              position: 'right',
+              formatter: (param: any) => {
+                const v = param?.value
+                // 끝점 (라벨 동봉) 만 표시. 다른 점은 빈 문자열.
+                if (Array.isArray(v) && v.length >= 3) return String(v[2])
+                return ''
+              },
+              color,
+              fontSize: 11,
+            },
+            silent: true, // tooltip/legend 동작에서 제외 — fit 은 보조선.
+          })
+        })
+      }
+
+      typedOption = {
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: interactions.showCrosshair
+            ? { type: 'cross' }
+            : { type: 'line' },
+          // xy-line tooltip — 시리즈명 / caption (회색) / (x, y) 단위 포함.
+          formatter: (paramsRaw: any) => {
+            const params = Array.isArray(paramsRaw) ? paramsRaw : [paramsRaw]
+            const rows = params
+              .filter((p) => !String(p?.seriesName ?? '').endsWith('(fit)'))
+              .map((p) => {
+                const v = p?.value
+                const x = Array.isArray(v) ? v[0] : ''
+                const y = Array.isArray(v) ? v[1] : ''
+                const seriesName = String(p?.seriesName ?? '')
+                // caption — block.data.series 에서 동명 시리즈 찾기.
+                const matched = series.find((s) => s.name === seriesName)
+                const caption = matched?.caption
+                const captionHtml = caption
+                  ? `<div style="color:#888;font-size:11px">${escapeHtml(caption)}</div>`
+                  : ''
+                const xFmt = formatTooltipNum(x)
+                const yFmt = formatTooltipNum(y)
+                const xLabel = xName || 'x'
+                const yLabel = yName || 'y'
+                return `<div style="margin-bottom:4px">
+                  <div style="font-weight:600">${escapeHtml(seriesName)}</div>
+                  ${captionHtml}
+                  <div>(${escapeHtml(xLabel)}, ${escapeHtml(yLabel)}) = (${xFmt}, ${yFmt})</div>
+                </div>`
+              })
+            return rows.join('')
+          },
+        },
+        legend: { bottom: 0, data: dataSeries.map((s) => s.name) },
+        grid: { left: 56, right: 24, top: 24, bottom: 64, containLabel: true },
+        xAxis: {
+          // log 토글이 켜진 경우 type 자체를 'log' 로 — 음수/0 데이터는
+          // ECharts 가 자체적으로 skip.
+          type: display.xLog === true ? 'log' : 'value',
+          name: xName,
+          nameLocation: 'middle',
+          nameGap: 30,
+          splitLine: { show: gridOn },
+        },
+        yAxis: {
+          type: display.yLog === true ? 'log' : 'value',
+          name: yName,
+          nameLocation: 'middle',
+          nameGap: 50,
+          splitLine: { show: gridOn },
+        },
+        // dataZoom — xy-line 의 핵심 인터랙션이라 기본 ON.
+        dataZoom: [
+          { type: 'inside' },
+          { type: 'slider', show: true, bottom: 0 },
+        ],
+        series: [...dataSeries, ...fitSeries],
       }
       break
     }
@@ -223,8 +354,13 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
           type: 'category',
           data: labels,
           boundaryGap: isBar,
+          splitLine: { show: gridOn },
         },
-        yAxis: { type: 'value' },
+        yAxis: {
+          // category 축인 x 와 달리 y 는 value — yLog 만 의미 있음.
+          type: display.yLog === true ? 'log' : 'value',
+          splitLine: { show: gridOn },
+        },
         dataZoom: interactions.showZoom
           ? [
               { type: 'inside' },
@@ -267,4 +403,27 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
     return { ...typedOption, ...block.options }
   }
   return typedOption
+}
+
+// tooltip HTML 안에 사용자 입력 (시리즈명/caption/축 라벨) 을 끼워넣을 때
+// XSS 방지를 위한 최소 escape. echarts formatter 가 반환한 문자열은
+// innerHTML 로 들어간다.
+function escapeHtml(s: unknown): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+// xy-line tooltip 용 숫자 포맷 — 크기에 따라 자릿수 자동 조절. 비숫자는 그대로.
+function formatTooltipNum(v: unknown): string {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return String(v ?? '')
+  const abs = Math.abs(v)
+  if (v === 0) return '0'
+  if (abs >= 100) return v.toFixed(1)
+  if (abs >= 1) return v.toFixed(3)
+  if (abs >= 0.01) return v.toFixed(4)
+  return v.toExponential(2)
 }
