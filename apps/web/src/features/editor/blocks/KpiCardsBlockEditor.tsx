@@ -5,6 +5,7 @@ import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { KpiCardsBlockView } from '@/components/blocks/KpiCardsBlock'
 import { BlockHelpDrawer } from '@/features/editor/components/BlockHelpDrawer'
+import { ZebraToggle } from './ZebraToggle'
 import { useT } from '@/lib/i18n'
 
 interface Props {
@@ -106,7 +107,16 @@ export function KpiCardsBlockEditor({ slug, block }: Props) {
         </div>
       )}
       <div className="space-y-2">
-        <p className="text-xs font-medium text-gray-700">{t('editor.kpi.itemsHeader')}</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-medium text-gray-700">{t('editor.kpi.itemsHeader')}</p>
+          <ZebraToggle
+            blockType="kpi-cards"
+            options={local.options}
+            onChange={({ stripe }) =>
+              void push({ ...local, options: { ...local.options, stripe } })
+            }
+          />
+        </div>
         {local.items.map((it, i) => (
           <div
             key={i}

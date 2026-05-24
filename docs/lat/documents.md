@@ -105,9 +105,10 @@
   TableBlock 과 달리 docx import 가 만들지 않고 사이트 에디터에서 직접 추가/편집.
   docx export 는 `_b_spreadsheet()` 가 `stripe=True` → `Light Grid Accent 1`,
   `False` → `Table Grid` 로 분기.
-- `BibliographyBlock` — `entries[]` ( `{key?, text, doi?, url?}` ), `title?`, `style?`.
-  본문의 `[[cite:KEY]]` 가 `<li id="cite-{key}">` anchor 로 연결. ★ 4 export
-  (docx / html / pptx / markdown) 모두 핸들러 존재 (이전엔 docx 만 존재했음).
+- `BibliographyBlock` — `entries[]` ( `{key?, text, doi?, url?}` ), `title?`, `style?`,
+  `options.stripe?` (default `true`, FE-only zebra). 본문의 `[[cite:KEY]]` 가
+  `<li id="cite-{key}">` anchor 로 연결. ★ 4 export (docx / html / pptx / markdown)
+  모두 핸들러 존재 (이전엔 docx 만 존재했음).
 - `ImageBlock` — `imageId` (camelCase, ULID/UUID), `alt?`, `caption?`, `width?`
   (sm=200px / md=400px / lg=600px / full). docx export 도 `width` enum 을
   Picture 너비로 반영 (sm/md/lg/full).
@@ -123,12 +124,19 @@
   본문 흐름의 명시적 여백. FE editor (SpacerBlockEditor.tsx) 가 dropdown 으로
   4 옵션 노출 (pass-3 N1 확장).
 - `FigureIndexBlock` — 본문의 캡션 있는 image/table/chart 자동 목차. `kinds?`
-  필터, `title?`. FE 의 FigureIndexBlock 에 🔄 갱신 버튼 — MutationObserver
-  로 본문 변화 캐치 후 collect() 재실행.
+  필터, `title?`, `options.stripe?` (default `true`, 그룹 내 항목 zebra — 그룹별
+  카운터 리셋). FE 의 FigureIndexBlock 에 🔄 갱신 버튼 — MutationObserver
+  로 본문 변화 캐치 후 collect() 재실행. 편집 모드에서는
+  [[src/features/editor/blocks/FigureIndexBlockEditor.tsx]] 가 title + zebra 토글만
+  노출 (entries 는 런타임 DOM 스캔, kinds 편집은 yagni 로 out-of-scope).
 - `CalloutBlock` — `variant: "info"|"warn"|"danger"|"success"|"tip"`, `title?`, `text`.
   docx export 시 `Widget: callout (variant)` hidden marker emit (검증:
   `test_renderer_callout_emits_hidden_marker_run`).
-- `KpiCardsBlock` — `items[]` (label, value, trend)
+- `KpiCardsBlock` — `items[]` (label, value, trend), `options.stripe?` (default `true`,
+  카드 단위 `:nth-of-type(2n)` blue-050 zebra — grid 컬럼 수와 무관).
+- `ListBlock` — `style: "bullet"|"number"|"check"`, `items[]` (depth 는 indent
+  prefix), `options.stripe?` (default `true`, depth=0 항목 한정 zebra — 중첩 항목
+  무영향).
 - `IframeBlock` — embed via `src` (URL) **XOR** `html` (sanitized snippet).
   schema 가 `oneOf` 로 두 변종을 강제하고, pydantic v2 의 codegen 한계
   (`not: required` 가 떨어짐) 는 [[packages/shared/codegen/generate-py.py]] 가
@@ -268,8 +276,12 @@ materialized view refresh 도 스킵 가능.
 9. **SpreadsheetBlock 은 docx import 가 만들지 않는다** — 사이트 에디터에서
    직접 추가. LLM 이 docx 로 작성할 땐 일반 TableBlock 으로 두고 사람이
    사이트에서 변환. (참고: [[../llm-input-rules.md#2-9-spreadsheet-편집-가능한-표]])
-10. **TableBlock·SpreadsheetBlock 의 `options.stripe` 기본은 `true`** — 옵션
-    객체 없으면 zebra 적용. 명시적으로 끄려면 `options.stripe=false` 저장 필요.
+10. **zebra `options.stripe` 기본은 `true`** — table/spreadsheet/list/kpi-cards/
+    bibliography/figure-index 6 종 모두 동일 contract: `options` 객체 없으면 zebra
+    적용. 명시적으로 끄려면 `{stripe:false}` 저장 필요. 단일 진실은
+    [[src/features/editor/blocks/zebra.ts#getZebraClass]] + 공통 UI 는
+    [[src/features/editor/blocks/ZebraToggle.tsx]]. table/spreadsheet 만 docx 등
+    export 에 반영, 나머지 4 종은 FE-only 시각 효과.
 11. **pydantic v2 codegen 은 JSON Schema 의 `oneOf` 의 `not: required` 부분을
     무시한다** — `datamodel-codegen` 이 두 helper class + `RootModel` union 으로
     풀지만 cross-branch 거부 (양쪽 모두 set 입력) 는 모델 validator 가 필요.

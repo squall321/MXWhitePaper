@@ -126,6 +126,9 @@ const GanttBlockEditor = lazy(() =>
 const KpiCardsBlockEditor = lazy(() =>
   import('@/features/editor/blocks/KpiCardsBlockEditor').then((m) => ({ default: m.KpiCardsBlockEditor })),
 )
+const FigureIndexBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/FigureIndexBlockEditor').then((m) => ({ default: m.FigureIndexBlockEditor })),
+)
 const PdfBlockEditor = lazy(() =>
   import('@/features/editor/blocks/PdfBlockEditor').then((m) => ({ default: m.PdfBlockEditor })),
 )
@@ -396,6 +399,9 @@ function BlockRendererInner({ block }: { block: Block }) {
     if (block.type === 'bibliography') {
       return lazyEditor(<BibliographyBlockEditor slug={editorSlug} block={block} />)
     }
+    if (block.type === 'figure-index') {
+      return lazyEditor(<FigureIndexBlockEditor slug={editorSlug} block={block} />)
+    }
     if (block.type === 'doc-link-card') {
       return <DocLinkCardBlockEditor slug={editorSlug} block={block} />
     }
@@ -506,7 +512,7 @@ function BlockRendererInner({ block }: { block: Block }) {
     case 'bibliography':
       return <BibliographyBlockView block={block} />
     case 'figure-index':
-      return <FigureIndexBlockView block={block as { title?: string; kinds?: ('image' | 'table' | 'chart')[] }} />
+      return <FigureIndexBlockView block={block as { title?: string; kinds?: ('image' | 'table' | 'chart')[]; options?: { stripe?: boolean } }} />
     case 'spacer': {
       // Deliberate vertical breathing room. Defaults are tight in
       // SectionLayout (space-y-2 = 8px); spacer block adds 16/32/64px

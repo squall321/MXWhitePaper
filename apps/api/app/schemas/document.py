@@ -215,6 +215,20 @@ class Style(Enum):
     check = 'check'
 
 
+class Options(BaseModel):
+    """
+    표시 옵션. 모두 optional, default 동작은 ON.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    stripe: bool | None = True
+    """
+    행 단위 zebra-striping. false 일 때만 OFF — 옛 문서 (옵션 미지정) 는 ON 유지. 중첩 항목 (depth>=1) 은 stripe 미적용.
+    """
+
+
 class ListBlock(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -223,6 +237,10 @@ class ListBlock(BaseModel):
     id: Ulid
     style: Style
     items: list[str]
+    options: Options | None = None
+    """
+    표시 옵션. 모두 optional, default 동작은 ON.
+    """
     meta: BlockMeta | None = None
 
 
@@ -389,7 +407,7 @@ class BorderStyle(Enum):
     all = 'all'
 
 
-class Options(BaseModel):
+class Options1(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
@@ -436,6 +454,20 @@ class Item(BaseModel):
     trend: Trend | None = None
 
 
+class Options2(BaseModel):
+    """
+    표시 옵션. 모두 optional, default 동작은 ON.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    stripe: bool | None = True
+    """
+    카드 단위 zebra-striping (`:nth-of-type(2n)`). grid 컬럼 수와 무관 — 카드 한 칸 건너 한 칸 음영.
+    """
+
+
 class KpiCardsBlock(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -443,6 +475,10 @@ class KpiCardsBlock(BaseModel):
     type: Literal['kpi-cards']
     id: Ulid
     items: list[Item]
+    options: Options2 | None = None
+    """
+    표시 옵션. 모두 optional, default 동작은 ON.
+    """
     meta: BlockMeta | None = None
 
 
@@ -996,6 +1032,20 @@ class Kind(Enum):
     chart = 'chart'
 
 
+class Options3(BaseModel):
+    """
+    표시 옵션. 모두 optional, default 동작은 ON.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    stripe: bool | None = True
+    """
+    그룹별 <ol> 안에서 항목 단위 zebra-striping (각 그룹 내 카운터 리셋).
+    """
+
+
 class FigureIndexBlock(BaseModel):
     """
     Auto-generated table of figures (그림/표/차트 목차). The renderer walks the document and lists every captioned image, table (with caption), and chart (with title), each linked to its anchor. `kinds` controls which lists to render.
@@ -1010,6 +1060,10 @@ class FigureIndexBlock(BaseModel):
     kinds: list[Kind] | None = Field(None, max_length=3, min_length=1)
     """
     Which figure types to include — 'image' (그림), 'table' (표), 'chart' (차트). Order in this array determines section order. Omit for all three.
+    """
+    options: Options3 | None = None
+    """
+    표시 옵션. 모두 optional, default 동작은 ON.
     """
     meta: BlockMeta | None = None
 
@@ -1372,7 +1426,7 @@ class AnnotationElement(
     )
 
 
-class Options1(BaseModel):
+class Options4(BaseModel):
     """
     Visual rendering options. All fields optional with sensible defaults.
     """
@@ -1400,7 +1454,7 @@ class SpreadsheetBlock(BaseModel):
     """
     Sparse map of cell-ref → raw cell input (e.g. {'A1':'42', 'B2':'=SUM(A1:A10)'})
     """
-    options: Options1 | None = None
+    options: Options4 | None = None
     """
     Visual rendering options. All fields optional with sensible defaults.
     """
@@ -1435,6 +1489,20 @@ class Entry(BaseModel):
     """
 
 
+class Options5(BaseModel):
+    """
+    표시 옵션. 모두 optional, default 동작은 ON.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    stripe: bool | None = True
+    """
+    참고문헌 항목 단위 zebra-striping (각 entry 행).
+    """
+
+
 class BibliographyBlock(BaseModel):
     """
     Reference list (참고문헌). Citations elsewhere in the document use the [[cite:KEY]] inline syntax to anchor-link into entries here. Most often produced by the DOCX importer when it sees a 'References' / '참고문헌' / 'Bibliography' heading.
@@ -1454,6 +1522,10 @@ class BibliographyBlock(BaseModel):
     Citation style label (numeric / alphabetic / author-year). Currently informational — the FE renders ordered list either way.
     """
     entries: list[Entry] = Field(..., min_length=1)
+    options: Options5 | None = None
+    """
+    표시 옵션. 모두 optional, default 동작은 ON.
+    """
     meta: BlockMeta | None = None
 
 
@@ -1565,7 +1637,7 @@ class TableBlock(BaseModel):
     """
     Optional footer row showing per-column aggregates. Computed at render time from `rows` (flat mode) — sparse mode is skipped because merged-cell semantics make column-wise sums ambiguous.
     """
-    options: Options | None = None
+    options: Options1 | None = None
     meta: BlockMeta | None = None
 
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { BibliographyBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
+import { ZebraToggle } from './ZebraToggle'
 import { useT } from '@/lib/i18n'
 
 interface Props {
@@ -66,6 +67,7 @@ export function BibliographyBlockEditor({ slug, block }: Props) {
           title: next.title,
           style: next.style,
           entries: next.entries,
+          ...(next.options ? { options: next.options } : {}),
         } as Partial<BibliographyBlock>,
         etag,
         t('editor.bibliography.changeLog'),
@@ -106,16 +108,25 @@ export function BibliographyBlockEditor({ slug, block }: Props) {
       data-block-id={block.id}
       className="my-4 space-y-2 rounded border border-smsg-100 bg-white p-3 shadow-sm"
     >
-      <input
-        type="text"
-        value={local.title ?? ''}
-        onChange={(e) =>
-          schedule({ ...local, title: e.target.value || undefined })
-        }
-        placeholder={t('editor.bibliography.titlePlaceholder')}
-        aria-label={t('editor.bibliography.title')}
-        className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-base font-semibold text-smsg-900 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none"
-      />
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={local.title ?? ''}
+          onChange={(e) =>
+            schedule({ ...local, title: e.target.value || undefined })
+          }
+          placeholder={t('editor.bibliography.titlePlaceholder')}
+          aria-label={t('editor.bibliography.title')}
+          className="flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-base font-semibold text-smsg-900 hover:border-gray-200 focus:border-smsg-500 focus:bg-white focus:outline-none"
+        />
+        <ZebraToggle
+          blockType="bibliography"
+          options={local.options}
+          onChange={({ stripe }) =>
+            schedule({ ...local, options: { ...local.options, stripe } })
+          }
+        />
+      </div>
 
       <ol className="list-none space-y-2 pl-0">
         {local.entries.map((entry, idx) => (

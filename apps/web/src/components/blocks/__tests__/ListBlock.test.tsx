@@ -85,3 +85,41 @@ describe('<ListBlockView /> nesting', () => {
     expect(html).toContain('deepest')
   })
 })
+
+describe('<ListBlockView /> zebra-striping', () => {
+  it('default ON — every other depth-0 row gets bg-gray-50', () => {
+    const html = renderToStaticMarkup(
+      <ListBlockView block={mkBlock('bullet', ['a', 'b', 'c', 'd'])} />,
+    )
+    // Two odd rows (depth0Idx 1 and 3) should carry the stripe class.
+    const matches = html.match(/bg-gray-50/g) ?? []
+    expect(matches.length).toBe(2)
+  })
+
+  it('options.stripe=false suppresses every stripe', () => {
+    const block: ListBlock = {
+      ...mkBlock('bullet', ['a', 'b', 'c']),
+      options: { stripe: false },
+    }
+    const html = renderToStaticMarkup(<ListBlockView block={block} />)
+    expect(html).not.toContain('bg-gray-50')
+  })
+
+  it('nested items (depth>=1) never receive a stripe', () => {
+    // depth0=0 "a"  -> no stripe (even)
+    // depth1   "  b" -> nested, must not carry stripe even though it's a
+    //                    different visual line
+    // depth0=1 "c"  -> stripe (odd)
+    const html = renderToStaticMarkup(
+      <ListBlockView
+        block={mkBlock('bullet', ['a', '  b', 'c'])}
+      />,
+    )
+    // Capture every <li ... class="..."> opening — only the depth-0 odd row
+    // should match. We rely on data-depth attribute as anchor.
+    const lis = html.match(/<li[^>]*>/g) ?? []
+    const withStripe = lis.filter((s) => s.includes('bg-gray-50'))
+    expect(withStripe.length).toBe(1)
+    expect(withStripe[0]).toContain('data-depth="0"')
+  })
+})

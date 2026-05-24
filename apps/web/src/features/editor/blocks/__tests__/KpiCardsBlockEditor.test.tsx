@@ -42,4 +42,26 @@ describe('<KpiCardsBlockEditor /> static render', () => {
     expect(html).toContain('aria-label="kpi 1 label"')
     expect(html).toContain('+ KPI 추가')
   })
+
+  it('surfaces ZebraToggle for the kpi-cards blockType', () => {
+    useEditorStore.getState().reset()
+    useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+    const html = renderToStaticMarkup(<KpiCardsBlockEditor slug="test" block={block} />)
+    expect(html).toContain('data-zebra-toggle="kpi-cards"')
+  })
+
+  it('preview applies blue zebra to odd cards when stripe is on', () => {
+    useEditorStore.getState().reset()
+    useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+    const html = renderToStaticMarkup(<KpiCardsBlockEditor slug="test" block={block} />)
+    expect(html).toContain('bg-[var(--smsg-blue-050)]')
+  })
+
+  it('preview skips zebra when options.stripe is false', () => {
+    useEditorStore.getState().reset()
+    useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+    const blockOff: KpiCardsBlock = { ...block, options: { stripe: false } }
+    const html = renderToStaticMarkup(<KpiCardsBlockEditor slug="test" block={blockOff} />)
+    expect(html).not.toContain('bg-[var(--smsg-blue-050)]')
+  })
 })

@@ -136,6 +136,9 @@ inline 서식은 markdown-flavored: `**bold**`, `*italic*`, `` `code` ``,
 
 `style`: `"bullet"` | `"number"` | `"check"` (체크박스).
 
+선택적 `options.stripe` (boolean, default `true`) — FE 한정 zebra-striping 토글
+(depth=0 항목만 적용). 명시적으로 끄려면 `"options": {"stripe": false}`.
+
 ### 3.4 quote (인용)
 
 ```json
@@ -225,6 +228,7 @@ LaTeX 표기. `display`: `"block"` | `"inline"`.
 ```
 
 `trend`: `"up"` | `"down"` | `"flat"`. `delta` 는 문자열 또는 숫자.
+선택적 `options.stripe` (boolean, default `true`) — 카드 단위 zebra (한 칸 건너 blue).
 
 ### 3.10 chart (데이터 차트) ★
 
@@ -434,6 +438,11 @@ YouTube/Vimeo 등 oembed 지원 호스트는 자동 변환됨.
 `whiteboard`, `image-annotation`, `pdf`, `data-source`, `dashboard-embed`,
 `calculator`, `figure-index`, `spacer`, `form`, `quiz` 등이 있다. 정확한 스키마는
 서버의 `apps/api/app/schemas/document.py` 의 해당 `*Block` 클래스 참조.
+
+★ zebra-striping 옵션은 6 종 (table / spreadsheet / list / kpi-cards / bibliography /
+figure-index) 이 공유한다. 모두 `options.stripe` (boolean, default `true`) 동일 패턴 —
+명시적 OFF 만 효과 있다. bibliography 는 entry 단위, figure-index 는 종류별 그룹
+(`<ol>` 안 카운터) 단위로 stripe 적용.
 
 가장 안전한 패턴: 클래스 정의를 보고 pydantic 의 필수 필드만 채워 보낸 뒤
 응답이 422 면 `error.details.errors` 가 부족한 필드를 알려줌. 이게 실질적인

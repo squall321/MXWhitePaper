@@ -1,5 +1,6 @@
 import type { ListBlock } from '@/types/document'
 import { Inline } from '../wiki/Inline'
+import { getZebraClass } from '@/features/editor/blocks/zebra'
 
 /**
  * List block — bullet / number / check.  Check items render an inert
@@ -70,6 +71,9 @@ export function ListBlockView({ block }: { block: ListBlock }) {
   // the depth shrinks so each nested level restarts at 1.
   const depthCounters: number[] = []
   let lastDepth = -1
+  // Top-level (depth=0) running counter used as the zebra row index. Nested
+  // items reuse the previous depth-0 index (no stripe applied to them).
+  let depth0Idx = -1
   const enriched = block.items.map((raw) => {
     const depth = countDepth(raw)
     if (depth !== lastDepth) {
@@ -84,40 +88,54 @@ export function ListBlockView({ block }: { block: ListBlock }) {
     const indexAtDepth = depthCounters[depth] ?? 0
     depthCounters[depth] = indexAtDepth + 1
     lastDepth = depth
-    return { raw, depth, indexAtDepth, visible: stripIndent(raw) }
+    if (depth === 0) depth0Idx++
+    return {
+      raw,
+      depth,
+      indexAtDepth,
+      depth0Idx,
+      visible: stripIndent(raw),
+    }
   })
+
+  const zebraFor = (depth: number, idx: number) =>
+    depth === 0 ? getZebraClass('list', block.options, idx) : ''
 
   if (block.style === 'number') {
     return (
       <ul className="space-y-1 text-[15px] leading-7 text-smsg-900">
-        {enriched.map(({ visible, depth, indexAtDepth }, i) => (
-          <li
-            key={i}
-            className="flex items-start gap-2"
-            style={{ paddingLeft: `${depth * 1.5}rem` }}
-            data-depth={depth}
-          >
-            <span className="mt-0 inline-block min-w-[1.5rem] text-right text-gray-500">
-              {numberedMarker(depth, indexAtDepth)}
-            </span>
-            <span className="flex-1">
-              <Inline text={visible} />
-            </span>
-          </li>
-        ))}
+        {enriched.map(({ visible, depth, indexAtDepth, depth0Idx }, i) => {
+          const zebra = zebraFor(depth, depth0Idx)
+          return (
+            <li
+              key={i}
+              className={`flex items-start gap-2${zebra ? ` ${zebra}` : ''}`}
+              style={{ paddingLeft: `${depth * 1.5}rem` }}
+              data-depth={depth}
+            >
+              <span className="mt-0 inline-block min-w-[1.5rem] text-right text-gray-500">
+                {numberedMarker(depth, indexAtDepth)}
+              </span>
+              <span className="flex-1">
+                <Inline text={visible} />
+              </span>
+            </li>
+          )
+        })}
       </ul>
     )
   }
   if (block.style === 'check') {
     return (
       <ul className="space-y-1 text-[15px] leading-7 text-smsg-900">
-        {enriched.map(({ visible, depth }, i) => {
+        {enriched.map(({ visible, depth, depth0Idx }, i) => {
           const checked = isChecked(visible)
           const display = stripCheckPrefix(visible)
+          const zebra = zebraFor(depth, depth0Idx)
           return (
             <li
               key={i}
-              className="flex items-start gap-2"
+              className={`flex items-start gap-2${zebra ? ` ${zebra}` : ''}`}
               style={{ paddingLeft: `${depth * 1.5}rem` }}
               data-depth={depth}
             >
@@ -140,21 +158,24 @@ export function ListBlockView({ block }: { block: ListBlock }) {
   }
   return (
     <ul className="space-y-1 text-[15px] leading-7 text-smsg-900">
-      {enriched.map(({ visible, depth }, i) => (
-        <li
-          key={i}
-          className="flex items-start gap-2"
-          style={{ paddingLeft: `${depth * 1.5}rem` }}
-          data-depth={depth}
-        >
-          <span aria-hidden className="mt-0 inline-block min-w-[0.75rem] text-gray-500">
-            {bulletGlyph(depth)}
-          </span>
-          <span className="flex-1">
-            <Inline text={visible} />
-          </span>
-        </li>
-      ))}
+      {enriched.map(({ visible, depth, depth0Idx }, i) => {
+        const zebra = zebraFor(depth, depth0Idx)
+        return (
+          <li
+            key={i}
+            className={`flex items-start gap-2${zebra ? ` ${zebra}` : ''}`}
+            style={{ paddingLeft: `${depth * 1.5}rem` }}
+            data-depth={depth}
+          >
+            <span aria-hidden className="mt-0 inline-block min-w-[0.75rem] text-gray-500">
+              {bulletGlyph(depth)}
+            </span>
+            <span className="flex-1">
+              <Inline text={visible} />
+            </span>
+          </li>
+        )
+      })}
     </ul>
   )
 }

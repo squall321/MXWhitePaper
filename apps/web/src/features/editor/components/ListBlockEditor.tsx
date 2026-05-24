@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ListBlock, Slug, Ulid } from '@/types/document'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { useEditorStore } from '../state'
+import { ZebraToggle } from '../blocks/ZebraToggle'
 
 /**
  * ListBlockEditor — inline editor for the three list styles (bullet / number /
@@ -109,10 +110,28 @@ export function ListBlockEditor({ slug, block }: Props) {
         id: block.id as Ulid,
         style: block.style,
         items: next,
+        ...(block.options ? { options: block.options } : {}),
       } as never
       const result = await patchBlock(slug, block.id, patch, etag, '목록 수정')
       apply(result.document, result.etag)
       dirtyRef.current = false
+    } catch (err) {
+      if (isPreconditionFailed(err)) setConflict(null)
+    }
+  }
+
+  const persistOptions = async (nextOptions: NonNullable<ListBlock['options']>) => {
+    if (!etag) return
+    try {
+      const patch = {
+        type: 'list' as const,
+        id: block.id as Ulid,
+        style: block.style,
+        items: block.items,
+        options: nextOptions,
+      } as never
+      const result = await patchBlock(slug, block.id, patch, etag, '목록 옵션 변경')
+      apply(result.document, result.etag)
     } catch (err) {
       if (isPreconditionFailed(err)) setConflict(null)
     }
@@ -252,13 +271,21 @@ export function ListBlockEditor({ slug, block }: Props) {
   let lastDepth = -1
 
   return (
-    <ul
-      data-list-block-editor
-      data-block-id={block.id}
-      data-list-style={block.style}
-      className="space-y-1"
-      onBlur={onBlur}
-    >
+    <div data-list-block-editor-root data-block-id={block.id}>
+      <div className="mb-1 flex items-center justify-end">
+        <ZebraToggle
+          blockType="list"
+          options={block.options}
+          onChange={({ stripe }) => void persistOptions({ ...block.options, stripe })}
+        />
+      </div>
+      <ul
+        data-list-block-editor
+        data-block-id={block.id}
+        data-list-style={block.style}
+        className="space-y-1"
+        onBlur={onBlur}
+      >
       {items.map((raw, idx) => {
         const depth = countDepth(raw)
         // Number-list counter bookkeeping: reset deeper levels when depth
@@ -324,7 +351,8 @@ export function ListBlockEditor({ slug, block }: Props) {
       <li className="pointer-events-none mt-1 list-none text-[11px] text-gray-400">
         Tab으로 들여쓰기 / Shift+Tab으로 내어쓰기
       </li>
-    </ul>
+      </ul>
+    </div>
   )
 }
 

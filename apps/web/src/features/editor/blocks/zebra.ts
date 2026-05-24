@@ -1,27 +1,38 @@
 /**
- * Zebra-striping utility for table/spreadsheet editor (and views that share
- * the same row-class contract). Pulled out as a pure function so we can
- * unit-test the row-coloring rule without mounting any UI.
+ * Zebra-striping utility for row-based blocks. Pulled out as a pure
+ * function so we can unit-test the row-coloring rule without mounting
+ * any UI.
  *
  * Contract:
  *   - `stripe` defaults to ON. Only an explicit `stripe: false` disables.
- *   - Header row is *not* coloured by this util (callers pass the data-row
- *     index, starting at 0 = first data row).
+ *   - Header row (when applicable) is *not* coloured by this util; callers
+ *     pass the data-row index, starting at 0 = first data row.
  *   - Data rows at odd indices (1, 3, 5…) get the stripe class.
  *
- * Block-type colour tokens:
- *   - `table` reuses the existing gray-50 background (= var(--smsg-gray-050)).
- *   - `spreadsheet` uses a paler blue (var(--smsg-blue-050)) to visually
- *     differentiate from regular tables. Both tokens have dark-mode variants
- *     wired in `tokens.css`, so this util is theme-agnostic.
+ * Block-type colour tokens (one per `ZebraBlockType`):
+ *   - `table` / `list` / `bibliography` / `figure-index` reuse gray-50.
+ *   - `spreadsheet` / `kpi-cards` use the paler blue (`var(--smsg-blue-050)`)
+ *     to visually mark data-card / numeric-grid surfaces. Both tokens
+ *     have dark-mode variants wired in `tokens.css`, so this util is
+ *     theme-agnostic.
  */
 
 export type ZebraOpts = { stripe?: boolean }
-export type ZebraBlockType = 'table' | 'spreadsheet'
+export type ZebraBlockType =
+  | 'table'
+  | 'spreadsheet'
+  | 'list'
+  | 'kpi-cards'
+  | 'bibliography'
+  | 'figure-index'
 
 const STRIPE_CLASSES: Record<ZebraBlockType, string> = {
   table: 'bg-gray-50',
   spreadsheet: 'bg-[var(--smsg-blue-050)]',
+  list: 'bg-gray-50',
+  'kpi-cards': 'bg-[var(--smsg-blue-050)]',
+  bibliography: 'bg-gray-50',
+  'figure-index': 'bg-gray-50',
 }
 
 export function getZebraClass(

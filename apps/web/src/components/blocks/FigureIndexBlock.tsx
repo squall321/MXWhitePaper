@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { getZebraClass } from '@/features/editor/blocks/zebra'
+import type { ZebraOpts } from '@/features/editor/blocks/zebra'
 
 /**
  * Renders a self-updating table of figures.
@@ -14,7 +16,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 export function FigureIndexBlockView({
   block,
 }: {
-  block: { title?: string; kinds?: ('image' | 'table' | 'chart')[] }
+  block: {
+    title?: string
+    kinds?: ('image' | 'table' | 'chart')[]
+    options?: ZebraOpts
+  }
 }) {
   const kinds = block.kinds && block.kinds.length ? block.kinds : (['image', 'table', 'chart'] as const)
   const [entries, setEntries] = useState<
@@ -79,11 +85,14 @@ export function FigureIndexBlockView({
               {g.label}
             </div>
             <ol className="ml-3 list-decimal text-gray-700">
-              {g.entries.map((e) => (
-                <li key={`${e.kind}-${e.n}`}>
-                  {g.label} {e.n}: {e.caption || <span className="text-gray-400">(캡션 없음)</span>}
-                </li>
-              ))}
+              {g.entries.map((e, idx) => {
+                const zebra = getZebraClass('figure-index', block.options, idx)
+                return (
+                  <li key={`${e.kind}-${e.n}`} className={zebra}>
+                    {g.label} {e.n}: {e.caption || <span className="text-gray-400">(캡션 없음)</span>}
+                  </li>
+                )
+              })}
             </ol>
           </div>
         ),

@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
 import {
   countDepth,
   stripIndent,
   indentItem,
   outdentItem,
+  ListBlockEditor,
 } from '../ListBlockEditor'
+import { useEditorStore } from '@/features/editor/state'
+import type { ListBlock } from '@/types/document'
 
 describe('ListBlockEditor depth helpers', () => {
   it('countDepth counts leading 2-space pairs', () => {
@@ -52,5 +56,40 @@ describe('ListBlockEditor depth helpers', () => {
     let s = 'x'
     for (let n = 0; n < 10; n++) s = indentItem(s)
     expect(countDepth(s)).toBe(4)
+  })
+})
+
+describe('<ListBlockEditor /> zebra toggle', () => {
+  const block: ListBlock = {
+    type: 'list',
+    id: '01TESTBLOCK000000000000LST',
+    style: 'bullet',
+    items: ['first', 'second', 'third'],
+  }
+
+  it('surfaces the ZebraToggle for the list blockType', () => {
+    useEditorStore.getState().reset()
+    useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+    const html = renderToStaticMarkup(<ListBlockEditor slug="test" block={block} />)
+    expect(html).toContain('data-zebra-toggle="list"')
+  })
+
+  it('checkbox checked by default when options is undefined', () => {
+    useEditorStore.getState().reset()
+    useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+    const html = renderToStaticMarkup(<ListBlockEditor slug="test" block={block} />)
+    const idx = html.indexOf('data-zebra-toggle="list"')
+    const snippet = html.slice(idx, idx + 300)
+    expect(snippet).toContain('checked=""')
+  })
+
+  it('checkbox unchecked when options.stripe is false', () => {
+    useEditorStore.getState().reset()
+    useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+    const off: ListBlock = { ...block, options: { stripe: false } }
+    const html = renderToStaticMarkup(<ListBlockEditor slug="test" block={off} />)
+    const idx = html.indexOf('data-zebra-toggle="list"')
+    const snippet = html.slice(idx, idx + 300)
+    expect(snippet).not.toContain('checked=""')
   })
 })

@@ -266,6 +266,18 @@
         "id":    { "$ref": "#/$defs/Ulid" },
         "style": { "enum": ["bullet", "number", "check"] },
         "items": { "type": "array", "items": { "type": "string" } },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "표시 옵션. 모두 optional, default 동작은 ON.",
+          "properties": {
+            "stripe": {
+              "type": "boolean",
+              "default": true,
+              "description": "행 단위 zebra-striping. false 일 때만 OFF — 옛 문서 (옵션 미지정) 는 ON 유지. 중첩 항목 (depth>=1) 은 stripe 미적용."
+            }
+          }
+        },
         "meta":  { "$ref": "#/$defs/BlockMeta" }
       }
     },
@@ -419,6 +431,18 @@
               "value": { "type": ["string", "number"] },
               "delta": { "type": ["string", "number"] },
               "trend": { "enum": ["up", "down", "flat"] }
+            }
+          }
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "표시 옵션. 모두 optional, default 동작은 ON.",
+          "properties": {
+            "stripe": {
+              "type": "boolean",
+              "default": true,
+              "description": "카드 단위 zebra-striping (`:nth-of-type(2n)`). grid 컬럼 수와 무관 — 카드 한 칸 건너 한 칸 음영."
             }
           }
         },
@@ -929,6 +953,18 @@
           "maxItems": 3,
           "uniqueItems": true
         },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "표시 옵션. 모두 optional, default 동작은 ON.",
+          "properties": {
+            "stripe": {
+              "type": "boolean",
+              "default": true,
+              "description": "그룹별 <ol> 안에서 항목 단위 zebra-striping (각 그룹 내 카운터 리셋)."
+            }
+          }
+        },
         "meta":  { "$ref": "#/$defs/BlockMeta" }
       }
     },
@@ -1385,6 +1421,18 @@
                 "type": "string",
                 "maxLength": 1000
               }
+            }
+          }
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "표시 옵션. 모두 optional, default 동작은 ON.",
+          "properties": {
+            "stripe": {
+              "type": "boolean",
+              "default": true,
+              "description": "참고문헌 항목 단위 zebra-striping (각 entry 행)."
             }
           }
         },

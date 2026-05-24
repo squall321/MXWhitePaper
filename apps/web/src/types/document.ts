@@ -318,6 +318,15 @@ export interface ListBlock {
   id: Ulid
   style: 'bullet' | 'number' | 'check'
   items: string[]
+  /**
+   * 표시 옵션. 모두 optional, default 동작은 ON.
+   */
+  options?: {
+    /**
+     * 행 단위 zebra-striping. false 일 때만 OFF — 옛 문서 (옵션 미지정) 는 ON 유지. 중첩 항목 (depth>=1) 은 stripe 미적용.
+     */
+    stripe?: boolean
+  }
   meta?: BlockMeta
 }
 export interface QuoteBlock {
@@ -493,6 +502,15 @@ export interface KpiCardsBlock {
     delta?: string | number
     trend?: 'up' | 'down' | 'flat'
   }[]
+  /**
+   * 표시 옵션. 모두 optional, default 동작은 ON.
+   */
+  options?: {
+    /**
+     * 카드 단위 zebra-striping (`:nth-of-type(2n)`). grid 컬럼 수와 무관 — 카드 한 칸 건너 한 칸 음영.
+     */
+    stripe?: boolean
+  }
   meta?: BlockMeta
 }
 /**
@@ -1042,6 +1060,15 @@ export interface BibliographyBlock {
       url?: string
     }[]
   ]
+  /**
+   * 표시 옵션. 모두 optional, default 동작은 ON.
+   */
+  options?: {
+    /**
+     * 참고문헌 항목 단위 zebra-striping (각 entry 행).
+     */
+    stripe?: boolean
+  }
   meta?: BlockMeta
 }
 /**
@@ -1070,6 +1097,15 @@ export interface FigureIndexBlock {
     | ['image' | 'table' | 'chart']
     | ['image' | 'table' | 'chart', 'image' | 'table' | 'chart']
     | ['image' | 'table' | 'chart', 'image' | 'table' | 'chart', 'image' | 'table' | 'chart']
+  /**
+   * 표시 옵션. 모두 optional, default 동작은 ON.
+   */
+  options?: {
+    /**
+     * 그룹별 <ol> 안에서 항목 단위 zebra-striping (각 그룹 내 카운터 리셋).
+     */
+    stripe?: boolean
+  }
   meta?: BlockMeta
 }
 export interface RelatedDoc {

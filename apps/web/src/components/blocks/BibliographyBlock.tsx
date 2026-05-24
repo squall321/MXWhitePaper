@@ -1,5 +1,6 @@
 import type { BibliographyBlock } from '@/types/document'
 import { Inline } from '../wiki/Inline'
+import { getZebraClass } from '@/features/editor/blocks/zebra'
 
 /**
  * Read-mode renderer for a `bibliography` block — a numbered list of
@@ -23,11 +24,13 @@ export function BibliographyBlockView({ block }: { block: BibliographyBlock }) {
     >
       <h3 className="mb-2 text-base font-semibold text-smsg-900">{heading}</h3>
       <ol className="list-none space-y-1 pl-0">
-        {block.entries.map((entry, idx) => (
+        {block.entries.map((entry, idx) => {
+          const zebra = getZebraClass('bibliography', block.options, idx)
+          return (
           <li
             key={idx}
             id={entry.key ? `cite-${entry.key}` : undefined}
-            className="leading-6"
+            className={`leading-6${zebra ? ` ${zebra}` : ''}`}
           >
             <span className="mr-2 font-mono text-xs text-gray-500">
               [{idx + 1}]
@@ -47,7 +50,8 @@ export function BibliographyBlockView({ block }: { block: BibliographyBlock }) {
               </>
             )}
           </li>
-        ))}
+          )
+        })}
       </ol>
     </section>
   )
