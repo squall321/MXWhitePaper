@@ -144,6 +144,7 @@ export function buildCallout(
   pos: readonly [number, number],
   text: string,
   color: string,
+  bgColor?: string,
 ): Extract<AnnotationElement, { kind: 'callout' }> {
   return {
     kind: 'callout',
@@ -152,6 +153,7 @@ export function buildCallout(
     y: pos[1],
     label: text,
     color,
+    ...(bgColor ? { bgColor } : {}),
   }
 }
 
@@ -326,6 +328,12 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
   const [annotations, setAnnotations] = useState<AnnotationElement[]>(block.annotations)
   const [tool, setTool] = useState<IAnnotationTool>('arrow')
   const [color, setColor] = useState<string>(IA_COLORS[0])
+  /**
+   * callout 라벨 배경 색. undefined = 흰색 default (image-annotation-label-bg
+   * 사이클의 svg-block-audit 의도 보존 — 사용자 이미지 위 가독성). 사용자가
+   * 명시 선택 시만 schema에 저장.
+   */
+  const [calloutBgColor, setCalloutBgColor] = useState<string | undefined>(undefined)
   // 선택된 요소들 — Shift+클릭으로 다중 선택. 단일 선택 코드 경로 보존을 위해
   // primary (가장 최근에 더해진) id 를 selectedId 로 derive.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
@@ -729,7 +737,7 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
     if (!calloutPos) return
     const txt = calloutText.trim()
     if (txt) {
-      const el = buildCallout(calloutPos, txt, color)
+      const el = buildCallout(calloutPos, txt, color, calloutBgColor)
       commit([...annotations, el])
     }
     setCalloutPos(null)
@@ -770,6 +778,41 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
             />
           ))}
         </div>
+
+        {tool === 'callout' && (
+          <>
+            <span className="mx-1 h-5 w-px bg-gray-300" aria-hidden="true" />
+            <div
+              data-callout-bg-group
+              className="flex items-center gap-1"
+              role="radiogroup"
+              aria-label="callout 라벨 배경"
+            >
+              <span className="text-[10px] text-gray-500">bg:</span>
+              <CalloutBgSwatch
+                value={undefined}
+                current={calloutBgColor}
+                onClick={setCalloutBgColor}
+                swatchBg="#ffffff"
+                title="기본 (흰색)"
+              />
+              <CalloutBgSwatch
+                value="#111827"
+                current={calloutBgColor}
+                onClick={setCalloutBgColor}
+                swatchBg="#111827"
+                title="다크"
+              />
+              <CalloutBgSwatch
+                value="#fef3c7"
+                current={calloutBgColor}
+                onClick={setCalloutBgColor}
+                swatchBg="#fef3c7"
+                title="노랑 (강조)"
+              />
+            </div>
+          </>
+        )}
 
         <span className="mx-1 h-5 w-px bg-gray-300" aria-hidden="true" />
 
@@ -1007,5 +1050,42 @@ function ToolButton({
     >
       {label}
     </button>
+  )
+}
+
+/**
+ * Callout 라벨 배경 swatch — `value=undefined` 가 흰색 default (svg-block-audit
+ * 의도 보존), 그 외 색은 사용자 override. 시각적으로 default(undefined) 와
+ * 명시적 흰색(`#ffffff`)을 구분하기 위해 default swatch는 회색 dashed border.
+ */
+function CalloutBgSwatch({
+  value,
+  current,
+  onClick,
+  swatchBg,
+  title,
+}: {
+  value: string | undefined
+  current: string | undefined
+  onClick: (v: string | undefined) => void
+  swatchBg: string
+  title: string
+}) {
+  const active = value === current
+  const isDefault = value === undefined
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      aria-label={title}
+      title={title}
+      onClick={() => onClick(value)}
+      data-callout-bg={value ?? 'default'}
+      className={`h-5 w-5 rounded border ${
+        active ? 'border-black ring-2 ring-smsg-400' : isDefault ? 'border-dashed border-gray-400' : 'border-gray-400'
+      }`}
+      style={{ background: swatchBg }}
+    />
   )
 }

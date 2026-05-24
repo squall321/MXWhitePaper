@@ -257,6 +257,16 @@ describe('buildArrow / buildRect / buildCallout', () => {
     expect(c.label).toBe('여기 확인')
     expect(c.color).toBe('#16a34a')
   })
+
+  it('buildCallout omits bgColor when not provided (default white preserved)', () => {
+    const c = buildCallout([0.1, 0.1], 'x', '#000')
+    expect('bgColor' in c).toBe(false)
+  })
+
+  it('buildCallout stores bgColor when provided', () => {
+    const c = buildCallout([0.1, 0.1], 'x', '#000', '#111827')
+    expect(c.bgColor).toBe('#111827')
+  })
 })
 
 describe('pickElement (select-tool hit-test)', () => {

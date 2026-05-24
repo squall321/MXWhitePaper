@@ -124,8 +124,10 @@
   하드코딩 — 사용자 이미지 위에 그려지는 라벨의 가독성 보장 (사용자 ann.color 가
   어떤 색이든 흰 배경 + 그 색 텍스트 = 항상 식별 가능). svg-block-audit 사이클에서
   *유지 결정* 후, image-annotation-label-bg 사이클에서 callout 변형에 optional
-  `bgColor?: string` 추가 — 이미지가 균일하게 밝아 흰 배경이 묻힐 때 사용자가
-  override 가능. editor UI는 후속 사이클 (현재는 raw JSON 편집만).
+  `bgColor?: string` 추가. image-annotation-bg-editor 사이클에서 editor UI 도입 —
+  callout 도구 선택 시 toolbar 에 3 swatch (default 흰색 / 다크 `#111827` /
+  강조 노랑 `#fef3c7`) 표시. `buildCallout(pos, text, color, bgColor?)` 시그니처
+  확장, undefined 시 schema 에 키 자체 미저장 (default 보존).
 - `SpacerBlock` — `size: "sm"|"md"|"lg"|"xl"` (16/32/64/128 px, default `md`).
   본문 흐름의 명시적 여백. FE editor (SpacerBlockEditor.tsx) 가 dropdown 으로
   4 옵션 노출 (pass-3 N1 확장).
