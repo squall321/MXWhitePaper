@@ -40,6 +40,27 @@ const PALETTE = [
 ]
 
 /**
+ * Dark-surface brighter variants of `PALETTE`. Index mapping preserved so
+ * "blue line = sales" semantics stay stable across themes — only
+ * luminance shifts. Mirrors the chart-dark-palette cycle pattern used in
+ * EChartsView's `PALETTE_DARK`.
+ */
+const PALETTE_DARK = [
+  '#93A5FF', // smsg-blue-700 dark
+  '#6E8BFF', // smsg-blue-500 dark
+  '#34D399', // emerald-400
+  '#FBBF24', // amber-400
+  '#F87171', // red-400
+  '#A78BFA', // violet-400
+  '#22D3EE', // cyan-400
+  '#F472B6', // pink-400
+]
+
+export function getRechartsPalette(theme: 'light' | 'dark'): readonly string[] {
+  return theme === 'dark' ? PALETTE_DARK : PALETTE
+}
+
+/**
  * Convert the {labels, series:[{name, values}]} normal form into the
  * row-oriented data Recharts wants: `[{ label, [seriesName]: value, … }]`.
  */
@@ -92,7 +113,7 @@ export function ChartBlockView({ block }: { block: ChartBlock }) {
       )}
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          {renderChart(block, data, gridStroke, axisStroke, tooltipContentStyle, tooltipItemStyle)}
+          {renderChart(block, data, gridStroke, axisStroke, tooltipContentStyle, tooltipItemStyle, getRechartsPalette(theme))}
         </ResponsiveContainer>
       </div>
     </figure>
@@ -106,6 +127,7 @@ function renderChart(
   axisStroke: string,
   tooltipContentStyle: CSSProperties,
   tooltipItemStyle: CSSProperties,
+  palette: readonly string[],
 ) {
   const seriesNames = block.data.series.map((s) => s.name)
   const tooltipProps = {
@@ -130,7 +152,7 @@ function renderChart(
               key={name}
               type="monotone"
               dataKey={name}
-              stroke={PALETTE[i % PALETTE.length]}
+              stroke={palette[i % palette.length]}
               dot={false}
               strokeWidth={2}
             />
@@ -146,7 +168,7 @@ function renderChart(
           <Tooltip {...tooltipProps} />
           <Legend verticalAlign="bottom" />
           {seriesNames.map((name, i) => (
-            <Bar key={name} dataKey={name} fill={PALETTE[i % PALETTE.length]} />
+            <Bar key={name} dataKey={name} fill={palette[i % palette.length]} />
           ))}
         </BarChart>
       )
@@ -163,8 +185,8 @@ function renderChart(
               key={name}
               type="monotone"
               dataKey={name}
-              stroke={PALETTE[i % PALETTE.length]}
-              fill={PALETTE[i % PALETTE.length]}
+              stroke={palette[i % palette.length]}
+              fill={palette[i % palette.length]}
               fillOpacity={0.25}
             />
           ))}
@@ -178,7 +200,7 @@ function renderChart(
           <Legend verticalAlign="bottom" />
           <Pie data={pData} dataKey="value" nameKey="name" outerRadius={90} label>
             {pData.map((_, i) => (
-              <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
+              <Cell key={i} fill={palette[i % palette.length]} />
             ))}
           </Pie>
         </PieChart>
@@ -196,8 +218,8 @@ function renderChart(
             <Radar
               key={name}
               dataKey={name}
-              stroke={PALETTE[i % PALETTE.length]}
-              fill={PALETTE[i % PALETTE.length]}
+              stroke={palette[i % palette.length]}
+              fill={palette[i % palette.length]}
               fillOpacity={0.25}
             />
           ))}
@@ -217,7 +239,7 @@ function renderChart(
               key={s.name}
               name={s.name}
               data={scatterPoints(s)}
-              fill={PALETTE[i % PALETTE.length]}
+              fill={palette[i % palette.length]}
             />
           ))}
         </ScatterChart>
