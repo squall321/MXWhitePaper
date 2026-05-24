@@ -54,8 +54,8 @@
 ### 렌더
 | 파일 | 책임 |
 |---|---|
-| [[src/components/blocks/ChartBlock.tsx]] | recharts 엔진 (line/bar/pie/area/radar/scatter, xy-line 제외) |
-| [[src/components/blocks/EChartsView.tsx]] | echarts 엔진 — xy-line 의 모든 P1+P3 기능. `forwardRef<EChartsViewHandle>` 로 `getPng()` 노출 |
+| [[src/components/blocks/ChartBlock.tsx]] | recharts 엔진 (line/bar/pie/area/radar/scatter, xy-line 제외). 다크 모드: `useResolvedTheme()` → CartesianGrid/XAxis/YAxis stroke 분기 + figure `dark:` 변형 |
+| [[src/components/blocks/EChartsView.tsx]] | echarts 엔진 — xy-line 의 모든 P1+P3 기능. `forwardRef<EChartsViewHandle>` 로 `getPng()` 노출. 다크 모드: `useResolvedTheme()` + `mergeThemeColors(buildOption(block, colors), colors)` + theme 변화 시 `dispose+init` 으로 재초기화 (ECharts init 시 결정되는 default를 다시 픽업). PNG export 배경도 theme 따라 분기 |
 
 ### 편집
 | 파일 | 책임 |
@@ -109,6 +109,10 @@
   계산 함수는 null 반환 (점 부족 / 행렬 singular / log 인자 비양수).
 - **annotation 좌표는 데이터 좌표계** — image 의 정규화 [0..1] 와 다름. paste 시
   시리즈 bbox 중심을 기본값으로 (A5 의 derived peaks 분기).
+- **다크 모드 = `useResolvedTheme()` hook** ([[src/features/theme/useResolvedTheme.ts]])
+  → MutationObserver 로 `html.classList`/`data-theme` 감지 → theme 변화 시
+  recharts는 props 분기로 즉시 / EChartsView 는 `dispose+init` 으로 재초기화.
+  데이터 시리즈 팔레트 (8색) 는 다크에서도 그대로 — 데이터 시각화 색은 *의미*.
 
 ## 테스트 지도
 

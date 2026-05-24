@@ -25,6 +25,7 @@ import {
 } from 'recharts'
 import type { ChartBlock } from '@/types/document'
 import { EChartsView } from './EChartsView'
+import { useResolvedTheme } from '@/features/theme/useResolvedTheme'
 
 const PALETTE = [
   '#1428A0',
@@ -73,24 +74,32 @@ export function ChartBlockView({ block }: { block: ChartBlock }) {
   if (block.engine === 'echarts') {
     return <EChartsView block={block} />
   }
+  const theme = useResolvedTheme()
+  const gridStroke = theme === 'dark' ? '#374151' : '#E5E7EB'
+  const axisStroke = theme === 'dark' ? '#E5E7EB' : '#1A1A1A'
   const data = rowData(block)
   return (
-    <figure className="rounded border border-gray-200 bg-white p-3">
+    <figure className="rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
       {block.title && (
-        <figcaption className="mb-2 text-sm font-semibold text-smsg-900">
+        <figcaption className="mb-2 text-sm font-semibold text-smsg-900 dark:text-gray-100">
           {block.title}
         </figcaption>
       )}
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          {renderChart(block, data)}
+          {renderChart(block, data, gridStroke, axisStroke)}
         </ResponsiveContainer>
       </div>
     </figure>
   )
 }
 
-function renderChart(block: ChartBlock, data: ReturnType<typeof rowData>) {
+function renderChart(
+  block: ChartBlock,
+  data: ReturnType<typeof rowData>,
+  gridStroke: string,
+  axisStroke: string,
+) {
   const seriesNames = block.data.series.map((s) => s.name)
   const tooltipProps = { wrapperStyle: { outline: 'none' }, isAnimationActive: false }
 
@@ -98,9 +107,9 @@ function renderChart(block: ChartBlock, data: ReturnType<typeof rowData>) {
     case 'line':
       return (
         <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-          <XAxis dataKey="label" />
-          <YAxis />
+          <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+          <XAxis dataKey="label" stroke={axisStroke} tick={{ fill: axisStroke }} />
+          <YAxis stroke={axisStroke} tick={{ fill: axisStroke }} />
           <Tooltip {...tooltipProps} />
           <Legend verticalAlign="bottom" />
           {seriesNames.map((name, i) => (
@@ -118,9 +127,9 @@ function renderChart(block: ChartBlock, data: ReturnType<typeof rowData>) {
     case 'bar':
       return (
         <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-          <XAxis dataKey="label" />
-          <YAxis />
+          <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+          <XAxis dataKey="label" stroke={axisStroke} tick={{ fill: axisStroke }} />
+          <YAxis stroke={axisStroke} tick={{ fill: axisStroke }} />
           <Tooltip {...tooltipProps} />
           <Legend verticalAlign="bottom" />
           {seriesNames.map((name, i) => (
@@ -131,9 +140,9 @@ function renderChart(block: ChartBlock, data: ReturnType<typeof rowData>) {
     case 'area':
       return (
         <AreaChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-          <XAxis dataKey="label" />
-          <YAxis />
+          <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+          <XAxis dataKey="label" stroke={axisStroke} tick={{ fill: axisStroke }} />
+          <YAxis stroke={axisStroke} tick={{ fill: axisStroke }} />
           <Tooltip {...tooltipProps} />
           <Legend verticalAlign="bottom" />
           {seriesNames.map((name, i) => (
@@ -184,9 +193,9 @@ function renderChart(block: ChartBlock, data: ReturnType<typeof rowData>) {
     case 'scatter':
       return (
         <ScatterChart>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-          <XAxis type="number" dataKey="x" name="x" />
-          <YAxis type="number" dataKey="y" name="y" />
+          <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+          <XAxis type="number" dataKey="x" name="x" stroke={axisStroke} tick={{ fill: axisStroke }} />
+          <YAxis type="number" dataKey="y" name="y" stroke={axisStroke} tick={{ fill: axisStroke }} />
           <ZAxis range={[60, 60]} />
           <Tooltip {...tooltipProps} cursor={{ strokeDasharray: '3 3' }} />
           <Legend verticalAlign="bottom" />
@@ -204,8 +213,8 @@ function renderChart(block: ChartBlock, data: ReturnType<typeof rowData>) {
       // Exhaustive fallback — render the data as a table-ish list.
       return (
         <LineChart data={data}>
-          <XAxis dataKey="label" />
-          <YAxis />
+          <XAxis dataKey="label" stroke={axisStroke} tick={{ fill: axisStroke }} />
+          <YAxis stroke={axisStroke} tick={{ fill: axisStroke }} />
           <Tooltip {...tooltipProps} />
         </LineChart>
       )

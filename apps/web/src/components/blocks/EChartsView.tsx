@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 import * as echarts from 'echarts/core'
+import { useResolvedTheme, type ResolvedTheme } from '@/features/theme/useResolvedTheme'
 import {
   BarChart as EBar,
   CustomChart as ECustom,
@@ -77,6 +78,107 @@ const PALETTE = [
  * 인스턴스에서 데이터 URL 을 꺼낼 수 있도록 forwardRef 로 노출하는 핸들.
  * 인스턴스가 아직 init 전이거나 dispose 된 직후에는 null 을 반환한다.
  */
+/**
+ * Theme-aware colour set injected into the ECharts option. Series palette
+ * is NOT included — data colours are *semantic* and stay constant across
+ * light/dark.
+ */
+export interface ThemeColors {
+  text: string
+  axis: string
+  axisLabel: string
+  split: string
+  caption: string
+  annDefault: string
+  pieBorder: string
+}
+
+export const THEME_COLORS_LIGHT: ThemeColors = {
+  text: '#1A1A1A',
+  axis: '#E5E7EB',
+  axisLabel: '#1A1A1A',
+  split: '#F3F4F6',
+  caption: '#888888',
+  annDefault: '#666666',
+  pieBorder: '#FFFFFF',
+}
+
+export const THEME_COLORS_DARK: ThemeColors = {
+  text: '#E5E7EB',
+  axis: '#374151',
+  axisLabel: '#E5E7EB',
+  split: '#1F2937',
+  caption: '#9CA3AF',
+  annDefault: '#9CA3AF',
+  pieBorder: '#111827',
+}
+
+/**
+ * Returns a new option with text / axis / split / tooltip colours
+ * injected from `c`. Pure (no mutation), idempotent.
+ */
+export function mergeThemeColors(
+  option: echarts.EChartsCoreOption,
+  c: ThemeColors,
+): echarts.EChartsCoreOption {
+  const next: Record<string, unknown> = { ...option }
+  const prevText = (option as { textStyle?: object }).textStyle ?? {}
+  next.textStyle = { ...prevText, color: c.text }
+
+  const applyAxis = (axis: unknown): unknown => {
+    if (!axis || typeof axis !== 'object') return axis
+    const a = axis as Record<string, unknown>
+    const axisLine = (a.axisLine as Record<string, unknown> | undefined) ?? {}
+    const axisTick = (a.axisTick as Record<string, unknown> | undefined) ?? {}
+    const axisLabel = (a.axisLabel as Record<string, unknown> | undefined) ?? {}
+    const splitLine = (a.splitLine as Record<string, unknown> | undefined) ?? {}
+    return {
+      ...a,
+      axisLine: {
+        ...axisLine,
+        lineStyle: {
+          ...((axisLine.lineStyle as Record<string, unknown> | undefined) ?? {}),
+          color: c.axis,
+        },
+      },
+      axisTick: {
+        ...axisTick,
+        lineStyle: {
+          ...((axisTick.lineStyle as Record<string, unknown> | undefined) ?? {}),
+          color: c.axis,
+        },
+      },
+      axisLabel: { ...axisLabel, color: c.axisLabel },
+      splitLine: {
+        ...splitLine,
+        lineStyle: {
+          ...((splitLine.lineStyle as Record<string, unknown> | undefined) ?? {}),
+          color: c.split,
+        },
+      },
+    }
+  }
+
+  if (Array.isArray((option as { xAxis?: unknown }).xAxis)) {
+    next.xAxis = ((option as { xAxis: unknown[] }).xAxis).map(applyAxis)
+  } else if ((option as { xAxis?: unknown }).xAxis) {
+    next.xAxis = applyAxis((option as { xAxis: unknown }).xAxis)
+  }
+  if (Array.isArray((option as { yAxis?: unknown }).yAxis)) {
+    next.yAxis = ((option as { yAxis: unknown[] }).yAxis).map(applyAxis)
+  } else if ((option as { yAxis?: unknown }).yAxis) {
+    next.yAxis = applyAxis((option as { yAxis: unknown }).yAxis)
+  }
+
+  const tooltip = (option as { tooltip?: Record<string, unknown> }).tooltip
+  if (tooltip) {
+    const prevTextStyle = (tooltip.textStyle as Record<string, unknown> | undefined) ?? {}
+    next.tooltip = { ...tooltip, textStyle: { ...prevTextStyle, color: c.text } }
+  }
+
+  return next as echarts.EChartsCoreOption
+}
+
 export interface EChartsViewHandle {
   getPng(): string | null
 }
@@ -114,7 +216,15 @@ export const EChartsView = forwardRef<EChartsViewHandle, EChartsViewProps>(
     const onPointClickRef = useRef(onPointClick)
     onPointClickRef.current = onPointClick
 
-    const option = useMemo(() => buildOption(block), [block])
+    const theme: ResolvedTheme = useResolvedTheme()
+    const themeColors = theme === 'dark' ? THEME_COLORS_DARK : THEME_COLORS_LIGHT
+    const themeRef = useRef(theme)
+    themeRef.current = theme
+
+    const option = useMemo(
+      () => mergeThemeColors(buildOption(block, themeColors), themeColors),
+      [block, themeColors],
+    )
 
     useEffect(() => {
       const el = containerRef.current
@@ -151,24 +261,52 @@ export const EChartsView = forwardRef<EChartsViewHandle, EChartsViewProps>(
       inst.setOption(option, true)
     }, [option])
 
-    // PNG export 는 ECharts 가 기본 제공하는 getDataURL — 흰 배경을 명시해
-    // 발표 자료에 바로 붙여도 투명 배경 문제 없도록 한다.
+    // Theme change → ECharts pulls some defaults from `init(el, theme)`;
+    // setOption alone misses them. Dispose+init keeps the renderer in
+    // sync with the resolved theme.
+    useEffect(() => {
+      const inst = instanceRef.current
+      const el = containerRef.current
+      if (!inst || !el) return
+      inst.dispose()
+      const next = echarts.init(el)
+      instanceRef.current = next
+      next.setOption(option, true)
+      next.on('click', (params: { componentType?: string; seriesName?: string; value?: unknown }) => {
+        const cb = onPointClickRef.current
+        if (!cb) return
+        if (params.componentType !== 'series') return
+        const v = params.value
+        if (!Array.isArray(v) || v.length < 2) return
+        const x = Number(v[0])
+        const y = Number(v[1])
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return
+        cb({ x, y, seriesName: typeof params.seriesName === 'string' ? params.seriesName : '' })
+      })
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [theme])
+
+    // PNG export — background follows the resolved theme so screenshots
+    // pasted into a slide match the surface around them.
     useImperativeHandle(
       ref,
       () => ({
         getPng() {
           const inst = instanceRef.current
           if (!inst) return null
-          return inst.getDataURL({ type: 'png', backgroundColor: '#fff' })
+          return inst.getDataURL({
+            type: 'png',
+            backgroundColor: themeRef.current === 'dark' ? '#111827' : '#fff',
+          })
         },
       }),
       [],
     )
 
     return (
-      <figure className="rounded border border-gray-200 bg-white p-3">
+      <figure className="rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
         {block.title && (
-          <figcaption className="mb-2 text-sm font-semibold text-smsg-900">
+          <figcaption className="mb-2 text-sm font-semibold text-smsg-900 dark:text-gray-100">
             {block.title}
           </figcaption>
         )}
@@ -179,7 +317,13 @@ export const EChartsView = forwardRef<EChartsViewHandle, EChartsViewProps>(
 )
 
 // P4 — 단위 테스트에서 LTTB/large 옵션 적용을 검증하기 위해 export.
-export function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
+// chart-darkmode — `colors` 인자가 annotation default / pie border /
+// caption tooltip 색을 결정. 미지정 시 light 토큰 사용 (기존 호출자
+// 호환).
+export function buildOption(
+  block: ChartBlock,
+  colors: ThemeColors = THEME_COLORS_LIGHT,
+): echarts.EChartsCoreOption {
   const labels = block.data?.labels ?? []
   const series = block.data?.series ?? []
   const interactions = block.interactions ?? {}
@@ -237,7 +381,7 @@ export function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
               name: label,
               value: series[0]?.values?.[i] ?? 0,
             })),
-            itemStyle: { borderColor: '#fff', borderWidth: 2 },
+            itemStyle: { borderColor: colors.pieBorder, borderWidth: 2 },
             label: { show: true, formatter: '{b}\n{d}%' },
           },
         ],
@@ -525,7 +669,7 @@ export function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
       const annotationSeries: any[] = []
       const annotations = block.annotations ?? []
       annotations.forEach((ann) => {
-        const color = ann.color ?? '#666'
+        const color = ann.color ?? colors.annDefault
         if (ann.kind === 'marker') {
           annotationSeries.push({
             name: `__ann_${ann.id}`,
@@ -673,7 +817,7 @@ export function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
                 const matched = series.find((s) => s.name === seriesName)
                 const caption = matched?.caption
                 const captionHtml = caption
-                  ? `<div style="color:#888;font-size:11px">${escapeHtml(caption)}</div>`
+                  ? `<div style="color:${colors.caption};font-size:11px">${escapeHtml(caption)}</div>`
                   : ''
                 const xFmt = formatTooltipNum(x)
                 const yFmt = formatTooltipNum(y)
