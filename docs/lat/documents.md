@@ -169,8 +169,12 @@
   hover 시 descendant 하이라이트. 다크 모드 자동 (SVG fill/stroke `var(--smsg-...)`
   + figure/empty `dark:` 변형 — chart-darkmode 사이클과 별개로 gantt-darkmode
   패턴 그대로 적용).
+- `FlowBlock` — mermaid DSL → SVG (lazy load). 다크 모드: `useResolvedTheme()` →
+  mermaid `initialize({theme: 'dark'\|'default'})` 재실행 + `idRef.current` 재생성
+  (mermaid singleton 캐시 회피) + `render()` 재실행. theme 변경 useEffect deps에
+  포함 (chart-libs-darkmode 사이클).
 - `ChartBlock`, `ColumnsBlock`, `TabsBlock`, `AccordionBlock`,
-  `FlowBlock`, `GalleryBlock`, …
+  `GalleryBlock`, …
 
 전체 enum 은 [[src/app/schemas/document.py]] 참고. 새 block type 추가 시:
 1. 스키마 클래스 + Union 등록

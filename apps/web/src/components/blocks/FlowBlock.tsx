@@ -1,17 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FlowBlock } from '@/types/document'
+import { useResolvedTheme, type ResolvedTheme } from '@/features/theme/useResolvedTheme'
 
 let mermaidPromise: Promise<typeof import('mermaid').default> | null = null
 
 function loadMermaid() {
   if (!mermaidPromise) {
-    mermaidPromise = import('mermaid').then((mod) => {
-      const m = mod.default
-      m.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' })
-      return m
-    })
+    mermaidPromise = import('mermaid').then((mod) => mod.default)
   }
   return mermaidPromise
+}
+
+/**
+ * Apply theme to mermaid singleton. Re-call on every render path that
+ * cares about theme — mermaid stores `theme` on its global config, so the
+ * latest `initialize()` wins for subsequent `render()` calls.
+ */
+function applyMermaidTheme(m: typeof import('mermaid').default, theme: ResolvedTheme) {
+  m.initialize({
+    startOnLoad: false,
+    theme: theme === 'dark' ? 'dark' : 'default',
+    securityLevel: 'strict',
+  })
 }
 
 /**
@@ -32,13 +42,17 @@ function MermaidFlow({ block }: { block: FlowBlock }) {
   const [svg, setSvg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const idRef = useRef(`mermaid-${Math.random().toString(36).slice(2, 8)}`)
+  const theme = useResolvedTheme()
 
   useEffect(() => {
     let cancelled = false
     setErr(null)
+    // Theme changed → mermaid caches by id; bump id so it re-renders cleanly.
+    idRef.current = `mermaid-${Math.random().toString(36).slice(2, 8)}`
     loadMermaid()
       .then(async (m) => {
         try {
+          applyMermaidTheme(m, theme)
           const out = await m.render(idRef.current, block.source)
           if (!cancelled) setSvg(out.svg)
         } catch (e) {
@@ -49,11 +63,11 @@ function MermaidFlow({ block }: { block: FlowBlock }) {
     return () => {
       cancelled = true
     }
-  }, [block.source])
+  }, [block.source, theme])
 
   if (err) {
     return (
-      <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+      <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
         Mermaid 렌더 실패: {err}
       </div>
     )

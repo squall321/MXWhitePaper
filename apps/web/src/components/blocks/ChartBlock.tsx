@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import {
   Area,
   AreaChart,
@@ -77,6 +78,10 @@ export function ChartBlockView({ block }: { block: ChartBlock }) {
   const theme = useResolvedTheme()
   const gridStroke = theme === 'dark' ? '#374151' : '#E5E7EB'
   const axisStroke = theme === 'dark' ? '#E5E7EB' : '#1A1A1A'
+  const tooltipContentStyle = theme === 'dark'
+    ? { background: '#111827', border: '1px solid #374151', color: '#E5E7EB' }
+    : { background: '#FFFFFF', border: '1px solid #E5E7EB', color: '#1A1A1A' }
+  const tooltipItemStyle = { color: axisStroke }
   const data = rowData(block)
   return (
     <figure className="rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
@@ -87,7 +92,7 @@ export function ChartBlockView({ block }: { block: ChartBlock }) {
       )}
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          {renderChart(block, data, gridStroke, axisStroke)}
+          {renderChart(block, data, gridStroke, axisStroke, tooltipContentStyle, tooltipItemStyle)}
         </ResponsiveContainer>
       </div>
     </figure>
@@ -99,9 +104,17 @@ function renderChart(
   data: ReturnType<typeof rowData>,
   gridStroke: string,
   axisStroke: string,
+  tooltipContentStyle: CSSProperties,
+  tooltipItemStyle: CSSProperties,
 ) {
   const seriesNames = block.data.series.map((s) => s.name)
-  const tooltipProps = { wrapperStyle: { outline: 'none' }, isAnimationActive: false }
+  const tooltipProps = {
+    wrapperStyle: { outline: 'none' },
+    isAnimationActive: false,
+    contentStyle: tooltipContentStyle,
+    itemStyle: tooltipItemStyle,
+    labelStyle: tooltipItemStyle,
+  }
 
   switch (block.chartType) {
     case 'line':

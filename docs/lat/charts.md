@@ -54,7 +54,7 @@
 ### 렌더
 | 파일 | 책임 |
 |---|---|
-| [[src/components/blocks/ChartBlock.tsx]] | recharts 엔진 (line/bar/pie/area/radar/scatter, xy-line 제외). 다크 모드: `useResolvedTheme()` → CartesianGrid/XAxis/YAxis stroke 분기 + figure `dark:` 변형 |
+| [[src/components/blocks/ChartBlock.tsx]] | recharts 엔진 (line/bar/pie/area/radar/scatter, xy-line 제외). 다크 모드: `useResolvedTheme()` → CartesianGrid/XAxis/YAxis stroke 분기 + figure `dark:` 변형 + Tooltip contentStyle/itemStyle theme 분기 (chart-libs-darkmode 사이클) |
 | [[src/components/blocks/EChartsView.tsx]] | echarts 엔진 — xy-line 의 모든 P1+P3 기능. `forwardRef<EChartsViewHandle>` 로 `getPng()` 노출. 다크 모드: `useResolvedTheme()` + `mergeThemeColors(buildOption(block, colors), colors)` + theme 변화 시 `dispose+init` 으로 재초기화 (ECharts init 시 결정되는 default를 다시 픽업). PNG export 배경도 theme 따라 분기 |
 
 ### 편집
