@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-24T11:08:46.311272+00:00",
+  "generated_at": "2026-05-24T17:27:26.663490+00:00",
   "source_hashes": {
-    "packages/shared/schemas/document.json": "aaf8252d7cf32bd675bf9b4e97b26bdc14e564501d103ecc687ea458f166b5dd",
+    "packages/shared/schemas/document.json": "4a28649ba429cd98030c002e89dd2d1760b5f69b2d07126779f22d6db53fb7a5",
     "apps/api/app/services/widget_markers.py": "29b9da045c859288c6bcb1195176ee9ebb9b50c2c5376c419d5c293632a5658e",
     "apps/api/app/services/docx_import.py": "a3e9a0afb4e221e12afafbd4db2f0b3360b445d4ea03869eadfd590945cb7f59",
     "docs/llm-input-rules.md": "174e43573dcff08000fd050d959bfacc5a47c6ced180338cb69ab93a11456ebc",

@@ -1394,6 +1394,10 @@ class AnnotationElement3(BaseModel):
     Annotation label (was `text` pre-pass-2). BE normaliser rewrites legacy `text` → `label` on read.
     """
     color: str
+    bg_color: str | None = Field(None, alias='bgColor')
+    """
+    Optional callout label background colour. Default is white (hardcoded for readability on top of user images — see svg-block-audit cycle). Set to override (e.g. when the underlying image is uniformly bright and white blends in).
+    """
 
 
 class AnnotationElement4(BaseModel):

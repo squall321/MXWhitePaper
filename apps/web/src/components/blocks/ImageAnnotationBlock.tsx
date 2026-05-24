@@ -197,7 +197,7 @@ export function AnnotationElementView({ ann }: { ann: AnnotationElement }) {
         rx={0.01}
         stroke={ann.color}
         strokeWidth={0.003}
-        fill="white"
+        fill={ann.bgColor ?? 'white'}
         fillOpacity={0.9}
       />
       <text

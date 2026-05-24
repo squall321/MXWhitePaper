@@ -145,6 +145,10 @@ export type AnnotationElement =
        */
       label: string
       color: string
+      /**
+       * Optional callout label background colour. Default is white (hardcoded for readability on top of user images — see svg-block-audit cycle). Set to override (e.g. when the underlying image is uniformly bright and white blends in).
+       */
+      bgColor?: string
     }
   | {
       kind: 'textbox'

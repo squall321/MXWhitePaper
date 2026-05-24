@@ -129,4 +129,29 @@ describe('<ImageAnnotationBlockView />', () => {
     expect(idxArrow).toBeGreaterThan(0)
     expect(idxCallout).toBeGreaterThan(idxArrow)
   })
+
+  it('callout label background defaults to white when bgColor is not set', () => {
+    const html = renderToStaticMarkup(harness(<ImageAnnotationBlockView block={block} />))
+    expect(html).toContain('fill="white"')
+  })
+
+  it('callout label respects user-provided bgColor override', () => {
+    const withBg: ImageAnnotationBlock = {
+      ...block,
+      annotations: [
+        {
+          kind: 'callout',
+          id: 'ann-bg-1',
+          x: 0.5,
+          y: 0.5,
+          label: 'Custom bg',
+          color: '#ffffff',
+          bgColor: '#1F2937',
+        },
+      ],
+    }
+    const html = renderToStaticMarkup(harness(<ImageAnnotationBlockView block={withBg} />))
+    expect(html).toContain('fill="#1F2937"')
+    expect(html).not.toContain('fill="white"')
+  })
 })

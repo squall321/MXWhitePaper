@@ -120,10 +120,12 @@
   로 통일됨 (arrow/rect 는 이전부터 `label`). legacy `text` 키가 남은 문서는
   [[src/app/services/document_service.py#_normalise_image_annotation_labels]] 가
   read 시점에 in-place 로 `label` 로 rename (정규화 헬퍼 — 마이그레이션 X).
-  **다크 모드 의도 예외**: callout 라벨 배경이 `fill="white"` 하드코딩 — 사용자
-  이미지 위에 그려지는 라벨의 가독성 보장 (사용자 ann.color 가 어떤 색이든 흰
-  배경 + 그 색 텍스트 = 항상 식별 가능). 토큰화 후보였으나 svg-block-audit
-  사이클에서 *유지 결정*.
+  **다크 모드 의도 예외 + 사용자 override**: callout 라벨 배경이 default `fill="white"`
+  하드코딩 — 사용자 이미지 위에 그려지는 라벨의 가독성 보장 (사용자 ann.color 가
+  어떤 색이든 흰 배경 + 그 색 텍스트 = 항상 식별 가능). svg-block-audit 사이클에서
+  *유지 결정* 후, image-annotation-label-bg 사이클에서 callout 변형에 optional
+  `bgColor?: string` 추가 — 이미지가 균일하게 밝아 흰 배경이 묻힐 때 사용자가
+  override 가능. editor UI는 후속 사이클 (현재는 raw JSON 편집만).
 - `SpacerBlock` — `size: "sm"|"md"|"lg"|"xl"` (16/32/64/128 px, default `md`).
   본문 흐름의 명시적 여백. FE editor (SpacerBlockEditor.tsx) 가 dropdown 으로
   4 옵션 노출 (pass-3 N1 확장).
