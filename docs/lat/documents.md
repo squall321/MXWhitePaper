@@ -321,6 +321,15 @@ materialized view refresh 도 스킵 가능.
     가드 `[[src/components/blocks/__tests__/AllBlocksDarkmode.test.ts]]` 가 자동
     검출. SVG 블록의 fill/stroke는 `var(--smsg-...)` 토큰 사용 (별개 — chart/gantt/
     orgchart darkmode 사이클 참조).
+
+12. **블록 반응형 = `grid-cols-N` (N>=2) 는 `sm:`/`md:` 변형 의무** — 데스크탑 위주
+    grid가 mobile (375px) 에서 깨지지 않게 `grid-cols-1` 로 시작 + `sm:grid-cols-N`
+    (640px+) 또는 `md:grid-cols-N` (768px+) 변형 동반. responsive-audit 사이클에서
+    blocks/ + features/editor/ 전수 적용 (ConflictMergeModal 3-col, ChartBlockEditor
+    stats/fit-range 2-col, ImageBlockEditor size picker 5-col, MathBlockEditor 2-col,
+    PdfBlockEditor 2-col, BlockInsertPalette 4-col). 회귀 가드
+    [[src/components/blocks/__tests__/AllBlocksResponsive.test.ts]] 가 blocks/ 신규
+    파일 자동 검출 (features/editor 는 별도 audit 필요 시 동일 패턴 확장).
 11. **pydantic v2 codegen 은 JSON Schema 의 `oneOf` 의 `not: required` 부분을
     무시한다** — `datamodel-codegen` 이 두 helper class + `RootModel` union 으로
     풀지만 cross-branch 거부 (양쪽 모두 set 입력) 는 모델 validator 가 필요.

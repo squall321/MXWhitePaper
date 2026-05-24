@@ -503,7 +503,7 @@ export function ImageBlockEditor({
       {galleryOpen && (
         <div
           data-sample-image-gallery
-          className="mt-2 grid grid-cols-5 gap-2 rounded border border-gray-200 bg-white p-2"
+          className="mt-2 grid grid-cols-3 gap-2 rounded border border-gray-200 bg-white p-2 sm:grid-cols-5"
         >
           {SAMPLE_IMAGES.map((sample) => (
             <button

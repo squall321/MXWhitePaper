@@ -492,7 +492,7 @@ export function BlockInsertPalette({ anchor, onPick, onClose }: Props) {
       }}
       className="w-72 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900"
     >
-      <div className="grid grid-cols-4 gap-1">
+      <div className="grid grid-cols-3 gap-1 sm:grid-cols-4">
         {PALETTE_ITEMS.map((it) => (
           <button
             key={it.kind}

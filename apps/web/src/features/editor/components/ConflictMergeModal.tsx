@@ -383,8 +383,8 @@ export function ConflictMergeModal({ slug }: ConflictMergeModalProps) {
           </div>
         </div>
 
-        {/* Three panes */}
-        <div className="grid flex-1 grid-cols-3 overflow-hidden">
+        {/* Three panes — stacked on mobile (<768px) so panes stay readable */}
+        <div className="grid flex-1 grid-cols-1 overflow-auto md:grid-cols-3 md:overflow-hidden">
           <Pane
             title="내 변경 (mine)"
             outline={mineOutline}

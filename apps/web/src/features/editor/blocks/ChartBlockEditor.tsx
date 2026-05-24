@@ -937,7 +937,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
       {isXyLine && display.showFit && (
         <details data-section="fit-range" className="rounded border border-gray-200 bg-white p-2 text-xs">
           <summary className="cursor-pointer text-gray-700">{t('editor.chart.fitRange')}</summary>
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-[10px] text-gray-500">
                 {t('editor.chart.fitRange.xMin')}
@@ -1235,7 +1235,7 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2 text-xs">
+      <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-gray-600">{t('editor.chart.title')}</span>
           <input

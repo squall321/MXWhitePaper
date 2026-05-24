@@ -15,7 +15,7 @@ export function MathBlockEditor({ block, onChange }: Props) {
   const t = useT()
   return (
     <div className="space-y-2 rounded border border-smsg-100 bg-smsg-100/40 p-3">
-      <div className="grid grid-cols-2 gap-2 text-xs">
+      <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-gray-600">{t('editor.math.display')}</span>
           <select

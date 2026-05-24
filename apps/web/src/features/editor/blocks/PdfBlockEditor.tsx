@@ -150,7 +150,7 @@ export function PdfBlockEditor({ slug, block }: Props) {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="flex items-center gap-2 text-[11px] text-gray-600">
           <span>{t('editor.pdf.pageLabel')}</span>
           <input
