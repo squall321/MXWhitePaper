@@ -461,20 +461,32 @@
                   },
                   "points": {
                     "type": "array",
-                    "description": "자유 (x, y) 쌍. chartType=='xy-line' 에서 사용. 시리즈마다 x 가 다를 수 있어 stress-strain 곡선처럼 측정점이 다른 데이터 비교 가능.",
+                    "description": "자유 (x, y) 쌍. chartType=='xy-line' 에서 사용. 시리즈마다 x 가 다를 수 있어 stress-strain 곡선처럼 측정점이 다른 데이터 비교 가능. 각 점에 optional err (대칭 error bar y±err) 또는 errLow/errHigh (비대칭) 가능 — 측정 오차 시각화.",
                     "items": {
                       "type": "object",
                       "required": ["x", "y"],
                       "additionalProperties": false,
                       "properties": {
                         "x": { "type": "number" },
-                        "y": { "type": "number" }
+                        "y": { "type": "number" },
+                        "err": { "type": "number", "description": "대칭 오차 (y±err). P3 추가." },
+                        "errLow": { "type": "number", "description": "비대칭 오차 — 하한 (y - errLow ~ y)." },
+                        "errHigh": { "type": "number", "description": "비대칭 오차 — 상한 (y ~ y + errHigh)." }
                       }
                     }
                   },
                   "caption": {
                     "type": "string",
                     "description": "시리즈 추가 설명 — hover/legend 에 표시. 캡션은 사용자가 paste 시 헤더에서 추출하거나 직접 입력."
+                  },
+                  "yAxisIndex": {
+                    "type": "integer",
+                    "enum": [0, 1],
+                    "description": "이 시리즈가 그려질 y 축. 0 (기본) = 왼쪽 축, 1 = 오른쪽 축. dual-axis 일 때 단위가 다른 두 시리즈를 같은 차트에 표시."
+                  },
+                  "color": {
+                    "type": "string",
+                    "description": "시리즈 색상 override. 미지정 시 PALETTE 자동. CSS 색 (#RGB, rgb(), name)."
                   }
                 }
               }
@@ -486,6 +498,14 @@
             "yAxisLabel": {
               "type": "string",
               "description": "y 축 라벨. paste 의 'y' 헤더 컬럼명에서 자동 추출 가능."
+            },
+            "yAxisLabel2": {
+              "type": "string",
+              "description": "오른쪽 y 축 라벨 — dual-axis 일 때 (series 중 yAxisIndex=1 있을 때) 사용."
+            },
+            "xAxisType": {
+              "enum": ["value", "time"],
+              "description": "x 축 데이터 유형. 'time' 이면 unix ms 또는 ISO date 로 해석 (P3 — timestamp x). 미지정 = 'value' (숫자)."
             }
           }
         },
@@ -557,6 +577,57 @@
             },
             "showStats": { "type": "boolean" },
             "sampling":  { "enum": ["none", "lttb"] }
+          }
+        },
+        "annotations": {
+          "type": "array",
+          "description": "차트 위 도형 (P3) — 사용자가 데이터 좌표계에 직접 얹는 화살표/박스/마커/노트. ImageAnnotation 의 카운터파트이지만 좌표가 (x, y) 데이터 단위.",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["kind", "id", "x", "y", "label"],
+                "additionalProperties": false,
+                "properties": {
+                  "kind":  { "const": "marker" },
+                  "id":    { "type": "string" },
+                  "x":     { "type": "number" },
+                  "y":     { "type": "number" },
+                  "label": { "type": "string" },
+                  "color": { "type": "string" }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["kind", "id", "fromX", "fromY", "toX", "toY"],
+                "additionalProperties": false,
+                "properties": {
+                  "kind":  { "const": "arrow" },
+                  "id":    { "type": "string" },
+                  "fromX": { "type": "number" },
+                  "fromY": { "type": "number" },
+                  "toX":   { "type": "number" },
+                  "toY":   { "type": "number" },
+                  "label": { "type": "string" },
+                  "color": { "type": "string" }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["kind", "id", "xMin", "xMax", "yMin", "yMax"],
+                "additionalProperties": false,
+                "properties": {
+                  "kind":  { "const": "box" },
+                  "id":    { "type": "string" },
+                  "xMin":  { "type": "number" },
+                  "xMax":  { "type": "number" },
+                  "yMin":  { "type": "number" },
+                  "yMax":  { "type": "number" },
+                  "label": { "type": "string" },
+                  "color": { "type": "string" }
+                }
+              }
+            ]
           }
         },
         "meta":    { "$ref": "#/$defs/BlockMeta" }

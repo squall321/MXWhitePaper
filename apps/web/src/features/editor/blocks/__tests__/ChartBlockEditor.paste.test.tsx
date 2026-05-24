@@ -359,17 +359,24 @@ describe('<ChartBlockEditor /> toolbar', () => {
     expect(next.display?.xLog).toBe(true)
   })
 
-  it('Fit 토글 버튼 클릭 시 display.showFit 가 true 로 바뀐다', () => {
+  // P3 — 기존 fit 토글 버튼은 select (data-toolbar="fit-type") 로 대체됨.
+  // 'linear' 옵션 선택 시 showFit + fitType 가 같이 갱신된다.
+  it('Fit select 에서 "linear" 선택 시 display.showFit/fitType 가 갱신된다', () => {
     const onChange = vi.fn()
     const block = makeBlock({ chartType: 'xy-line' })
     const els = renderTree(block, onChange)
-    const btn = els.find(
+    const sel = els.find(
       (e) =>
-        e.type === 'button' &&
-        (e.props as { 'data-toolbar'?: string })['data-toolbar'] === 'fit',
+        e.type === 'select' &&
+        (e.props as { 'data-toolbar'?: string })['data-toolbar'] === 'fit-type',
     )!
-    ;(btn.props as { onClick: () => void }).onClick()
+    ;(sel.props as {
+      onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
+    }).onChange({
+      target: { value: 'linear' } as HTMLSelectElement,
+    } as unknown as React.ChangeEvent<HTMLSelectElement>)
     const next = onChange.mock.calls[0]![0] as ChartBlock
     expect(next.display?.showFit).toBe(true)
+    expect(next.display?.fitType).toBe('linear')
   })
 })

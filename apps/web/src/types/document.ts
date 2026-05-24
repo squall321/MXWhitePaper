@@ -519,16 +519,36 @@ export interface ChartBlock {
        */
       values?: number[]
       /**
-       * 자유 (x, y) 쌍. chartType=='xy-line' 에서 사용. 시리즈마다 x 가 다를 수 있어 stress-strain 곡선처럼 측정점이 다른 데이터 비교 가능.
+       * 자유 (x, y) 쌍. chartType=='xy-line' 에서 사용. 시리즈마다 x 가 다를 수 있어 stress-strain 곡선처럼 측정점이 다른 데이터 비교 가능. 각 점에 optional err (대칭 error bar y±err) 또는 errLow/errHigh (비대칭) 가능 — 측정 오차 시각화.
        */
       points?: {
         x: number
         y: number
+        /**
+         * 대칭 오차 (y±err). P3 추가.
+         */
+        err?: number
+        /**
+         * 비대칭 오차 — 하한 (y - errLow ~ y).
+         */
+        errLow?: number
+        /**
+         * 비대칭 오차 — 상한 (y ~ y + errHigh).
+         */
+        errHigh?: number
       }[]
       /**
        * 시리즈 추가 설명 — hover/legend 에 표시. 캡션은 사용자가 paste 시 헤더에서 추출하거나 직접 입력.
        */
       caption?: string
+      /**
+       * 이 시리즈가 그려질 y 축. 0 (기본) = 왼쪽 축, 1 = 오른쪽 축. dual-axis 일 때 단위가 다른 두 시리즈를 같은 차트에 표시.
+       */
+      yAxisIndex?: 0 | 1
+      /**
+       * 시리즈 색상 override. 미지정 시 PALETTE 자동. CSS 색 (#RGB, rgb(), name).
+       */
+      color?: string
     }[]
     /**
      * x 축 라벨. xy-line 처럼 카테고리가 아닌 연속값일 때 의미. paste 의 'x' 헤더 컬럼명에서 자동 추출 가능.
@@ -538,6 +558,14 @@ export interface ChartBlock {
      * y 축 라벨. paste 의 'y' 헤더 컬럼명에서 자동 추출 가능.
      */
     yAxisLabel?: string
+    /**
+     * 오른쪽 y 축 라벨 — dual-axis 일 때 (series 중 yAxisIndex=1 있을 때) 사용.
+     */
+    yAxisLabel2?: string
+    /**
+     * x 축 데이터 유형. 'time' 이면 unix ms 또는 ISO date 로 해석 (P3 — timestamp x). 미지정 = 'value' (숫자).
+     */
+    xAxisType?: 'value' | 'time'
   }
   /**
    * Friendly knobs for ECharts interactivity that map onto markPoint / markArea / dataZoom without requiring users to write raw EChartsOption.
@@ -608,6 +636,39 @@ export interface ChartBlock {
     showStats?: boolean
     sampling?: 'none' | 'lttb'
   }
+  /**
+   * 차트 위 도형 (P3) — 사용자가 데이터 좌표계에 직접 얹는 화살표/박스/마커/노트. ImageAnnotation 의 카운터파트이지만 좌표가 (x, y) 데이터 단위.
+   */
+  annotations?: (
+    | {
+        kind: 'marker'
+        id: string
+        x: number
+        y: number
+        label: string
+        color?: string
+      }
+    | {
+        kind: 'arrow'
+        id: string
+        fromX: number
+        fromY: number
+        toX: number
+        toY: number
+        label?: string
+        color?: string
+      }
+    | {
+        kind: 'box'
+        id: string
+        xMin: number
+        xMax: number
+        yMin: number
+        yMax: number
+        label?: string
+        color?: string
+      }
+  )[]
   meta?: BlockMeta
 }
 export interface GanttBlock {

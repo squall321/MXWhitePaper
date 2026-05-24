@@ -7,7 +7,15 @@ import { parseCsv } from '@/features/editor/extensions/csv-paste'
 import { tableToChartData } from '@/features/editor/tableToChart'
 import { useT } from '@/lib/i18n'
 import { parseChartPaste, type ChartPasteResult } from './_chartPaste'
-import { linearFit, type XYPoint } from './_fits'
+import { linearFit, type FitType, type XYPoint } from './_fits'
+import { differentiate, integrate, findPeaks, diffSeries } from './_derived'
+
+// P3 — annotation kind (block.annotations 의 union 원소).
+type ChartAnnotation = NonNullable<ChartBlock['annotations']>[number]
+type AnnotationKind = ChartAnnotation['kind']
+
+// P3 — derived 시리즈 종류 (toolbar dropdown 의 값).
+type DerivedOp = 'diff' | 'integrate' | 'peaks' | 'subtract'
 
 interface ChartBlockEditorProps {
   block: ChartBlock
@@ -107,6 +115,8 @@ export function applyChartPasteToBlock(
     data.yAxisLabel && data.yAxisLabel.trim() !== ''
       ? data.yAxisLabel
       : parsed.yAxisLabel
+  // P3 — paste 가 timestamp 컬럼을 인식했으면 xAxisType='time' 전파 (기존 값 우선).
+  const nextXAxisType = data.xAxisType ?? parsed.xAxisType
 
   return {
     ...block,
@@ -119,6 +129,7 @@ export function applyChartPasteToBlock(
       series: nextSeries,
       xAxisLabel: nextXAxisLabel,
       yAxisLabel: nextYAxisLabel,
+      xAxisType: nextXAxisType,
     },
   }
 }
@@ -455,6 +466,166 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
     onChange({ ...block, data: { ...block.data, series: next } })
   }
 
+  // P3 — dual-y 토글 상태. 시리즈 중 yAxisIndex=1 가 하나라도 있으면 켜진 것으로 간주.
+  const dualYEnabled = block.data.series.some((s) => s.yAxisIndex === 1)
+  const toggleDualY = () => {
+    if (dualYEnabled) {
+      // 끄기 — 모든 시리즈의 yAxisIndex 를 제거 (정규화).
+      const series = block.data.series.map((s) => {
+        const { yAxisIndex: _drop, ...rest } = s
+        return rest
+      })
+      onChange({ ...block, data: { ...block.data, series } })
+    } else {
+      // 켜기 — 마지막 시리즈를 R 축으로 옮긴다 (사용자가 더 옮기고 싶으면 panel 에서).
+      const last = block.data.series.length - 1
+      if (last < 0) return // 시리즈 0 이면 no-op
+      const series = block.data.series.map((s, i) =>
+        i === last ? { ...s, yAxisIndex: 1 as const } : s,
+      )
+      onChange({ ...block, data: { ...block.data, series } })
+    }
+  }
+  const setSeriesYAxis = (sIdx: number, axis: 0 | 1) => {
+    const series = block.data.series.map((s, i) => {
+      if (i !== sIdx) return s
+      if (axis === 0) {
+        const { yAxisIndex: _drop, ...rest } = s
+        return rest
+      }
+      return { ...s, yAxisIndex: 1 as const }
+    })
+    onChange({ ...block, data: { ...block.data, series } })
+  }
+
+  // P3 — annotation 추가 (kind 별 중앙 좌표). bbox 가 비어있으면 (0,0).
+  // crypto.randomUUID 가 vitest 환경에서 없을 수 있어 fallback.
+  const genAnnId = (): string => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      try {
+        return (crypto as { randomUUID: () => string }).randomUUID()
+      } catch {
+        /* ignore */
+      }
+    }
+    return `ann_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`
+  }
+  const seriesBBox = (): { x: number; y: number; spanX: number; spanY: number } => {
+    let xMin = Infinity
+    let xMax = -Infinity
+    let yMin = Infinity
+    let yMax = -Infinity
+    for (const s of block.data.series) {
+      for (const p of s.points ?? []) {
+        if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue
+        if (p.x < xMin) xMin = p.x
+        if (p.x > xMax) xMax = p.x
+        if (p.y < yMin) yMin = p.y
+        if (p.y > yMax) yMax = p.y
+      }
+    }
+    if (!Number.isFinite(xMin) || !Number.isFinite(xMax)) {
+      return { x: 0, y: 0, spanX: 1, spanY: 1 }
+    }
+    const spanX = Math.max(xMax - xMin, 1)
+    const spanY = Math.max(yMax - yMin, 1)
+    return { x: (xMin + xMax) / 2, y: (yMin + yMax) / 2, spanX, spanY }
+  }
+  const addAnnotation = (kind: AnnotationKind) => {
+    const bbox = seriesBBox()
+    const id = genAnnId()
+    let next: ChartAnnotation
+    if (kind === 'marker') {
+      next = { kind: 'marker', id, x: bbox.x, y: bbox.y, label: 'Marker' }
+    } else if (kind === 'arrow') {
+      const dx = bbox.spanX * 0.1
+      const dy = bbox.spanY * 0.1
+      next = {
+        kind: 'arrow',
+        id,
+        fromX: bbox.x - dx,
+        fromY: bbox.y - dy,
+        toX: bbox.x + dx,
+        toY: bbox.y + dy,
+        label: 'Arrow',
+      }
+    } else {
+      const dx = bbox.spanX * 0.1
+      const dy = bbox.spanY * 0.1
+      next = {
+        kind: 'box',
+        id,
+        xMin: bbox.x - dx,
+        xMax: bbox.x + dx,
+        yMin: bbox.y - dy,
+        yMax: bbox.y + dy,
+        label: 'Box',
+      }
+    }
+    const annotations = [...(block.annotations ?? []), next]
+    onChange({ ...block, annotations })
+  }
+  const updateAnnotation = (id: string, patch: Partial<ChartAnnotation>) => {
+    const annotations = (block.annotations ?? []).map((a) =>
+      a.id === id ? ({ ...a, ...patch } as ChartAnnotation) : a,
+    )
+    onChange({ ...block, annotations })
+  }
+  const removeAnnotation = (id: string) => {
+    const annotations = (block.annotations ?? []).filter((a) => a.id !== id)
+    onChange({ ...block, annotations })
+  }
+
+  // P3 — derived 시리즈/annotation 추가. value 형식: "<op>:<arg>"
+  const applyDerived = (raw: string) => {
+    const [op, arg] = raw.split(':') as [DerivedOp, string]
+    if (!op || arg === undefined) return
+    if (op === 'subtract') {
+      const [aStr, bStr] = arg.split('-')
+      const aIdx = Number(aStr)
+      const bIdx = Number(bStr)
+      const a = block.data.series[aIdx]
+      const b = block.data.series[bIdx]
+      if (!a || !b) return
+      const points = diffSeries(a.points ?? [], b.points ?? [])
+      if (points.length === 0) return
+      const series = [
+        ...block.data.series,
+        { name: `${a.name}-${b.name}`, points },
+      ]
+      onChange({ ...block, data: { ...block.data, series } })
+      return
+    }
+    const sIdx = Number(arg)
+    const src = block.data.series[sIdx]
+    if (!src) return
+    if (op === 'peaks') {
+      const peaks = findPeaks(src.points ?? [])
+      if (peaks.length === 0) return
+      const newAnns: ChartAnnotation[] = peaks.map((p) => ({
+        kind: 'marker',
+        id: genAnnId(),
+        x: p.x,
+        y: p.y,
+        label: p.kind, // 'peak' 또는 'valley'
+      }))
+      const annotations = [...(block.annotations ?? []), ...newAnns]
+      onChange({ ...block, annotations })
+      return
+    }
+    const points =
+      op === 'diff'
+        ? differentiate(src.points ?? [])
+        : op === 'integrate'
+          ? integrate(src.points ?? [])
+          : []
+    if (points.length === 0) return
+    const name =
+      op === 'diff' ? `d(${src.name})/dx` : `∫${src.name}dx`
+    const series = [...block.data.series, { name, points }]
+    onChange({ ...block, data: { ...block.data, series } })
+  }
+
   // P2 — PNG / CSV export. PNG 는 hidden EChartsView 에 부착된 ref 로 dataURL
   // 을 받아 a[download] 클릭. CSV 는 buildCsvExport 결과를 Blob 으로 변환.
   // 빈 차트 (series 0) 면 버튼 비활성.
@@ -547,19 +718,121 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
           >
             {t('editor.chart.yLog')}
           </button>
+          {/* P3 — fit type select. '' = 없음 (= showFit off), 그 외 5 가지 모델. */}
+          <label className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700">
+            <span className="text-gray-500">{t('editor.chart.fit.label')}</span>
+            <select
+              data-toolbar="fit-type"
+              value={display.showFit ? (display.fitType ?? 'linear') : ''}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === '') {
+                  setDisplay({ showFit: false })
+                } else {
+                  setDisplay({ showFit: true, fitType: v as FitType })
+                }
+              }}
+              className="bg-transparent text-[11px] outline-none"
+            >
+              <option value="">{t('editor.chart.fit.none')}</option>
+              <option value="linear">{t('editor.chart.fit.linear')}</option>
+              <option value="poly2">{t('editor.chart.fit.poly2')}</option>
+              <option value="poly3">{t('editor.chart.fit.poly3')}</option>
+              <option value="exp">{t('editor.chart.fit.exp')}</option>
+              <option value="power">{t('editor.chart.fit.power')}</option>
+            </select>
+          </label>
+          {/* P3 — dual-y 토글. 켜면 series-panel 에 L/R 라디오가 나타남. */}
           <button
             type="button"
-            aria-pressed={!!display.showFit}
-            data-toolbar="fit"
-            onClick={() => setDisplay({ showFit: !display.showFit })}
+            aria-pressed={dualYEnabled}
+            data-toolbar="dual-y"
+            onClick={toggleDualY}
             className={`rounded border px-2 py-0.5 ${
-              display.showFit
+              dualYEnabled
                 ? 'border-smsg-500 bg-smsg-50 text-smsg-900'
                 : 'border-gray-300 bg-white text-gray-600'
             }`}
           >
-            {t('editor.chart.fitLinear')}
+            {t('editor.chart.dualY')}
           </button>
+          {/* P3 — annotation 추가 dropdown. 선택 즉시 차트 중앙 좌표에 추가. */}
+          <label className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700">
+            <span className="text-gray-500">{t('editor.chart.annotation.add')}</span>
+            <select
+              data-toolbar="add-annotation"
+              value=""
+              onChange={(e) => {
+                const v = e.target.value as AnnotationKind | ''
+                if (v === '') return
+                addAnnotation(v)
+                // select 를 즉시 reset — controlled component 이므로 value=''
+                // 가 다시 적용되어 select 가 placeholder 로 돌아간다.
+              }}
+              className="bg-transparent text-[11px] outline-none"
+            >
+              <option value="">—</option>
+              <option value="marker">{t('editor.chart.annotation.kind.marker')}</option>
+              <option value="arrow">{t('editor.chart.annotation.kind.arrow')}</option>
+              <option value="box">{t('editor.chart.annotation.kind.box')}</option>
+            </select>
+          </label>
+          {/* P3 — derived 시리즈 메뉴. 시리즈 1 개 골라 즉시 적용. peaks 만 annotation 으로. */}
+          <label className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700">
+            <span className="text-gray-500">{t('editor.chart.derived.add')}</span>
+            <select
+              data-toolbar="add-derived"
+              value=""
+              onChange={(e) => {
+                const v = e.target.value
+                if (!v) return
+                // value 형식: "<op>:<sIdx>" 또는 "subtract:<a>-<b>" (두 시리즈 선택은
+                // 단순화를 위해 a=0, b=1 fix — 사용자가 시리즈 정리 panel 에서
+                // reorder 한 뒤 호출하는 것을 권장. 시리즈 2 개 미만이면 옵션 자체 없음).
+                applyDerived(v)
+              }}
+              className="bg-transparent text-[11px] outline-none"
+            >
+              <option value="">—</option>
+              {block.data.series.map((s, i) => (
+                <option key={`diff-${i}`} value={`diff:${i}`}>
+                  d/dx {s.name}
+                </option>
+              ))}
+              {block.data.series.map((s, i) => (
+                <option key={`int-${i}`} value={`integrate:${i}`}>
+                  ∫ {s.name} dx
+                </option>
+              ))}
+              {block.data.series.map((s, i) => (
+                <option key={`pk-${i}`} value={`peaks:${i}`}>
+                  Peaks {s.name}
+                </option>
+              ))}
+              {block.data.series.length >= 2 && (
+                <option value={`subtract:0-1`}>
+                  {block.data.series[0]?.name} - {block.data.series[1]?.name}
+                </option>
+              )}
+            </select>
+          </label>
+          {/* P3 — timestamp x 축 hint chip. xAxisType='time' 일 때만. 클릭하면 'value' 로. */}
+          {block.data.xAxisType === 'time' && (
+            <button
+              type="button"
+              data-toolbar="x-axis-time"
+              onClick={() =>
+                onChange({
+                  ...block,
+                  data: { ...block.data, xAxisType: 'value' },
+                })
+              }
+              className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-blue-800"
+              title={t('editor.chart.xAxisType.timeHint')}
+            >
+              {t('editor.chart.xAxisType.time')}
+            </button>
+          )}
           <button
             type="button"
             data-toolbar="reset-zoom"
@@ -606,7 +879,8 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
         </div>
       )}
 
-      {/* P2 — 축 범위 popover. xy-line 일 때만. 빈 값 = auto. */}
+      {/* P2 — 축 범위 popover. xy-line 일 때만. 빈 값 = auto. P3 — dual-y 가 켜져
+          있으면 오른쪽 y 축 라벨 input 도 함께 노출. */}
       {isXyLine && (
         <details data-section="axis-range" className="rounded border border-gray-200 bg-white p-2 text-xs">
           <summary className="cursor-pointer text-gray-700">{t('editor.chart.axisRange')}</summary>
@@ -627,6 +901,26 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
               </label>
             ))}
           </div>
+          {dualYEnabled && (
+            <label className="mt-2 block">
+              <span className="mb-1 block text-[10px] text-gray-500">
+                {t('editor.chart.yAxisLabel2')}
+              </span>
+              <input
+                type="text"
+                data-axis-label="y2"
+                value={block.data.yAxisLabel2 ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value
+                  const data = { ...block.data }
+                  if (v === '') delete data.yAxisLabel2
+                  else data.yAxisLabel2 = v
+                  onChange({ ...block, data })
+                }}
+                className="w-full rounded border border-gray-300 px-1.5 py-0.5"
+              />
+            </label>
+          )}
         </details>
       )}
 
@@ -681,6 +975,45 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
                 <div key={i} className="flex items-center gap-1">
                   <span className="flex-1 truncate">{s.name}</span>
                   <span className="text-[10px] text-gray-500">{(s.points ?? []).length} pts</span>
+                  {/* P3 — dual-y 가 켜져 있으면 L/R 라디오. 끄면 안 보임. */}
+                  {dualYEnabled && (
+                    <span
+                      role="radiogroup"
+                      aria-label={t('editor.chart.seriesPanel.axisLabel')}
+                      className="inline-flex rounded border border-gray-300 bg-white text-[10px]"
+                    >
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={(s.yAxisIndex ?? 0) === 0}
+                        data-series-axis="L"
+                        data-series-index={i}
+                        onClick={() => setSeriesYAxis(i, 0)}
+                        className={`px-1.5 py-0.5 ${
+                          (s.yAxisIndex ?? 0) === 0
+                            ? 'bg-smsg-700 text-white'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        L
+                      </button>
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={s.yAxisIndex === 1}
+                        data-series-axis="R"
+                        data-series-index={i}
+                        onClick={() => setSeriesYAxis(i, 1)}
+                        className={`px-1.5 py-0.5 ${
+                          s.yAxisIndex === 1
+                            ? 'bg-smsg-700 text-white'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        R
+                      </button>
+                    </span>
+                  )}
                   <button
                     type="button"
                     data-series-action="up"
@@ -716,6 +1049,144 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
                 </div>
               ))
             )}
+          </div>
+        </details>
+      )}
+
+      {/* P3 — annotation panel. xy-line + annotations 가 1 개 이상일 때만 보임.
+          (추가는 toolbar dropdown 으로만 가능 — 빈 상태로 panel 띄우는 건 잡음.) */}
+      {isXyLine && (block.annotations?.length ?? 0) > 0 && (
+        <details
+          data-section="annotations-panel"
+          className="rounded border border-gray-200 bg-white p-2 text-xs"
+          open
+        >
+          <summary className="cursor-pointer text-gray-700">
+            {t('editor.chart.annotation.panel')} ({block.annotations!.length})
+          </summary>
+          <div className="mt-2 space-y-1">
+            {block.annotations!.map((a) => (
+              <div
+                key={a.id}
+                data-annotation-id={a.id}
+                className="flex flex-wrap items-center gap-1 rounded border border-gray-100 bg-gray-50 px-1.5 py-1"
+              >
+                <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">
+                  {a.kind}
+                </span>
+                <input
+                  type="text"
+                  data-annotation-field="label"
+                  value={a.kind === 'marker' ? a.label : (a.label ?? '')}
+                  onChange={(e) =>
+                    updateAnnotation(a.id, { label: e.target.value } as Partial<ChartAnnotation>)
+                  }
+                  placeholder="label"
+                  className="flex-1 min-w-[80px] rounded border border-gray-300 px-1.5 py-0.5"
+                />
+                {a.kind === 'marker' && (
+                  <>
+                    <input
+                      type="number"
+                      data-annotation-field="x"
+                      value={a.x}
+                      onChange={(e) => {
+                        const n = Number(e.target.value)
+                        if (!Number.isFinite(n)) return
+                        updateAnnotation(a.id, { x: n } as Partial<ChartAnnotation>)
+                      }}
+                      className="w-16 rounded border border-gray-300 px-1.5 py-0.5"
+                    />
+                    <input
+                      type="number"
+                      data-annotation-field="y"
+                      value={a.y}
+                      onChange={(e) => {
+                        const n = Number(e.target.value)
+                        if (!Number.isFinite(n)) return
+                        updateAnnotation(a.id, { y: n } as Partial<ChartAnnotation>)
+                      }}
+                      className="w-16 rounded border border-gray-300 px-1.5 py-0.5"
+                    />
+                  </>
+                )}
+                {a.kind === 'arrow' && (
+                  <>
+                    {(['fromX', 'fromY', 'toX', 'toY'] as const).map((k) => (
+                      <input
+                        key={k}
+                        type="number"
+                        data-annotation-field={k}
+                        value={a[k]}
+                        onChange={(e) => {
+                          const n = Number(e.target.value)
+                          if (!Number.isFinite(n)) return
+                          updateAnnotation(a.id, { [k]: n } as Partial<ChartAnnotation>)
+                        }}
+                        className="w-14 rounded border border-gray-300 px-1.5 py-0.5"
+                        title={k}
+                      />
+                    ))}
+                  </>
+                )}
+                {a.kind === 'box' && (
+                  <>
+                    {(['xMin', 'xMax', 'yMin', 'yMax'] as const).map((k) => (
+                      <input
+                        key={k}
+                        type="number"
+                        data-annotation-field={k}
+                        value={a[k]}
+                        onChange={(e) => {
+                          const n = Number(e.target.value)
+                          if (!Number.isFinite(n)) return
+                          updateAnnotation(a.id, { [k]: n } as Partial<ChartAnnotation>)
+                        }}
+                        className="w-14 rounded border border-gray-300 px-1.5 py-0.5"
+                        title={k}
+                      />
+                    ))}
+                  </>
+                )}
+                {/* 색 swatch — 5 개 고정. clear (= color undefined) 도 1 칸. */}
+                <span className="inline-flex gap-0.5">
+                  {(['', '#dc2626', '#2563eb', '#16a34a', '#f59e0b'] as const).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      data-annotation-color={c || 'none'}
+                      onClick={() => {
+                        const patch = c === '' ? { color: undefined } : { color: c }
+                        updateAnnotation(a.id, patch as Partial<ChartAnnotation>)
+                      }}
+                      aria-label={c || 'none'}
+                      className={`h-4 w-4 rounded border ${
+                        (a.color ?? '') === c
+                          ? 'border-gray-900'
+                          : 'border-gray-300'
+                      }`}
+                      style={{
+                        background: c || 'transparent',
+                        backgroundImage:
+                          c === ''
+                            ? 'linear-gradient(45deg, transparent 45%, #ccc 45% 55%, transparent 55%)'
+                            : undefined,
+                      }}
+                    />
+                  ))}
+                </span>
+                <button
+                  type="button"
+                  data-annotation-action="remove"
+                  data-annotation-id={a.id}
+                  aria-label={t('editor.chart.annotation.remove')}
+                  onClick={() => removeAnnotation(a.id)}
+                  className="rounded border border-red-200 bg-white px-1.5 py-0.5 text-red-600 hover:bg-red-50"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
           </div>
         </details>
       )}

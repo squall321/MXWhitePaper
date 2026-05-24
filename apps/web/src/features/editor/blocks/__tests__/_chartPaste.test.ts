@@ -100,6 +100,83 @@ describe('parseChartPaste — 실패/엣지 케이스', () => {
   })
 })
 
+describe('parseChartPaste — timestamp x (P3)', () => {
+  it('ISO date 시계열 → xAxisType=time, x 는 unix ms', () => {
+    const r = parseChartPaste('2024-01-01\t100\n2024-01-02\t110\n2024-01-03\t120')
+    expect(r).not.toBeNull()
+    expect(r!.xAxisType).toBe('time')
+    expect(r!.series).toHaveLength(1)
+    const pts = r!.series[0]!.points
+    expect(pts).toHaveLength(3)
+    expect(pts[0]!.x).toBe(Date.parse('2024-01-01'))
+    expect(pts[0]!.y).toBe(100)
+    expect(pts[2]!.x).toBe(Date.parse('2024-01-03'))
+  })
+
+  it('ISO datetime → xAxisType=time', () => {
+    const r = parseChartPaste(
+      '2024-01-01T00:00:00Z\t50\n2024-01-01T12:00:00Z\t60',
+    )
+    expect(r).not.toBeNull()
+    expect(r!.xAxisType).toBe('time')
+    expect(r!.series[0]!.points[0]!.x).toBe(
+      Date.parse('2024-01-01T00:00:00Z'),
+    )
+  })
+
+  it('슬래시 패턴 YYYY/MM/DD → xAxisType=time', () => {
+    const r = parseChartPaste('2024/01/01\t1\n2024/01/02\t2')
+    expect(r).not.toBeNull()
+    expect(r!.xAxisType).toBe('time')
+    expect(r!.series[0]!.points[0]!.x).toBe(Date.parse('2024/01/01'))
+  })
+
+  it('헤더 date/price + ISO date → xAxisType=time, xAxisLabel=date', () => {
+    const r = parseChartPaste('date\tprice\n2024-01-01\t100\n2024-01-02\t110')
+    expect(r).not.toBeNull()
+    expect(r!.xAxisType).toBe('time')
+    expect(r!.xAxisLabel).toBe('date')
+    expect(r!.yAxisLabel).toBe('price')
+    expect(r!.series[0]!.points[0]!.x).toBe(Date.parse('2024-01-01'))
+  })
+
+  it('헤더에 time 키워드 + unix ms 정수 → xAxisType=time', () => {
+    const r = parseChartPaste('time\tv\n1700000000000\t1\n1700000060000\t2')
+    expect(r).not.toBeNull()
+    expect(r!.xAxisType).toBe('time')
+    expect(r!.series[0]!.points[0]!.x).toBe(1700000000000)
+  })
+
+  it('헤더 time 키워드 없는 unix-like 큰 정수 → xAxisType 미지정 (일반 number)', () => {
+    const r = parseChartPaste('1700000000000\t1\n1700000060000\t2')
+    expect(r).not.toBeNull()
+    expect(r!.xAxisType).toBeUndefined()
+    expect(r!.series[0]!.points).toEqual([
+      { x: 1700000000000, y: 1 },
+      { x: 1700000060000, y: 2 },
+    ])
+  })
+
+  it('일반 숫자 x (변위/힘 케이스 회귀) → xAxisType 미지정', () => {
+    const r = parseChartPaste('Strain [mm/mm]\tStress [MPa]\n0\t0\n0.1\t100')
+    expect(r).not.toBeNull()
+    expect(r!.xAxisType).toBeUndefined()
+  })
+
+  it('첫 컬럼에 일부만 ISO date (mix) → timestamp 미인식 (= xAxisType 미지정)', () => {
+    // 첫 행은 ISO date, 두 번째는 일반 숫자. 일관성 없음 → timestamp 컬럼 아님.
+    // x 셀이 모두 finite number 여야 하므로 ISO 행은 toPoints 에서 NaN 으로 drop.
+    const r = parseChartPaste('2024-01-01\t1\n5\t2\n10\t3')
+    expect(r).not.toBeNull()
+    expect(r!.xAxisType).toBeUndefined()
+    // ISO 행은 Number('2024-01-01')=NaN 으로 drop, 숫자 2 행만 남는다.
+    expect(r!.series[0]!.points).toEqual([
+      { x: 5, y: 2 },
+      { x: 10, y: 3 },
+    ])
+  })
+})
+
 describe('extractUnit', () => {
   it('대괄호 [..] 인식', () => {
     expect(extractUnit('Stress [MPa]')).toEqual({ name: 'Stress', unit: 'MPa' })

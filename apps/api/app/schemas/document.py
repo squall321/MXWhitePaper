@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Any, Literal, Annotated
 
 from pydantic import AnyUrl, BaseModel, ConfigDict, Field, RootModel, model_validator
@@ -475,6 +475,27 @@ class Point(BaseModel):
     )
     x: float
     y: float
+    err: float | None = None
+    """
+    대칭 오차 (y±err). P3 추가.
+    """
+    err_low: float | None = Field(None, alias='errLow')
+    """
+    비대칭 오차 — 하한 (y - errLow ~ y).
+    """
+    err_high: float | None = Field(None, alias='errHigh')
+    """
+    비대칭 오차 — 상한 (y ~ y + errHigh).
+    """
+
+
+class YAxisIndex(IntEnum):
+    """
+    이 시리즈가 그려질 y 축. 0 (기본) = 왼쪽 축, 1 = 오른쪽 축. dual-axis 일 때 단위가 다른 두 시리즈를 같은 차트에 표시.
+    """
+
+    integer_0 = 0
+    integer_1 = 1
 
 
 class Series(BaseModel):
@@ -485,12 +506,29 @@ class Series(BaseModel):
     """
     points: list[Point] | None = None
     """
-    자유 (x, y) 쌍. chartType=='xy-line' 에서 사용. 시리즈마다 x 가 다를 수 있어 stress-strain 곡선처럼 측정점이 다른 데이터 비교 가능.
+    자유 (x, y) 쌍. chartType=='xy-line' 에서 사용. 시리즈마다 x 가 다를 수 있어 stress-strain 곡선처럼 측정점이 다른 데이터 비교 가능. 각 점에 optional err (대칭 error bar y±err) 또는 errLow/errHigh (비대칭) 가능 — 측정 오차 시각화.
     """
     caption: str | None = None
     """
     시리즈 추가 설명 — hover/legend 에 표시. 캡션은 사용자가 paste 시 헤더에서 추출하거나 직접 입력.
     """
+    y_axis_index: YAxisIndex | None = Field(None, alias='yAxisIndex')
+    """
+    이 시리즈가 그려질 y 축. 0 (기본) = 왼쪽 축, 1 = 오른쪽 축. dual-axis 일 때 단위가 다른 두 시리즈를 같은 차트에 표시.
+    """
+    color: str | None = None
+    """
+    시리즈 색상 override. 미지정 시 PALETTE 자동. CSS 색 (#RGB, rgb(), name).
+    """
+
+
+class XAxisType(Enum):
+    """
+    x 축 데이터 유형. 'time' 이면 unix ms 또는 ISO date 로 해석 (P3 — timestamp x). 미지정 = 'value' (숫자).
+    """
+
+    value = 'value'
+    time = 'time'
 
 
 class Data(BaseModel):
@@ -503,6 +541,14 @@ class Data(BaseModel):
     y_axis_label: str | None = Field(None, alias='yAxisLabel')
     """
     y 축 라벨. paste 의 'y' 헤더 컬럼명에서 자동 추출 가능.
+    """
+    y_axis_label2: str | None = Field(None, alias='yAxisLabel2')
+    """
+    오른쪽 y 축 라벨 — dual-axis 일 때 (series 중 yAxisIndex=1 있을 때) 사용.
+    """
+    x_axis_type: XAxisType | None = Field(None, alias='xAxisType')
+    """
+    x 축 데이터 유형. 'time' 이면 unix ms 또는 ISO date 로 해석 (P3 — timestamp x). 미지정 = 'value' (숫자).
     """
 
 
@@ -607,6 +653,46 @@ class Display1(BaseModel):
     sampling: Sampling | None = None
 
 
+class Annotations(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['marker']
+    id: str
+    x: float
+    y: float
+    label: str
+    color: str | None = None
+
+
+class Annotations1(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['arrow']
+    id: str
+    from_x: float = Field(..., alias='fromX')
+    from_y: float = Field(..., alias='fromY')
+    to_x: float = Field(..., alias='toX')
+    to_y: float = Field(..., alias='toY')
+    label: str | None = None
+    color: str | None = None
+
+
+class Annotations2(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['box']
+    id: str
+    x_min: float = Field(..., alias='xMin')
+    x_max: float = Field(..., alias='xMax')
+    y_min: float = Field(..., alias='yMin')
+    y_max: float = Field(..., alias='yMax')
+    label: str | None = None
+    color: str | None = None
+
+
 class ChartBlock(BaseModel):
     """
     Chart block — `engine` selects the renderer. 'recharts' (default) uses our existing simple chart UI; 'echarts' unlocks rich interaction (zoom, brush, hover slope, markPoint annotations, markArea regions). With 'echarts' the data fields below still drive the dataset, but `options` accepts any ECharts EChartsOption fragment that gets merged on top.
@@ -638,6 +724,10 @@ class ChartBlock(BaseModel):
     display: Display1 | None = None
     """
     사용자 시각화 토글 상태. 차트 블록과 함께 저장되어 재방문 시 동일 상태 복원. P1 에서 gridOn/xLog/yLog/showFit + 자동 zoom 지원, P2 에서 fitRange/축범위/stats, P3 에서 fitType/도메인 옵션 확장.
+    """
+    annotations: list[Annotations | Annotations1 | Annotations2] | None = None
+    """
+    차트 위 도형 (P3) — 사용자가 데이터 좌표계에 직접 얹는 화살표/박스/마커/노트. ImageAnnotation 의 카운터파트이지만 좌표가 (x, y) 데이터 단위.
     """
     meta: BlockMeta | None = None
 

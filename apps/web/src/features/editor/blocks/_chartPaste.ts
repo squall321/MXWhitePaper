@@ -30,6 +30,11 @@ export interface ChartPasteResult {
   xAxisLabel?: string
   /** y 축 라벨. 단일 시리즈면 y 컬럼명, 여러면 비움 (각 시리즈 name 으로 구분). */
   yAxisLabel?: string
+  /**
+   * x 축 데이터 유형 — 첫 컬럼이 ISO date/datetime/슬래시 패턴이면 'time'.
+   * 미지정 = 'value' (기존 동작 유지). points[].x 는 'time' 인 경우 unix ms.
+   */
+  xAxisType?: 'value' | 'time'
   series: ChartPasteSeries[]
 }
 
@@ -89,9 +94,12 @@ export function parseChartPaste(text: string): ChartPasteResult | null {
   const remaining = rawRows.slice(cursor)
   if (remaining.length < 1) return null
 
-  // 3) 헤더 행 추론 — 남은 첫 행의 셀이 모두 숫자 가능하면 헤더 없음.
+  // 3) 헤더 행 추론 — 남은 첫 행의 셀이 모두 숫자 또는 timestamp 패턴이면 헤더 없음.
+  //    (P3) ISO date `2024-01-01` 는 Number() 로 NaN 이라 헤더로 오인되는 회귀 방지.
   const firstRemaining = remaining[0]!
-  const hasHeader = !firstRemaining.every((c) => isNumericCell(c))
+  const hasHeader = !firstRemaining.every(
+    (c) => isNumericCell(c) || isTimestampCell(c),
+  )
 
   let headerCells: string[] | null = null
   let dataRows: string[][]
@@ -111,6 +119,22 @@ export function parseChartPaste(text: string): ChartPasteResult | null {
   const parsedHeaders = headerCells
     ? headerCells.map((h) => extractUnit(h))
     : null
+
+  // 첫 컬럼이 timestamp 인지 추론. 'time' 이면 dataRows 의 0번 셀을 unix ms 로 미리 치환.
+  // 헤더가 time/date 키워드면 unix-like 큰 정수도 허용; 그 외엔 ISO/슬래시 패턴만.
+  const xHeaderHint = headerCells ? headerCells[0] : undefined
+  const isTime = detectTimestampColumn(dataRows, 0, xHeaderHint)
+  if (isTime) {
+    result.xAxisType = 'time'
+    for (const r of dataRows) {
+      const raw = (r[0] ?? '').trim()
+      if (raw === '') continue
+      // 큰 정수 (unix ms / s) 는 그대로 number 로 통과시킴.
+      const asNum = /^\d{10,13}$/.test(raw) ? Number(raw) : Date.parse(raw)
+      // NaN 이면 toPoints 의 isFinite 검사가 알아서 그 행을 skip.
+      r[0] = Number.isFinite(asNum) ? String(asNum) : ''
+    }
+  }
 
   if (colCount === 2) {
     // 2 컬럼: 단일 시리즈.
@@ -162,6 +186,51 @@ function isNumericCell(cell: string): boolean {
   if (t === '') return false
   const n = Number(t)
   return Number.isFinite(n)
+}
+
+/** ISO date/datetime/슬래시 패턴 매칭. unix-like 큰 정수는 별도 처리 (헤더 hint 필요). */
+const TIMESTAMP_PATTERNS: RegExp[] = [
+  /^\d{4}-\d{2}-\d{2}$/,
+  /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/,
+  /^\d{4}\/\d{2}\/\d{2}$/,
+  /^\d{1,2}\/\d{1,2}\/\d{4}$/,
+]
+
+function isTimestampCell(cell: string): boolean {
+  const t = (cell ?? '').trim()
+  if (t === '') return false
+  return TIMESTAMP_PATTERNS.some((re) => re.test(t))
+}
+
+const TIME_HEADER_KEYWORDS = ['time', 'date', 'timestamp', '날짜', '시간']
+
+function looksLikeTimeHeader(header: string | undefined): boolean {
+  if (!header) return false
+  const lower = header.toLowerCase()
+  return TIME_HEADER_KEYWORDS.some((k) => lower.includes(k))
+}
+
+/**
+ * 모든 dataRow 의 첫 컬럼 (비어있지 않은 셀) 이 timestamp 패턴이면 true.
+ * unix-like 10~13 자리 정수는 헤더에 time/date/... 키워드가 있을 때만 timestamp 로 본다.
+ */
+function detectTimestampColumn(
+  rows: string[][],
+  col: number,
+  headerHint: string | undefined,
+): boolean {
+  let seen = 0
+  const headerHinted = looksLikeTimeHeader(headerHint)
+  for (const r of rows) {
+    const raw = (r[col] ?? '').trim()
+    if (raw === '') continue
+    seen++
+    const isIsoLike = TIMESTAMP_PATTERNS.some((re) => re.test(raw))
+    if (isIsoLike) continue
+    if (headerHinted && /^\d{10,13}$/.test(raw)) continue
+    return false
+  }
+  return seen > 0
 }
 
 function toPoints(rows: string[][], xCol: number, yCol: number): XYPoint[] {

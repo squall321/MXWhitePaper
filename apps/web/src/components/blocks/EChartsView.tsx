@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'rea
 import * as echarts from 'echarts/core'
 import {
   BarChart as EBar,
+  CustomChart as ECustom,
   LineChart as ELine,
   PieChart as EPie,
   RadarChart as ERadar,
@@ -12,6 +13,7 @@ import {
   GridComponent,
   LegendComponent,
   MarkAreaComponent,
+  MarkLineComponent,
   MarkPointComponent,
   RadarComponent,
   TitleComponent,
@@ -20,9 +22,22 @@ import {
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { ChartBlock } from '@/types/document'
-// xy-line 의 선형 회귀선/표기는 동일 함수를 에디터/뷰어가 공유하기 위해
-// 별도 순수 모듈에 분리되어 있다 (chart-xy-line.plan §2.5).
-import { fitLine, formatFit } from '@/features/editor/blocks/_fits'
+// xy-line 의 회귀선/표기는 동일 함수를 에디터/뷰어가 공유하기 위해 별도 순수
+// 모듈에 분리되어 있다 (chart-xy-line.plan §2.5). P3 에서 비선형 fit
+// (poly2/poly3/exp/power) 도 같은 모듈로 들어왔다.
+import {
+  evaluateFit,
+  exponentialFit,
+  fitLine,
+  formatFit,
+  formatFitGeneric,
+  linearFit,
+  polyFit,
+  powerFit,
+  type AnyFitResult,
+  type FitType,
+  type XYPoint,
+} from '@/features/editor/blocks/_fits'
 
 // Register only the pieces we use to keep the bundle slim. Adding a new
 // chart type later means importing it here too.
@@ -32,6 +47,7 @@ echarts.use([
   EPie,
   ERadar,
   EScatter,
+  ECustom,
   GridComponent,
   TooltipComponent,
   LegendComponent,
@@ -40,6 +56,7 @@ echarts.use([
   DataZoomComponent,
   MarkPointComponent,
   MarkAreaComponent,
+  MarkLineComponent,
   RadarComponent,
   CanvasRenderer,
 ])
@@ -246,9 +263,26 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
       // 측정점이 다른 데이터를 한 그림에 겹쳐 비교.
       const xName = block.data?.xAxisLabel ?? ''
       const yName = block.data?.yAxisLabel ?? ''
-      // 데이터 시리즈
-      const dataSeries = series.map((s, i) => {
-        const color = PALETTE[i % PALETTE.length]
+      const yName2 = block.data?.yAxisLabel2 ?? ''
+      // P3: dual y-axis — 어떤 시리즈라도 yAxisIndex===1 이 있으면 우축을 추가.
+      // 우축은 log 토글 대상이 아니며 (단순화), 좌축의 yLog 만 적용.
+      const hasRightAxis = series.some((s) => s.yAxisIndex === 1)
+      // P3: timestamp x — xAxisType='time' 이면 ECharts type='time'. log 와
+      // 동시 ON 인 경우 time 우선 (log 무시).
+      const xIsTime = block.data?.xAxisType === 'time'
+      // P2: 수동 축 범위. xLog/yLog 가 켜진 경우 log scale 에는 양수만 들어갈
+      // 수 있으므로 0 이하 입력은 무시한다 (echarts 가 NaN 으로 폭주하는 걸 방지).
+      const xIsLog = !xIsTime && display.xLog === true
+      const yIsLog = display.yLog === true
+      const xAxisRange = resolveAxisRange(display.xMin, display.xMax, xIsLog)
+      const yAxisRange = resolveAxisRange(display.yMin, display.yMax, yIsLog)
+      // 시리즈별 색 — 사용자 지정 (s.color) 이 있으면 우선, 없으면 팔레트.
+      const colorFor = (i: number): string =>
+        series[i]?.color ?? PALETTE[i % PALETTE.length]!
+
+      // 데이터 시리즈 (메인 line) — yAxisIndex / 색 override 반영.
+      const dataSeries: any[] = series.map((s, i) => {
+        const color = colorFor(i)
         return {
           name: s.name,
           type: 'line' as const,
@@ -257,14 +291,99 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
           data: (s.points ?? []).map((p) => [p.x, p.y]),
           lineStyle: { color },
           itemStyle: { color },
+          yAxisIndex: s.yAxisIndex === 1 ? 1 : 0,
         }
       })
-      // showFit=true 면 시리즈마다 선형 회귀선을 별도 line 시리즈로 추가.
-      // 같은 색의 dashed line + 끝점 label 로 fit 식/R² 표시.
-      // P2: display.fitRange 가 있으면 그 x 구간 안의 점만 회귀에 사용 —
-      // elastic 영역만 골라 Young's modulus 를 뽑는 식의 사용 시나리오.
+
+      // P3: error bar — 점마다 err/errLow/errHigh 가 하나라도 있으면 custom
+      // series 로 vertical line 을 그린다. legend/tooltip 에서는 숨김.
+      const errorSeries: any[] = []
+      series.forEach((s, i) => {
+        const pts = s.points ?? []
+        const hasErr = pts.some(
+          (p) => p.err != null || p.errLow != null || p.errHigh != null,
+        )
+        if (!hasErr) return
+        const color = colorFor(i)
+        // ECharts custom series 는 [x, yLow, yHigh] 행을 받고 renderItem 에서
+        // 픽셀 좌표로 변환해 직접 그린다.
+        const errData = pts
+          .filter(
+            (p) =>
+              Number.isFinite(p.x) &&
+              Number.isFinite(p.y) &&
+              (p.err != null || p.errLow != null || p.errHigh != null),
+          )
+          .map((p) => {
+            const low = p.err ?? p.errLow ?? 0
+            const high = p.err ?? p.errHigh ?? 0
+            return [p.x, p.y - low, p.y + high]
+          })
+        if (errData.length === 0) return
+        errorSeries.push({
+          name: `${s.name}_err`,
+          type: 'custom',
+          yAxisIndex: s.yAxisIndex === 1 ? 1 : 0,
+          renderItem: (_params: any, api: any) => {
+            // api.value(d) 는 raw 값, api.coord([x, y]) 는 픽셀 좌표.
+            const x = api.value(0)
+            const yLow = api.value(1)
+            const yHigh = api.value(2)
+            const ptLow = api.coord([x, yLow])
+            const ptHigh = api.coord([x, yHigh])
+            // 짧은 캡 (좌우 4px). vertical line + top/bottom cap.
+            const cap = 4
+            return {
+              type: 'group',
+              children: [
+                {
+                  type: 'line',
+                  shape: {
+                    x1: ptLow[0],
+                    y1: ptLow[1],
+                    x2: ptHigh[0],
+                    y2: ptHigh[1],
+                  },
+                  style: { stroke: color, lineWidth: 1 },
+                },
+                {
+                  type: 'line',
+                  shape: {
+                    x1: ptLow[0] - cap,
+                    y1: ptLow[1],
+                    x2: ptLow[0] + cap,
+                    y2: ptLow[1],
+                  },
+                  style: { stroke: color, lineWidth: 1 },
+                },
+                {
+                  type: 'line',
+                  shape: {
+                    x1: ptHigh[0] - cap,
+                    y1: ptHigh[1],
+                    x2: ptHigh[0] + cap,
+                    y2: ptHigh[1],
+                  },
+                  style: { stroke: color, lineWidth: 1 },
+                },
+              ],
+            }
+          },
+          data: errData,
+          silent: true,
+          tooltip: { show: false },
+          // legend 에 표시되지 않도록 — legend.data 에서 제외하면 OK.
+          z: 1,
+        })
+      })
+
+      // showFit=true 면 시리즈마다 회귀선 (linear/poly2/poly3/exp/power) 을
+      // 별도 line 시리즈로 추가. 같은 색의 dashed line + 끝점 label 로 식/R² 표시.
+      // P2: display.fitRange 가 있으면 그 x 구간 안의 점만 회귀에 사용.
+      // P3: display.fitType 에 따라 분기. fit 실패 (singular/데이터 부족) 면 skip.
       const fitSeries: any[] = []
       if (display.showFit === true) {
+        const fitType: FitType = display.fitType ?? 'linear'
         const fitRange = display.fitRange
         const hasRange =
           fitRange &&
@@ -276,51 +395,215 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
           : ''
         series.forEach((s, i) => {
           const sourcePoints = s.points ?? []
-          const targetPoints = hasRange
-            ? sourcePoints.filter(
-                (p) => p.x >= fitRange!.xMin && p.x <= fitRange!.xMax,
-              )
-            : sourcePoints
-          const result = fitLine(targetPoints)
+          const targetPoints: XYPoint[] = (
+            hasRange
+              ? sourcePoints.filter(
+                  (p) => p.x >= fitRange!.xMin && p.x <= fitRange!.xMax,
+                )
+              : sourcePoints
+          ).map((p) => ({ x: p.x, y: p.y }))
+          const color = colorFor(i)
+          const yIdx = s.yAxisIndex === 1 ? 1 : 0
+
+          if (fitType === 'linear') {
+            // 직선은 기존처럼 두 끝점만 있으면 충분.
+            const result = fitLine(targetPoints)
+            if (!result) return
+            const label = `${formatFit(result.fit)}${rangeSuffix}`
+            fitSeries.push(
+              buildFitLineSeries(
+                s.name,
+                color,
+                yIdx,
+                [
+                  [result.line[0].x, result.line[0].y],
+                  [result.line[1].x, result.line[1].y, label],
+                ],
+                false,
+              ),
+            )
+            return
+          }
+
+          // 비선형 — fit 결과 + 곡선을 균등 50 점 샘플링.
+          let result: AnyFitResult | null = null
+          if (fitType === 'poly2') result = polyFit(targetPoints, 2)
+          else if (fitType === 'poly3') result = polyFit(targetPoints, 3)
+          else if (fitType === 'exp') result = exponentialFit(targetPoints)
+          else if (fitType === 'power') result = powerFit(targetPoints)
+          else {
+            // fallback — 알 수 없는 fitType 은 linear 시도.
+            const lin = linearFit(targetPoints)
+            if (lin.n >= 2) result = lin
+          }
           if (!result) return
-          const color = PALETTE[i % PALETTE.length]
-          const label = `${formatFit(result.fit)}${rangeSuffix}`
-          fitSeries.push({
-            // legend 와 충돌 안 나도록 fit 시리즈에는 별도 이름.
-            name: `${s.name} (fit)`,
-            type: 'line',
-            smooth: false,
-            showSymbol: false,
-            // 회귀선 위에 라벨이 겹치지 않게 마지막 점에만 라벨 표시.
-            data: [
-              [result.line[0].x, result.line[0].y],
-              [result.line[1].x, result.line[1].y, label],
-            ],
-            lineStyle: { color, type: 'dashed', width: 1.5 },
-            itemStyle: { color },
-            label: {
-              show: true,
-              position: 'right',
-              formatter: (param: any) => {
-                const v = param?.value
-                // 끝점 (라벨 동봉) 만 표시. 다른 점은 빈 문자열.
-                if (Array.isArray(v) && v.length >= 3) return String(v[2])
-                return ''
-              },
-              color,
-              fontSize: 11,
-            },
-            silent: true, // tooltip/legend 동작에서 제외 — fit 은 보조선.
-          })
+
+          // 샘플링 x 범위 — fitRange 우선, 없으면 시리즈 x min/max.
+          let xMin = Infinity
+          let xMax = -Infinity
+          if (hasRange) {
+            xMin = fitRange!.xMin
+            xMax = fitRange!.xMax
+          } else {
+            for (const p of targetPoints) {
+              if (!Number.isFinite(p.x)) continue
+              if (p.x < xMin) xMin = p.x
+              if (p.x > xMax) xMax = p.x
+            }
+          }
+          if (!Number.isFinite(xMin) || !Number.isFinite(xMax) || xMin >= xMax) {
+            return
+          }
+          const N = 50
+          const xs: number[] = new Array(N)
+          for (let k = 0; k < N; k++) {
+            xs[k] = xMin + ((xMax - xMin) * k) / (N - 1)
+          }
+          const ys = evaluateFit(fitType, result, xs)
+          if (ys.length !== xs.length) return
+          // 마지막 점에 라벨 동봉.
+          const label = `${formatFitGeneric(fitType, result)}${rangeSuffix}`
+          const curveData: any[] = []
+          for (let k = 0; k < N; k++) {
+            const y = ys[k]!
+            if (!Number.isFinite(y)) continue
+            if (k === N - 1) {
+              curveData.push([xs[k], y, label])
+            } else {
+              curveData.push([xs[k], y])
+            }
+          }
+          if (curveData.length < 2) return
+          fitSeries.push(
+            buildFitLineSeries(s.name, color, yIdx, curveData, true),
+          )
         })
       }
 
-      // P2: 수동 축 범위. xLog/yLog 가 켜진 경우 log scale 에는 양수만 들어갈
-      // 수 있으므로 0 이하 입력은 무시한다 (echarts 가 NaN 으로 폭주하는 걸 방지).
-      const xIsLog = display.xLog === true
-      const yIsLog = display.yLog === true
-      const xAxisRange = resolveAxisRange(display.xMin, display.xMax, xIsLog)
-      const yAxisRange = resolveAxisRange(display.yMin, display.yMax, yIsLog)
+      // P3: annotations — marker/arrow/box. 좌축 기준 (yAxisIndex=0) 으로 둔다.
+      const annotationSeries: any[] = []
+      const annotations = block.annotations ?? []
+      annotations.forEach((ann) => {
+        const color = ann.color ?? '#666'
+        if (ann.kind === 'marker') {
+          annotationSeries.push({
+            name: `__ann_${ann.id}`,
+            type: 'line',
+            yAxisIndex: 0,
+            data: [],
+            silent: true,
+            tooltip: { show: false },
+            z: 5,
+            markPoint: {
+              symbol: 'pin',
+              symbolSize: 36,
+              data: [
+                {
+                  coord: [ann.x, ann.y],
+                  itemStyle: { color },
+                  label: {
+                    show: true,
+                    formatter: ann.label,
+                    color: '#fff',
+                    fontSize: 11,
+                  },
+                },
+              ],
+            },
+          })
+        } else if (ann.kind === 'arrow') {
+          // 화살표 — line series 로 from→to + end symbol='arrow'.
+          annotationSeries.push({
+            name: `__ann_${ann.id}`,
+            type: 'line',
+            yAxisIndex: 0,
+            data: [
+              [ann.fromX, ann.fromY],
+              [ann.toX, ann.toY],
+            ],
+            symbol: ['none', 'arrow'],
+            symbolSize: 10,
+            lineStyle: { color, type: 'dashed', width: 1.5 },
+            itemStyle: { color },
+            silent: true,
+            tooltip: { show: false },
+            z: 5,
+            label: ann.label
+              ? {
+                  show: true,
+                  position: 'middle',
+                  formatter: ann.label,
+                  color,
+                  fontSize: 11,
+                }
+              : { show: false },
+          })
+        } else if (ann.kind === 'box') {
+          // 박스 — markArea 로 직사각형 영역. 빈 데이터 line 에 markArea 부착.
+          annotationSeries.push({
+            name: `__ann_${ann.id}`,
+            type: 'line',
+            yAxisIndex: 0,
+            data: [],
+            silent: true,
+            tooltip: { show: false },
+            z: 5,
+            markArea: {
+              itemStyle: {
+                color,
+                opacity: 0.15,
+                borderColor: color,
+                borderWidth: 1,
+                borderType: 'dashed',
+              },
+              label: ann.label
+                ? {
+                    show: true,
+                    formatter: ann.label,
+                    color,
+                    fontSize: 11,
+                    position: 'top',
+                  }
+                : { show: false },
+              data: [
+                [
+                  { coord: [ann.xMin, ann.yMin] },
+                  { coord: [ann.xMax, ann.yMax] },
+                ],
+              ],
+            },
+          })
+        }
+      })
+
+      // 좌/우 y 축 구성 — 우축이 필요할 때만 array 로.
+      const yAxisLeft = {
+        type: yIsLog ? ('log' as const) : ('value' as const),
+        name: yName,
+        nameLocation: 'middle' as const,
+        nameGap: 50,
+        splitLine: { show: gridOn },
+        ...yAxisRange,
+      }
+      const yAxisOption = hasRightAxis
+        ? [
+            yAxisLeft,
+            {
+              type: 'value' as const,
+              name: yName2,
+              nameLocation: 'middle' as const,
+              nameGap: 50,
+              splitLine: { show: false },
+            },
+          ]
+        : yAxisLeft
+
+      // x 축 — time 이면 type='time' (log 무시), 아니면 log/value.
+      const xAxisType: 'time' | 'log' | 'value' = xIsTime
+        ? 'time'
+        : xIsLog
+          ? 'log'
+          : 'value'
 
       typedOption = {
         tooltip: {
@@ -329,10 +612,17 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
             ? { type: 'cross' }
             : { type: 'line' },
           // xy-line tooltip — 시리즈명 / caption (회색) / (x, y) 단위 포함.
+          // fit/error/annotation 보조 시리즈는 제외.
           formatter: (paramsRaw: any) => {
             const params = Array.isArray(paramsRaw) ? paramsRaw : [paramsRaw]
             const rows = params
-              .filter((p) => !String(p?.seriesName ?? '').endsWith('(fit)'))
+              .filter((p) => {
+                const n = String(p?.seriesName ?? '')
+                if (n.endsWith('(fit)')) return false
+                if (n.endsWith('_err')) return false
+                if (n.startsWith('__ann_')) return false
+                return true
+              })
               .map((p) => {
                 const v = p?.value
                 const x = Array.isArray(v) ? v[0] : ''
@@ -358,31 +648,27 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
           },
         },
         legend: { bottom: 0, data: dataSeries.map((s) => s.name) },
-        grid: { left: 56, right: 24, top: 24, bottom: 64, containLabel: true },
+        grid: { left: 56, right: hasRightAxis ? 56 : 24, top: 24, bottom: 64, containLabel: true },
         xAxis: {
-          // log 토글이 켜진 경우 type 자체를 'log' 로 — 음수/0 데이터는
-          // ECharts 가 자체적으로 skip.
-          type: xIsLog ? 'log' : 'value',
+          type: xAxisType,
           name: xName,
           nameLocation: 'middle',
           nameGap: 30,
           splitLine: { show: gridOn },
-          ...xAxisRange,
+          ...(xIsTime ? {} : xAxisRange),
         },
-        yAxis: {
-          type: yIsLog ? 'log' : 'value',
-          name: yName,
-          nameLocation: 'middle',
-          nameGap: 50,
-          splitLine: { show: gridOn },
-          ...yAxisRange,
-        },
+        yAxis: yAxisOption,
         // dataZoom — xy-line 의 핵심 인터랙션이라 기본 ON.
         dataZoom: [
           { type: 'inside' },
           { type: 'slider', show: true, bottom: 0 },
         ],
-        series: [...dataSeries, ...fitSeries],
+        series: [
+          ...dataSeries,
+          ...errorSeries,
+          ...fitSeries,
+          ...annotationSeries,
+        ],
       }
       break
     }
@@ -484,6 +770,40 @@ function resolveAxisRange(
     if (!isLog || max > 0) out.max = max
   }
   return out
+}
+
+// fit 시리즈 (선형/비선형 공용) — 같은 색의 dashed line + 끝점 label.
+// linear 는 두 끝점, 비선형은 50 점 샘플링한 곡선. smooth 는 비선형일 때만.
+function buildFitLineSeries(
+  baseName: string,
+  color: string,
+  yAxisIndex: 0 | 1,
+  data: any[],
+  smooth: boolean,
+): any {
+  return {
+    name: `${baseName} (fit)`,
+    type: 'line',
+    smooth,
+    showSymbol: false,
+    yAxisIndex,
+    data,
+    lineStyle: { color, type: 'dashed', width: 1.5 },
+    itemStyle: { color },
+    label: {
+      show: true,
+      position: 'right',
+      formatter: (param: any) => {
+        const v = param?.value
+        // 라벨 동봉 점 (length>=3) 만 표시, 다른 점은 빈 문자열.
+        if (Array.isArray(v) && v.length >= 3) return String(v[2])
+        return ''
+      },
+      color,
+      fontSize: 11,
+    },
+    silent: true, // tooltip/legend 동작에서 제외 — fit 은 보조선.
+  }
 }
 
 // xy-line tooltip 용 숫자 포맷 — 크기에 따라 자릿수 자동 조절. 비숫자는 그대로.
