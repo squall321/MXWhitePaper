@@ -227,24 +227,19 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
   }
 
   // 차트 블록 wrapper 위에서 받은 paste 이벤트.
-  // input/textarea/contentEditable 이 target 이면 가로채지 않는다 (셀 편집 우선).
+  //
+  // 핵심 — input/textarea 가 target 인 경우에도 *클립보드 내용 자체가 표 모양*
+  // (multi-line + tab/comma) 이면 차트 데이터로 간주해 가로챈다. 사용자가
+  // 차트 블록 안 어디든 paste 했을 때 직관적으로 동작하기 위함. 표 모양이
+  // 아닌 평범한 짧은 텍스트 (시리즈명 입력 등) 는 native paste 그대로.
   const onWrapperPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement | null
-    if (target) {
-      const tag = (target.tagName ?? '').toLowerCase()
-      if (
-        tag === 'input' ||
-        tag === 'textarea' ||
-        target.isContentEditable
-      ) {
-        return
-      }
-    }
     const text = e.clipboardData.getData('text/plain')
     if (!text) return
     const parsed = parseChartPaste(text)
-    if (!parsed) return // non-csv: 기본 paste 동작 유지 (preventDefault 안 함)
+    if (!parsed) return  // non-csv → 기본 paste 동작 유지
+    // 표 모양 텍스트 — input/textarea/contentEditable 안에서도 가로채기.
     e.preventDefault()
+    e.stopPropagation()
     onChange(applyChartPasteToBlock(block, parsed))
     setConvertHint(
       t('editor.chart.csvApplied', {

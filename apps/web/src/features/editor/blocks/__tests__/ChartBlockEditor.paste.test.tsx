@@ -171,6 +171,7 @@ function fakeClipboardEvent(text: string): React.ClipboardEvent<HTMLDivElement> 
     target: { tagName: 'DIV', isContentEditable: false } as HTMLElement,
     clipboardData: { getData: (_: string) => text },
     preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
   } as unknown as React.ClipboardEvent<HTMLDivElement>
 }
 
@@ -272,7 +273,11 @@ describe('<ChartBlockEditor /> onPaste', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('paste target 이 input 이면 가로채지 않는다 (셀 편집 우선)', () => {
+  it('input 안에서 paste 해도 표 모양이면 가로챈다 (직관적 UX)', () => {
+    // 사용자 보고로 정책 변경 — 차트 블록의 input 셀에 paste 했을 때도
+    // 클립보드 내용이 표 모양 (multi-line + tab/comma) 이면 차트 데이터로
+    // 인식해야 한다. 표 모양 아닌 평문은 native paste 그대로 (이 테스트
+    // 범위 밖).
     const onChange = vi.fn()
     const block = makeBlock({ chartType: 'xy-line' })
     const els = renderTree(block, onChange)
@@ -290,9 +295,12 @@ describe('<ChartBlockEditor /> onPaste', () => {
       target: { tagName: 'INPUT', isContentEditable: false } as HTMLElement,
       clipboardData: { getData: (_: string) => 'x\ty\n0\t0\n1\t1' },
       preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
     } as unknown as React.ClipboardEvent<HTMLDivElement>
     onPaste(ev)
-    expect(onChange).not.toHaveBeenCalled()
+    expect(onChange).toHaveBeenCalled()
+    expect(ev.preventDefault).toHaveBeenCalled()
+    expect(ev.stopPropagation).toHaveBeenCalled()
   })
 })
 
