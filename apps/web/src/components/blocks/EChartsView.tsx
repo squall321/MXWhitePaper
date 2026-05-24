@@ -74,6 +74,27 @@ const PALETTE = [
 ]
 
 /**
+ * Brighter variants of `PALETTE` for use on dark surfaces. The index
+ * mapping is preserved so series semantics ("blue line = sales") stay
+ * stable across themes — only luminance shifts. Derived from Tailwind's
+ * 400-scale equivalents of each light-mode hue.
+ */
+const PALETTE_DARK = [
+  '#93A5FF',
+  '#6E8BFF',
+  '#34D399',
+  '#FBBF24',
+  '#F87171',
+  '#A78BFA',
+  '#38BDF8',
+  '#F472B6',
+]
+
+export function getPalette(theme: ResolvedTheme): readonly string[] {
+  return theme === 'dark' ? PALETTE_DARK : PALETTE
+}
+
+/**
  * 외부 (예: ChartBlockEditor 의 ⬇PNG 버튼) 가 EChartsView 의 내부 echarts
  * 인스턴스에서 데이터 URL 을 꺼낼 수 있도록 forwardRef 로 노출하는 핸들.
  * 인스턴스가 아직 init 전이거나 dispose 된 직후에는 null 을 반환한다.
@@ -222,8 +243,8 @@ export const EChartsView = forwardRef<EChartsViewHandle, EChartsViewProps>(
     themeRef.current = theme
 
     const option = useMemo(
-      () => mergeThemeColors(buildOption(block, themeColors), themeColors),
-      [block, themeColors],
+      () => mergeThemeColors(buildOption(block, themeColors, getPalette(theme)), themeColors),
+      [block, themeColors, theme],
     )
 
     useEffect(() => {
@@ -323,6 +344,7 @@ export const EChartsView = forwardRef<EChartsViewHandle, EChartsViewProps>(
 export function buildOption(
   block: ChartBlock,
   colors: ThemeColors = THEME_COLORS_LIGHT,
+  palette: readonly string[] = PALETTE,
 ): echarts.EChartsCoreOption {
   const labels = block.data?.labels ?? []
   const series = block.data?.series ?? []
@@ -401,7 +423,7 @@ export function buildOption(
             data: series.map((s, i) => ({
               name: s.name,
               value: s.values,
-              itemStyle: { color: PALETTE[i % PALETTE.length] },
+              itemStyle: { color: palette[i % palette.length] },
             })),
           },
         ],
@@ -424,7 +446,7 @@ export function buildOption(
           name: s.name,
           type: 'scatter',
           data: (s.values ?? []).map((y, j) => [j, y]),
-          itemStyle: { color: PALETTE[i % PALETTE.length] },
+          itemStyle: { color: palette[i % palette.length] },
           markPoint: markPoints.length > 0 ? { data: markPoints } : undefined,
         })),
       }
@@ -450,7 +472,7 @@ export function buildOption(
       const yAxisRange = resolveAxisRange(display.yMin, display.yMax, yIsLog)
       // 시리즈별 색 — 사용자 지정 (s.color) 이 있으면 우선, 없으면 팔레트.
       const colorFor = (i: number): string =>
-        series[i]?.color ?? PALETTE[i % PALETTE.length]!
+        series[i]?.color ?? palette[i % palette.length]!
 
       // 데이터 시리즈 (메인 line) — yAxisIndex / 색 override 반영.
       // P4 §2.11 — 시리즈 점이 100k 이상이면 ECharts LTTB sampling + large 모드를
@@ -894,10 +916,10 @@ export function buildOption(
             name: s.name,
             type: isBar ? ('bar' as const) : ('line' as const),
             data: s.values,
-            itemStyle: { color: PALETTE[i % PALETTE.length] },
+            itemStyle: { color: palette[i % palette.length] },
             smooth: !isBar,
             areaStyle: isArea
-              ? { color: PALETTE[i % PALETTE.length], opacity: 0.2 }
+              ? { color: palette[i % palette.length], opacity: 0.2 }
               : undefined,
           }
           // Attach mark{Point,Area} to the FIRST series so the highlights

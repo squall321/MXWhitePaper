@@ -112,7 +112,9 @@
 - **다크 모드 = `useResolvedTheme()` hook** ([[src/features/theme/useResolvedTheme.ts]])
   → MutationObserver 로 `html.classList`/`data-theme` 감지 → theme 변화 시
   recharts는 props 분기로 즉시 / EChartsView 는 `dispose+init` 으로 재초기화.
-  데이터 시리즈 팔레트 (8색) 는 다크에서도 그대로 — 데이터 시각화 색은 *의미*.
+  시리즈 팔레트는 `getPalette(theme)` ([[src/components/blocks/EChartsView.tsx#getPalette]])
+  로 light/dark brighter variant 자동 전환 — 인덱스 일관성 유지 (chart-dark-palette
+  사이클). series.color override 는 theme 무관 우선.
 
 ## 테스트 지도
 
