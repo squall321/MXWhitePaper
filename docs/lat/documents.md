@@ -157,8 +157,10 @@
   FE 컴포넌트가 미정의 term 을 ⚠️ + 회색 (border-gray-400, bg-gray-100) +
   "(용어 사전에 없음)" 으로 시각화, `data-glossary-ref-broken` 속성 노출.
 - `GanttBlock` — `tasks[]` (`{name, start, end, progress?}`), `options.stripe?`
-  (default `true`, SVG `<rect fill="#F9FAFB">` 로 task row 음영 — `<rect>`는
-  SVG 첫 자식이라 axis line / 막대 뒤에 paint).
+  (default `true`, SVG `<rect fill="var(--smsg-gray-050)">` 로 task row 음영 —
+  `<rect>`는 SVG 첫 자식이라 axis line / 막대 뒤에 paint). 다크 모드 자동 대응:
+  모든 SVG fill/stroke 가 `var(--smsg-...)` 토큰 — `tokens.css` `.dark` 변형이
+  자동 치환. figure 배경도 `dark:bg-gray-900 dark:border-gray-700`.
 - `ChartBlock`, `ColumnsBlock`, `TabsBlock`, `AccordionBlock`,
   `FlowBlock`, `OrgChartBlock`, `GalleryBlock`, …
 

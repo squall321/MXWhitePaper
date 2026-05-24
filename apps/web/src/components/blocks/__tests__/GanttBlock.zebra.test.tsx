@@ -20,7 +20,7 @@ describe('<GanttBlockView /> zebra-striping', () => {
     const matches = html.match(/data-gantt-zebra-row/g) ?? []
     // tasks: idx 0,1,2,3 → zebra on idx 1 and 3 → 2 rects
     expect(matches.length).toBe(2)
-    expect(html).toContain('fill="#F9FAFB"')
+    expect(html).toContain('fill="var(--smsg-gray-050)"')
   })
 
   it('odd-count tasks → floor(n/2) zebra rects', () => {
@@ -34,6 +34,6 @@ describe('<GanttBlockView /> zebra-striping', () => {
       <GanttBlockView block={mkBlock(4, { stripe: false })} />,
     )
     expect(html).not.toContain('data-gantt-zebra-row')
-    expect(html).not.toContain('fill="#F9FAFB"')
+    expect(html).not.toContain('fill="var(--smsg-gray-050)"')
   })
 })

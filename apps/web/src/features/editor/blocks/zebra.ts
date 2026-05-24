@@ -35,10 +35,10 @@ const STRIPE_CLASSES: Record<ZebraBlockType, string> = {
   bibliography: 'bg-gray-50',
   'figure-index': 'bg-gray-50',
   // gantt is an SVG block — its rows are painted via inline `<rect
-  // fill="#F9FAFB">` (Tailwind gray-50 hex equivalent), not a className.
-  // The entry below exists so ZebraToggle and the exhaustive type check
-  // accept blockType="gantt"; the value is intentionally unused by
-  // GanttBlockView.
+  // fill="var(--smsg-gray-050)">` (token reference so darkmode resolves
+  // through `.dark`), not a className. The entry below exists so
+  // ZebraToggle and the exhaustive type check accept blockType="gantt";
+  // the value is intentionally unused by GanttBlockView.
   gantt: 'bg-gray-50',
 }
 

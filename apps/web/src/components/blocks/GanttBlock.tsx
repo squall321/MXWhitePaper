@@ -28,7 +28,7 @@ export function GanttBlockView({ block }: { block: GanttBlock }) {
   const stripeOn = block.options?.stripe !== false
 
   return (
-    <figure className="overflow-x-auto rounded border border-gray-200 bg-white p-2">
+    <figure className="overflow-x-auto rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900">
       <svg
         width={totalW}
         height={totalH}
@@ -47,7 +47,7 @@ export function GanttBlockView({ block }: { block: GanttBlock }) {
                 y={idx * rowH + 4}
                 width={totalW}
                 height={rowH}
-                fill="#F9FAFB"
+                fill="var(--smsg-gray-050)"
               />
             ) : null,
           )}
@@ -57,7 +57,7 @@ export function GanttBlockView({ block }: { block: GanttBlock }) {
           y1={totalH - 16}
           x2={labelW + barAreaW}
           y2={totalH - 16}
-          stroke="#E5E7EB"
+          stroke="var(--smsg-gray-200)"
         />
         {tasks.map((t, idx) => {
           const x =
@@ -67,12 +67,12 @@ export function GanttBlockView({ block }: { block: GanttBlock }) {
           const y = idx * rowH + 8
           return (
             <g key={idx}>
-              <text x={4} y={y + 14} fontSize={11} fill="#1A1A1A">
+              <text x={4} y={y + 14} fontSize={11} fill="var(--smsg-gray-900)">
                 {t.name}
               </text>
-              <rect x={x} y={y} width={w} height={rowH - 8} fill="#2E5BFF" rx={2} />
+              <rect x={x} y={y} width={w} height={rowH - 8} fill="var(--smsg-blue-500)" rx={2} />
               {progressW > 0 && (
-                <rect x={x} y={y} width={progressW} height={rowH - 8} fill="#1428A0" rx={2} />
+                <rect x={x} y={y} width={progressW} height={rowH - 8} fill="var(--smsg-blue-700)" rx={2} />
               )}
             </g>
           )
