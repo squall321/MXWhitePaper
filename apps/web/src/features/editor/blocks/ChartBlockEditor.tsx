@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { ChartBlock, TableBlock } from '@/types/document'
 import { ChartBlockView } from '@/components/blocks/ChartBlock'
+import { EChartsView, type EChartsViewHandle } from '@/components/blocks/EChartsView'
 import { useEditorStore } from '@/features/editor/state'
 import { parseCsv } from '@/features/editor/extensions/csv-paste'
 import { tableToChartData } from '@/features/editor/tableToChart'
 import { useT } from '@/lib/i18n'
 import { parseChartPaste, type ChartPasteResult } from './_chartPaste'
+import { linearFit, type XYPoint } from './_fits'
 
 interface ChartBlockEditorProps {
   block: ChartBlock
@@ -119,6 +121,132 @@ export function applyChartPasteToBlock(
       yAxisLabel: nextYAxisLabel,
     },
   }
+}
+
+/**
+ * P2 — xy-line series 를 union x 축의 N×(K+1) CSV 로 직렬화하는 순수 함수.
+ *
+ * 시리즈마다 x 가 다를 수 있으므로 (stress-strain 시료별로 측정점이 다름)
+ * 모든 x 의 합집합을 만들고 정렬 → 시리즈별로 해당 x 에 y 가 있으면 채우고
+ * 없으면 빈 칸. 결과 CSV 의 첫 행은 헤더 `x,Series1,Series2,...`.
+ *
+ * 시리즈 이름에 콤마/따옴표/개행이 있으면 RFC 4180 식으로 quote.
+ * onChange handler 가 아닌 download 헬퍼가 호출하지만, 순수 함수로 분리해
+ * 테스트에서 직접 검증한다.
+ */
+export function buildCsvExport(
+  series: ReadonlyArray<{
+    name: string
+    points?: ReadonlyArray<XYPoint>
+  }>,
+): string {
+  // x 합집합 (정확 동치만 — float noise 가 있는 데이터는 paste 단계에서 이미
+  // 정수/문자열 키로 정규화되어 있다고 가정).
+  const xSet = new Set<number>()
+  for (const s of series) {
+    for (const p of s.points ?? []) {
+      if (Number.isFinite(p.x)) xSet.add(p.x)
+    }
+  }
+  const xs = Array.from(xSet).sort((a, b) => a - b)
+
+  // 시리즈별 x→y lookup.
+  const lookups = series.map((s) => {
+    const m = new Map<number, number>()
+    for (const p of s.points ?? []) {
+      if (Number.isFinite(p.x) && Number.isFinite(p.y)) m.set(p.x, p.y)
+    }
+    return m
+  })
+
+  const header = ['x', ...series.map((s) => csvField(s.name))].join(',')
+  const rows = xs.map((x) => {
+    const cells = [String(x), ...lookups.map((m) => {
+      const y = m.get(x)
+      return y === undefined ? '' : String(y)
+    })]
+    return cells.join(',')
+  })
+  return [header, ...rows].join('\n')
+}
+
+function csvField(raw: string): string {
+  // RFC 4180 — , / " / 개행 포함이면 quote + 내부 " 는 ""
+  if (/[",\n\r]/.test(raw)) {
+    return `"${raw.replace(/"/g, '""')}"`
+  }
+  return raw
+}
+
+/**
+ * P2 — 시리즈별 통계 한 줄 (B6 통계 박스). slope 는 linearFit 결과.
+ * 점 수 < 1 이면 NaN 으로 표시되도록 호출측이 처리한다.
+ */
+export interface SeriesStat {
+  name: string
+  n: number
+  xMin: number
+  xMax: number
+  yMean: number
+  yStd: number
+  slope: number | null
+}
+
+export function computeSeriesStats(
+  series: ReadonlyArray<{
+    name: string
+    points?: ReadonlyArray<XYPoint>
+  }>,
+): SeriesStat[] {
+  return series.map((s) => {
+    const pts = (s.points ?? []).filter(
+      (p) => Number.isFinite(p.x) && Number.isFinite(p.y),
+    )
+    const n = pts.length
+    if (n === 0) {
+      return {
+        name: s.name,
+        n: 0,
+        xMin: NaN,
+        xMax: NaN,
+        yMean: NaN,
+        yStd: NaN,
+        slope: null,
+      }
+    }
+    let xMin = Infinity
+    let xMax = -Infinity
+    let sumY = 0
+    for (const p of pts) {
+      if (p.x < xMin) xMin = p.x
+      if (p.x > xMax) xMax = p.x
+      sumY += p.y
+    }
+    const yMean = sumY / n
+    // 표본표준편차 (n>1 일 때만 의미). n==1 이면 0.
+    let varSum = 0
+    for (const p of pts) {
+      const d = p.y - yMean
+      varSum += d * d
+    }
+    const yStd = n > 1 ? Math.sqrt(varSum / (n - 1)) : 0
+    // 기울기는 n>=2 이고 x 가 모두 같지 않을 때만.
+    const fit = n >= 2 ? linearFit(pts) : null
+    const slope = fit && fit.n >= 2 ? fit.slope : null
+    return { name: s.name, n, xMin, xMax, yMean, yStd, slope }
+  })
+}
+
+/** stats 패널에서 NaN/null 안전 출력. */
+function formatStatNum(v: number | null | undefined): string {
+  if (v === null || v === undefined) return '—'
+  if (!Number.isFinite(v)) return '—'
+  if (v === 0) return '0'
+  const abs = Math.abs(v)
+  if (abs >= 100) return v.toFixed(1)
+  if (abs >= 1) return v.toFixed(3)
+  if (abs >= 0.01) return v.toFixed(4)
+  return v.toExponential(2)
 }
 
 /**
@@ -271,6 +399,104 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
     applyCsvText(ex)
   }
 
+  // P2 — 숫자 input 갱신용 헬퍼. 빈 칸이면 해당 키를 display 에서 제거 (auto).
+  // 유한수만 받음. 다른 키는 보존.
+  const setAxisRange = (
+    key: 'xMin' | 'xMax' | 'yMin' | 'yMax',
+    raw: string,
+  ) => {
+    const trimmed = raw.trim()
+    const nextDisplay = { ...display }
+    if (trimmed === '') {
+      delete nextDisplay[key]
+    } else {
+      const n = Number(trimmed)
+      if (!Number.isFinite(n)) return // 잘못된 입력은 무시 (이전 값 유지)
+      nextDisplay[key] = n
+    }
+    onChange({ ...block, display: nextDisplay })
+  }
+  const setFitRange = (key: 'xMin' | 'xMax', raw: string) => {
+    const trimmed = raw.trim()
+    const current = display.fitRange
+    const nextDisplay = { ...display }
+    if (trimmed === '') {
+      // 한쪽이라도 비면 fitRange 자체를 제거 (전체 점 회귀).
+      delete nextDisplay.fitRange
+    } else {
+      const n = Number(trimmed)
+      if (!Number.isFinite(n)) return
+      const other = key === 'xMin' ? 'xMax' : 'xMin'
+      const otherVal = current?.[other]
+      // 한쪽만 들어와 있고 다른쪽이 없으면 NaN 대신 동일값 임시 — 검증은
+      // EChartsView 가 xMin<xMax 인지 체크하므로 여기서는 객체만 보존.
+      const nextRange = {
+        xMin: key === 'xMin' ? n : (otherVal ?? n),
+        xMax: key === 'xMax' ? n : (otherVal ?? n),
+      }
+      nextDisplay.fitRange = nextRange
+    }
+    onChange({ ...block, display: nextDisplay })
+  }
+
+  // P2 — 시리즈 reorder/delete (E4 시리즈 정리 panel). 인덱스 기반.
+  const moveSeries = (sIdx: number, dir: -1 | 1) => {
+    const target = sIdx + dir
+    const len = block.data.series.length
+    if (target < 0 || target >= len) return
+    const next = [...block.data.series]
+    const tmp = next[sIdx]!
+    next[sIdx] = next[target]!
+    next[target] = tmp
+    onChange({ ...block, data: { ...block.data, series: next } })
+  }
+  const removeSeries = (sIdx: number) => {
+    const next = block.data.series.filter((_, i) => i !== sIdx)
+    onChange({ ...block, data: { ...block.data, series: next } })
+  }
+
+  // P2 — PNG / CSV export. PNG 는 hidden EChartsView 에 부착된 ref 로 dataURL
+  // 을 받아 a[download] 클릭. CSV 는 buildCsvExport 결과를 Blob 으로 변환.
+  // 빈 차트 (series 0) 면 버튼 비활성.
+  const chartRef = useRef<EChartsViewHandle | null>(null)
+  const hasSeries = block.data.series.length > 0
+  const downloadName = (block.title?.trim() || 'chart').replace(/[^\w.-]+/g, '_')
+
+  const exportPng = () => {
+    const url = chartRef.current?.getPng()
+    if (!url) return
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${downloadName}.png`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+  const exportCsv = () => {
+    if (!hasSeries) return
+    const csv = buildCsvExport(
+      block.data.series.map((s) => ({ name: s.name, points: s.points })),
+    )
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${downloadName}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  // 통계 panel 데이터. 항상 계산 (가벼움). showStats 일 때만 렌더.
+  const stats = isXyLine ? computeSeriesStats(block.data.series) : []
+  // fitRange 유효성 — UI 경고용. 둘 다 finite 이고 xMin < xMax 가 아니면 invalid.
+  const fitRangeInvalid =
+    display.fitRange !== undefined &&
+    Number.isFinite(display.fitRange.xMin) &&
+    Number.isFinite(display.fitRange.xMax) &&
+    !(display.fitRange.xMin < display.fitRange.xMax)
+
   return (
     <div
       className="space-y-3 rounded border border-smsg-100 bg-smsg-100/40 p-3"
@@ -346,6 +572,187 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
           >
             {t('editor.chart.resetZoom')}
           </button>
+          <button
+            type="button"
+            aria-pressed={!!display.showStats}
+            data-toolbar="stats"
+            onClick={() => setDisplay({ showStats: !display.showStats })}
+            className={`rounded border px-2 py-0.5 ${
+              display.showStats
+                ? 'border-smsg-500 bg-smsg-50 text-smsg-900'
+                : 'border-gray-300 bg-white text-gray-600'
+            }`}
+          >
+            {t('editor.chart.stats')}
+          </button>
+          <button
+            type="button"
+            data-toolbar="export-png"
+            disabled={!hasSeries}
+            onClick={exportPng}
+            className="rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700 disabled:opacity-40"
+          >
+            {t('editor.chart.exportPng')}
+          </button>
+          <button
+            type="button"
+            data-toolbar="export-csv"
+            disabled={!hasSeries}
+            onClick={exportCsv}
+            className="rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-700 disabled:opacity-40"
+          >
+            {t('editor.chart.exportCsv')}
+          </button>
+        </div>
+      )}
+
+      {/* P2 — 축 범위 popover. xy-line 일 때만. 빈 값 = auto. */}
+      {isXyLine && (
+        <details data-section="axis-range" className="rounded border border-gray-200 bg-white p-2 text-xs">
+          <summary className="cursor-pointer text-gray-700">{t('editor.chart.axisRange')}</summary>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(['xMin', 'xMax', 'yMin', 'yMax'] as const).map((k) => (
+              <label key={k} className="block">
+                <span className="mb-1 block text-[10px] text-gray-500">
+                  {t(`editor.chart.axisRange.${k}`)}
+                </span>
+                <input
+                  type="number"
+                  data-axis-range={k}
+                  value={display[k] === undefined ? '' : String(display[k])}
+                  onChange={(e) => setAxisRange(k, e.target.value)}
+                  placeholder={t('editor.chart.axisRange.autoHint')}
+                  className="w-full rounded border border-gray-300 px-1.5 py-0.5"
+                />
+              </label>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {/* P2 — 피팅 범위. showFit 가 켜져 있을 때만 노출. 두 값 모두 채워야
+          실제로 적용되며 (xMin < xMax 검증), 한쪽이라도 비면 전체 점 회귀. */}
+      {isXyLine && display.showFit && (
+        <details data-section="fit-range" className="rounded border border-gray-200 bg-white p-2 text-xs">
+          <summary className="cursor-pointer text-gray-700">{t('editor.chart.fitRange')}</summary>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-[10px] text-gray-500">
+                {t('editor.chart.fitRange.xMin')}
+              </span>
+              <input
+                type="number"
+                data-fit-range="xMin"
+                value={display.fitRange?.xMin === undefined ? '' : String(display.fitRange.xMin)}
+                onChange={(e) => setFitRange('xMin', e.target.value)}
+                className="w-full rounded border border-gray-300 px-1.5 py-0.5"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[10px] text-gray-500">
+                {t('editor.chart.fitRange.xMax')}
+              </span>
+              <input
+                type="number"
+                data-fit-range="xMax"
+                value={display.fitRange?.xMax === undefined ? '' : String(display.fitRange.xMax)}
+                onChange={(e) => setFitRange('xMax', e.target.value)}
+                className="w-full rounded border border-gray-300 px-1.5 py-0.5"
+              />
+            </label>
+          </div>
+          {fitRangeInvalid && (
+            <p role="alert" className="mt-1 text-[11px] text-red-600">
+              {t('editor.chart.fitRange.invalid')}
+            </p>
+          )}
+        </details>
+      )}
+
+      {/* P2 — 시리즈 정리 panel (E4). reorder + delete. */}
+      {isXyLine && (
+        <details data-section="series-panel" className="rounded border border-gray-200 bg-white p-2 text-xs">
+          <summary className="cursor-pointer text-gray-700">{t('editor.chart.seriesPanel')}</summary>
+          <div className="mt-2 space-y-1">
+            {block.data.series.length === 0 ? (
+              <p className="text-gray-500">{t('editor.chart.seriesPanel.empty')}</p>
+            ) : (
+              block.data.series.map((s, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  <span className="flex-1 truncate">{s.name}</span>
+                  <span className="text-[10px] text-gray-500">{(s.points ?? []).length} pts</span>
+                  <button
+                    type="button"
+                    data-series-action="up"
+                    data-series-index={i}
+                    aria-label={t('editor.chart.seriesPanel.up')}
+                    disabled={i === 0}
+                    onClick={() => moveSeries(i, -1)}
+                    className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-gray-700 disabled:opacity-30"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    data-series-action="down"
+                    data-series-index={i}
+                    aria-label={t('editor.chart.seriesPanel.down')}
+                    disabled={i === block.data.series.length - 1}
+                    onClick={() => moveSeries(i, 1)}
+                    className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-gray-700 disabled:opacity-30"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    data-series-action="remove"
+                    data-series-index={i}
+                    aria-label={t('editor.chart.seriesPanel.remove')}
+                    onClick={() => removeSeries(i)}
+                    className="rounded border border-red-200 bg-white px-1.5 py-0.5 text-red-600 hover:bg-red-50"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </details>
+      )}
+
+      {/* P2 — 통계 panel. showStats 토글이 켜진 경우에만 노출. */}
+      {isXyLine && display.showStats && (
+        <div data-section="stats-panel" className="overflow-x-auto rounded border border-gray-200 bg-white p-2 text-xs">
+          {stats.length === 0 ? (
+            <p className="text-gray-500">{t('editor.chart.stats.empty')}</p>
+          ) : (
+            <table className="w-full text-[11px]">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-2 py-1 text-left font-semibold">{t('editor.chart.stats.col.series')}</th>
+                  <th className="px-2 py-1 text-right font-semibold">{t('editor.chart.stats.col.n')}</th>
+                  <th className="px-2 py-1 text-left font-semibold">{t('editor.chart.stats.col.xRange')}</th>
+                  <th className="px-2 py-1 text-left font-semibold">{t('editor.chart.stats.col.yMean')}</th>
+                  <th className="px-2 py-1 text-right font-semibold">{t('editor.chart.stats.col.slope')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.map((st, i) => (
+                  <tr key={i} className="border-t border-gray-100">
+                    <td className="px-2 py-1">{st.name}</td>
+                    <td className="px-2 py-1 text-right">{st.n}</td>
+                    <td className="px-2 py-1">
+                      [{formatStatNum(st.xMin)}, {formatStatNum(st.xMax)}]
+                    </td>
+                    <td className="px-2 py-1">
+                      {formatStatNum(st.yMean)} ± {formatStatNum(st.yStd)}
+                    </td>
+                    <td className="px-2 py-1 text-right">{formatStatNum(st.slope)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
@@ -671,6 +1078,29 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
       </details>
 
       <ChartBlockView block={block} />
+
+      {/* P2 — PNG export 용 hidden EChartsView. ChartBlockView 는 engine
+          분기 (recharts/echarts) 에 따라 다른 렌더러를 쓰는데, 사용자가
+          recharts 엔진을 골라도 PNG 받을 때만큼은 ECharts 캔버스가 필요하다.
+          off-screen 위치에 작게 그려두고 chartRef.getPng() 만 호출.
+          xy-line 차트일 때만 마운트 (다른 chartType 은 export 가 의미 없음). */}
+      {isXyLine && (
+        <div
+          aria-hidden="true"
+          data-section="png-source"
+          style={{
+            position: 'absolute',
+            left: '-99999px',
+            top: 0,
+            width: 600,
+            height: 360,
+            overflow: 'hidden',
+            pointerEvents: 'none',
+          }}
+        >
+          <EChartsView ref={chartRef} block={{ ...block, engine: 'echarts' }} />
+        </div>
+      )}
     </div>
   )
 }

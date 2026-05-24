@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 import * as echarts from 'echarts/core'
 import {
   BarChart as EBar,
@@ -56,6 +56,15 @@ const PALETTE = [
 ]
 
 /**
+ * 외부 (예: ChartBlockEditor 의 ⬇PNG 버튼) 가 EChartsView 의 내부 echarts
+ * 인스턴스에서 데이터 URL 을 꺼낼 수 있도록 forwardRef 로 노출하는 핸들.
+ * 인스턴스가 아직 init 전이거나 dispose 된 직후에는 null 을 반환한다.
+ */
+export interface EChartsViewHandle {
+  getPng(): string | null
+}
+
+/**
  * EChartsView — renders a `ChartBlock` with `engine === 'echarts'` via
  * Apache ECharts. The translation pipeline is:
  *
@@ -69,45 +78,61 @@ const PALETTE = [
  * The chart instance is disposed on unmount and re-renders on data
  * changes via a stable signature (JSON.stringify of the option fragment).
  */
-export function EChartsView({ block }: { block: ChartBlock }) {
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const instanceRef = useRef<echarts.ECharts | null>(null)
+export const EChartsView = forwardRef<EChartsViewHandle, { block: ChartBlock }>(
+  function EChartsView({ block }, ref) {
+    const containerRef = useRef<HTMLDivElement | null>(null)
+    const instanceRef = useRef<echarts.ECharts | null>(null)
 
-  const option = useMemo(() => buildOption(block), [block])
+    const option = useMemo(() => buildOption(block), [block])
 
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const inst = echarts.init(el)
-    instanceRef.current = inst
-    inst.setOption(option, true)
-    const onResize = () => inst.resize()
-    window.addEventListener('resize', onResize)
-    return () => {
-      window.removeEventListener('resize', onResize)
-      inst.dispose()
-      instanceRef.current = null
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    useEffect(() => {
+      const el = containerRef.current
+      if (!el) return
+      const inst = echarts.init(el)
+      instanceRef.current = inst
+      inst.setOption(option, true)
+      const onResize = () => inst.resize()
+      window.addEventListener('resize', onResize)
+      return () => {
+        window.removeEventListener('resize', onResize)
+        inst.dispose()
+        instanceRef.current = null
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
-  useEffect(() => {
-    const inst = instanceRef.current
-    if (!inst) return
-    inst.setOption(option, true)
-  }, [option])
+    useEffect(() => {
+      const inst = instanceRef.current
+      if (!inst) return
+      inst.setOption(option, true)
+    }, [option])
 
-  return (
-    <figure className="rounded border border-gray-200 bg-white p-3">
-      {block.title && (
-        <figcaption className="mb-2 text-sm font-semibold text-smsg-900">
-          {block.title}
-        </figcaption>
-      )}
-      <div ref={containerRef} className="h-72 w-full" data-echarts-view />
-    </figure>
-  )
-}
+    // PNG export 는 ECharts 가 기본 제공하는 getDataURL — 흰 배경을 명시해
+    // 발표 자료에 바로 붙여도 투명 배경 문제 없도록 한다.
+    useImperativeHandle(
+      ref,
+      () => ({
+        getPng() {
+          const inst = instanceRef.current
+          if (!inst) return null
+          return inst.getDataURL({ type: 'png', backgroundColor: '#fff' })
+        },
+      }),
+      [],
+    )
+
+    return (
+      <figure className="rounded border border-gray-200 bg-white p-3">
+        {block.title && (
+          <figcaption className="mb-2 text-sm font-semibold text-smsg-900">
+            {block.title}
+          </figcaption>
+        )}
+        <div ref={containerRef} className="h-72 w-full" data-echarts-view />
+      </figure>
+    )
+  },
+)
 
 function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
   const labels = block.data?.labels ?? []
@@ -236,13 +261,30 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
       })
       // showFit=true 면 시리즈마다 선형 회귀선을 별도 line 시리즈로 추가.
       // 같은 색의 dashed line + 끝점 label 로 fit 식/R² 표시.
+      // P2: display.fitRange 가 있으면 그 x 구간 안의 점만 회귀에 사용 —
+      // elastic 영역만 골라 Young's modulus 를 뽑는 식의 사용 시나리오.
       const fitSeries: any[] = []
       if (display.showFit === true) {
+        const fitRange = display.fitRange
+        const hasRange =
+          fitRange &&
+          Number.isFinite(fitRange.xMin) &&
+          Number.isFinite(fitRange.xMax) &&
+          fitRange.xMin < fitRange.xMax
+        const rangeSuffix = hasRange
+          ? ` (범위 [${formatTooltipNum(fitRange!.xMin)}, ${formatTooltipNum(fitRange!.xMax)}])`
+          : ''
         series.forEach((s, i) => {
-          const result = fitLine(s.points ?? [])
+          const sourcePoints = s.points ?? []
+          const targetPoints = hasRange
+            ? sourcePoints.filter(
+                (p) => p.x >= fitRange!.xMin && p.x <= fitRange!.xMax,
+              )
+            : sourcePoints
+          const result = fitLine(targetPoints)
           if (!result) return
           const color = PALETTE[i % PALETTE.length]
-          const label = formatFit(result.fit)
+          const label = `${formatFit(result.fit)}${rangeSuffix}`
           fitSeries.push({
             // legend 와 충돌 안 나도록 fit 시리즈에는 별도 이름.
             name: `${s.name} (fit)`,
@@ -272,6 +314,13 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
           })
         })
       }
+
+      // P2: 수동 축 범위. xLog/yLog 가 켜진 경우 log scale 에는 양수만 들어갈
+      // 수 있으므로 0 이하 입력은 무시한다 (echarts 가 NaN 으로 폭주하는 걸 방지).
+      const xIsLog = display.xLog === true
+      const yIsLog = display.yLog === true
+      const xAxisRange = resolveAxisRange(display.xMin, display.xMax, xIsLog)
+      const yAxisRange = resolveAxisRange(display.yMin, display.yMax, yIsLog)
 
       typedOption = {
         tooltip: {
@@ -313,18 +362,20 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
         xAxis: {
           // log 토글이 켜진 경우 type 자체를 'log' 로 — 음수/0 데이터는
           // ECharts 가 자체적으로 skip.
-          type: display.xLog === true ? 'log' : 'value',
+          type: xIsLog ? 'log' : 'value',
           name: xName,
           nameLocation: 'middle',
           nameGap: 30,
           splitLine: { show: gridOn },
+          ...xAxisRange,
         },
         yAxis: {
-          type: display.yLog === true ? 'log' : 'value',
+          type: yIsLog ? 'log' : 'value',
           name: yName,
           nameLocation: 'middle',
           nameGap: 50,
           splitLine: { show: gridOn },
+          ...yAxisRange,
         },
         // dataZoom — xy-line 의 핵심 인터랙션이라 기본 ON.
         dataZoom: [
@@ -415,6 +466,24 @@ function escapeHtml(s: unknown): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+// 사용자 지정 min/max 를 echarts axis 옵션으로 변환. 한쪽만 있어도 그쪽만
+// 적용. log scale 인 축에는 0 / 음수가 들어가면 echarts 가 폭주하므로 양수만
+// 통과시킨다 (그 외에는 자동 범위 유지).
+function resolveAxisRange(
+  min: number | undefined,
+  max: number | undefined,
+  isLog: boolean,
+): { min?: number; max?: number } {
+  const out: { min?: number; max?: number } = {}
+  if (typeof min === 'number' && Number.isFinite(min)) {
+    if (!isLog || min > 0) out.min = min
+  }
+  if (typeof max === 'number' && Number.isFinite(max)) {
+    if (!isLog || max > 0) out.max = max
+  }
+  return out
 }
 
 // xy-line tooltip 용 숫자 포맷 — 크기에 따라 자릿수 자동 조절. 비숫자는 그대로.
