@@ -54,4 +54,15 @@ describe('<GanttBlockEditor />', () => {
     expect(html).toContain('aria-label="task 1 name"')
     expect(html).toContain('aria-label="remove task 0"')
   })
+
+  it('surfaces the ZebraToggle for the gantt blockType', () => {
+    const html = renderToStaticMarkup(
+      <GanttBlockEditor slug="test" block={filled} />,
+    )
+    expect(html).toContain('data-zebra-toggle="gantt"')
+    // checked by default (options undefined)
+    const idx = html.indexOf('data-zebra-toggle="gantt"')
+    const snippet = html.slice(idx, idx + 300)
+    expect(snippet).toContain('checked=""')
+  })
 })

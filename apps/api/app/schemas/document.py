@@ -775,6 +775,20 @@ class Task(BaseModel):
     progress: float | None = Field(None, ge=0.0, le=100.0)
 
 
+class Options3(BaseModel):
+    """
+    표시 옵션. 모두 optional, default 동작은 ON.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    stripe: bool | None = True
+    """
+    task row 단위 zebra-striping (label 영역 포함 전체 행). SVG `<rect fill='#F9FAFB'>` 로 paint.
+    """
+
+
 class GanttBlock(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -782,6 +796,10 @@ class GanttBlock(BaseModel):
     type: Literal['gantt']
     id: Ulid
     tasks: list[Task]
+    options: Options3 | None = None
+    """
+    표시 옵션. 모두 optional, default 동작은 ON.
+    """
     meta: BlockMeta | None = None
 
 
@@ -1032,7 +1050,7 @@ class Kind(Enum):
     chart = 'chart'
 
 
-class Options3(BaseModel):
+class Options4(BaseModel):
     """
     표시 옵션. 모두 optional, default 동작은 ON.
     """
@@ -1061,7 +1079,7 @@ class FigureIndexBlock(BaseModel):
     """
     Which figure types to include — 'image' (그림), 'table' (표), 'chart' (차트). Order in this array determines section order. Omit for all three.
     """
-    options: Options3 | None = None
+    options: Options4 | None = None
     """
     표시 옵션. 모두 optional, default 동작은 ON.
     """
@@ -1426,7 +1444,7 @@ class AnnotationElement(
     )
 
 
-class Options4(BaseModel):
+class Options5(BaseModel):
     """
     Visual rendering options. All fields optional with sensible defaults.
     """
@@ -1454,7 +1472,7 @@ class SpreadsheetBlock(BaseModel):
     """
     Sparse map of cell-ref → raw cell input (e.g. {'A1':'42', 'B2':'=SUM(A1:A10)'})
     """
-    options: Options4 | None = None
+    options: Options5 | None = None
     """
     Visual rendering options. All fields optional with sensible defaults.
     """
@@ -1489,7 +1507,7 @@ class Entry(BaseModel):
     """
 
 
-class Options5(BaseModel):
+class Options6(BaseModel):
     """
     표시 옵션. 모두 optional, default 동작은 ON.
     """
@@ -1522,7 +1540,7 @@ class BibliographyBlock(BaseModel):
     Citation style label (numeric / alphabetic / author-year). Currently informational — the FE renders ordered list either way.
     """
     entries: list[Entry] = Field(..., min_length=1)
-    options: Options5 | None = None
+    options: Options6 | None = None
     """
     표시 옵션. 모두 optional, default 동작은 ON.
     """

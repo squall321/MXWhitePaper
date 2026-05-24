@@ -698,6 +698,15 @@ export interface GanttBlock {
     end: string
     progress?: number
   }[]
+  /**
+   * 표시 옵션. 모두 optional, default 동작은 ON.
+   */
+  options?: {
+    /**
+     * task row 단위 zebra-striping (label 영역 포함 전체 행). SVG `<rect fill='#F9FAFB'>` 로 paint.
+     */
+    stripe?: boolean
+  }
   meta?: BlockMeta
 }
 export interface FlowBlock {

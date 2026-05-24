@@ -268,6 +268,8 @@ markArea/dataZoom/brush 등 추가 `options` 필드로 ECharts 옵션 직접 전
 ```
 
 날짜는 ISO `YYYY-MM-DD`. `progress` 는 0~100.
+선택적 `options.stripe` (boolean, default `true`) — task row 단위 zebra
+(SVG `<rect>` 음영, label 영역 포함).
 
 ### 3.12 flow (플로우/다이어그램)
 
@@ -439,10 +441,10 @@ YouTube/Vimeo 등 oembed 지원 호스트는 자동 변환됨.
 `calculator`, `figure-index`, `spacer`, `form`, `quiz` 등이 있다. 정확한 스키마는
 서버의 `apps/api/app/schemas/document.py` 의 해당 `*Block` 클래스 참조.
 
-★ zebra-striping 옵션은 6 종 (table / spreadsheet / list / kpi-cards / bibliography /
-figure-index) 이 공유한다. 모두 `options.stripe` (boolean, default `true`) 동일 패턴 —
-명시적 OFF 만 효과 있다. bibliography 는 entry 단위, figure-index 는 종류별 그룹
-(`<ol>` 안 카운터) 단위로 stripe 적용.
+★ zebra-striping 옵션은 7 종 (table / spreadsheet / list / kpi-cards / bibliography /
+figure-index / gantt) 이 공유한다. 모두 `options.stripe` (boolean, default `true`)
+동일 패턴 — 명시적 OFF 만 효과 있다. bibliography 는 entry 단위, figure-index 는
+종류별 그룹 (`<ol>` 안 카운터) 단위, gantt 는 task row 단위 (SVG `<rect>`) 로 stripe 적용.
 
 가장 안전한 패턴: 클래스 정의를 보고 pydantic 의 필수 필드만 채워 보낸 뒤
 응답이 422 면 `error.details.errors` 가 부족한 필드를 알려줌. 이게 실질적인

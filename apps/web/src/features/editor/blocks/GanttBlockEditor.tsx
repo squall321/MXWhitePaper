@@ -4,6 +4,7 @@ import { Field, Input } from '@/components/ui'
 import { useEditorStore } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
 import { GanttBlockView } from '@/components/blocks/GanttBlock'
+import { ZebraToggle } from './ZebraToggle'
 import { useT } from '@/lib/i18n'
 
 interface Props {
@@ -102,14 +103,23 @@ export function GanttBlockEditor({ slug, block }: Props) {
         <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
           {t('editor.gantt.tasksHeader', { n: local.tasks.length })}
         </p>
-        <button
-          type="button"
-          onClick={add}
-          className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
-          aria-label={t('editor.gantt.addTask')}
-        >
-          {t('editor.gantt.addTask')}
-        </button>
+        <div className="flex items-center gap-2">
+          <ZebraToggle
+            blockType="gantt"
+            options={local.options}
+            onChange={({ stripe }) =>
+              void push({ ...local, options: { ...local.options, stripe } })
+            }
+          />
+          <button
+            type="button"
+            onClick={add}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
+            aria-label={t('editor.gantt.addTask')}
+          >
+            {t('editor.gantt.addTask')}
+          </button>
+        </div>
       </div>
 
       {local.tasks.length === 0 ? (

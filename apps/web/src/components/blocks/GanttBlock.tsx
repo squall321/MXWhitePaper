@@ -25,6 +25,8 @@ export function GanttBlockView({ block }: { block: GanttBlock }) {
   const totalW = labelW + barAreaW + 16
   const totalH = tasks.length * rowH + 24
 
+  const stripeOn = block.options?.stripe !== false
+
   return (
     <figure className="overflow-x-auto rounded border border-gray-200 bg-white p-2">
       <svg
@@ -34,6 +36,21 @@ export function GanttBlockView({ block }: { block: GanttBlock }) {
         role="img"
         aria-label="Gantt 차트"
       >
+        {/* zebra rows — paint first so they sit behind axis line and bars. */}
+        {stripeOn &&
+          tasks.map((_, idx) =>
+            idx % 2 === 1 ? (
+              <rect
+                key={`zebra-${idx}`}
+                data-gantt-zebra-row
+                x={0}
+                y={idx * rowH + 4}
+                width={totalW}
+                height={rowH}
+                fill="#F9FAFB"
+              />
+            ) : null,
+          )}
         {/* axis line */}
         <line
           x1={labelW}

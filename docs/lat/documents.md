@@ -156,8 +156,11 @@
   *없음* (이전 docx_export dead branch 정리, widget-integrity-pass-2 M11).
   FE 컴포넌트가 미정의 term 을 ⚠️ + 회색 (border-gray-400, bg-gray-100) +
   "(용어 사전에 없음)" 으로 시각화, `data-glossary-ref-broken` 속성 노출.
+- `GanttBlock` — `tasks[]` (`{name, start, end, progress?}`), `options.stripe?`
+  (default `true`, SVG `<rect fill="#F9FAFB">` 로 task row 음영 — `<rect>`는
+  SVG 첫 자식이라 axis line / 막대 뒤에 paint).
 - `ChartBlock`, `ColumnsBlock`, `TabsBlock`, `AccordionBlock`,
-  `GanttBlock`, `FlowBlock`, `OrgChartBlock`, `GalleryBlock`, …
+  `FlowBlock`, `OrgChartBlock`, `GalleryBlock`, …
 
 전체 enum 은 [[src/app/schemas/document.py]] 참고. 새 block type 추가 시:
 1. 스키마 클래스 + Union 등록
@@ -277,11 +280,13 @@ materialized view refresh 도 스킵 가능.
    직접 추가. LLM 이 docx 로 작성할 땐 일반 TableBlock 으로 두고 사람이
    사이트에서 변환. (참고: [[../llm-input-rules.md#2-9-spreadsheet-편집-가능한-표]])
 10. **zebra `options.stripe` 기본은 `true`** — table/spreadsheet/list/kpi-cards/
-    bibliography/figure-index 6 종 모두 동일 contract: `options` 객체 없으면 zebra
-    적용. 명시적으로 끄려면 `{stripe:false}` 저장 필요. 단일 진실은
+    bibliography/figure-index/gantt **7 종** 모두 동일 contract: `options` 객체
+    없으면 zebra 적용. 명시적으로 끄려면 `{stripe:false}` 저장 필요. 단일 진실은
     [[src/features/editor/blocks/zebra.ts#getZebraClass]] + 공통 UI 는
     [[src/features/editor/blocks/ZebraToggle.tsx]]. table/spreadsheet 만 docx 등
-    export 에 반영, 나머지 4 종은 FE-only 시각 효과.
+    export 에 반영, 나머지 5 종은 FE-only 시각 효과 (gantt 는 SVG `<rect>` paint,
+    `STRIPE_CLASSES` map의 `gantt` 엔트리는 type 완전성 위한 dummy — 본문 fill은
+    GanttBlockView 인라인 `#F9FAFB`).
 11. **pydantic v2 codegen 은 JSON Schema 의 `oneOf` 의 `not: required` 부분을
     무시한다** — `datamodel-codegen` 이 두 helper class + `RootModel` union 으로
     풀지만 cross-branch 거부 (양쪽 모두 set 입력) 는 모델 validator 가 필요.

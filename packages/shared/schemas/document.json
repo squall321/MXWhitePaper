@@ -677,6 +677,18 @@
             }
           }
         },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "표시 옵션. 모두 optional, default 동작은 ON.",
+          "properties": {
+            "stripe": {
+              "type": "boolean",
+              "default": true,
+              "description": "task row 단위 zebra-striping (label 영역 포함 전체 행). SVG `<rect fill='#F9FAFB'>` 로 paint."
+            }
+          }
+        },
         "meta": { "$ref": "#/$defs/BlockMeta" }
       }
     },

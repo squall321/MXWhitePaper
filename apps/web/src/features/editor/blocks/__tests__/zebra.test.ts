@@ -59,6 +59,12 @@ describe('getZebraClass', () => {
     expect(getZebraClass('figure-index', { stripe: false }, 3)).toBe('')
   })
 
+  it('gantt: registered with the gray-50 token for type completeness (SVG block uses inline fill instead)', () => {
+    expect(getZebraClass('gantt', undefined, 0)).toBe('')
+    expect(getZebraClass('gantt', undefined, 1)).toBe('bg-gray-50')
+    expect(getZebraClass('gantt', { stripe: false }, 1)).toBe('')
+  })
+
   it('every ZebraBlockType has a mapped colour token (no undefined leaks)', () => {
     const types = [
       'table',
@@ -67,6 +73,7 @@ describe('getZebraClass', () => {
       'kpi-cards',
       'bibliography',
       'figure-index',
+      'gantt',
     ] as const
     for (const t of types) {
       expect(getZebraClass(t, undefined, 1)).not.toBe('')
