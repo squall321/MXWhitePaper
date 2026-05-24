@@ -112,7 +112,7 @@ export function OrgChartBlockView({ block }: Props) {
 
   if (!block?.root || positioned.nodes.length === 0) {
     return (
-      <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-3 text-xs text-gray-500">
+      <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-3 text-xs text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400">
         조직도 데이터가 비어 있습니다.
       </div>
     )
@@ -132,7 +132,7 @@ export function OrgChartBlockView({ block }: Props) {
   }
 
   return (
-    <figure className="overflow-auto rounded border border-gray-200 bg-white p-2">
+    <figure className="overflow-auto rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900">
       <svg width={svgW} height={svgH} role="img" aria-label="조직도">
         {/* edges */}
         {positioned.nodes.map((p) => {
@@ -148,7 +148,7 @@ export function OrgChartBlockView({ block }: Props) {
               y1={a.cy + NODE_H / 2}
               x2={b.cx}
               y2={b.cy - NODE_H / 2}
-              stroke={active ? '#1428A0' : '#CBD5E1'}
+              stroke={active ? 'var(--smsg-blue-700)' : 'var(--smsg-gray-300)'}
               strokeWidth={active ? 2 : 1.2}
             />
           )
@@ -169,8 +169,8 @@ export function OrgChartBlockView({ block }: Props) {
                 width={NODE_W}
                 height={NODE_H}
                 rx={8}
-                fill={active ? '#E8EFFF' : '#FFFFFF'}
-                stroke={active ? '#1428A0' : '#94A3B8'}
+                fill={active ? 'var(--smsg-blue-100)' : 'var(--smsg-surface)'}
+                stroke={active ? 'var(--smsg-blue-700)' : 'var(--smsg-gray-500)'}
                 strokeWidth={active ? 2 : 1}
               />
               <text
@@ -179,7 +179,7 @@ export function OrgChartBlockView({ block }: Props) {
                 textAnchor="middle"
                 fontSize={13}
                 fontWeight={600}
-                fill="#0F172A"
+                fill="var(--smsg-gray-900)"
               >
                 {truncate(p.node.label, 16)}
               </text>
@@ -189,7 +189,7 @@ export function OrgChartBlockView({ block }: Props) {
                   y={c.cy + 12}
                   textAnchor="middle"
                   fontSize={11}
-                  fill="#475569"
+                  fill="var(--smsg-gray-700)"
                 >
                   {truncate(p.node.role, 18)}
                 </text>

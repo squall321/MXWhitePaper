@@ -161,8 +161,12 @@
   `<rect>`는 SVG 첫 자식이라 axis line / 막대 뒤에 paint). 다크 모드 자동 대응:
   모든 SVG fill/stroke 가 `var(--smsg-...)` 토큰 — `tokens.css` `.dark` 변형이
   자동 치환. figure 배경도 `dark:bg-gray-900 dark:border-gray-700`.
+- `OrgChartBlock` — tidy-tree 레이아웃의 순수 SVG 조직도 (mermaid 아님).
+  hover 시 descendant 하이라이트. 다크 모드 자동 (SVG fill/stroke `var(--smsg-...)`
+  + figure/empty `dark:` 변형 — chart-darkmode 사이클과 별개로 gantt-darkmode
+  패턴 그대로 적용).
 - `ChartBlock`, `ColumnsBlock`, `TabsBlock`, `AccordionBlock`,
-  `FlowBlock`, `OrgChartBlock`, `GalleryBlock`, …
+  `FlowBlock`, `GalleryBlock`, …
 
 전체 enum 은 [[src/app/schemas/document.py]] 참고. 새 block type 추가 시:
 1. 스키마 클래스 + Union 등록
