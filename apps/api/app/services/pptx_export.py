@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from pptx import Presentation
-from pptx.chart.data import CategoryChartData
+from pptx.chart.data import CategoryChartData, XyChartData
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN
@@ -757,6 +757,87 @@ def _b_kpi_cards(slide: Any, _frame: Any, block: dict[str, Any], _ctx: _Ctx, _de
     return True
 
 
+def _emit_xy_line_chart(
+    slide: Any,
+    frame: Any,
+    title: str,
+    data: dict[str, Any],
+    series: list[Any],
+    depth: int,
+) -> bool:
+    """xy-line: series[i].points: [{x, y}] 를 XyChartData 로 직접 emit.
+
+    - 모든 시리즈가 비어 있으면 textual placeholder 폴백.
+    - x/y 가 숫자로 변환되지 않는 point 는 skip.
+    """
+    # 유효 시리즈만 추림 (이름 + 정상 변환된 points 1+).
+    norm_series: list[tuple[str, list[tuple[float, float]]]] = []
+    for sd in series or []:
+        if not isinstance(sd, dict):
+            continue
+        pts: list[tuple[float, float]] = []
+        for pt in sd.get("points") or []:
+            if not isinstance(pt, dict):
+                continue
+            raw_x = pt.get("x")
+            raw_y = pt.get("y")
+            # x/y 키가 둘 다 없거나 None 이면 skip (모두 0,0 으로 강제하지 않음).
+            if raw_x is None and raw_y is None:
+                continue
+            pts.append((float(_to_number(raw_x)), float(_to_number(raw_y))))
+        if pts:
+            norm_series.append((_str(sd.get("name")) or "", pts))
+
+    if not norm_series:
+        # 폴백: 텍스트 placeholder.
+        p = _next_paragraph(frame)
+        p.level = depth
+        run = p.add_run()
+        run.text = f"[차트] xy-line — 0 시리즈"
+        run.font.bold = True
+        run.font.size = Pt(14)
+        if title:
+            sub_p = _next_paragraph(frame)
+            sub_p.level = depth + 1
+            run = sub_p.add_run()
+            run.text = title
+            run.font.size = Pt(12)
+        return True
+
+    chart_data = XyChartData()
+    for name, pts in norm_series:
+        s = chart_data.add_series(name)
+        for x, y in pts:
+            s.add_data_point(x, y)
+
+    left = _BODY_LEFT
+    top = _next_shape_top(slide)
+    width = Inches(11)
+    height = Inches(4.5)
+    chart_shape = slide.shapes.add_chart(
+        XL_CHART_TYPE.XY_SCATTER_LINES_NO_MARKERS, left, top, width, height, chart_data
+    )
+    chart = chart_shape.chart
+    if title:
+        chart.has_title = True
+        chart.chart_title.text_frame.text = title
+
+    # 축 라벨 (xy 차트에서 category_axis 는 x value axis 로 동작).
+    x_label = _str(data.get("xAxisLabel"))
+    y_label = _str(data.get("yAxisLabel"))
+    if x_label:
+        try:
+            chart.category_axis.axis_title.text_frame.text = x_label
+        except Exception:
+            pass
+    if y_label:
+        try:
+            chart.value_axis.axis_title.text_frame.text = y_label
+        except Exception:
+            pass
+    return True
+
+
 def _b_chart(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
     marker = emit_marker_text(block)
     if marker:
@@ -770,6 +851,9 @@ def _b_chart(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: i
     data = block.get("data") or {}
     labels = data.get("labels") or []
     series = data.get("series") or []
+    # xy-line: 시리즈마다 자유 (x, y) 쌍. CategoryChartData 가 아니라 XyChartData 사용.
+    if chart_type == "xy-line":
+        return _emit_xy_line_chart(slide, frame, title, data, series, depth)
     xl_type = {
         "line": XL_CHART_TYPE.LINE,
         "bar": XL_CHART_TYPE.COLUMN_CLUSTERED,

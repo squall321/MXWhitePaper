@@ -177,6 +177,39 @@ describe('parseChartPaste — timestamp x (P3)', () => {
   })
 })
 
+describe('parseChartPaste — outlier 검출 (P4 §2.11)', () => {
+  it('평범한 시리즈 → outliers 미설정', () => {
+    // 0..19 균등 분포, y = x. 1% 초과 5σ outlier 없음.
+    const lines = ['x\ty']
+    for (let i = 0; i < 20; i++) lines.push(`${i}\t${i}`)
+    const r = parseChartPaste(lines.join('\n'))
+    expect(r).not.toBeNull()
+    expect(r!.outliers).toBeUndefined()
+  })
+
+  it('5σ 초과 점이 1% 넘는 시리즈 → outliers 에 등록', () => {
+    // 200 개 y=0 (std=0 의 자살 회피 위해 200 점), 3 개 y=100 (spike).
+    // mean≈1.48, std≈12.07 → 5σ≈60.3 → spike 3 점 모두 outlier. 비율 3/203≈1.48% > 1%.
+    const lines = ['x\ty']
+    for (let i = 0; i < 200; i++) lines.push(`${i}\t0`)
+    for (let i = 0; i < 3; i++) lines.push(`${200 + i}\t100`)
+    const r = parseChartPaste(lines.join('\n'))
+    expect(r).not.toBeNull()
+    expect(r!.outliers).toBeDefined()
+    expect(r!.outliers!).toHaveLength(1)
+    expect(r!.outliers![0]!.seriesName).toBe('y')
+    expect(r!.outliers![0]!.count).toBe(3)
+    expect(r!.outliers![0]!.total).toBe(203)
+  })
+
+  it('n<10 시리즈는 outlier 검사 skip', () => {
+    // 5 개 중 1 개 명백한 outlier 라도 통계적 의미 약해 검사 안 함.
+    const r = parseChartPaste('x\ty\n0\t0\n1\t0\n2\t0\n3\t0\n4\t100000')
+    expect(r).not.toBeNull()
+    expect(r!.outliers).toBeUndefined()
+  })
+})
+
 describe('extractUnit', () => {
   it('대괄호 [..] 인식', () => {
     expect(extractUnit('Stress [MPa]')).toEqual({ name: 'Stress', unit: 'MPa' })

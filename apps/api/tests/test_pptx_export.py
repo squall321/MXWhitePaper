@@ -217,6 +217,63 @@ def test_renderer_chart_unsupported_type_falls_back_to_text() -> None:
     assert "산점도" in text
 
 
+def test_renderer_chart_xy_line_emits_native_chart() -> None:
+    # xy-line: series 마다 자유 (x, y) — XyChartData 경로로 native chart shape.
+    blocks = [
+        {
+            "type": "chart",
+            "id": "01CH0000000000000000003A",
+            "chartType": "xy-line",
+            "title": "I-V 곡선",
+            "data": {
+                "xAxisLabel": "V (V)",
+                "yAxisLabel": "I (A)",
+                "series": [
+                    {
+                        "name": "샘플A",
+                        "points": [
+                            {"x": 0.0, "y": 0.0},
+                            {"x": 0.5, "y": 1.2},
+                            {"x": 1.0, "y": 2.5},
+                        ],
+                    },
+                    {
+                        "name": "샘플B",
+                        "points": [
+                            {"x": 0.0, "y": 0.1},
+                            {"x": 1.0, "y": 2.7},
+                        ],
+                    },
+                ],
+            },
+        }
+    ]
+    out = render_pptx(_doc(blocks))
+    assert out[:4] == b"PK\x03\x04"
+    prs = Presentation(io.BytesIO(out))
+    chart_shapes = [s for slide in prs.slides for s in slide.shapes if s.has_chart]
+    assert len(chart_shapes) == 1
+
+
+def test_renderer_chart_xy_line_empty_series_falls_back_to_text() -> None:
+    # 모든 시리즈가 비어 있으면 placeholder 텍스트 분기 — 예외 없이 PPTX 산출.
+    blocks = [
+        {
+            "type": "chart",
+            "id": "01CH0000000000000000004A",
+            "chartType": "xy-line",
+            "title": "빈 차트",
+            "data": {"series": [{"name": "empty", "points": []}]},
+        }
+    ]
+    out = render_pptx(_doc(blocks))
+    assert out[:4] == b"PK\x03\x04"
+    prs = Presentation(io.BytesIO(out))
+    text = _slides_text(prs)
+    assert "[차트] xy-line" in text
+    assert "0 시리즈" in text
+
+
 def test_renderer_kpi_cards_emit_2x2_grid() -> None:
     blocks = [
         {

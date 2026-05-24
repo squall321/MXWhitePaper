@@ -151,7 +151,8 @@ export const EChartsView = forwardRef<EChartsViewHandle, { block: ChartBlock }>(
   },
 )
 
-function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
+// P4 — 단위 테스트에서 LTTB/large 옵션 적용을 검증하기 위해 export.
+export function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
   const labels = block.data?.labels ?? []
   const series = block.data?.series ?? []
   const interactions = block.interactions ?? {}
@@ -281,18 +282,31 @@ function buildOption(block: ChartBlock): echarts.EChartsCoreOption {
         series[i]?.color ?? PALETTE[i % PALETTE.length]!
 
       // 데이터 시리즈 (메인 line) — yAxisIndex / 색 override 반영.
+      // P4 §2.11 — 시리즈 점이 100k 이상이면 ECharts LTTB sampling + large 모드를
+      // 자동 ON. 사용자가 display.sampling 으로 명시하면 그 값 우선
+      // ('none' = 끄기, 'lttb' = 강제 ON).
+      const samplingPref = display.sampling
       const dataSeries: any[] = series.map((s, i) => {
         const color = colorFor(i)
-        return {
+        const points = s.points ?? []
+        const useLttb =
+          samplingPref === 'lttb' ||
+          (samplingPref !== 'none' && points.length >= 100_000)
+        const base: any = {
           name: s.name,
           type: 'line' as const,
           smooth: false,
           showSymbol: false,
-          data: (s.points ?? []).map((p) => [p.x, p.y]),
+          data: points.map((p) => [p.x, p.y]),
           lineStyle: { color },
           itemStyle: { color },
           yAxisIndex: s.yAxisIndex === 1 ? 1 : 0,
         }
+        if (useLttb) {
+          base.sampling = 'lttb'
+          base.large = true
+        }
+        return base
       })
 
       // P3: error bar — 점마다 err/errLow/errHigh 가 하나라도 있으면 custom

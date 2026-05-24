@@ -6,6 +6,7 @@ import { useEditorStore } from '@/features/editor/state'
 import { parseCsv } from '@/features/editor/extensions/csv-paste'
 import { tableToChartData } from '@/features/editor/tableToChart'
 import { useT } from '@/lib/i18n'
+import { toast } from '@/components/ui/Toast'
 import { parseChartPaste, type ChartPasteResult } from './_chartPaste'
 import { linearFit, type FitType, type XYPoint } from './_fits'
 import { differentiate, integrate, findPeaks, diffSeries } from './_derived'
@@ -386,6 +387,13 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
         cols: parsed.series.length,
       }),
     )
+    // P4 §2.11 — 5σ outlier 가 1% 초과인 시리즈는 toast.warn 으로 알림.
+    // (최대 3 건만 띄워 toast 폭주 방지.)
+    if (parsed.outliers && parsed.outliers.length > 0) {
+      for (const o of parsed.outliers.slice(0, 3)) {
+        toast.warn(`${o.seriesName}: 큰 outlier ${o.count}/${o.total} 점 — 데이터 확인 권장`)
+      }
+    }
   }
 
   // toolbar — display 토글 update 헬퍼.

@@ -36,6 +36,17 @@ export interface ChartPasteResult {
    */
   xAxisType?: 'value' | 'time'
   series: ChartPasteSeries[]
+  /**
+   * 시리즈별 5σ 이상 outlier 가 1% 초과인 경우만 채워짐 (P4 §2.11).
+   * 사용자에게 toast/hint 로 데이터 확인을 권고한다. n<10 시리즈는 검사 skip.
+   */
+  outliers?: ChartPasteOutlier[]
+}
+
+export interface ChartPasteOutlier {
+  seriesName: string
+  count: number
+  total: number
 }
 
 /**
@@ -166,6 +177,31 @@ export function parseChartPaste(text: string): ChartPasteResult | null {
       result.yAxisLabel = undefined
     }
   }
+
+  // P4 §2.11 — 5σ outlier 검사. n<10 시리즈는 통계적 의미가 약해 skip.
+  // |y - mean| > 5σ 인 점이 1% 초과면 outliers 에 등록.
+  const outliers: ChartPasteOutlier[] = []
+  for (const s of result.series) {
+    const ys = s.points.map((p) => p.y).filter((y) => Number.isFinite(y))
+    const total = ys.length
+    if (total < 10) continue
+    let sum = 0
+    for (const y of ys) sum += y
+    const mean = sum / total
+    let sq = 0
+    for (const y of ys) sq += (y - mean) ** 2
+    const std = Math.sqrt(sq / total)
+    if (std === 0) continue
+    let count = 0
+    const threshold = 5 * std
+    for (const y of ys) {
+      if (Math.abs(y - mean) > threshold) count++
+    }
+    if (count / total > 0.01) {
+      outliers.push({ seriesName: s.name, count, total })
+    }
+  }
+  if (outliers.length > 0) result.outliers = outliers
 
   return result
 }
