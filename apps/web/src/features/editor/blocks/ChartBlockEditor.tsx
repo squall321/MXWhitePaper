@@ -1558,26 +1558,35 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
 
       <ChartBlockView block={block} />
 
-      {/* P2 — PNG export 용 hidden EChartsView. ChartBlockView 는 engine
-          분기 (recharts/echarts) 에 따라 다른 렌더러를 쓰는데, 사용자가
-          recharts 엔진을 골라도 PNG 받을 때만큼은 ECharts 캔버스가 필요하다.
-          off-screen 위치에 작게 그려두고 chartRef.getPng() 만 호출.
-          xy-line 차트일 때만 마운트 (다른 chartType 은 export 가 의미 없음). */}
+      {/* P2 — PNG export 용 EChartsView. 동시에 D1 의 데이터 포인트 클릭 →
+          marker annotation 자동 추가 핸들러 부착. xy-line 일 때만 마운트.
+          사용자에게 visible 한 inline preview 도 겸함 (편집 중에도 차트가
+          보여야 직관적). read mode 의 ChartBlockView 와 중복 렌더는 비용
+          있지만 편집 모드 한정이라 허용. */}
       {isXyLine && (
         <div
-          aria-hidden="true"
-          data-section="png-source"
-          style={{
-            position: 'absolute',
-            left: '-99999px',
-            top: 0,
-            width: 600,
-            height: 360,
-            overflow: 'hidden',
-            pointerEvents: 'none',
-          }}
+          data-section="chart-preview"
+          className="mt-2 rounded border border-gray-200 bg-white"
         >
-          <EChartsView ref={chartRef} block={{ ...block, engine: 'echarts' }} />
+          <EChartsView
+            ref={chartRef}
+            block={{ ...block, engine: 'echarts' }}
+            onPointClick={(pt) => {
+              // D1 — series point 클릭 → marker annotation 자동 추가.
+              const id = genAnnId()
+              const next: ChartAnnotation = {
+                kind: 'marker',
+                id,
+                x: pt.x,
+                y: pt.y,
+                label: pt.seriesName
+                  ? `${pt.seriesName} (${pt.x}, ${pt.y})`
+                  : `(${pt.x}, ${pt.y})`,
+              }
+              const annotations = [...(block.annotations ?? []), next]
+              onChange({ ...block, annotations })
+            }}
+          />
         </div>
       )}
     </div>

@@ -95,10 +95,24 @@ export interface EChartsViewHandle {
  * The chart instance is disposed on unmount and re-renders on data
  * changes via a stable signature (JSON.stringify of the option fragment).
  */
-export const EChartsView = forwardRef<EChartsViewHandle, { block: ChartBlock }>(
-  function EChartsView({ block }, ref) {
+/**
+ * P3 D1 — 차트 데이터 포인트 클릭 시 호출되는 callback. xy-line 의 series
+ * point 를 클릭하면 그 (x, y) 가 전달된다. 편집기는 이걸 받아 marker
+ * annotation 을 자동 추가 (block.annotations 갱신). undefined 면 click 핸들러
+ * 등록 안 함 — 뷰 모드 (read-only) 에서 자연스럽게 비활성.
+ */
+export interface EChartsViewProps {
+  block: ChartBlock
+  onPointClick?: (point: { x: number; y: number; seriesName: string }) => void
+}
+
+export const EChartsView = forwardRef<EChartsViewHandle, EChartsViewProps>(
+  function EChartsView({ block, onPointClick }, ref) {
     const containerRef = useRef<HTMLDivElement | null>(null)
     const instanceRef = useRef<echarts.ECharts | null>(null)
+    // onPointClick 은 매 렌더 새 참조 — closure 갱신 회피 위해 ref 로 stale-safe.
+    const onPointClickRef = useRef(onPointClick)
+    onPointClickRef.current = onPointClick
 
     const option = useMemo(() => buildOption(block), [block])
 
@@ -108,6 +122,19 @@ export const EChartsView = forwardRef<EChartsViewHandle, { block: ChartBlock }>(
       const inst = echarts.init(el)
       instanceRef.current = inst
       inst.setOption(option, true)
+      // D1 — series point click → marker annotation. params.value 는 보통
+      // [x, y]; xy-line 이 아니거나 callback 미설정이면 skip.
+      inst.on('click', (params: { componentType?: string; seriesName?: string; value?: unknown }) => {
+        const cb = onPointClickRef.current
+        if (!cb) return
+        if (params.componentType !== 'series') return
+        const v = params.value
+        if (!Array.isArray(v) || v.length < 2) return
+        const x = Number(v[0])
+        const y = Number(v[1])
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return
+        cb({ x, y, seriesName: typeof params.seriesName === 'string' ? params.seriesName : '' })
+      })
       const onResize = () => inst.resize()
       window.addEventListener('resize', onResize)
       return () => {
