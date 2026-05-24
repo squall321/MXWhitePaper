@@ -175,6 +175,12 @@
   mermaid `initialize({theme: 'dark'\|'default'})` 재실행 + `idRef.current` 재생성
   (mermaid singleton 캐시 회피) + `render()` 재실행. theme 변경 useEffect deps에
   포함 (chart-libs-darkmode 사이클).
+- `WhiteboardBlock` — 사용자가 그린 SVG 요소 모음 (`el.color`, `el.stroke` 직접
+  지정). **다크 모드 의도**: 캔버스 `bg-white` 영구 유지 + 사용자 색 자동 변환 X.
+  Figma/Excalidraw 관례 — painter 도구는 사용자 색 책임. svg-block-audit 사이클에서
+  유지 결정, whiteboard-darkmode-decision 사이클에서 *재확인* (HSL inversion / dark
+  캔버스 모두 yagni, 사용자 그린 의도 보존 우선). 향후 사용자 요청 시 escape hatch
+  (`darkBehavior?: 'invert'`) 추가 가능 — 현재 미요청.
 - `ChartBlock`, `ColumnsBlock`, `TabsBlock`, `AccordionBlock`,
   `GalleryBlock`, …
 
