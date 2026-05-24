@@ -43,6 +43,7 @@ Read 하는 패턴을 피한다.
 | [core](core.md) | 인증 (`require_role`), 에러 envelope, 설정 (pydantic-settings) | `app/core/auth.py`, `app/core/errors.py`, `app/core/config.py`, `app/core/db.py` |
 | [graph](graph.md) | 위키 링크 그래프, 의존성 그래프, 의미 triple (subject/predicate/object) | `app/routers/links_graph.py`, `app/routers/dep_graph.py`, `app/routers/triples.py`, `app/services/triple_extractor.py` |
 | [charts](charts.md) | ChartBlock — xy-line/paste/toolbar/fit/derived/annotation/dual-y, EChartsView 렌더 | `src/components/blocks/EChartsView.tsx`, `src/features/editor/blocks/ChartBlockEditor.tsx`, `_fits.ts`, `_chartPaste.ts`, `_derived.ts`, `app/services/pptx_export.py#_b_chart` |
+| [visual-regression](visual-regression.md) | Playwright screenshot diff 시각 회귀 PoC (light/dark) | `apps/web/tests/e2e/visual-darkmode.spec.ts` + `__snapshots__` baseline PNG |
 
 > 백엔드 외부 도구 — LLM 이 docx 룰을 따라 작성하도록 돕는 standalone toolkit
 > (validator + RAG CLI + MCP 서버) 은 별도 트리에서 산다:
