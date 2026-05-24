@@ -13,7 +13,7 @@ export function PlaceholderBlockView({
   sprint: string
 }) {
   return (
-    <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-3">
+    <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-800">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
           {block.type}

@@ -79,7 +79,7 @@ export function DashboardEmbedBlockView({ block }: { block: DashboardEmbedBlock 
   const providerLabel = isKnownProvider ? PROVIDER_LABEL[provider] : '알 수 없는 제공자'
 
   return (
-    <figure className="space-y-2 rounded border border-gray-200 bg-white p-2">
+    <figure className="space-y-2 rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900">
       <header className="flex items-center justify-between gap-2 text-xs text-gray-500">
         <div className="flex items-center gap-2">
           <Badge tone="brand" size="sm">{providerLabel}</Badge>
@@ -94,7 +94,7 @@ export function DashboardEmbedBlockView({ block }: { block: DashboardEmbedBlock 
       ) : !isProviderConfigured ? (
         <div
           data-dashboard-no-base
-          className="grid h-48 place-items-center rounded border border-dashed border-gray-300 bg-gray-50 text-xs text-gray-500"
+          className="grid h-48 place-items-center rounded border border-dashed border-gray-300 bg-gray-50 text-xs text-gray-500 dark:border-gray-600 dark:bg-gray-800"
         >
           URL 미설정 — 환경 변수 VITE_DASHBOARD_{provider.toUpperCase()}_BASE 를 설정하세요.
         </div>
@@ -107,7 +107,7 @@ export function DashboardEmbedBlockView({ block }: { block: DashboardEmbedBlock 
           loading="lazy"
         />
       ) : (
-        <div className="grid h-48 place-items-center rounded border border-dashed border-gray-300 bg-gray-50 text-xs text-gray-500">
+        <div className="grid h-48 place-items-center rounded border border-dashed border-gray-300 bg-gray-50 text-xs text-gray-500 dark:border-gray-600 dark:bg-gray-800">
           panel id를 입력하세요.
         </div>
       )}

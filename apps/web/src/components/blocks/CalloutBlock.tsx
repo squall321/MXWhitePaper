@@ -112,7 +112,7 @@ export function CalloutBlockView({ block }: { block: CalloutBlock }) {
           data-variant={block.variant}
           onClick={() => void onCycle()}
           disabled={busy}
-          className="absolute right-2 top-2 rounded-full border border-gray-300 bg-white/95 px-2 py-0.5 text-[11px] font-medium text-gray-700 opacity-0 shadow-sm transition-opacity hover:bg-gray-50 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-40"
+          className="absolute right-2 top-2 rounded-full border border-gray-300 bg-white/95 px-2 py-0.5 text-[11px] font-medium text-gray-700 opacity-0 shadow-sm transition-opacity hover:bg-gray-50 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800/95 dark:text-gray-300 dark:hover:bg-gray-700"
         >
           {CALLOUT_LABEL[block.variant]} ↻
         </button>

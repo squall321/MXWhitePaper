@@ -18,7 +18,7 @@ export function FileBlockView({ block }: { block: FileBlock }) {
   return (
     <a
       href={href}
-      className="flex items-center justify-between rounded border border-gray-200 bg-white px-3 py-2 text-sm hover:border-smsg-500"
+      className="flex items-center justify-between rounded border border-gray-200 bg-white px-3 py-2 text-sm hover:border-smsg-500 dark:border-gray-700 dark:bg-gray-900"
       download={block.name}
     >
       <span className="flex items-center gap-2">

@@ -13,7 +13,7 @@ export function VideoBlockView({ block }: { block: VideoBlock }) {
     const embed = toYouTubeEmbed(block.url)
     return (
       <figure className="my-4">
-        <div className="aspect-video w-full overflow-hidden rounded border border-gray-200">
+        <div className="aspect-video w-full overflow-hidden rounded border border-gray-200 dark:border-gray-700">
           <iframe
             src={embed}
             title={block.title ?? 'YouTube video'}
@@ -35,7 +35,7 @@ export function VideoBlockView({ block }: { block: VideoBlock }) {
   if (provider === 'vimeo') {
     return (
       <figure className="my-4">
-        <div className="aspect-video w-full overflow-hidden rounded border border-gray-200">
+        <div className="aspect-video w-full overflow-hidden rounded border border-gray-200 dark:border-gray-700">
           <iframe
             src={block.url}
             title={block.title ?? 'Vimeo video'}
@@ -60,7 +60,7 @@ export function VideoBlockView({ block }: { block: VideoBlock }) {
         src={block.url}
         controls
         preload="none"
-        className="w-full rounded border border-gray-200 bg-black"
+        className="w-full rounded border border-gray-200 bg-black dark:border-gray-700"
       />
       {block.title && (
         <figcaption className="mt-1 text-center text-xs text-gray-500">

@@ -15,7 +15,7 @@ export function WhiteboardBlockView({ block }: { block: WhiteboardBlock }) {
   const { w, h } = block.viewbox
   return (
     <figure
-      className="rounded border border-gray-200 bg-white p-2"
+      className="rounded border border-gray-200 bg-white p-2 dark:border-gray-700"
       data-whiteboard-block
       data-block-id={block.id}
     >

@@ -48,7 +48,7 @@ export function ImageBlockView({ block }: { block: ImageBlock }) {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="이미지 확대"
-        className="block w-full overflow-hidden rounded border border-gray-200"
+        className="block w-full overflow-hidden rounded border border-gray-200 dark:border-gray-700"
         style={{ backgroundColor: bg }}
       >
         <img

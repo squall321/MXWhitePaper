@@ -28,7 +28,7 @@ export function ImageAnnotationBlockView({ block }: { block: ImageAnnotationBloc
       data-block-id={block.id}
     >
       <div
-        className="relative overflow-hidden rounded border border-gray-200"
+        className="relative overflow-hidden rounded border border-gray-200 dark:border-gray-700"
         style={{ backgroundColor: bg }}
       >
         <img

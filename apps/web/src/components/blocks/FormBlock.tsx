@@ -147,7 +147,7 @@ export function FormBlockView({ block }: FormBlockViewProps) {
       data-form-block
       data-block-id={block.id}
       onSubmit={onSubmit}
-      className="my-3 space-y-3 rounded border border-gray-200 bg-white p-4"
+      className="my-3 space-y-3 rounded border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
     >
       {block.title && <h3 className="text-base font-semibold text-smsg-900">{block.title}</h3>}
       {block.description && (
@@ -202,7 +202,7 @@ function QuestionInput({
         placeholder={q.placeholder ?? ''}
         onChange={(e) => onChange(e.target.value)}
         rows={3}
-        className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none"
+        className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
       />
     )
   }
@@ -294,7 +294,7 @@ function QuestionInput({
             className={`h-8 w-8 rounded text-sm ${
               n >= r
                 ? 'bg-amber-400 text-white'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700'
             }`}
           >
             ★

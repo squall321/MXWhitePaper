@@ -29,17 +29,17 @@ export function SpreadsheetBlockView({ block }: SpreadsheetBlockViewProps) {
     <div
       data-spreadsheet-block
       data-block-id={block.id}
-      className="my-3 overflow-x-auto rounded border border-gray-200"
+      className="my-3 overflow-x-auto rounded border border-gray-200 dark:border-gray-700"
     >
       {block.title && (
-        <div className="border-b border-gray-200 bg-smsg-50 px-3 py-2 text-sm font-semibold text-smsg-900">
+        <div className="border-b border-gray-200 bg-smsg-50 px-3 py-2 text-sm font-semibold text-smsg-900 dark:border-gray-700">
           {block.title}
         </div>
       )}
       <table className="w-full border-collapse text-left text-xs">
-        <thead className="bg-gray-50 text-gray-600">
+        <thead className="bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
           <tr>
-            <th className="w-10 border border-gray-200 px-2 py-1 text-center font-medium" />
+            <th className="w-10 border border-gray-200 px-2 py-1 dark:border-gray-700 text-center font-medium" />
             {Array.from({ length: cols }).map((_, c) => {
               const letter = String.fromCharCode(65 + c)
               const label = headers[c] ?? letter
@@ -47,7 +47,7 @@ export function SpreadsheetBlockView({ block }: SpreadsheetBlockViewProps) {
                 <th
                   key={c}
                   scope="col"
-                  className="min-w-[80px] border border-gray-200 px-2 py-1 font-medium"
+                  className="min-w-[80px] border border-gray-200 px-2 py-1 dark:border-gray-700 font-medium"
                 >
                   {label}
                 </th>
@@ -60,7 +60,7 @@ export function SpreadsheetBlockView({ block }: SpreadsheetBlockViewProps) {
             <tr key={r}>
               <th
                 scope="row"
-                className="border border-gray-200 bg-gray-50 px-2 py-1 text-center font-medium text-gray-500"
+                className="border border-gray-200 bg-gray-50 px-2 py-1 text-center font-medium text-gray-500 dark:border-gray-700 dark:bg-gray-800"
               >
                 {r + 1}
               </th>
@@ -68,7 +68,7 @@ export function SpreadsheetBlockView({ block }: SpreadsheetBlockViewProps) {
                 const ref = refOf(c, r)
                 const result = computed[ref]
                 let display: string
-                let cls = 'border border-gray-100 px-2 py-1 align-top text-gray-800'
+                let cls = 'border border-gray-100 px-2 py-1 align-top text-gray-800 dark:border-gray-800 dark:text-gray-200'
                 if (result?.error) {
                   display = result.error
                   cls += ' text-red-600 font-mono'

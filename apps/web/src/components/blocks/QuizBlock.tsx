@@ -237,7 +237,7 @@ export function QuizBlockView({ block }: QuizBlockViewProps) {
               return (
                 <li
                   key={q.id}
-                  className="rounded border border-gray-200 bg-white p-2 text-sm"
+                  className="rounded border border-gray-200 bg-white p-2 text-sm dark:border-gray-700 dark:bg-gray-900"
                 >
                   <p className="font-medium text-smsg-900">
                     {i + 1}. {q.label}
@@ -280,7 +280,7 @@ export function QuizBlockView({ block }: QuizBlockViewProps) {
       data-quiz-block
       data-block-id={block.id}
       onSubmit={onSubmit}
-      className="my-3 space-y-3 rounded border border-gray-200 bg-white p-4"
+      className="my-3 space-y-3 rounded border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
     >
       {block.title && <h3 className="text-base font-semibold text-smsg-900">{block.title}</h3>}
       {block.description && (

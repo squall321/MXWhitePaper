@@ -12,7 +12,7 @@ export function DocLinkCardBlockView({ block }: { block: DocLinkCardBlock }) {
 
   if (isPending) {
     return (
-      <div className="space-y-2 rounded border border-gray-200 bg-white p-3" aria-busy="true">
+      <div className="space-y-2 rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900" aria-busy="true">
         <Skeleton className="h-3.5 w-2/3" />
         <Skeleton className="h-3 w-full" />
       </div>
@@ -29,7 +29,7 @@ export function DocLinkCardBlockView({ block }: { block: DocLinkCardBlock }) {
   return (
     <Link
       to={`/docs/${encodeURIComponent(block.slug)}`}
-      className="block rounded border border-gray-200 bg-white p-3 hover:border-smsg-500"
+      className="block rounded border border-gray-200 bg-white p-3 hover:border-smsg-500 dark:border-gray-700 dark:bg-gray-900"
     >
       <p className="text-sm font-semibold text-smsg-900">{data.document.title}</p>
       {showSummary && data.document.summary && (

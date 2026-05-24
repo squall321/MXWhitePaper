@@ -15,12 +15,12 @@ export function GlossaryRefBlockView({ block }: { block: GlossaryRefBlock }) {
   const broken = !def
 
   const containerCls = broken
-    ? 'rounded border-l-4 border-gray-400 bg-gray-100 p-3 text-sm'
+    ? 'rounded border-l-4 border-gray-400 bg-gray-100 p-3 text-sm dark:border-gray-500 dark:bg-gray-800'
     : 'rounded border-l-4 border-smsg-500 bg-smsg-100/50 p-3 text-sm'
   const labelCls = broken
-    ? 'text-xs font-semibold uppercase tracking-wide text-gray-600'
+    ? 'text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400'
     : 'text-xs font-semibold uppercase tracking-wide text-smsg-700'
-  const termCls = broken ? 'text-gray-900' : 'text-smsg-900'
+  const termCls = broken ? 'text-gray-900 dark:text-gray-100' : 'text-smsg-900'
 
   return (
     <aside className={containerCls} data-glossary-ref-broken={broken ? '' : undefined}>
@@ -33,7 +33,7 @@ export function GlossaryRefBlockView({ block }: { block: GlossaryRefBlock }) {
         )}
         <strong className={termCls}>{block.term}</strong>
         {def ? (
-          <span className="ml-2 text-gray-700">— {def}</span>
+          <span className="ml-2 text-gray-700 dark:text-gray-300">— {def}</span>
         ) : (
           <span className="ml-2 text-gray-500">(용어 사전에 없음)</span>
         )}

@@ -164,7 +164,7 @@ export function DataSourceBlockView({ block }: Props) {
 
   if (!enabled) {
     return (
-      <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-3 text-xs text-gray-500">
+      <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-3 text-xs text-gray-500 dark:border-gray-600 dark:bg-gray-800">
         데이터 소스 endpoint가 설정되지 않았습니다.
       </div>
     )
@@ -198,7 +198,7 @@ export function DataSourceBlockView({ block }: Props) {
   }
 
   return (
-    <section className="space-y-2 rounded border border-gray-200 bg-white p-3">
+    <section className="space-y-2 rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
       <header className="flex items-center justify-between text-xs text-gray-500">
         <div className="flex items-center gap-2">
           <Badge tone="info" size="sm">데이터 소스</Badge>

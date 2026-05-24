@@ -22,7 +22,7 @@ function loadMermaid() {
 export function FlowBlockView({ block }: { block: FlowBlock }) {
   if (block.engine === 'mermaid') return <MermaidFlow block={block} />
   return (
-    <pre className="overflow-x-auto rounded bg-gray-100 p-2 text-xs">
+    <pre className="overflow-x-auto rounded bg-gray-100 p-2 text-xs dark:bg-gray-800 dark:text-gray-200">
       {block.source}
     </pre>
   )
@@ -63,7 +63,7 @@ function MermaidFlow({ block }: { block: FlowBlock }) {
   }
   return (
     <div
-      className="overflow-x-auto rounded border border-gray-200 bg-white p-2"
+      className="overflow-x-auto rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   )

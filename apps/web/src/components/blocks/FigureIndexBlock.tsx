@@ -64,7 +64,7 @@ export function FigureIndexBlockView({
   return (
     <aside
       data-block-type="figure-index"
-      className="my-3 rounded-md border border-gray-200 bg-gray-50/60 p-3 text-sm"
+      className="my-3 rounded-md border border-gray-200 bg-gray-50/60 p-3 text-sm dark:border-gray-700 dark:bg-gray-800/60"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="font-semibold text-gray-800">{block.title ?? '그림 목차'}</div>
@@ -73,7 +73,7 @@ export function FigureIndexBlockView({
           onClick={collect}
           aria-label="그림 목차 갱신"
           data-action="figure-index-refresh"
-          className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-100"
+          className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-700"
         >
           🔄 갱신
         </button>
@@ -84,7 +84,7 @@ export function FigureIndexBlockView({
             <div className="text-xs font-bold uppercase tracking-wider text-gray-500">
               {g.label}
             </div>
-            <ol className="ml-3 list-decimal text-gray-700">
+            <ol className="ml-3 list-decimal text-gray-700 dark:text-gray-300">
               {g.entries.map((e, idx) => {
                 const zebra = getZebraClass('figure-index', block.options, idx)
                 return (

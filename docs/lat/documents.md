@@ -297,6 +297,16 @@ materialized view refresh 도 스킵 가능.
     export 에 반영, 나머지 5 종은 FE-only 시각 효과 (gantt 는 SVG `<rect>` paint,
     `STRIPE_CLASSES` map의 `gantt` 엔트리는 type 완전성 위한 dummy — 본문 fill은
     GanttBlockView 인라인 `#F9FAFB`).
+
+11. **블록 다크 모드 = Tailwind `dark:` 변형 의무** — `bg-white`/`border-gray-200`/
+    `border-gray-300` 가 있는 *모든* 블록 className에 같은 line에 `dark:bg-gray-900`/
+    `dark:border-gray-700`/`dark:border-gray-600` 동반 (block-darkmode-batch
+    사이클에서 26 파일 일괄 적용). 의도 예외 2건은 `AllBlocksDarkmode.test.ts` 의
+    `ALLOW_LIGHT_ONLY` map에 등록 + 사유 명시 — CodeBlock (코드 블록은 *항상* 어두운
+    surface), WhiteboardBlock (사용자 그림용 흰 캔버스). 신규 블록 추가 시 회귀
+    가드 `[[src/components/blocks/__tests__/AllBlocksDarkmode.test.ts]]` 가 자동
+    검출. SVG 블록의 fill/stroke는 `var(--smsg-...)` 토큰 사용 (별개 — chart/gantt/
+    orgchart darkmode 사이클 참조).
 11. **pydantic v2 codegen 은 JSON Schema 의 `oneOf` 의 `not: required` 부분을
     무시한다** — `datamodel-codegen` 이 두 helper class + `RootModel` union 으로
     풀지만 cross-branch 거부 (양쪽 모두 set 입력) 는 모델 validator 가 필요.

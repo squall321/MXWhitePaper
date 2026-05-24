@@ -144,7 +144,7 @@ export function ListBlockView({ block }: { block: ListBlock }) {
                 disabled
                 checked={checked}
                 readOnly
-                className="mt-1 h-4 w-4 rounded border-gray-300"
+                className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-gray-600"
                 aria-label={`체크 ${i + 1}`}
               />
               <span>

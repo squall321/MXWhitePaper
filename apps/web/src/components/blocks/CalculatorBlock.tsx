@@ -77,7 +77,7 @@ export function CalculatorBlockView({ block }: Props) {
   )
 
   return (
-    <section className="space-y-3 rounded border border-gray-200 bg-white p-3">
+    <section className="space-y-3 rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {block.inputs.map((inp) => (
           <Field key={inp.name} label={inp.label || inp.name}>

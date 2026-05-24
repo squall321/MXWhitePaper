@@ -191,7 +191,7 @@ function FlatTableBody({
         {visibleRows.map(({ row, origIndex }, rIdx) => (
           <tr
             key={origIndex}
-            className={`${stripe ? 'odd:bg-white even:bg-gray-50' : 'bg-white'} transition-colors hover:bg-smsg-50/50`}
+            className={`${stripe ? 'odd:bg-white even:bg-gray-50 dark:odd:bg-gray-900 dark:even:bg-gray-800' : 'bg-white dark:bg-gray-900'} transition-colors hover:bg-smsg-50/50 dark:hover:bg-gray-700/50`}
           >
             {rowNumbers && (
               <td
@@ -289,9 +289,9 @@ function SparseTableBody({
               className={
                 stripe
                   ? idx % 2 === 0
-                    ? 'bg-white'
-                    : 'bg-gray-50'
-                  : 'bg-white'
+                    ? 'bg-white dark:bg-gray-900'
+                    : 'bg-gray-50 dark:bg-gray-800'
+                  : 'bg-white dark:bg-gray-900'
               }
             >
               {(byRow.get(r) ?? []).map((cell, i) => {
@@ -486,7 +486,7 @@ export function TableBlockView({ block }: { block: TableBlock }) {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="표 안에서 검색…"
             aria-label="표 행 검색"
-            className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none"
+            className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
           />
           {query && (
             <span className="whitespace-nowrap text-gray-500">
@@ -498,7 +498,7 @@ export function TableBlockView({ block }: { block: TableBlock }) {
 
       {/* `max-h-[60vh]` 로 자체 스크롤 컨테이너를 만들어서 sticky thead 가 표
           컨테이너 안에서만 부착되도록 한다. */}
-      <div data-no-swipe className="max-h-[60vh] overflow-x-auto overflow-y-auto rounded-md border border-gray-200 shadow-sm">
+      <div data-no-swipe className="max-h-[60vh] overflow-x-auto overflow-y-auto rounded-md border border-gray-200 shadow-sm dark:border-gray-700">
         <table className="w-full min-w-[480px] border-collapse text-left text-sm">
           {isSparse ? (
             <SparseTableBody
@@ -556,7 +556,7 @@ export function TableBlockView({ block }: { block: TableBlock }) {
           aria-label="표를 차트로 변환"
           data-table-to-chart
           onClick={openModal}
-          className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-smsg-200 bg-white/95 px-2 py-1 text-[11px] font-medium text-smsg-700 opacity-0 shadow-sm transition-opacity duration-base hover:bg-smsg-100 group-hover:opacity-100 group-focus-within:opacity-100"
+          className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-smsg-200 bg-white/95 px-2 py-1 text-[11px] font-medium text-smsg-700 opacity-0 shadow-sm transition-opacity duration-base hover:bg-smsg-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-gray-800/95"
         >
           <span aria-hidden>📊</span>
           <span>차트로</span>
@@ -580,7 +580,7 @@ export function TableBlockView({ block }: { block: TableBlock }) {
                 type="button"
                 onClick={() => setModalOpen(false)}
                 disabled={busy}
-                className="rounded border border-gray-300 px-3 py-1.5 text-xs hover:bg-gray-50"
+                className="rounded border border-gray-300 px-3 py-1.5 text-xs hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
               >
                 취소
               </button>

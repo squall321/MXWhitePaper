@@ -21,11 +21,11 @@ export function KpiCardsBlockView({ block }: { block: KpiCardsBlock }) {
     <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
       {block.items.map((item, idx) => {
         const zebra = getZebraClass('kpi-cards', block.options, idx)
-        const surface = zebra || 'bg-white'
+        const surface = zebra || 'bg-white dark:bg-gray-900'
         return (
           <li
             key={idx}
-            className={`rounded border border-gray-200 ${surface} p-3 shadow-sm`}
+            className={`rounded border border-gray-200 ${surface} p-3 shadow-sm dark:border-gray-700`}
           >
             <p className="text-xs uppercase tracking-wide text-gray-500">{item.label}</p>
             <p className="mt-1 text-xl font-semibold text-smsg-900">{item.value}</p>

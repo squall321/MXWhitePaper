@@ -90,7 +90,7 @@ function GalleryItem({
 
   return (
     <figure
-      className="overflow-hidden rounded border border-gray-200"
+      className="overflow-hidden rounded border border-gray-200 dark:border-gray-700"
       style={{ backgroundColor: bg }}
     >
       <button
@@ -107,7 +107,7 @@ function GalleryItem({
         />
       </button>
       {item.caption && (
-        <figcaption className="bg-white px-2 py-1 text-xs text-gray-600">
+        <figcaption className="bg-white px-2 py-1 text-xs text-gray-600 dark:bg-gray-900 dark:text-gray-400">
           {item.caption}
         </figcaption>
       )}

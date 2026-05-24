@@ -23,7 +23,7 @@ export function IframeBlockView({ block }: { block: IframeBlock }) {
 
   if (block.html) {
     return (
-      <figure className="rounded border border-gray-200 bg-white p-2">
+      <figure className="rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900">
         {block.title && (
           <figcaption className="mb-1 text-xs text-gray-500">{block.title}</figcaption>
         )}
@@ -40,7 +40,7 @@ export function IframeBlockView({ block }: { block: IframeBlock }) {
   }
   if (block.src) {
     return (
-      <figure className="rounded border border-gray-200 bg-white p-2">
+      <figure className="rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900">
         {block.title && (
           <figcaption className="mb-1 text-xs text-gray-500">{block.title}</figcaption>
         )}
@@ -57,7 +57,7 @@ export function IframeBlockView({ block }: { block: IframeBlock }) {
   }
   return (
     <figure
-      className="flex min-h-[120px] items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 p-3 text-xs text-gray-500"
+      className="flex min-h-[120px] items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 p-3 text-xs text-gray-500 dark:border-gray-600 dark:bg-gray-800"
       data-empty-iframe-block
     >
       비어있는 임베드 — URL 또는 HTML을 입력하세요
