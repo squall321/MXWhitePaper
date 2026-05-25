@@ -175,17 +175,23 @@ export function chunkBlocksForSlides(blocks: readonly Block[]): Block[][] {
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i]!
     if (_isSoloVisual(b)) {
-      // solo-visual: 직전 paragraph 가 현재 청크의 마지막이면 그것까지 같이.
-      let caption: Block | null = null
-      if (cur.length > 0) {
+      // solo-visual: 직전 paragraph 또는 heading-4 가 현재 청크의 마지막이면
+      // 그것까지 같이 (캡션/소제목 역할 — presentation-layout follow-up).
+      // 또한 직전 (heading-4 + paragraph) 페어 까지 캡션으로 흡수 — 흔한
+      // 패턴 "소제목 + 한 줄 설명 + 시각자료".
+      const caption: Block[] = []
+      while (cur.length > 0) {
         const last = cur[cur.length - 1]!
-        if (last.type === 'paragraph') {
-          caption = last
+        if (last.type === 'paragraph' || last.type === 'heading-4') {
+          caption.unshift(last)
           cur = cur.slice(0, -1)
+          if (caption.length >= 2) break
+        } else {
+          break
         }
       }
       flush()
-      chunks.push(caption ? [caption, b] : [b])
+      chunks.push(caption.length > 0 ? [...caption, b] : [b])
       continue
     }
     const w = _blockWeight(b)

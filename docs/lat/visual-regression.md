@@ -26,10 +26,10 @@ import) 로 검증 불가 → 실 브라우저 렌더 + baseline diff 가 유일
 ```
 apps/web/
 ├── tests/e2e/
-│   ├── visual-darkmode.spec.ts                                    # PoC spec — light + dark 2 케이스
-│   └── visual-darkmode.spec.ts-snapshots/
-│       ├── doc-light-chromium-desktop-linux.png                   # baseline (light)
-│       └── doc-dark-chromium-desktop-linux.png                    # baseline (dark)
+│   ├── visual-darkmode.spec.ts                                    # 다크모드 light + dark 2 케이스
+│   ├── visual-darkmode.spec.ts-snapshots/                         # baseline 2 PNG
+│   ├── visual-presentation.spec.ts                                # presentation 4 슬라이드 (NEW: presentation-layout cycle)
+│   └── visual-presentation.spec.ts-snapshots/                     # baseline 4 PNG
 └── playwright.config.ts                                            # 변경 없음 — testDir './tests/e2e' 그대로
 ```
 

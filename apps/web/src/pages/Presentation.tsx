@@ -535,6 +535,10 @@ function SubsectionInline({
   const subs = Array.isArray((section as { subsections?: unknown[] }).subsections)
     ? ((section as { subsections: unknown[] }).subsections as (SectionLevel2 | SectionLevel3)[])
     : []
+  // presentation-layout follow-up: heading-only subsection (body=0, child=0)
+  // 은 빈 슬라이드 만들지 않음. SectionSlide 안에서 *제목만 표시* 되면 청자
+  // 인지 부담 ↑. 위 slideMachine 의 nested 빈 skip 와 짝이 되는 inline 처리.
+  if (cleanBody.length === 0 && subs.length === 0) return null
   const number = section.number ?? ''
   const title = section.title ?? ''
   const Heading = section.level === 2 ? 'h3' : 'h4'
@@ -721,7 +725,12 @@ const PRESENTATION_CSS = `
   /* A4: place-items: start center — 가로 가운데, 세로 위쪽 정렬. 짧은 콘텐츠가
      가운데 박혀 하단 빈 공간 만드는 거슬림 해소 (presentation-layout 사이클).
      단 .slide-title 만 가운데 정렬 유지 (override 아래). */
-  display: grid; place-items: start center; padding: 56px 80px;
+  display: grid; place-items: start center;
+  /* M1 (presentation-mobile cycle): padding 56px 80px 가 mobile 375px 에서
+     양쪽 160px 잠식 → 콘텐츠 잘림. viewport 비례 padding 으로 자동 축소.
+     padding-top 은 toolbar (top: 12px + ~32px height) 와 콘텐츠 겹침 방지 위해
+     min 60px 보장. */
+  padding: max(60px, clamp(16px, 5vh, 56px)) clamp(16px, 5vw, 80px) clamp(16px, 5vh, 56px);
   overflow: auto; animation: slideFade 200ms ease-out;
   position: relative;
 }
@@ -784,7 +793,9 @@ const PRESENTATION_CSS = `
 .slide-section .prose-slide [data-block-type="iframe"] iframe,
 .slide-section .prose-slide [data-block-type="video"] iframe,
 .slide-section .prose-slide [data-block-type="video"] video {
-  height: 65vh !important; min-height: 360px; width: 100%;
+  /* M2: mobile 에서 min-height 360 + 65vh 가 너무 큼 (433px = 화면 65%).
+     viewport 더 작아지면 자연 축소. */
+  height: clamp(220px, 65vh, 720px) !important; width: 100%;
 }
 .slide-section .prose-slide [data-block-type="chart"] figure,
 .slide-section .prose-slide [data-block-type="chart"] > div,

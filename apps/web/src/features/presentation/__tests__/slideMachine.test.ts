@@ -303,6 +303,21 @@ describe('chunkBlocksForSlides', () => {
     expect(out).toHaveLength(1)
     expect(out[0]).toEqual([huge])
   })
+
+  it('solo-visual 직전 heading-4 도 캡션으로 흡수 (slide-3 follow-up)', () => {
+    const heading = { type: 'heading-4', id: 'h1', title: '에디터 파트 R&R' } as unknown as Block
+    const c = chart('c1')
+    const out = chunkBlocksForSlides([heading, c])
+    expect(out).toEqual([[heading, c]])
+  })
+
+  it('solo-visual 직전 (heading-4 + paragraph) 페어도 함께 (소제목 + 한 줄 + 시각자료)', () => {
+    const heading = { type: 'heading-4', id: 'h1', title: '제목' } as unknown as Block
+    const p: Block = { type: 'paragraph', id: 'p1', text: '짧은 설명' } as Block
+    const c = chart('c1')
+    const out = chunkBlocksForSlides([heading, p, c])
+    expect(out).toEqual([[heading, p, c]])
+  })
 })
 
 describe('buildSlides — autoSplit 통합', () => {
