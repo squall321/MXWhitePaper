@@ -72,14 +72,41 @@ describe('buildSlides', () => {
     expect(slides.slice(1).every((s) => s.kind === 'section')).toBe(true)
   })
 
-  it('nested mode: also includes level-2 subsections', () => {
+  it('nested mode: skips empty level-2 subsections (presentation-layout cycle)', () => {
+    // sec 1.1 has empty blocks → was previously a blank "에디터 파트 R&R" slide
+    // (audit captured slide 3). After A1 fix: empty nested subsections are
+    // dropped. Result: title + sec1 + sec2 = 3.
     const slides = buildSlides(makeDoc(), { nested: true })
-    // title + sec1 + sec1.1 + sec2 = 4
+    expect(slides).toHaveLength(3)
+    const numbers = slides
+      .filter((s): s is Extract<(typeof slides)[number], { kind: 'section' }> => s.kind === 'section')
+      .map((s) => s.number)
+    expect(numbers).toEqual(['1', '2'])
+  })
+
+  it('nested mode: level-2 subsection with body content still emitted', () => {
+    const doc = makeDoc()
+    doc.sections[0]!.subsections![0]!.blocks = [
+      { type: 'paragraph', id: '01P000000000000000000000S1', text: 'sub content' },
+    ]
+    const slides = buildSlides(doc, { nested: true })
+    // title + sec1 + sec1.1 (has content now) + sec2 = 4
     expect(slides).toHaveLength(4)
     const numbers = slides
       .filter((s): s is Extract<(typeof slides)[number], { kind: 'section' }> => s.kind === 'section')
       .map((s) => s.number)
     expect(numbers).toEqual(['1', '1.1', '2'])
+  })
+
+  it('flat mode: level-1 section with empty blocks still gets a slide (chapter divider)', () => {
+    // sec 2 has empty blocks but is level 1 — should remain as a chapter
+    // divider slide. Only level-2 empty subsections are skipped.
+    const slides = buildSlides(makeDoc())
+    expect(slides).toHaveLength(3)
+    const sectionSlides = slides.filter(
+      (s): s is Extract<(typeof slides)[number], { kind: 'section' }> => s.kind === 'section',
+    )
+    expect(sectionSlides.map((s) => s.number)).toEqual(['1', '2'])
   })
 
   it('handles empty section trees', () => {

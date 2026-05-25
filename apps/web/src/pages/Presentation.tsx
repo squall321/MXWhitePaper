@@ -462,17 +462,24 @@ function SlideContent({
     'slide',
   )
 
-  // 자동 분할된 continuation 슬라이드면 제목에 "(계속 N/M)" 표시.
-  const contLabel =
-    usingSplit && (slide.continuation ?? 0) > 0 && slide.totalContinuations
-      ? ` (계속 ${(slide.continuation ?? 0) + 1}/${slide.totalContinuations})`
-      : ''
+  // 자동 분할된 continuation 슬라이드면 헤딩 옆 작은 chip 으로 N/M 표시.
+  // (제목 글자에 섞으면 청자 인지 부담 — chip 으로 분리)
+  const isContinuation =
+    usingSplit && (slide.continuation ?? 0) > 0 && !!slide.totalContinuations
+  const contChipText = isContinuation
+    ? `${(slide.continuation ?? 0) + 1}/${slide.totalContinuations}`
+    : ''
 
   return (
     <div className="slide-body slide-section">
       <header className="slide-heading">
         {slide.number && <span className="num">{slide.number}</span>}
-        <h2>{(slide.title || '(제목 없음)') + contLabel}</h2>
+        <h2>{slide.title || '(제목 없음)'}</h2>
+        {isContinuation && (
+          <span className="slide-cont-chip" aria-label={`계속 ${contChipText}`}>
+            {contChipText}
+          </span>
+        )}
       </header>
       {!isTitleOnly && (
         <div className="slide-blocks">
@@ -711,7 +718,10 @@ const PRESENTATION_CSS = `
   .presentation-root { --mx-stage-bg: #ffffff; --mx-stage-fg: #0f172a; }
 }
 .slide {
-  display: grid; place-items: center; padding: 56px 80px;
+  /* A4: place-items: start center — 가로 가운데, 세로 위쪽 정렬. 짧은 콘텐츠가
+     가운데 박혀 하단 빈 공간 만드는 거슬림 해소 (presentation-layout 사이클).
+     단 .slide-title 만 가운데 정렬 유지 (override 아래). */
+  display: grid; place-items: start center; padding: 56px 80px;
   overflow: auto; animation: slideFade 200ms ease-out;
   position: relative;
 }
@@ -720,8 +730,11 @@ const PRESENTATION_CSS = `
 @media (prefers-reduced-motion: reduce) {
   .slide { animation: none; }
 }
-.slide-body { width: 100%; max-width: 1200px; margin: auto; }
-.slide-title { text-align: center; }
+/* A5: 1200 → 1440 (16:9 viewport 활용 ↑). 더 작은 화면은 vw 단위로 자연 축소. */
+.slide-body { width: 100%; max-width: min(1440px, 92vw); margin: 0 auto; }
+.slide-title { text-align: center; align-self: center; }
+/* A4 override — title slide 컨테이너만 세로 가운데 (place-items center) 회복. */
+.slide:has(.slide-title) { place-items: center; }
 .slide-title h1 {
   font-size: clamp(40px, 6vw, 80px); font-weight: 700;
   margin: 0 0 16px; line-height: 1.1;
@@ -754,7 +767,51 @@ const PRESENTATION_CSS = `
 .slide-section .prose-slide ol { padding-left: 28px; margin: 0 0 12px; }
 .slide-section .prose-slide li { margin: 4px 0; }
 .slide-section .prose-slide table { font-size: 16px; }
-.slide-section .prose-slide img { max-height: 60vh; width: auto; max-width: 100%; }
+/* A7: 시각 블록 (chart/gantt/whiteboard/org-chart/flow) 슬라이드 viewport 가득.
+   read-mode 의 작은 h-72 같은 고정 높이로는 1080p 슬라이드를 활용 못 함. */
+.slide-section .prose-slide img { max-height: 72vh; width: auto; max-width: 100%; }
+.slide-section .prose-slide [data-block-type="chart"],
+.slide-section .prose-slide [data-block-type="gantt"],
+.slide-section .prose-slide [data-block-type="org-chart"],
+.slide-section .prose-slide [data-block-type="whiteboard"],
+.slide-section .prose-slide [data-block-type="flow"],
+.slide-section .prose-slide [data-block-type="iframe"],
+.slide-section .prose-slide [data-block-type="video"],
+.slide-section .prose-slide [data-block-type="image-annotation"] { width: 100%; }
+/* A3: iframe / video — read-mode 높이 360px 가 슬라이드에선 작아 빈 박스처럼.
+   슬라이드에선 viewport 활용으로 확대 (콘텐츠가 외부 URL이라 진짜 로딩은
+   외부 사이트 책임). */
+.slide-section .prose-slide [data-block-type="iframe"] iframe,
+.slide-section .prose-slide [data-block-type="video"] iframe,
+.slide-section .prose-slide [data-block-type="video"] video {
+  height: 65vh !important; min-height: 360px; width: 100%;
+}
+.slide-section .prose-slide [data-block-type="chart"] figure,
+.slide-section .prose-slide [data-block-type="chart"] > div,
+.slide-section .prose-slide [data-block-type="gantt"] figure,
+.slide-section .prose-slide [data-block-type="org-chart"] figure,
+.slide-section .prose-slide [data-block-type="whiteboard"] figure,
+.slide-section .prose-slide [data-block-type="flow"] > div {
+  max-height: 72vh; height: auto; min-height: 360px;
+}
+.slide-section .prose-slide [data-block-type="chart"] .h-72 { height: 60vh; }
+
+/* A2 chip: (계속 N/M) 작은 라벨 — 청자 인지 부담 ↓. */
+.slide-cont-chip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(12px, 0.9vw, 14px);
+  color: #6f87d6;
+  background: rgba(99, 130, 255, 0.12);
+  padding: 2px 8px; border-radius: 999px;
+  align-self: center; margin-left: 8px;
+}
+
+/* A6: continuation 슬라이드에 부모 subsection 컨텍스트 — Plan에서 명시했으나
+   현재 buildSlides가 section 단위로만 chunk라 subsection 컨텍스트는 inline
+   subsection 의 책임. continuation은 *부모 section 자체*의 다음 chunk라
+   subsection이 이미 SectionSlide.section 안에 있음. 따라서 별도 fix 불요 —
+   audit에서 본 "subsection title 사라짐" 은 사실 nested=1 옵션 시 subsection
+   자체가 별개 슬라이드라 발생. nested 옵션 사용자가 의도하면 그대로 유지. */
 
 /* Inline-rendered subsection inside a parent slide.
    Heading (h3) sits ~70% of the parent h2 size; nested subsections (h4)

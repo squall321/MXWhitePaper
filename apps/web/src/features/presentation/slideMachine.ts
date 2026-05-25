@@ -71,7 +71,10 @@ export interface BuildSlidesOptions {
 //   - table 작은 거 (~5x3) = 250, 큰 거 (>10 행) = 500+
 //   - chart/kpi/gantt/flow/org/whiteboard 같은 시각 위주 = 400~500 (단독에 가까움)
 //   - image = 300 (대형 시각 자료)
-const SLIDE_BUDGET = 700
+// 1080p (16:9) 슬라이드 viewport 의 실제 컨텐츠 영역에 맞춰 보정. 700은
+// 너무 보수적이라 같은 섹션이 "(계속 5/N)" 까지 분할되는 케이스가 audit에서
+// 발견됨 (presentation-layout 사이클). 시각 블록 weight 도 같이 ↓.
+const SLIDE_BUDGET = 1100
 
 /** block 별 weight 점수. 시각 위주 (chart 등) 는 단독 슬라이드에 가깝게. */
 function _blockWeight(b: Block | undefined): number {
@@ -107,16 +110,20 @@ function _blockWeight(b: Block | undefined): number {
     return Math.min(900, 150 + rows * 50 + headers * 20)
   }
   if (t === 'image' || t === 'gallery' || t === 'pdf' || t === 'image-annotation') {
-    return 450  // 큰 시각 자료 — 거의 단독.
+    return 350  // 큰 시각 자료 — solo-visual 단독은 _isSoloVisual 분기로.
   }
   if (
     t === 'chart' || t === 'kpi-cards' || t === 'gantt' || t === 'flow' ||
     t === 'org-chart' || t === 'whiteboard' || t === 'spreadsheet'
   ) {
-    return 500  // 단독에 가까움.
+    return 350
   }
   if (t === 'iframe' || t === 'video') {
-    return 500
+    return 350
+  }
+  // doc-link-card / bibliography 류는 짧은 카드 — 단독 슬라이드 만들 가치 X.
+  if (t === 'doc-link-card' || t === 'bibliography' || t === 'glossary-ref') {
+    return 100
   }
   if (t === 'columns' || t === 'tabs' || t === 'accordion') {
     // 자식 합을 적당히 가중 — children walk 는 비용 커서 conservative cap.
@@ -129,15 +136,17 @@ function _blockWeight(b: Block | undefined): number {
 /**
  * 자기만의 슬라이드를 갖는 게 자연스러운 시각-중심 블록인지. 이 종류가 한 번
  * 등장하면 그 직전 paragraph 1개 (있으면) 와 함께 단독 슬라이드로 분리.
+ *
+ * presentation-layout 사이클에서 *진짜 큰 시각 자료* 만 solo 로 좁힘 — iframe /
+ * video / gallery / pdf 는 콘텐츠 따라 작을 수도 있어 BUDGET 누적으로 결정.
  */
 function _isSoloVisual(b: Block | undefined): boolean {
   if (!b) return false
   const t = b.type as string
   return (
-    t === 'chart' || t === 'kpi-cards' || t === 'gantt' || t === 'flow' ||
+    t === 'chart' || t === 'gantt' || t === 'flow' ||
     t === 'org-chart' || t === 'whiteboard' || t === 'spreadsheet' ||
-    t === 'image-annotation' || t === 'gallery' || t === 'iframe' ||
-    t === 'video' || t === 'pdf'
+    t === 'image-annotation'
   )
 }
 
@@ -241,6 +250,10 @@ export function buildSlides(
     const allBlocks = Array.isArray(sec.blocks) ? sec.blocks : []
     const { body } = splitSpeakerNotes(allBlocks)
     const chunks = chunkBlocksForSlides(body)
+    // A1: 본문 없는 *nested subsection (level 2)* 은 빈 슬라이드 만들지 않음.
+    // level 1 (최상위 섹션) 은 본문 없어도 *섹션 표지* 역할로 유지 — 발표 흐름의
+    // chapter divider 의미.
+    if (chunks.length === 0 && level === 2) return
     if (chunks.length <= 1) {
       // 분할 불필요 — 기존과 동일 (bodyBlocks 미정 = legacy 렌더).
       slides.push({
