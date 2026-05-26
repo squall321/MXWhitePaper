@@ -470,9 +470,17 @@ function SlideContent({
     ? `${(slide.continuation ?? 0) + 1}/${slide.totalContinuations}`
     : ''
 
+  // L4 chapter-hero: level-1 section 의 *첫* 슬라이드 (continuation 아님) 은
+  // 거대한 챕터 번호 배경 + gradient 강조 헤더. 청자가 챕터 전환을 즉시 인지.
+  // continuation 슬라이드와 subsection level-2 슬라이드는 평범 헤더 유지.
+  const isChapterHero = !isContinuation && slide.level === 1
+
   return (
-    <div className="slide-body slide-section">
+    <div className={`slide-body slide-section${isChapterHero ? ' slide-chapter-hero' : ''}`}>
       <header className="slide-heading">
+        {isChapterHero && slide.number && (
+          <span className="chapter-bignum" aria-hidden="true">{slide.number}</span>
+        )}
         {slide.number && <span className="num">{slide.number}</span>}
         <h2>{slide.title || '(제목 없음)'}</h2>
         {isContinuation && (
@@ -757,7 +765,45 @@ const PRESENTATION_CSS = `
   color: #a5b4fc;
 }
 .slide-meta .tag { color: #94a3b8; }
-.slide-section .slide-heading { display: flex; align-items: baseline; gap: clamp(8px, 0.8vw, 16px); margin-bottom: 24px; }
+.slide-section .slide-heading { display: flex; align-items: baseline; gap: clamp(8px, 0.8vw, 16px); margin-bottom: 24px; position: relative; }
+
+/* L4 chapter-hero: level-1 section 의 첫 슬라이드 임팩트 강화 (presentation-
+   chapter-divider 사이클).
+   - chapter-bignum: 슬라이드 좌상단 배경에 거대한 챕터 번호 (semi-transparent
+     gradient). 헤더 글자 위에 깔리되 pointer-events 없음.
+   - 헤더 글자는 그 위에 떠 있어 가독성 유지.
+   - 본문은 헤더 아래 자연 흐름 — 슬라이드 갯수 늘리지 않음. */
+.slide-chapter-hero .slide-heading {
+  margin-bottom: 36px;
+  padding: 24px 0 16px;
+  border-bottom: 2px solid rgba(111, 135, 214, 0.25);
+}
+.slide-chapter-hero .slide-heading .chapter-bignum {
+  position: absolute; left: -16px; top: -32px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(120px, 14vw, 220px);
+  font-weight: 900;
+  background: linear-gradient(135deg, rgba(111, 135, 214, 0.20), rgba(20, 40, 160, 0.08));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  line-height: 0.9;
+  pointer-events: none;
+  z-index: 0;
+  letter-spacing: -0.04em;
+}
+[data-pres-theme="dark"] .slide-chapter-hero .slide-heading .chapter-bignum {
+  background: linear-gradient(135deg, rgba(147, 165, 255, 0.28), rgba(111, 135, 214, 0.08));
+  -webkit-background-clip: text; background-clip: text;
+}
+.slide-chapter-hero .slide-heading .num,
+.slide-chapter-hero .slide-heading h2 {
+  position: relative; z-index: 1;
+}
+.slide-chapter-hero .slide-heading h2 {
+  font-size: clamp(44px, 5.2vw, 64px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
 .slide-section .slide-heading .num {
   font-family: 'JetBrains Mono', monospace; color: #6f87d6;
   /* Scale alongside the h2 (clamp(36, 4.5vw, 56)) so the ratio stays
