@@ -81,6 +81,10 @@ apps/web/.playwright/
 .playwright-mcp/
 new-ux-overview.png
 
+# root-level ad-hoc 캡처/덱 (코드와 무관, 외부 공유 산출물)
+/*.html
+/*.png
+
 # DB backups (contain document data + user emails — not part of the repo)
 infra/backups/
 
