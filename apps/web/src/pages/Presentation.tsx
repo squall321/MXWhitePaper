@@ -20,6 +20,7 @@ import {
   staggerStyle,
   themeAttrs,
 } from '@/features/presentation/transitions.css'
+import { resolveLayout, type AutoLayoutKind } from '@/features/presentation/autoLayout'
 import {
   useSettingsStore,
   type SlideTheme,
@@ -81,6 +82,12 @@ export function PresentationPage() {
   const [stripVisible, setStripVisible] = useState(false)
   const [notesVisible, setNotesVisible] = useState(false)
   const [watermarkHidden, setWatermarkHidden] = useState(false)
+  // presentation-auto-layout 사이클: 사용자가 section.layout 명시 안 했을 때
+  // chunk 분석으로 자동 추천 (image-right / two-col 등). 기본 true.
+  const [autoLayoutEnabled, setAutoLayoutEnabled] = useState(true)
+  // 사용자가 발표 모드에서 즉시 layout 조정 — slide.key → override map.
+  // 세션 안에서만 유효 (저장 X, 다음 발표는 default).
+  const [layoutOverrides, setLayoutOverrides] = useState<Record<string, AutoLayoutKind>>({})
 
   // Visual preferences (transition, theme, stagger). Subscribing to the store
   // re-renders on change so cycling through options updates immediately.
@@ -279,7 +286,12 @@ export function PresentationPage() {
           data-kind={slide.kind}
           aria-live="polite"
         >
-          <SlideContent slide={slide} staggerEnabled={slideStagger} />
+          <SlideContent
+            slide={slide}
+            staggerEnabled={slideStagger}
+            autoLayoutEnabled={autoLayoutEnabled}
+            layoutOverride={layoutOverrides[slide.key]}
+          />
           {!watermarkHidden && (
             <div className="slide-watermark" aria-hidden>
               <span>{slug}</span>
@@ -293,11 +305,29 @@ export function PresentationPage() {
         theme={slideTheme}
         transition={slideTransition}
         stagger={slideStagger}
+        autoLayoutEnabled={autoLayoutEnabled}
+        currentLayout={
+          layoutOverrides[slide.key] ??
+          (slide.kind === 'section'
+            ? (resolveLayout(slide.section, slide.bodyBlocks ?? slide.section?.blocks ?? [], autoLayoutEnabled))
+            : 'stack')
+        }
+        canChangeLayout={slide.kind === 'section'}
         onCycleTheme={() => setSetting('slide_theme', cycleTheme(slideTheme))}
         onCycleTransition={() =>
           setSetting('slide_transition', cycleTransition(slideTransition))
         }
         onToggleStagger={() => setSetting('slide_stagger', !slideStagger)}
+        onToggleAutoLayout={() => setAutoLayoutEnabled((v) => !v)}
+        onChangeLayoutOverride={(next) => {
+          setLayoutOverrides((prev) => {
+            if (next === '__clear__') {
+              const { [slide.key]: _omit, ...rest } = prev
+              return rest
+            }
+            return { ...prev, [slide.key]: next as AutoLayoutKind }
+          })
+        }}
       />
 
       {notesVisible && (
@@ -409,9 +439,18 @@ export function PresentationPage() {
 function SlideContent({
   slide,
   staggerEnabled,
+  autoLayoutEnabled,
+  layoutOverride,
 }: {
   slide: Slide
   staggerEnabled: boolean
+  /** 사용자가 section.layout 명시 안 했을 때 chunk 분석으로 자동 추천 layout
+   * 적용. 기본 true — 슬라이드는 평범한 stack 보다 자동 추천이 거의 항상
+   * 좋음. 사용자가 chapter-divider toggle 같은 *완전 평범* 원하면 끌 수 있음. */
+  autoLayoutEnabled: boolean
+  /** Toolbar 의 layout override — 사용자가 즉시 조정. undefined 면 auto
+   * resolve. SectionLayoutKind 와 동일 enum. */
+  layoutOverride?: AutoLayoutKind
 }) {
   if (slide.kind === 'title') {
     const tags = Array.isArray(slide.meta?.tags) ? slide.meta.tags : []
@@ -439,11 +478,18 @@ function SlideContent({
   const usingSplit = Array.isArray(slide.bodyBlocks)
   const effectiveBody = usingSplit ? (slide.bodyBlocks as typeof body) : body
 
-  const layout = slide.section?.layout
-  // `title-only` is a deliberate cover-style slide: render only the heading,
-  // hide all body blocks. Other layouts go through SectionLayout for the
-  // 2-col / image-left / image-right / full-bleed shapes; the wrapper
-  // staggered-animation classes are applied to each layout cell.
+  // Layout 결정 우선순위:
+  //   1. toolbar override (사용자 즉시 조정 — 가장 강력)
+  //   2. section.layout 명시 (사용자가 문서 작성 때 지정)
+  //   3. autoLayoutEnabled 면 chunk 분석 자동 추천
+  //   4. stack default
+  // `title-only` 는 chapter divider 같은 표지 — 본문 hide.
+  const cleanBodyForLayout = filterForAudience(
+    effectiveBody.filter((b): b is NonNullable<typeof b> => Boolean(b)),
+    'slide',
+  )
+  const layout: AutoLayoutKind = layoutOverride
+    ?? resolveLayout(slide.section, cleanBodyForLayout, autoLayoutEnabled)
   const isTitleOnly = layout === 'title-only'
 
   // Walk subsections so nested content isn't silently dropped on the
@@ -454,13 +500,8 @@ function SlideContent({
   const subsections = usingSplit
     ? []
     : (Array.isArray(slide.section?.subsections) ? slide.section.subsections : [])
-  // Honor per-block `meta.audience`: drop blocks that opted out of the
-  // slide view. `wiki-only` blocks stay in the wiki article but vanish
-  // from every deck the user generates.
-  const cleanBody = filterForAudience(
-    effectiveBody.filter((b): b is NonNullable<typeof b> => Boolean(b)),
-    'slide',
-  )
+  // Honor per-block `meta.audience` — already computed for layout above.
+  const cleanBody = cleanBodyForLayout
 
   // 자동 분할된 continuation 슬라이드면 헤딩 옆 작은 chip 으로 N/M 표시.
   // (제목 글자에 섞으면 청자 인지 부담 — chip 으로 분리)
@@ -508,6 +549,7 @@ function SlideContent({
               key={sub.id}
               section={sub}
               staggerEnabled={staggerEnabled}
+              autoLayoutEnabled={autoLayoutEnabled}
             />
           ))}
         </div>
@@ -529,9 +571,11 @@ function SlideContent({
 function SubsectionInline({
   section,
   staggerEnabled,
+  autoLayoutEnabled,
 }: {
   section: SectionLevel2 | SectionLevel3
   staggerEnabled: boolean
+  autoLayoutEnabled: boolean
 }) {
   const allBlocks = Array.isArray(section?.blocks) ? section.blocks : []
   const { body } = splitSpeakerNotes(allBlocks)
@@ -539,14 +583,15 @@ function SubsectionInline({
     body.filter((b): b is NonNullable<typeof b> => Boolean(b)),
     'slide',
   )
-  const layout = (section as { layout?: string })?.layout
   const subs = Array.isArray((section as { subsections?: unknown[] }).subsections)
     ? ((section as { subsections: unknown[] }).subsections as (SectionLevel2 | SectionLevel3)[])
     : []
   // presentation-layout follow-up: heading-only subsection (body=0, child=0)
-  // 은 빈 슬라이드 만들지 않음. SectionSlide 안에서 *제목만 표시* 되면 청자
-  // 인지 부담 ↑. 위 slideMachine 의 nested 빈 skip 와 짝이 되는 inline 처리.
+  // 은 빈 슬라이드 만들지 않음.
   if (cleanBody.length === 0 && subs.length === 0) return null
+  // presentation-auto-layout: subsection 도 동일 정책 — section.layout 명시 우선,
+  // 없으면 auto 추천.
+  const layout = resolveLayout(section, cleanBody, autoLayoutEnabled)
   const number = section.number ?? ''
   const title = section.title ?? ''
   const Heading = section.level === 2 ? 'h3' : 'h4'
@@ -571,7 +616,12 @@ function SubsectionInline({
         />
       )}
       {subs.map((s) => (
-        <SubsectionInline key={s.id} section={s} staggerEnabled={staggerEnabled} />
+        <SubsectionInline
+          key={s.id}
+          section={s}
+          staggerEnabled={staggerEnabled}
+          autoLayoutEnabled={autoLayoutEnabled}
+        />
       ))}
     </section>
   )
@@ -596,15 +646,26 @@ interface PresentationToolbarProps {
   theme: SlideTheme
   transition: SlideTransition
   stagger: boolean
+  autoLayoutEnabled: boolean
+  currentLayout: AutoLayoutKind
+  canChangeLayout: boolean
   onCycleTheme: () => void
   onCycleTransition: () => void
   onToggleStagger: () => void
+  onToggleAutoLayout: () => void
+  /** 'stack'|'two-col'|... 또는 '__clear__' 로 override 제거. */
+  onChangeLayoutOverride: (next: string) => void
 }
 
 function PresentationToolbar({
   theme,
   transition,
   stagger,
+  autoLayoutEnabled,
+  currentLayout,
+  canChangeLayout,
+  onChangeLayoutOverride,
+  onToggleAutoLayout,
   onCycleTheme,
   onCycleTransition,
   onToggleStagger,
@@ -636,6 +697,31 @@ function PresentationToolbar({
       >
         {`📋 등장: ${stagger ? 'on' : 'off'}`}
       </button>
+      <button
+        type="button"
+        onClick={onToggleAutoLayout}
+        aria-pressed={autoLayoutEnabled}
+        title="자동 배치 (auto-layout) — 콘텐츠 분석해 2단/이미지좌우 등 자동 선택"
+        aria-label={`auto-layout: ${autoLayoutEnabled ? 'on' : 'off'}`}
+      >
+        {`🪄 자동: ${autoLayoutEnabled ? 'on' : 'off'}`}
+      </button>
+      <select
+        title="현재 슬라이드 배치 강제 변경 (세션 한정)"
+        aria-label="현재 슬라이드 배치"
+        value={currentLayout}
+        disabled={!canChangeLayout}
+        onChange={(e) => onChangeLayoutOverride(e.target.value)}
+        className="pres-toolbar-select"
+        data-pres-layout-select
+      >
+        <option value="__clear__">↺ 자동 (override 해제)</option>
+        <option value="stack">☰ 기본 (세로)</option>
+        <option value="two-col">⫴ 2단</option>
+        <option value="image-left">⬛︎▤ 이미지 좌</option>
+        <option value="image-right">▤⬛︎ 이미지 우</option>
+        <option value="full-bleed">◳ 풀블리드</option>
+      </select>
     </div>
   )
 }

@@ -161,11 +161,29 @@ export const TRANSITIONS_CSS = `
   font-family: inherit;
 }
 .pres-toolbar button:hover { background: rgba(255,255,255,0.08); }
+.pres-toolbar select.pres-toolbar-select {
+  background: transparent; color: var(--mx-stage-fg, #f8fafc);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 4px 6px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  font-family: inherit;
+}
+.pres-toolbar select.pres-toolbar-select:disabled {
+  opacity: 0.4; cursor: not-allowed;
+}
+.pres-toolbar select.pres-toolbar-select option {
+  background: rgba(15, 23, 42, 0.95); color: #f8fafc;
+}
 [data-pres-theme="light"] .pres-toolbar {
   background: rgba(255,255,255,0.85); border-color: rgba(15,23,42,0.12);
 }
 [data-pres-theme="light"] .pres-toolbar button { color: #0f172a; border-color: rgba(15,23,42,0.12); }
 [data-pres-theme="light"] .pres-toolbar button:hover { background: rgba(15,23,42,0.06); }
+[data-pres-theme="light"] .pres-toolbar select.pres-toolbar-select {
+  color: #0f172a; border-color: rgba(15,23,42,0.12);
+}
+[data-pres-theme="light"] .pres-toolbar select.pres-toolbar-select option {
+  background: #ffffff; color: #0f172a;
+}
 
 /* ── Reduced motion ───────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
