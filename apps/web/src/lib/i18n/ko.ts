@@ -646,6 +646,8 @@ export const ko = {
   'editor.ia.deleteAria': '선택한 주석 삭제',
   'editor.ia.deleteTitle': '삭제 (Backspace)',
   'editor.ia.replaceImage': '이미지 교체',
+  'editor.ia.rotateTitle': '회전 (90°)',
+  'editor.ia.rotateAria': '이미지 90도 회전 (주석 좌표도 같이 회전)',
   'editor.ia.canvasLabel': '이미지 주석 캔버스',
   'editor.ia.calloutInput': '콜아웃 텍스트 입력',
   'editor.ia.textboxInput': '텍스트 박스 본문',

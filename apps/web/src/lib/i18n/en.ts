@@ -615,6 +615,8 @@ export const en: Record<LocaleKey, string> = {
   'editor.ia.deleteAria': 'Delete selected annotation',
   'editor.ia.deleteTitle': 'Delete (Backspace)',
   'editor.ia.replaceImage': 'Replace image',
+  'editor.ia.rotateTitle': 'Rotate (90°)',
+  'editor.ia.rotateAria': 'Rotate image 90° (also rotates annotation coords)',
   'editor.ia.canvasLabel': 'Image annotation canvas',
   'editor.ia.calloutInput': 'Callout text input',
   'editor.ia.textboxInput': 'Text box body',

@@ -15,6 +15,9 @@ import {
   ImageDropzone,
   type ImageDropzoneHandle,
 } from '@/features/upload/components/ImageDropzone'
+import { uploadImage } from '@/features/upload/uploadImage'
+import { loadImageElement, rotateImageToBlob } from '@/features/upload/canvasEncode'
+import { rotateAnnotations } from '@/features/upload/annotationRotate'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
 import {
@@ -371,6 +374,7 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
   }
   const [error, setError] = useState<string | null>(null)
   const [savedOnce, setSavedOnce] = useState(false)
+  const [rotateBusy, setRotateBusy] = useState(false)
 
   // Drafting state — while dragging an arrow / rect, we mount a preview
   // element with this synthetic id so it draws in real-time without entering
@@ -746,6 +750,33 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
 
   const onReplaceImage = () => dropzoneRef.current?.openFilePicker()
 
+  /**
+   * 90° CW rotate. Rotates the underlying bitmap (re-upload via
+   * `rotateImageToBlob` + `uploadImage`) AND transforms every annotation's
+   * normalized coords by the same angle — keeping them aligned with the
+   * rotated image. Without this dual update the bitmap dimensions swap
+   * (e.g. 800x600 → 600x800) and existing annotations silently misalign.
+   */
+  const onRotateClick = async () => {
+    if (rotateBusy || !src) return
+    setRotateBusy(true)
+    setError(null)
+    try {
+      const el = await loadImageElement(src)
+      const blob = await rotateImageToBlob(el, 90)
+      const rec = await uploadImage(blob, { filename: `rot-${block.id}.png` })
+      const nextAnns = rotateAnnotations(annotations, 90)
+      // Local optimistic update so the canvas re-renders with the new coords
+      // before the server PATCH round-trips.
+      setAnnotations(nextAnns)
+      await persist(nextAnns, rec.image_id)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setRotateBusy(false)
+    }
+  }
+
   return (
     <div
       ref={wrapperRef}
@@ -852,6 +883,17 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
 
         <span className="mx-1 h-5 w-px bg-gray-300" aria-hidden="true" />
 
+        <button
+          type="button"
+          title={t('editor.ia.rotateTitle')}
+          aria-label={t('editor.ia.rotateAria')}
+          data-action="rotate"
+          onClick={() => void onRotateClick()}
+          disabled={rotateBusy}
+          className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-40"
+        >
+          <span aria-hidden="true">{rotateBusy ? '…' : '↻'}</span>
+        </button>
         <button
           type="button"
           onClick={onReplaceImage}

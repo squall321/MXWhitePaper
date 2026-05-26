@@ -347,4 +347,52 @@ describe('<ImageAnnotationBlockEditor /> static render', () => {
     // viewbox stays normalised
     expect(html).toContain('viewBox="0 0 1 1"')
   })
+
+  it('renders the rotate button with rotate-aware aria-label', () => {
+    useEditorStore.getState().reset()
+    useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+    const html = renderToStaticMarkup(
+      harness(<ImageAnnotationBlockEditor slug="test" block={sampleBlock} />),
+    )
+    expect(html).toContain('data-action="rotate"')
+    // Korean aria label — single source of truth in ko.ts
+    expect(html).toContain('이미지 90도 회전')
+  })
+})
+
+describe('annotation coords stay aligned after rotate', () => {
+  it('rotateAnnotations transforms each kind by 90° CW (sanity)', async () => {
+    // Asserts the pure helper produces the expected transforms the editor's
+    // rotate button relies on. We don't run the React onClick here (no DOM),
+    // but this guarantees the editor's wire-up is calling something correct.
+    const { rotateAnnotations } = await import(
+      '@/features/upload/annotationRotate'
+    )
+    const before: AnnotationElement[] = [
+      {
+        kind: 'arrow',
+        id: 'ar',
+        from: { x: 0.1, y: 0.2 },
+        to: { x: 0.6, y: 0.8 },
+        color: '#000',
+      },
+      { kind: 'rect', id: 're', x: 0.1, y: 0.2, w: 0.3, h: 0.4, color: '#000' },
+      { kind: 'callout', id: 'cl', x: 0.3, y: 0.4, label: 'x', color: '#000' },
+    ]
+    const after = rotateAnnotations(before, 90)
+    if (after[0]!.kind === 'arrow') {
+      expect(after[0]!.from.x).toBeCloseTo(0.8, 9)
+      expect(after[0]!.from.y).toBeCloseTo(0.1, 9)
+    } else throw new Error('expected arrow')
+    if (after[1]!.kind === 'rect') {
+      expect(after[1]!.x).toBeCloseTo(0.4, 9)
+      expect(after[1]!.y).toBeCloseTo(0.1, 9)
+      expect(after[1]!.w).toBeCloseTo(0.4, 9)
+      expect(after[1]!.h).toBeCloseTo(0.3, 9)
+    } else throw new Error('expected rect')
+    if (after[2]!.kind === 'callout') {
+      expect(after[2]!.x).toBeCloseTo(0.6, 9)
+      expect(after[2]!.y).toBeCloseTo(0.3, 9)
+    } else throw new Error('expected callout')
+  })
 })
