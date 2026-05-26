@@ -21,6 +21,7 @@ import {
   themeAttrs,
 } from '@/features/presentation/transitions.css'
 import { resolveLayout, type AutoLayoutKind } from '@/features/presentation/autoLayout'
+import { patchSection } from '@/features/editor/api'
 import {
   useSettingsStore,
   type SlideTheme,
@@ -88,6 +89,13 @@ export function PresentationPage() {
   // 사용자가 발표 모드에서 즉시 layout 조정 — slide.key → override map.
   // 세션 안에서만 유효 (저장 X, 다음 발표는 default).
   const [layoutOverrides, setLayoutOverrides] = useState<Record<string, AutoLayoutKind>>({})
+  // S1: 저장 진행 상태 (slide.key → 'saving'|'saved'|'error') — 토스트 대신
+  // toolbar 버튼 label 이 일시적으로 변화.
+  const [saveStatus, setSaveStatus] = useState<Record<string, 'saving' | 'saved' | 'error'>>({})
+  // S3 발표 중 블록 hide — 세션 한정 (창 닫으면 사라짐). Set<block.id>.
+  // SlideContent 의 cleanBody 가 이 set 으로 추가 필터.
+  const [hiddenBlockIds, setHiddenBlockIds] = useState<Set<string>>(() => new Set())
+  const [blockPanelOpen, setBlockPanelOpen] = useState(false)
 
   // Visual preferences (transition, theme, stagger). Subscribing to the store
   // re-renders on change so cycling through options updates immediately.
@@ -291,6 +299,7 @@ export function PresentationPage() {
             staggerEnabled={slideStagger}
             autoLayoutEnabled={autoLayoutEnabled}
             layoutOverride={layoutOverrides[slide.key]}
+            hiddenBlockIds={hiddenBlockIds}
           />
           {!watermarkHidden && (
             <div className="slide-watermark" aria-hidden>
@@ -313,6 +322,12 @@ export function PresentationPage() {
             : 'stack')
         }
         canChangeLayout={slide.kind === 'section'}
+        canSaveLayout={
+          slide.kind === 'section' &&
+          !!slide.section?.id &&
+          slide.key in layoutOverrides
+        }
+        saveStatus={saveStatus[slide.key]}
         onCycleTheme={() => setSetting('slide_theme', cycleTheme(slideTheme))}
         onCycleTransition={() =>
           setSetting('slide_transition', cycleTransition(slideTransition))
@@ -328,7 +343,55 @@ export function PresentationPage() {
             return { ...prev, [slide.key]: next as AutoLayoutKind }
           })
         }}
+        hiddenCount={
+          slide.kind === 'section'
+            ? (slide.bodyBlocks ?? slide.section?.blocks ?? []).filter(
+                (b) => b && hiddenBlockIds.has(b.id),
+              ).length
+            : 0
+        }
+        onToggleBlockPanel={() => setBlockPanelOpen((v) => !v)}
+        onSaveLayout={async () => {
+          if (slide.kind !== 'section') return
+          const sectionId = slide.section?.id
+          const etag = data?.meta?.etag
+          const override = layoutOverrides[slide.key]
+          if (!slug || !sectionId || !etag || !override) return
+          setSaveStatus((p) => ({ ...p, [slide.key]: 'saving' }))
+          try {
+            await patchSection(slug, sectionId, { layout: override }, etag, 'slide layout 저장 (발표 모드)')
+            setSaveStatus((p) => ({ ...p, [slide.key]: 'saved' }))
+            // 2초 후 status 클리어
+            window.setTimeout(() => {
+              setSaveStatus((p) => {
+                const { [slide.key]: _omit, ...rest } = p
+                return rest
+              })
+            }, 2000)
+          } catch (err) {
+            console.warn('[Presentation] save layout failed', err)
+            setSaveStatus((p) => ({ ...p, [slide.key]: 'error' }))
+          }
+        }}
       />
+
+      {blockPanelOpen && slide.kind === 'section' && (
+        <SlideBlockPanel
+          blocks={(slide.bodyBlocks ?? slide.section?.blocks ?? []).filter(
+            (b): b is NonNullable<typeof b> => Boolean(b),
+          )}
+          hiddenBlockIds={hiddenBlockIds}
+          onToggle={(id) => {
+            setHiddenBlockIds((prev) => {
+              const next = new Set(prev)
+              if (next.has(id)) next.delete(id)
+              else next.add(id)
+              return next
+            })
+          }}
+          onClose={() => setBlockPanelOpen(false)}
+        />
+      )}
 
       {notesVisible && (
         <aside className="slide-notes" aria-label="발표자 메모">
@@ -441,6 +504,7 @@ function SlideContent({
   staggerEnabled,
   autoLayoutEnabled,
   layoutOverride,
+  hiddenBlockIds,
 }: {
   slide: Slide
   staggerEnabled: boolean
@@ -451,6 +515,8 @@ function SlideContent({
   /** Toolbar 의 layout override — 사용자가 즉시 조정. undefined 면 auto
    * resolve. SectionLayoutKind 와 동일 enum. */
   layoutOverride?: AutoLayoutKind
+  /** S3 발표 중 hide 토글된 block.id 집합. cleanBody 가 추가 필터. */
+  hiddenBlockIds?: Set<string>
 }) {
   if (slide.kind === 'title') {
     const tags = Array.isArray(slide.meta?.tags) ? slide.meta.tags : []
@@ -484,10 +550,11 @@ function SlideContent({
   //   3. autoLayoutEnabled 면 chunk 분석 자동 추천
   //   4. stack default
   // `title-only` 는 chapter divider 같은 표지 — 본문 hide.
+  // 추가 — S3: 발표 중 hide 토글된 블록 제거.
   const cleanBodyForLayout = filterForAudience(
     effectiveBody.filter((b): b is NonNullable<typeof b> => Boolean(b)),
     'slide',
-  )
+  ).filter((b) => !hiddenBlockIds?.has(b.id))
   const layout: AutoLayoutKind = layoutOverride
     ?? resolveLayout(slide.section, cleanBodyForLayout, autoLayoutEnabled)
   const isTitleOnly = layout === 'title-only'
@@ -649,12 +716,21 @@ interface PresentationToolbarProps {
   autoLayoutEnabled: boolean
   currentLayout: AutoLayoutKind
   canChangeLayout: boolean
+  /** S1: override 가 세팅됐고 section.id 가 있으면 저장 가능. */
+  canSaveLayout: boolean
+  saveStatus?: 'saving' | 'saved' | 'error'
+  /** S3: 현 슬라이드에서 hide 된 블록 수 (badge 표시). */
+  hiddenCount: number
   onCycleTheme: () => void
   onCycleTransition: () => void
   onToggleStagger: () => void
   onToggleAutoLayout: () => void
   /** 'stack'|'two-col'|... 또는 '__clear__' 로 override 제거. */
   onChangeLayoutOverride: (next: string) => void
+  /** S1: 현재 override 를 문서의 section.layout 으로 영구 저장. */
+  onSaveLayout: () => void
+  /** S3: 블록 표시/숨김 패널 토글. */
+  onToggleBlockPanel: () => void
 }
 
 function PresentationToolbar({
@@ -664,8 +740,13 @@ function PresentationToolbar({
   autoLayoutEnabled,
   currentLayout,
   canChangeLayout,
+  canSaveLayout,
+  saveStatus,
+  hiddenCount,
   onChangeLayoutOverride,
   onToggleAutoLayout,
+  onSaveLayout,
+  onToggleBlockPanel,
   onCycleTheme,
   onCycleTransition,
   onToggleStagger,
@@ -722,8 +803,105 @@ function PresentationToolbar({
         <option value="image-right">▤⬛︎ 이미지 우</option>
         <option value="full-bleed">◳ 풀블리드</option>
       </select>
+      <button
+        type="button"
+        onClick={onSaveLayout}
+        disabled={!canSaveLayout || saveStatus === 'saving'}
+        title="현재 슬라이드 layout 을 문서에 영구 저장 (section.layout)"
+        aria-label="배치 저장"
+        data-pres-save-layout
+      >
+        {saveStatus === 'saving'
+          ? '💾 저장 중…'
+          : saveStatus === 'saved'
+            ? '✅ 저장됨'
+            : saveStatus === 'error'
+              ? '⚠️ 실패'
+              : '💾 저장'}
+      </button>
+      <button
+        type="button"
+        onClick={onToggleBlockPanel}
+        title="현재 슬라이드 블록 표시/숨김 패널 열기 (세션 한정)"
+        aria-label={`블록 표시/숨김 ${hiddenCount > 0 ? `(${hiddenCount} 숨김)` : ''}`}
+        data-pres-block-panel-toggle
+      >
+        {hiddenCount > 0 ? `🙈 블록 (${hiddenCount})` : '🙈 블록'}
+      </button>
     </div>
   )
+}
+
+/**
+ * S3: 발표 중 현재 슬라이드 블록을 표시/숨김 토글하는 floating panel.
+ * 세션 한정 (hiddenBlockIds 는 PresentationPage state). 문서에 저장 안 함 —
+ * 발표자가 즉석에서 "이 callout 은 다음 슬라이드에서 보여줄게" 같이 hide 하고
+ * 발표 끝나면 자동 복귀.
+ */
+function SlideBlockPanel({
+  blocks,
+  hiddenBlockIds,
+  onToggle,
+  onClose,
+}: {
+  blocks: Array<{ id: string; type: string }>
+  hiddenBlockIds: Set<string>
+  onToggle: (id: string) => void
+  onClose: () => void
+}) {
+  return (
+    <aside
+      className="slide-block-panel"
+      role="dialog"
+      aria-label="블록 표시/숨김"
+      data-pres-block-panel
+    >
+      <header className="slide-block-panel-head">
+        <h3>슬라이드 블록 ({blocks.length})</h3>
+        <button type="button" onClick={onClose} aria-label="패널 닫기">
+          ✕
+        </button>
+      </header>
+      <ul className="slide-block-panel-list">
+        {blocks.map((b) => {
+          const hidden = hiddenBlockIds.has(b.id)
+          const label = blockShortLabel(b)
+          return (
+            <li key={b.id} className={hidden ? 'is-hidden' : ''}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!hidden}
+                  onChange={() => onToggle(b.id)}
+                />
+                <span className="slide-block-panel-type">{b.type}</span>
+                <span className="slide-block-panel-label">{label}</span>
+              </label>
+            </li>
+          )
+        })}
+      </ul>
+      <footer className="slide-block-panel-foot">
+        세션 한정 — 발표 종료 시 자동 복귀
+      </footer>
+    </aside>
+  )
+}
+
+/** Best-effort 짧은 라벨 — text/title/caption 우선. */
+function blockShortLabel(b: { type: string }): string {
+  const rec = b as unknown as Record<string, unknown>
+  const pick = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim() ? v.trim() : null
+  const cand =
+    pick(rec['text']) ??
+    pick(rec['title']) ??
+    pick(rec['caption']) ??
+    pick(rec['src']) ??
+    pick(rec['url']) ??
+    ''
+  const trimmed = cand.replace(/\s+/g, ' ').trim()
+  return trimmed.length > 60 ? `${trimmed.slice(0, 60)}…` : trimmed || '(no label)'
 }
 
 /**

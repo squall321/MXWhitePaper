@@ -245,6 +245,21 @@ Repository (DB I/O) 는 [[src/app/repos/document_repo.py]]:
 원본을 본다. 잘못된 위치 (예: `update_document` 직전 BEGIN) 에 호출하면
 편집자가 본인이 못 보는 블록을 무의식적으로 지워버리는 사고가 남.
 
+## Presentation hints (block meta + section.layout)
+
+발표 모드 ([[apps/web/src/pages/Presentation.tsx]]) 가 참고하는 meta 키:
+
+- **`block.meta.audience`**: `'both' | 'wiki-only' | 'slide-only'` — 발표 모드
+  렌더링에서 `wiki-only` 블록 제외. [[apps/web/src/components/blocks/audienceFilter.ts]]
+- **`block.meta.slideBreak`**: `'before' | 'after'` — `chunkBlocksForSlides`
+  ([[apps/web/src/features/presentation/slideMachine.ts]]) 의 자동 BUDGET
+  분할보다 우선. 같은 섹션 안에서 발표자가 슬라이드 분할 지점을 명시.
+
+`PATCH /{slug}/sections/{id}` 는 `layout` 필드를 받음 (`'stack' | 'two-col'
+| 'image-left' | 'image-right' | 'full-bleed' | 'title-only'`). 발표 모드
+toolbar 에서 즉시 override 후 "💾 저장" 으로 영구 반영. FE 진입점:
+[[apps/web/src/features/editor/api.ts#patchSection]].
+
 ## Versioning
 
 - `documents` 테이블에 `version` 컬럼 (정수).

@@ -318,6 +318,41 @@ describe('chunkBlocksForSlides', () => {
     const out = chunkBlocksForSlides([heading, p, c])
     expect(out).toEqual([[heading, p, c]])
   })
+
+  it('S2: meta.slideBreak=before — 이 블록부터 새 청크 (사용자 명시 우선)', () => {
+    const p1 = longPara('p1', 50)
+    const p2: Block = {
+      type: 'paragraph', id: 'p2', text: 'b',
+      meta: { slideBreak: 'before' },
+    } as unknown as Block
+    const p3 = longPara('p3', 50)
+    const out = chunkBlocksForSlides([p1, p2, p3])
+    // 자동 BUDGET 무관: p2 'before' 가 강제 split.
+    expect(out).toEqual([[p1], [p2, p3]])
+  })
+
+  it('S2: meta.slideBreak=after — 이 블록 포함 청크 flush 후 새 시작', () => {
+    const p1 = longPara('p1', 50)
+    const p2: Block = {
+      type: 'paragraph', id: 'p2', text: 'b',
+      meta: { slideBreak: 'after' },
+    } as unknown as Block
+    const p3 = longPara('p3', 50)
+    const out = chunkBlocksForSlides([p1, p2, p3])
+    expect(out).toEqual([[p1, p2], [p3]])
+  })
+
+  it('S2: slideBreak=before + solo-visual 충돌 — slideBreak 우선', () => {
+    const p1 = longPara('p1', 50)
+    const c: Block = {
+      type: 'chart', id: 'c1',
+      meta: { slideBreak: 'before' },
+    } as unknown as Block
+    const out = chunkBlocksForSlides([p1, c])
+    // slideBreak=before 가 flush 한 뒤 chart 가 단독 (solo-visual 룰로 caption
+    // 흡수 시도하지만 이미 cur 비었으므로 단독 청크).
+    expect(out).toEqual([[p1], [c]])
+  })
 })
 
 describe('buildSlides — autoSplit 통합', () => {

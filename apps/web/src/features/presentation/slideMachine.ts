@@ -174,6 +174,10 @@ export function chunkBlocksForSlides(blocks: readonly Block[]): Block[][] {
   }
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i]!
+    // S2 사용자 명시 slide-break: meta.slideBreak='before' 면 현재 청크 flush
+    // 후 이 블록부터 새 청크 시작. solo-visual / weight 룰보다 우선.
+    const sbBefore = (b as { meta?: { slideBreak?: string } }).meta?.slideBreak === 'before'
+    if (sbBefore) flush()
     if (_isSoloVisual(b)) {
       // solo-visual: 직전 paragraph 또는 heading-4 가 현재 청크의 마지막이면
       // 그것까지 같이 (캡션/소제목 역할 — presentation-layout follow-up).
@@ -192,15 +196,18 @@ export function chunkBlocksForSlides(blocks: readonly Block[]): Block[][] {
       }
       flush()
       chunks.push(caption.length > 0 ? [...caption, b] : [b])
-      continue
+    } else {
+      const w = _blockWeight(b)
+      // 현재 청크가 비어있지 않은데 합치면 BUDGET 초과 → flush 후 새 청크.
+      if (cur.length > 0 && curW + w > SLIDE_BUDGET) {
+        flush()
+      }
+      cur.push(b)
+      curW += w
     }
-    const w = _blockWeight(b)
-    // 현재 청크가 비어있지 않은데 합치면 BUDGET 초과 → flush 후 새 청크.
-    if (cur.length > 0 && curW + w > SLIDE_BUDGET) {
-      flush()
-    }
-    cur.push(b)
-    curW += w
+    // S2: meta.slideBreak='after' 면 이 블록을 포함한 청크 flush 후 새 시작.
+    const sbAfter = (b as { meta?: { slideBreak?: string } }).meta?.slideBreak === 'after'
+    if (sbAfter) flush()
   }
   flush()
   return chunks

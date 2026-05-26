@@ -148,6 +148,15 @@ class Audience(Enum):
     slide_only = 'slide-only'
 
 
+class SlideBreak(Enum):
+    """
+    프레젠테이션 모드에서 사용자가 명시적으로 슬라이드 분할 지점을 지정. 'before': 이 블록부터 새 슬라이드 시작. 'after': 이 블록 다음부터 새 슬라이드 시작. buildSlides 의 자동 BUDGET 분할보다 우선. 같은 섹션 안에서 발표자 흐름을 직접 제어할 때 사용.
+    """
+
+    before = 'before'
+    after = 'after'
+
+
 class BlockMeta(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -172,6 +181,10 @@ class BlockMeta(BaseModel):
     audience: Audience | None = None
     """
     이 블록이 노출되는 뷰. 'both'(기본): 위키 + 슬라이드 둘 다. 'wiki-only': 위키에만 (프레젠테이션에서 숨김). 'slide-only': 프레젠테이션에서만 (위키 본문에서는 숨김). 발표용 큰 이미지/스피커 멘트, 또는 위키엔 자세히 적고 슬라이드엔 빼고 싶은 표 등을 분리할 때 사용.
+    """
+    slide_break: SlideBreak | None = Field(None, alias='slideBreak')
+    """
+    프레젠테이션 모드에서 사용자가 명시적으로 슬라이드 분할 지점을 지정. 'before': 이 블록부터 새 슬라이드 시작. 'after': 이 블록 다음부터 새 슬라이드 시작. buildSlides 의 자동 BUDGET 분할보다 우선. 같은 섹션 안에서 발표자 흐름을 직접 제어할 때 사용.
     """
 
 

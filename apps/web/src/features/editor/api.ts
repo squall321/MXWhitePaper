@@ -95,6 +95,12 @@ export interface SectionPatch {
   title?: string
   blocks?: Block[]
   number?: string
+  /**
+   * Section layout (stack / two-col / image-left / image-right / full-bleed /
+   * title-only). Used by Presentation mode to drive auto-layout decisions.
+   * Set from /present toolbar's "이 layout 으로 저장" action.
+   */
+  layout?: 'stack' | 'two-col' | 'image-left' | 'image-right' | 'full-bleed' | 'title-only'
 }
 
 /** Light tree shape we send back to /sections/reorder. */
