@@ -44,6 +44,41 @@ export function nextIndex(current: number, length: number, dir: 1 | -1): number 
 }
 
 /**
+ * Result of classifying a keypress for the Lightbox. Extracted so the
+ * keyboard contract can be unit-tested without a DOM. `action` describes
+ * what the host should do; `preventDefault` mirrors what the live handler
+ * actually does to the underlying KeyboardEvent.
+ */
+export type LightboxKeyAction =
+  | { action: 'close' }
+  | { action: 'navigate'; dir: 1 | -1 }
+  | { action: 'focus-trap'; target: 'first' | 'last' }
+  | { action: 'ignore' }
+
+/**
+ * Pure keyboard classifier — returns the intended action for a given key.
+ * `total` lets us skip nav when there's only one image; `shiftKey` flips
+ * the Tab trap direction.
+ */
+export function classifyLightboxKey(
+  key: string,
+  total: number,
+  shiftKey: boolean,
+  activeIsFirst: boolean,
+  activeIsLast: boolean,
+): LightboxKeyAction {
+  if (key === 'Escape') return { action: 'close' }
+  if (key === 'ArrowRight' && total > 1) return { action: 'navigate', dir: 1 }
+  if (key === 'ArrowLeft' && total > 1) return { action: 'navigate', dir: -1 }
+  if (key === 'Tab') {
+    // Wrap focus inside the dialog. Shift+Tab off first → last; Tab off last → first.
+    if (shiftKey && activeIsFirst) return { action: 'focus-trap', target: 'last' }
+    if (!shiftKey && activeIsLast) return { action: 'focus-trap', target: 'first' }
+  }
+  return { action: 'ignore' }
+}
+
+/**
  * Fullscreen image overlay. Used by both `<ImageBlockView>` (single image)
  * and `<GalleryBlockView>` (multi-image with prev/next + ←/→ navigation).
  *
@@ -68,6 +103,11 @@ export function Lightbox({
   const [zoom, setZoom] = useState(LIGHTBOX_MIN_ZOOM)
   const pinchStartRef = useRef(LIGHTBOX_MIN_ZOOM)
   const stageRef = useRef<HTMLDivElement>(null)
+  // A11y: focus trap refs + trigger snapshot for focus restoration.
+  const closeBtnRef = useRef<HTMLButtonElement>(null)
+  const prevBtnRef = useRef<HTMLButtonElement>(null)
+  const nextBtnRef = useRef<HTMLButtonElement>(null)
+  const triggerRef = useRef<Element | null>(null)
 
   // Reset index whenever the lightbox reopens.
   useEffect(() => {
@@ -115,18 +155,45 @@ export function Lightbox({
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-      else if (e.key === 'ArrowRight' && total > 1) {
+      // Focus-trap classification needs to know which of our internal
+      // buttons is active. With single-image (total<=1) only the close
+      // button is rendered, so it is both first and last.
+      const active = typeof document !== 'undefined' ? document.activeElement : null
+      const first = total > 1 ? prevBtnRef.current : closeBtnRef.current
+      const last = total > 1 ? nextBtnRef.current : closeBtnRef.current
+      const activeIsFirst = !!first && active === first
+      const activeIsLast = !!last && active === last
+      const result = classifyLightboxKey(e.key, total, e.shiftKey, activeIsFirst, activeIsLast)
+      if (result.action === 'close') {
+        onClose()
+      } else if (result.action === 'navigate') {
         e.preventDefault()
-        go(1)
-      } else if (e.key === 'ArrowLeft' && total > 1) {
+        go(result.dir)
+      } else if (result.action === 'focus-trap') {
         e.preventDefault()
-        go(-1)
+        const target = result.target === 'first' ? first : last
+        target?.focus()
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [open, onClose, total, go])
+
+  // Focus management: snapshot the triggering element on open, focus the
+  // close button, and restore focus to the trigger on close/unmount.
+  useEffect(() => {
+    if (!open) return
+    if (typeof document !== 'undefined') {
+      triggerRef.current = document.activeElement
+    }
+    // Defer to next tick so refs are attached after the render commit.
+    const id = setTimeout(() => closeBtnRef.current?.focus(), 0)
+    return () => {
+      clearTimeout(id)
+      const t = triggerRef.current as HTMLElement | null
+      if (t && typeof t.focus === 'function') t.focus()
+    }
+  }, [open])
 
   if (!open || total === 0) return null
   const safeIdx = Math.min(idx, total - 1)
@@ -172,6 +239,7 @@ export function Lightbox({
         {total > 1 && (
           <>
             <button
+              ref={prevBtnRef}
               type="button"
               aria-label="이전 이미지"
               data-nav="prev"
@@ -184,6 +252,7 @@ export function Lightbox({
               ‹
             </button>
             <button
+              ref={nextBtnRef}
               type="button"
               aria-label="다음 이미지"
               data-nav="next"
@@ -197,6 +266,19 @@ export function Lightbox({
             </button>
           </>
         )}
+        <button
+          ref={closeBtnRef}
+          type="button"
+          aria-label="닫기"
+          data-nav="close"
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose()
+          }}
+          className="absolute left-2 top-2 rounded-full bg-black/50 px-3 py-1 text-sm text-white hover:bg-black/80"
+        >
+          ×
+        </button>
       </div>
       {cur.caption && (
         <p className="mt-3 max-w-[80vw] text-center text-sm text-white/90">
@@ -204,7 +286,12 @@ export function Lightbox({
         </p>
       )}
       {total > 1 && (
-        <p className="mt-1 text-xs text-white/60">
+        <p
+          data-lightbox-counter
+          aria-live="polite"
+          aria-atomic="true"
+          className="mt-1 text-xs text-white/60"
+        >
           {safeIdx + 1} / {total}
         </p>
       )}

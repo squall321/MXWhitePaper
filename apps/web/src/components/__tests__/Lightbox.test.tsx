@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Lightbox, nextIndex, type LightboxItem } from '../Lightbox'
+import { Lightbox, nextIndex, classifyLightboxKey, type LightboxItem } from '../Lightbox'
 
 describe('nextIndex (gallery navigation state machine)', () => {
   it('wraps forward', () => {
@@ -63,5 +63,87 @@ describe('<Lightbox /> static render', () => {
       <Lightbox open items={[]} onClose={() => {}} />,
     )
     expect(html).toBe('')
+  })
+
+  it('renders a close button (focus-trap anchor + a11y affordance)', () => {
+    const html = renderToStaticMarkup(
+      <Lightbox open items={items} onClose={() => {}} />,
+    )
+    expect(html).toContain('data-nav="close"')
+    expect(html).toContain('aria-label="닫기"')
+  })
+
+  it('renders the N / M counter with aria-live="polite"', () => {
+    const html = renderToStaticMarkup(
+      <Lightbox open items={items} startIndex={1} onClose={() => {}} />,
+    )
+    expect(html).toContain('data-lightbox-counter')
+    expect(html).toContain('aria-live="polite"')
+    // 0-based startIndex 1 of 3 items → "2 / 3".
+    expect(html).toMatch(/2\s*\/\s*3/)
+  })
+
+  it('counter is omitted for single-image lightbox', () => {
+    const html = renderToStaticMarkup(
+      <Lightbox open src="/img/single.jpg" onClose={() => {}} />,
+    )
+    expect(html).not.toContain('data-lightbox-counter')
+  })
+
+  it('exposes role=dialog + aria-modal for screen readers', () => {
+    const html = renderToStaticMarkup(
+      <Lightbox open items={items} onClose={() => {}} />,
+    )
+    expect(html).toContain('role="dialog"')
+    expect(html).toContain('aria-modal="true"')
+  })
+})
+
+describe('classifyLightboxKey (keyboard contract)', () => {
+  it('Escape returns close', () => {
+    expect(classifyLightboxKey('Escape', 3, false, false, false)).toEqual({ action: 'close' })
+  })
+
+  it('ArrowRight navigates forward when total > 1', () => {
+    expect(classifyLightboxKey('ArrowRight', 3, false, false, false)).toEqual({
+      action: 'navigate',
+      dir: 1,
+    })
+  })
+
+  it('ArrowLeft navigates backward when total > 1', () => {
+    expect(classifyLightboxKey('ArrowLeft', 3, false, false, false)).toEqual({
+      action: 'navigate',
+      dir: -1,
+    })
+  })
+
+  it('arrow keys ignored when total <= 1 (single image)', () => {
+    expect(classifyLightboxKey('ArrowRight', 1, false, false, false)).toEqual({ action: 'ignore' })
+    expect(classifyLightboxKey('ArrowLeft', 1, false, false, false)).toEqual({ action: 'ignore' })
+  })
+
+  it('Tab off last cycles to first', () => {
+    expect(classifyLightboxKey('Tab', 3, false, false, true)).toEqual({
+      action: 'focus-trap',
+      target: 'first',
+    })
+  })
+
+  it('Shift+Tab off first cycles to last', () => {
+    expect(classifyLightboxKey('Tab', 3, true, true, false)).toEqual({
+      action: 'focus-trap',
+      target: 'last',
+    })
+  })
+
+  it('Tab in the middle of the trap is ignored (browser handles it)', () => {
+    expect(classifyLightboxKey('Tab', 3, false, false, false)).toEqual({ action: 'ignore' })
+    expect(classifyLightboxKey('Tab', 3, true, false, false)).toEqual({ action: 'ignore' })
+  })
+
+  it('unrelated keys are ignored', () => {
+    expect(classifyLightboxKey('a', 3, false, false, false)).toEqual({ action: 'ignore' })
+    expect(classifyLightboxKey('Enter', 3, false, false, false)).toEqual({ action: 'ignore' })
   })
 })

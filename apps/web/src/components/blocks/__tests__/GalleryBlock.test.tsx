@@ -40,4 +40,14 @@ describe('<GalleryBlockView /> lightbox wiring', () => {
     expect(html).toContain('first')
     expect(html).toContain('second')
   })
+
+  it('each tile is a button so the lightbox can be opened by index', () => {
+    // The component wires `onOpen(i)` → `setOpenIdx(i)` which feeds
+    // `startIndex={openIdx}` into <Lightbox>. We can't drive a click without
+    // a DOM, but the structural contract is visible: one button per item,
+    // with an index-derived aria-label.
+    const html = renderToStaticMarkup(harness(<GalleryBlockView block={block} />))
+    const buttonCount = (html.match(/<button[^>]*aria-label="갤러리 \d+번 이미지 확대"/g) ?? []).length
+    expect(buttonCount).toBe(block.items.length)
+  })
 })
