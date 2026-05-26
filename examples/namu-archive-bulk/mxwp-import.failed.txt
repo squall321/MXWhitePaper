@@ -1,0 +1,3 @@
+/home/koopark/claude/MXWhitePaper/examples/namu-archive-bulk/amd-gpu-hd-7000-시리즈.docx
+/home/koopark/claude/MXWhitePaper/examples/namu-archive-bulk/google-pixel-5.docx
+/home/koopark/claude/MXWhitePaper/examples/namu-archive-bulk/hbm.docx
