@@ -77,6 +77,18 @@ async def _create_temp_user(email: str, password: str) -> str:
 
 async def _delete_user(email: str) -> None:
     async with session_scope() as s:
+        # FK cascade: clear audit rows referencing this user first. The
+        # login flow now writes auth.login / auth.login.failed audit rows,
+        # so the seed-only DELETE here would trip audit_logs_user_id_fkey
+        # whenever a test logged in as this throwaway user.
+        row = (
+            await s.execute(text("SELECT id FROM users WHERE email = :e"), {"e": email})
+        ).first()
+        if row is not None:
+            await s.execute(
+                text("DELETE FROM audit_logs WHERE user_id = CAST(:uid AS uuid)"),
+                {"uid": str(row[0])},
+            )
         await s.execute(text("DELETE FROM users WHERE email = :e"), {"e": email})
         await s.commit()
 

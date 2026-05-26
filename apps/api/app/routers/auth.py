@@ -9,6 +9,7 @@ GET  /api/v1/me
 """
 from __future__ import annotations
 
+import json
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -107,6 +108,36 @@ async def _set_refresh_cookie(response: Response, token: str) -> None:
     )
 
 
+async def _write_auth_audit(
+    s: AsyncSession,
+    *,
+    user_id: str | None,
+    action: str,
+    target: str,
+    payload: dict[str, Any] | None,
+    ip: str | None,
+) -> None:
+    """Inline INSERT (matches signup_service.create_user_account) so we can
+    populate the `ip` column too. No exception swallow — if the DB is broken
+    we want the login response to surface it rather than silently lose audit.
+    """
+    await s.execute(
+        text("""
+            INSERT INTO audit_logs (user_id, action, target, payload, ip)
+            VALUES (CAST(:uid AS uuid), :a, :t, CAST(:p AS JSONB),
+                    CAST(:ip AS INET))
+        """),
+        {
+            "uid": user_id,
+            "a": action,
+            "t": target,
+            "p": json.dumps(payload or {}, ensure_ascii=False),
+            "ip": ip,
+        },
+    )
+    await s.commit()
+
+
 async def _issue_session(
     response: Response, user: dict[str, Any], s: AsyncSession
 ) -> dict[str, Any]:
@@ -140,9 +171,11 @@ async def _issue_session(
 @router.post("/auth/login")
 async def login(
     payload: LoginIn,
+    request: Request,
     response: Response,
     s: AsyncSession = Depends(get_db),
 ) -> Any:
+    ip = request.client.host if request.client else None
     row = (await s.execute(
         text("""
             SELECT id, email, name, role, team_id, password_hash, is_active,
@@ -152,8 +185,27 @@ async def login(
         {"e": payload.email},
     )).first()
     if not row or not bool(row[6]):
+        # No row, or row exists but is_active is False. user_id is set when
+        # we did find the row (so we can audit failed attempts against a
+        # disabled account); NULL when the email matches nothing.
+        await _write_auth_audit(
+            s,
+            user_id=str(row[0]) if row else None,
+            action="auth.login.failed",
+            target=f"user:{row[0]}" if row else f"email:{payload.email}",
+            payload={"email": payload.email, "reason": "unknown_or_inactive"},
+            ip=ip,
+        )
         raise Unauthorized("Invalid credentials")
     if not verify_password(payload.password, row[5]):
+        await _write_auth_audit(
+            s,
+            user_id=str(row[0]),
+            action="auth.login.failed",
+            target=f"user:{row[0]}",
+            payload={"email": payload.email, "reason": "bad_password"},
+            ip=ip,
+        )
         raise Unauthorized("Invalid credentials")
 
     user = _user_payload(row)
@@ -175,15 +227,25 @@ async def login(
         )
         return JSONResponse(status_code=401, content=body)
 
+    await _write_auth_audit(
+        s,
+        user_id=user["id"],
+        action="auth.login",
+        target=f"user:{user['id']}",
+        payload={"method": "password", "email": user["email"]},
+        ip=ip,
+    )
     return await _issue_session(response, user, s)
 
 
 @router.post("/auth/login/totp")
 async def login_totp(
     payload: LoginTotpIn,
+    request: Request,
     response: Response,
     s: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
+    ip = request.client.host if request.client else None
     user_id = _decode_partial_token(payload.partial_token)
     row = (await s.execute(
         text("""
@@ -201,9 +263,25 @@ async def login_totp(
         raise Unauthorized("2FA is not enabled for this user")
 
     if not await verify_totp_for_user(s, user_id, payload.code):
+        await _write_auth_audit(
+            s,
+            user_id=user_id,
+            action="auth.login.failed",
+            target=f"user:{user_id}",
+            payload={"method": "totp", "reason": "bad_code"},
+            ip=ip,
+        )
         raise Unauthorized("Invalid TOTP or backup code")
 
     user = _user_payload(row)
+    await _write_auth_audit(
+        s,
+        user_id=user["id"],
+        action="auth.login.totp",
+        target=f"user:{user['id']}",
+        payload={"method": "totp", "email": user["email"]},
+        ip=ip,
+    )
     return await _issue_session(response, user, s)
 
 

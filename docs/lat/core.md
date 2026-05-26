@@ -200,6 +200,21 @@ JWT payload: `{sub: user_id, role: …, exp, iat}`. 변경 시 FE 미들웨어
 
 성공 시 `users` INSERT + `audit_logs` (`action='user_signup'`) 한 트랜잭션.
 
+### 로그인이 쓰는 audit actions (G1)
+
+`/auth/login` 과 `/auth/login/totp` 도 `audit_logs` 에 행을 남긴다
+([[src/app/routers/auth.py#_write_auth_audit]]):
+
+| action | 트리거 | user_id | payload |
+|---|---|---|---|
+| `auth.login` | 패스워드 로그인 성공 (2FA 없음) | 본인 | `{method:"password", email}` |
+| `auth.login.totp` | 2FA exchange 성공 | 본인 | `{method:"totp", email}` |
+| `auth.login.failed` | 패스워드 불일치 / unknown email / inactive / 잘못된 TOTP | 알려진 user 면 본인, 모르면 `NULL` | `{email?, method?, reason}` (절대 평문 password 안 넣음) |
+
+`target` 은 `user:<uuid>` (이메일이 미매칭이면 `email:<addr>`). `ip` 는
+`Request.client.host`. audit write 는 try/except 로 감싸지 않음 — DB 가 깨지면
+로그인이 실패하는 게 맞다 (조용한 audit 손실 금지).
+
 ### 조직 셀렉터 (가입 폼이 채우는 cascading dropdown)
 
 이미 존재하는 `routers/orgs.py` 가 그대로 쓰임:
