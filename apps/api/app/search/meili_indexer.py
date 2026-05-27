@@ -13,15 +13,80 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+import time
+from typing import Any, Callable, TypeVar
 
 import meilisearch
+import meilisearch.errors as _meili_errors
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+# ── transient-error retry (M2) ────────────────────────────────────────
+# `upsert_document` / `delete_document` are best-effort but were giving up
+# after a single 5xx / timeout — the H9 background hook wrapper
+# (`document_service._run_with_retry`) then retried the whole flow once.
+# That outer retry waits 1 s and re-issues the *full* request including the
+# DB fetch, which is wasteful when only the Meilisearch HTTP call blipped.
+# Add a fine-grained retry around the Meilisearch call itself for the
+# subset of errors that are worth retrying (network down, request timeout,
+# 5xx). Auth/4xx are user errors and not retried.
+_RETRY_BACKOFFS_SECONDS: tuple[float, ...] = (0.5, 1.0)
+
+
+def _is_transient_meili_error(exc: BaseException) -> bool:
+    """True if ``exc`` is a Meilisearch error worth retrying.
+
+    Retried:
+      - MeilisearchCommunicationError (connection refused / DNS / reset)
+      - MeilisearchTimeoutError       (request timeout)
+      - MeilisearchApiError with HTTP 5xx
+    Not retried:
+      - MeilisearchApiError 4xx       (bad payload / auth — retry won't help)
+      - everything else               (unknown — surface to caller's except)
+    """
+    if isinstance(exc, _meili_errors.MeilisearchCommunicationError):
+        return True
+    if isinstance(exc, _meili_errors.MeilisearchTimeoutError):
+        return True
+    if isinstance(exc, _meili_errors.MeilisearchApiError):
+        status = getattr(exc, "status_code", None)
+        return isinstance(status, int) and 500 <= status < 600
+    return False
+
+
+def _call_meili_with_retry(label: str, fn: Callable[[], T]) -> T:
+    """Run ``fn`` with up to ``len(_RETRY_BACKOFFS_SECONDS)`` retries on
+    transient errors. Returns ``fn()``'s value on success; re-raises the
+    last exception on final failure. Logs each retry with attempt counter.
+    """
+    last_exc: BaseException | None = None
+    for attempt in range(len(_RETRY_BACKOFFS_SECONDS) + 1):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001
+            if not _is_transient_meili_error(exc):
+                raise
+            last_exc = exc
+            if attempt >= len(_RETRY_BACKOFFS_SECONDS):
+                break
+            delay = _RETRY_BACKOFFS_SECONDS[attempt]
+            logger.warning(
+                "meili %s transient error (attempt %d/%d): %s — retrying in %.1fs",
+                label, attempt + 1, len(_RETRY_BACKOFFS_SECONDS) + 1, exc, delay,
+            )
+            time.sleep(delay)
+    assert last_exc is not None
+    logger.warning(
+        "meili %s failed after %d attempts: %s",
+        label, len(_RETRY_BACKOFFS_SECONDS) + 1, last_exc,
+    )
+    raise last_exc
 
 
 # ── CamelCase / snake_case tokenizer ────────────────────────────────
@@ -334,7 +399,9 @@ async def _fetch_all_flat_rows(s: AsyncSession) -> list[dict[str, Any]]:
 async def upsert_document(s: AsyncSession, doc_id: str) -> bool:
     """Best-effort: Meilisearch 에 1건 push. 실패하면 warn 만.
 
-    Returns True on success, False otherwise.
+    Returns True on success, False otherwise. Transient Meilisearch errors
+    (timeout / connection refused / HTTP 5xx) are retried with backoff —
+    see ``_call_meili_with_retry``.
     """
     try:
         flat = await _fetch_flat_row(s, doc_id)
@@ -342,7 +409,11 @@ async def upsert_document(s: AsyncSession, doc_id: str) -> bool:
             # published 가 아니거나 view 가 아직 갱신 안됐을 수 있음 → 삭제 시도
             return delete_document(doc_id)
         cli = get_client()
-        cli.index(INDEX_UID).add_documents([flat], primary_key=PRIMARY_KEY)
+
+        def _push() -> None:
+            cli.index(INDEX_UID).add_documents([flat], primary_key=PRIMARY_KEY)
+
+        _call_meili_with_retry(f"upsert {doc_id}", _push)
         return True
     except Exception as e:
         logger.warning("Meilisearch upsert failed for %s: %s", doc_id, e)
@@ -352,7 +423,11 @@ async def upsert_document(s: AsyncSession, doc_id: str) -> bool:
 def delete_document(doc_id: str) -> bool:
     try:
         cli = get_client()
-        cli.index(INDEX_UID).delete_document(doc_id)
+
+        def _delete() -> None:
+            cli.index(INDEX_UID).delete_document(doc_id)
+
+        _call_meili_with_retry(f"delete {doc_id}", _delete)
         return True
     except Exception as e:
         logger.warning("Meilisearch delete failed for %s: %s", doc_id, e)

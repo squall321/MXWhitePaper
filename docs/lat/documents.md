@@ -290,8 +290,40 @@ toolbar 에서 즉시 override 후 "💾 저장" 으로 영구 반영. FE 진입
 ([[src/app/services/document_service.py#_run_with_retry]]) — silent 실패 위험
 감소. `create_document` / `archive_document` 는 아직 동기 (follow-up).
 
+### 검색 인덱싱 retry 정책 (M2)
+
+`reindex_meili()` → `meili_indexer.upsert_document()` / `delete_document()` 의
+Meilisearch HTTP 호출은 `_call_meili_with_retry()`
+([[src/app/search/meili_indexer.py#_call_meili_with_retry]]) 로 감싸 transient
+오류를 fine-grained 재시도한다:
+
+- 재시도 대상: `MeilisearchTimeoutError`, `MeilisearchCommunicationError`,
+  `MeilisearchApiError` (HTTP 5xx)
+- 재시도 안 함: HTTP 4xx (auth/payload — 재시도 무의미), 그 외 일반 예외
+- backoff: 0.5s, 1.0s (총 시도 3회 = 초기 + 2 retry)
+
+외부의 `_run_with_retry` (1회 retry + 1s) 와 책임이 다르다 — 외부는 hook
+전체 (DB fetch + HTTP) 를 한 단위로 재시도, 내부는 HTTP 단의 transient
+network blip 만 잡는다. 결과적으로 최악의 경우 단일 PUT 의 인덱싱 시도
+횟수는 6회 (3×2). DB fetch 가 비싸면 외부 retry 가 부담이므로 fine-grained
+가 우선 흡수.
+
 테스트 환경에선 5번이 **비활성화** (`MXWP_SKIP_VIEW_REFRESH=1` 가
 [[src/tests/conftest.py]] 에서 자동 세팅) — async engine reset 과 충돌 방지.
+
+### 한국어 부분 매칭 (M1 — Meilisearch native)
+
+Meilisearch 1.10 의 charabia 토크나이저가 CJK 를 음절 단위로 토큰화하므로
+한국어 부분 매칭이 **별도 사전 토큰화 없이도 동작**한다:
+
+- `"사업부"` 검색 → `"MX사업부 운영 가이드"` 매칭 ✓
+- `"MX사"` 검색 → `"MX사업부"` 매칭 ✓
+- `"확인 항목"` 검색 → `"확인항목"` 도 매칭 ✓
+
+`_tokenize_words()` ([[src/app/search/meili_indexer.py#_tokenize_words]]) 는
+CamelCase / snake_case / kebab-case 만 공백 분리 (영문 식별자용) — 한국어는
+pass-through 가 정답. 회귀 가드: [[src/tests/test_search_hardening.py]] 의
+`test_korean_partial_match_works_natively` (live Meili 필요, 부재 시 skip).
 
 ### `links` 테이블 인덱스 (backlinks query)
 
