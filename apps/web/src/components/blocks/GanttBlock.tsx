@@ -4,8 +4,16 @@ import type { GanttBlock } from '@/types/document'
  * Minimal Gantt chart — single SVG with horizontal bars positioned by
  * (start, end) ms timestamps relative to the global span. Progress is
  * indicated by a darker overlay.
+ *
+ * `today` prop 은 테스트/SSR 안정성용 (YYYY-MM-DD). 미지정 시 `new Date()` 사용.
  */
-export function GanttBlockView({ block }: { block: GanttBlock }) {
+export function GanttBlockView({
+  block,
+  today,
+}: {
+  block: GanttBlock
+  today?: string
+}) {
   if (block.tasks.length === 0) {
     return <p className="text-xs text-gray-500">작업 없음</p>
   }
@@ -26,6 +34,15 @@ export function GanttBlockView({ block }: { block: GanttBlock }) {
   const totalH = tasks.length * rowH + 24
 
   const stripeOn = block.options?.stripe !== false
+
+  // today marker — 오늘 날짜가 gantt 범위 [minMs, maxMs] 안에 있으면 빨간 점선
+  // 세로선을 task bars 위에 그린다. 범위 밖이면 미렌더.
+  const todayMs = today ? Date.parse(today) : Date.now()
+  const todayInRange =
+    Number.isFinite(todayMs) && todayMs >= minMs && todayMs <= maxMs
+  const todayX = todayInRange
+    ? labelW + ((todayMs - minMs) / span) * barAreaW
+    : 0
 
   return (
     <figure className="overflow-x-auto rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900">
@@ -77,6 +94,22 @@ export function GanttBlockView({ block }: { block: GanttBlock }) {
             </g>
           )
         })}
+        {/* today marker — task bars 다음 (위에 오도록) */}
+        {todayInRange && (
+          <line
+            data-gantt-today
+            x1={todayX}
+            x2={todayX}
+            y1={0}
+            y2={totalH}
+            stroke="#dc2626"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+            aria-label="오늘"
+          >
+            <title>오늘</title>
+          </line>
+        )}
       </svg>
     </figure>
   )
