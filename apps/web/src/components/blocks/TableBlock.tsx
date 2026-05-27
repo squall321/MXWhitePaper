@@ -497,8 +497,9 @@ export function TableBlockView({ block }: { block: TableBlock }) {
       )}
 
       {/* `max-h-[60vh]` 로 자체 스크롤 컨테이너를 만들어서 sticky thead 가 표
-          컨테이너 안에서만 부착되도록 한다. */}
-      <div data-no-swipe className="max-h-[60vh] overflow-x-auto overflow-y-auto rounded-md border border-gray-200 shadow-sm dark:border-gray-700">
+          컨테이너 안에서만 부착되도록 한다. `scroll-fade-x` 는 좌/우에 가려진
+          내용이 있을 때만 페이드를 칠해 가로 스크롤이 가능하다는 신호를 준다. */}
+      <div data-no-swipe className="scroll-fade-x max-h-[60vh] overflow-x-auto overflow-y-auto rounded-md border border-gray-200 shadow-sm dark:border-gray-700">
         <table className="w-full min-w-[480px] border-collapse text-left text-sm">
           {isSparse ? (
             <SparseTableBody

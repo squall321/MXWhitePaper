@@ -29,7 +29,7 @@ export function SpreadsheetBlockView({ block }: SpreadsheetBlockViewProps) {
     <div
       data-spreadsheet-block
       data-block-id={block.id}
-      className="my-3 overflow-x-auto rounded border border-gray-200 dark:border-gray-700"
+      className="scroll-fade-x my-3 overflow-x-auto rounded border border-gray-200 dark:border-gray-700"
     >
       {block.title && (
         <div className="border-b border-gray-200 bg-smsg-50 px-3 py-2 text-sm font-semibold text-smsg-900 dark:border-gray-700">

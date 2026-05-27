@@ -97,6 +97,40 @@ describe('<Lightbox /> static render', () => {
     expect(html).toContain('role="dialog"')
     expect(html).toContain('aria-modal="true"')
   })
+
+  // M8a — nav buttons / alt overlay must honour the iPhone notch + landscape
+  // edge insets so they're not clipped or obstructed by the system UI.
+  it('close button declares safe-area-inset top + left', () => {
+    const html = renderToStaticMarkup(
+      <Lightbox open items={items} onClose={() => {}} />,
+    )
+    // Find the close button's style attribute (data-nav="close" is unique).
+    const closeMatch = html.match(/data-nav="close"[^>]*style="([^"]*)"/)
+    expect(closeMatch, 'close button must declare safe-area inline style').toBeTruthy()
+    const style = closeMatch?.[1] ?? ''
+    expect(style).toContain('safe-area-inset-top')
+    expect(style).toContain('safe-area-inset-left')
+  })
+
+  it('prev / next buttons declare safe-area-inset left / right', () => {
+    const html = renderToStaticMarkup(
+      <Lightbox open items={items} onClose={() => {}} />,
+    )
+    const prevMatch = html.match(/data-nav="prev"[^>]*style="([^"]*)"/)
+    const nextMatch = html.match(/data-nav="next"[^>]*style="([^"]*)"/)
+    expect(prevMatch?.[1] ?? '').toContain('safe-area-inset-left')
+    expect(nextMatch?.[1] ?? '').toContain('safe-area-inset-right')
+  })
+
+  it('alt overlay declares safe-area-inset top + right', () => {
+    const html = renderToStaticMarkup(
+      <Lightbox open items={items} onClose={() => {}} />,
+    )
+    const altMatch = html.match(/data-alt-overlay[^>]*style="([^"]*)"/)
+    const style = altMatch?.[1] ?? ''
+    expect(style).toContain('safe-area-inset-top')
+    expect(style).toContain('safe-area-inset-right')
+  })
 })
 
 describe('classifyLightboxKey (keyboard contract)', () => {

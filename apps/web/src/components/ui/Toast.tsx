@@ -72,7 +72,13 @@ export function ToastProvider() {
     <div
       aria-live="polite"
       aria-atomic="true"
-      className="pointer-events-none fixed bottom-4 right-4 z-toast flex w-full max-w-xs flex-col gap-2 sm:max-w-sm"
+      // safe-area: lift toasts above the iPhone home indicator (≈34px) and
+      // keep them clear of the right-edge inset in landscape.
+      style={{
+        bottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+        right: 'max(1rem, env(safe-area-inset-right, 0px))',
+      }}
+      className="pointer-events-none fixed z-toast flex w-full max-w-xs flex-col gap-2 sm:max-w-sm"
     >
       {items.map((t) => (
         <div

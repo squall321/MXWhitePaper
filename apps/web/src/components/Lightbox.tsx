@@ -231,7 +231,12 @@ export function Lightbox({
         {cur.alt && (
           <span
             data-alt-overlay
-            className="absolute right-2 top-2 max-w-[60%] truncate rounded bg-black/60 px-2 py-1 text-xs text-white/90"
+            // safe-area mirrors the close button so the two top-corner items don't clip the notch.
+            style={{
+              top: 'max(0.5rem, env(safe-area-inset-top, 0px))',
+              right: 'max(0.5rem, env(safe-area-inset-right, 0px))',
+            }}
+            className="absolute max-w-[60%] truncate rounded bg-black/60 px-2 py-1 text-xs text-white/90"
           >
             {cur.alt}
           </span>
@@ -247,7 +252,9 @@ export function Lightbox({
                 e.stopPropagation()
                 go(-1)
               }}
-              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 px-3 py-2 text-lg text-white hover:bg-black/80"
+              // safe-area: keep the tap target clear of the iPhone left-edge notch in landscape.
+              style={{ left: 'max(0.5rem, env(safe-area-inset-left, 0px))' }}
+              className="absolute top-1/2 -translate-y-1/2 rounded-full bg-black/50 px-3 py-2 text-lg text-white hover:bg-black/80"
             >
               ‹
             </button>
@@ -260,7 +267,8 @@ export function Lightbox({
                 e.stopPropagation()
                 go(1)
               }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 px-3 py-2 text-lg text-white hover:bg-black/80"
+              style={{ right: 'max(0.5rem, env(safe-area-inset-right, 0px))' }}
+              className="absolute top-1/2 -translate-y-1/2 rounded-full bg-black/50 px-3 py-2 text-lg text-white hover:bg-black/80"
             >
               ›
             </button>
@@ -275,7 +283,13 @@ export function Lightbox({
             e.stopPropagation()
             onClose()
           }}
-          className="absolute left-2 top-2 rounded-full bg-black/50 px-3 py-1 text-sm text-white hover:bg-black/80"
+          // safe-area: respect the iPhone notch / Dynamic Island in portrait
+          // so the close button is always tappable.
+          style={{
+            top: 'max(0.5rem, env(safe-area-inset-top, 0px))',
+            left: 'max(0.5rem, env(safe-area-inset-left, 0px))',
+          }}
+          className="absolute rounded-full bg-black/50 px-3 py-1 text-sm text-white hover:bg-black/80"
         >
           ×
         </button>

@@ -209,6 +209,40 @@ a.wiki-missing { color: var(--smsg-link-missing); }
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
 }
 
+/* Horizontal-scroll affordance — paints a soft fade on whichever edge has
+   hidden content. Uses the `background-attachment: local` trick: the two
+   white "cover" layers are scroll-locked to the container, so they shrink
+   over the corresponding gradient as the user reaches an edge. CSS-only,
+   no JS scroll listener needed. Dark-mode aware via --smsg-bg.
+
+   Apply to any `overflow-x-auto` wrapper that holds a wider-than-container
+   child (TableBlock / SpreadsheetBlock wrappers, etc.). */
+.scroll-fade-x {
+  background:
+    /* solid covers (scroll-locked) that hide the gradient once you reach the edge */
+    linear-gradient(to right, var(--smsg-bg) 30%, transparent),
+    linear-gradient(to right, transparent, var(--smsg-bg) 70%) 100% 0,
+    /* shadow-gradients (fixed to the viewport-of-container) */
+    radial-gradient(farthest-side at 0 50%, rgba(15, 23, 42, .14), transparent),
+    radial-gradient(farthest-side at 100% 50%, rgba(15, 23, 42, .14), transparent) 100% 0;
+  background-repeat: no-repeat;
+  background-color: var(--smsg-bg);
+  background-size: 32px 100%, 32px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+[data-theme='dark'] .scroll-fade-x,
+.dark .scroll-fade-x {
+  background:
+    linear-gradient(to right, var(--smsg-bg) 30%, transparent),
+    linear-gradient(to right, transparent, var(--smsg-bg) 70%) 100% 0,
+    radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, .55), transparent),
+    radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, .55), transparent) 100% 0;
+  background-repeat: no-repeat;
+  background-color: var(--smsg-bg);
+  background-size: 32px 100%, 32px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
 /* Side menu (drag handle) -- Samsung Blue accent on hover. */
 .wp-editor-surface .bn-side-menu button[data-test="dragHandle"]:hover,
 .wp-editor-surface .bn-side-menu button[data-test="addBlock"]:hover {
