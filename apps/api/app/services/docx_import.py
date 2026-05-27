@@ -591,6 +591,31 @@ def _strip_leading_numbering(title: str) -> str:
     return out
 
 
+# Check-list item prefix.
+#
+# docx_export 는 모든 check item 앞에 `☐ ` 를 박는다 (현재 export 는 unchecked
+# 변종만). 다른 작성 도구나 사람이 `□`/`☑`/`■`/`✅` 같은 변종을 쓸 수도 있어
+# 함께 인식한다. 매치되면 (is_checked, stripped_text) 를 돌려준다. 텍스트
+# 본문에 박힌 web 컨벤션 `[x]` / `[ ]` 는 별도로 보존됨 (export 가 prefix 만
+# 덧붙이고 본문은 그대로 둠).
+_CHECK_PREFIX_RE = re.compile(r"^\s*(☐|□|☑|■|✅)\s+")
+_CHECKED_GLYPHS = {"☑", "■", "✅"}
+# Web 컨벤션 (`apps/web/.../ListBlock.tsx`) — `[x]` / `[ ]` markdown prefix.
+_MD_CHECK_PREFIX_RE = re.compile(r"^\s*\[[xX\s]\]\s+")
+
+
+def _strip_check_prefix(text: str) -> tuple[bool, str] | None:
+    """text 가 check-list prefix 로 시작하면 (checked, stripped) 반환.
+
+    매치 없으면 None — 호출자가 일반 bullet 으로 처리.
+    """
+    m = _CHECK_PREFIX_RE.match(text)
+    if not m:
+        return None
+    glyph = m.group(1)
+    return (glyph in _CHECKED_GLYPHS), text[m.end():]
+
+
 def _list_info(p: ET.Element) -> tuple[int, str] | None:
     """`(ilvl, numId)` 또는 None. numPr 가 있어야 함."""
     pPr = p.find(_q("w", "pPr"))
@@ -1160,11 +1185,42 @@ def _build_sections(
         if not list_buffer:
             return
         sec = _current_section(sections, stack)
-        items = ["  " * d + t for d, t in list_buffer]
+        # Check-list 승격: 모든 item 이 check prefix (☐/□/☑/■/✅) 로 시작할
+        # 때만 style:"check" 로 변경. 혼합이면 안전하게 일반 bullet 유지
+        # (텍스트 보존). docx_export 의 round-trip 손실 (style:"check" →
+        # bullet) 을 메우는 분기 — H7.
+        promote_check = False
+        promoted_items: list[tuple[int, str]] = []
+        if list_style == "bullet":
+            parsed = [
+                (d, _strip_check_prefix(t)) for d, t in list_buffer
+            ]
+            if parsed and all(p is not None for _, p in parsed):
+                promote_check = True
+                # Web 컨벤션: items 텍스트 안의 `[x]` / `[ ]` prefix 로
+                # per-item checked 상태 인코딩. schema 는 items 가
+                # string 배열뿐이라 별도 필드 없음. 우리 export 는 본문에
+                # `[x]`/`[ ]` 를 이미 포함시킨 채 추가로 `☐ ` 만 prefix —
+                # 이 경우 중복 마킹 회피 위해 이미 있으면 그대로 두고,
+                # 외부 docx 처럼 `[x]`/`[ ]` 가 없을 때만 새로 부여.
+                for d, p in parsed:
+                    assert p is not None
+                    checked, stripped = p
+                    if _MD_CHECK_PREFIX_RE.match(stripped):
+                        promoted_items.append((d, stripped))
+                    else:
+                        mark = "[x] " if checked else "[ ] "
+                        promoted_items.append((d, mark + stripped))
+        if promote_check:
+            items = ["  " * d + t for d, t in promoted_items]
+            style_out = "check"
+        else:
+            items = ["  " * d + t for d, t in list_buffer]
+            style_out = list_style
         sec["blocks"].append({
             "type": "list",
             "id": _new_id(),
-            "style": list_style,
+            "style": style_out,
             "items": items,
         })
         ctx.summary.lists += 1

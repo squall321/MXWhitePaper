@@ -320,6 +320,12 @@ slug 중복은 `skipped` 로 카운트 (에러 아님).
    `int(headers["X-MXWP-Roundtrip-Sections"])` 식으로 캐스팅.
 6. 라우터 모듈에 in-process rate-limit (`_history` 딕셔너리) 이 있어
    분산 환경에선 cluster-aware redis-bucket 으로 교체 필요 (현재 단일 노드).
+7. **Check-list round-trip** — docx_export 는 모든 check item 앞에 `☐ ` 만 박는다
+   (현재 export 는 unchecked 변종뿐). import 측 [[src/app/services/docx_import.py#_flush_list]]
+   은 list 내 *모든* item 이 check prefix (`☐`/`□`/`☑`/`■`/`✅`) 로 시작할 때만
+   `style:"check"` 로 승격 — 혼합 list 는 안전하게 일반 bullet 유지 (텍스트 보존).
+   per-item checked 상태는 schema 의 `items: string[]` 컨벤션을 따라 web prefix
+   `[x] ` / `[ ] ` 로 인코딩하지만, 본문에 이미 있으면 중복 마킹 안 함 (idempotent).
 
 ## 테스트 지도
 
