@@ -82,4 +82,33 @@ describe('<SpreadsheetBlockEditor /> smoke', () => {
     expect(html).toContain('>1<')
     expect(html).toContain('>5<')
   })
+
+  it('renders ✕ delete buttons in row + column headers (SSR)', () => {
+    const html = renderToStaticMarkup(
+      harness(<SpreadsheetBlockEditor slug={SLUG} block={baseBlock} />),
+    )
+    // Row delete buttons exist for rows 1..5.
+    expect(html).toContain('aria-label="행 1 삭제"')
+    expect(html).toContain('aria-label="행 5 삭제"')
+    expect(html).toContain('data-spreadsheet-delete-row="1"')
+    // Column delete buttons exist for A..D (cols=4).
+    expect(html).toContain('aria-label="열 A 삭제"')
+    expect(html).toContain('aria-label="열 D 삭제"')
+    expect(html).toContain('data-spreadsheet-delete-col="A"')
+  })
+
+  it('hides ✕ delete buttons when there is only a single row/col', () => {
+    const oneByOne: SpreadsheetBlock = {
+      ...baseBlock,
+      cols: 1,
+      rows: 1,
+      cells: {},
+    }
+    const html = renderToStaticMarkup(
+      harness(<SpreadsheetBlockEditor slug={SLUG} block={oneByOne} />),
+    )
+    // Last row/col deletion would empty the grid — should be suppressed.
+    expect(html).not.toContain('aria-label="행 1 삭제"')
+    expect(html).not.toContain('aria-label="열 A 삭제"')
+  })
 })

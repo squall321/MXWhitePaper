@@ -3,6 +3,7 @@ import type { SpreadsheetBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { evaluateAll, refOf, parseRef } from './spreadsheet/formulaEngine'
+import { remapCells } from './spreadsheet/referenceShift'
 import { getZebraClass } from './zebra'
 
 interface Props {
@@ -154,14 +155,42 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
     }
   }
 
-  const addRow = () => {
+  /**
+   * 행 삽입. idx 가 주어지면 그 위치에 새 행을 끼워넣고 (cells 키 + formula
+   * 참조 shift), 생략하면 끝에 한 행만 append 한다 (기존 addRow 동작).
+   */
+  const insertRow = (idx?: number) => {
     if (rows >= 200) return
-    schedule({ ...local, rows: rows + 1 })
+    if (idx == null || idx >= rows) {
+      schedule({ ...local, rows: rows + 1 })
+      return
+    }
+    const nextCells = remapCells(cells, 'row', idx, 'insert')
+    schedule({ ...local, rows: rows + 1, cells: nextCells })
   }
 
-  const addCol = () => {
+  const insertCol = (idx?: number) => {
     if (cols >= 26) return
-    schedule({ ...local, cols: cols + 1 })
+    if (idx == null || idx >= cols) {
+      schedule({ ...local, cols: cols + 1 })
+      return
+    }
+    const nextCells = remapCells(cells, 'col', idx, 'insert')
+    schedule({ ...local, cols: cols + 1, cells: nextCells })
+  }
+
+  const deleteRow = (idx: number) => {
+    if (rows <= 1) return
+    if (idx < 0 || idx >= rows) return
+    const nextCells = remapCells(cells, 'row', idx, 'delete')
+    schedule({ ...local, rows: rows - 1, cells: nextCells })
+  }
+
+  const deleteCol = (idx: number) => {
+    if (cols <= 1) return
+    if (idx < 0 || idx >= cols) return
+    const nextCells = remapCells(cells, 'col', idx, 'delete')
+    schedule({ ...local, cols: cols - 1, cells: nextCells })
   }
 
   const focusedRaw = focused ? (local.cells?.[focused] ?? '') : ''
@@ -183,7 +212,7 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
         />
         <button
           type="button"
-          onClick={addRow}
+          onClick={() => insertRow()}
           disabled={rows >= 200}
           className="rounded border border-smsg-300 bg-white px-2 py-1 text-xs text-smsg-700 hover:bg-smsg-100 disabled:opacity-50"
         >
@@ -191,7 +220,7 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
         </button>
         <button
           type="button"
-          onClick={addCol}
+          onClick={() => insertCol()}
           disabled={cols >= 26}
           className="rounded border border-smsg-300 bg-white px-2 py-1 text-xs text-smsg-700 hover:bg-smsg-100 disabled:opacity-50"
         >
@@ -230,15 +259,29 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
           <thead className="bg-gray-50 text-gray-600">
             <tr>
               <th className="w-10 border border-gray-200 px-2 py-1 text-center font-medium" />
-              {Array.from({ length: cols }).map((_, c) => (
-                <th
-                  key={c}
-                  scope="col"
-                  className="min-w-[80px] border border-gray-200 px-2 py-1 font-medium"
-                >
-                  {String.fromCharCode(65 + c)}
-                </th>
-              ))}
+              {Array.from({ length: cols }).map((_, c) => {
+                const colLabel = String.fromCharCode(65 + c)
+                return (
+                  <th
+                    key={c}
+                    scope="col"
+                    className="group relative min-w-[80px] border border-gray-200 px-2 py-1 font-medium"
+                  >
+                    <span>{colLabel}</span>
+                    {cols > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => deleteCol(c)}
+                        aria-label={`열 ${colLabel} 삭제`}
+                        data-spreadsheet-delete-col={colLabel}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1 text-[10px] leading-none text-gray-400 opacity-0 hover:bg-red-100 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
@@ -249,9 +292,20 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
               >
                 <th
                   scope="row"
-                  className="border border-gray-200 bg-gray-50 px-2 py-1 text-center font-medium text-gray-500"
+                  className="group relative border border-gray-200 bg-gray-50 px-2 py-1 text-center font-medium text-gray-500"
                 >
-                  {r + 1}
+                  <span>{r + 1}</span>
+                  {rows > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => deleteRow(r)}
+                      aria-label={`행 ${r + 1} 삭제`}
+                      data-spreadsheet-delete-row={r + 1}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 rounded px-1 text-[10px] leading-none text-gray-400 opacity-0 hover:bg-red-100 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </th>
                 {Array.from({ length: cols }).map((_, c) => {
                   const ref = refOf(c, r)
