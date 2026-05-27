@@ -1,8 +1,11 @@
 import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes, type ReactNode } from 'react'
 import { cn } from './cn'
 
+// `text-base sm:text-sm` keeps the compact 14px on desktop but forces 16px
+// on mobile (≤ 640px) — iOS Safari auto-zooms when focusing an input whose
+// effective font-size is < 16px, which is jarring on every form interaction.
 const FIELD_BASE =
-  'block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 ' +
+  'block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-base sm:text-sm text-gray-900 ' +
   'placeholder:text-gray-400 ' +
   'transition-colors duration-fast ' +
   'hover:border-gray-400 ' +
@@ -33,7 +36,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         <input
           ref={ref}
           aria-invalid={invalid || undefined}
-          className="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
+          className="min-w-0 flex-1 border-0 bg-transparent py-2 text-base sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
           {...rest}
         />
         {suffix && <span className="text-xs text-gray-500">{suffix}</span>}

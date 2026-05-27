@@ -12,10 +12,13 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   children: ReactNode
 }
 
+// Mobile (≤ 640px) bumps every icon-only button up to a 44×44 hit target
+// (WCAG 2.5.5 / iOS HIG). Desktop keeps the compact toolbar density via the
+// `sm:` reset to the original 32/36/40px.
 const SIZE_CLS: Record<IconButtonSize, string> = {
-  sm: 'h-8 w-8 text-sm rounded-md',
-  md: 'h-9 w-9 text-base rounded-md',
-  lg: 'h-10 w-10 text-lg rounded-lg',
+  sm: 'h-11 w-11 sm:h-8 sm:w-8 text-sm rounded-md',
+  md: 'h-11 w-11 sm:h-9 sm:w-9 text-base rounded-md',
+  lg: 'h-11 w-11 sm:h-10 sm:w-10 text-lg rounded-lg',
 }
 
 const VARIANT_CLS: Record<IconButtonVariant, string> = {

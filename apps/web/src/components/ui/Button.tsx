@@ -26,9 +26,12 @@ const VARIANT_CLS: Record<ButtonVariant, string> = {
     'border border-gray-300 bg-white text-gray-800 hover:border-smsg-500 hover:text-smsg-900 disabled:opacity-50',
 }
 
+// On mobile (≤ 640px) every variant collapses to a 44px tall touch target —
+// WCAG 2.5.5 Level AAA / iOS HIG / Material guidance all call for ≥ 44px.
+// Desktop keeps the original compact `h-8` / `h-9` look via the `sm:` reset.
 const SIZE_CLS: Record<ButtonSize, string> = {
-  sm: 'h-8 px-2.5 text-xs gap-1.5 rounded-md',
-  md: 'h-9 px-3.5 text-sm gap-2 rounded-md',
+  sm: 'h-11 sm:h-8 px-2.5 text-xs gap-1.5 rounded-md',
+  md: 'h-11 sm:h-9 px-3.5 text-sm gap-2 rounded-md',
   lg: 'h-11 px-5 text-base gap-2 rounded-lg',
 }
 
