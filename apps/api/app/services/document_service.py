@@ -13,15 +13,18 @@ Sprint 4 — Editor MVP 추가:
 """
 from __future__ import annotations
 
+import asyncio
 import copy
 import logging
 import os
 import re
 from typing import Any
 
+from fastapi import BackgroundTasks
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db import session_scope
 from app.core.errors import NotFound, PreconditionFailed, ValidationFailed
 from app.repos import document_repo
 from app.schemas.document import DocumentjsonV10
@@ -627,6 +630,84 @@ async def reindex_meili(s: AsyncSession, *, doc_id: str, archived: bool = False)
         logger.warning("Meilisearch sync skipped: %s", e)
 
 
+# ── H9: PUT 응답 경로에서 reindex/refresh/webhook 분리 ───────────────────
+# replace_document 의 응답 latency 를 줄이기 위해 검색 인덱싱과 webhook
+# 발송을 BackgroundTasks 로 후행 실행한다. 호출자(라우터)가 BackgroundTasks
+# 를 전달하지 않으면 종전대로 동기 실행 (테스트/배치 경로 호환).
+#
+# 백그라운드에서 실행되는 함수는 요청 스코프의 AsyncSession 을 재사용할 수
+# 없다 — 응답이 전송되면 dependency 가 close 한다. 따라서 새 session 을
+# 직접 연다 (session_scope).
+#
+# Retry: 즉시 1회 재시도 + 1s backoff. background 라 silent 실패 위험을 줄임.
+
+_RETRY_DELAY_SECONDS = 1.0
+
+
+async def _run_with_retry(
+    name: str,
+    fn,  # type: ignore[no-untyped-def]
+    *args,  # type: ignore[no-untyped-def]
+    **kwargs,  # type: ignore[no-untyped-def]
+) -> None:
+    """fn 을 1회 호출, 실패 시 1초 후 1회 재시도 — silent 실패 로깅."""
+    try:
+        await fn(*args, **kwargs)
+        return
+    except Exception as e:
+        logger.warning("[background] %s failed (attempt 1): %s — retrying", name, e)
+    await asyncio.sleep(_RETRY_DELAY_SECONDS)
+    try:
+        await fn(*args, **kwargs)
+    except Exception as e:
+        logger.warning("[background] %s failed (attempt 2, giving up): %s", name, e)
+
+
+async def run_post_save_hooks(
+    *,
+    doc_id: str,
+    webhook_event: str | None,
+    webhook_payload: dict[str, Any] | None,
+    target_part_id: str | None = None,
+    archived: bool = False,
+    tag_added_events: list[dict[str, Any]] | None = None,
+) -> None:
+    """3 hook (refresh_search_view + reindex_meili + fire_webhook) 을 백그라운드
+    에서 새 DB session 으로 실행. 각각 retry-1 로 silent 실패 위험 감소.
+
+    응답이 이미 전송된 뒤 호출되므로 실패해도 write path 는 막지 않는다.
+    """
+    # 1) Meilisearch 색인 — 자체 session 필요 (요청 session 은 이미 닫힘)
+    async def _reindex() -> None:
+        async with session_scope() as s2:
+            await reindex_meili(s2, doc_id=doc_id, archived=archived)
+
+    # 2) materialized view refresh — 자체 session, CONCURRENTLY 시도
+    async def _refresh() -> None:
+        async with session_scope() as s2:
+            await refresh_search_view(s2)
+
+    # 3) webhook + automation + subscription fanout — session 무관
+    async def _webhook() -> None:
+        if webhook_event and webhook_payload:
+            await fire_webhook(
+                webhook_event, webhook_payload, target_part_id=target_part_id,
+            )
+
+    await _run_with_retry("reindex_meili", _reindex)
+    await _run_with_retry("refresh_search_view", _refresh)
+    await _run_with_retry("fire_webhook", _webhook)
+
+    # tag_added events (replace_document 의 tag diff fanout)
+    for ev in tag_added_events or []:
+        await _run_with_retry(
+            "fire_webhook[tag_added]",
+            fire_webhook,
+            "tag_added",
+            ev,
+        )
+
+
 async def upsert_glossary_terms(
     s: AsyncSession, *, doc_id: str, content_json: dict[str, Any]
 ) -> int:
@@ -906,7 +987,11 @@ async def replace_document(
     if_match: str | None,
     actor_id: str,
     change_log: str | None = None,
+    background_tasks: BackgroundTasks | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    # H9: 응답 latency 단축 — background_tasks 가 주어지면 reindex/refresh/
+    # webhook 을 응답 후 백그라운드에서 실행. 트랜잭션 일관성이 필요한
+    # update_links_for_document 는 응답 경로 유지.
     existing = await document_repo.find_by_slug(s, slug)
     if not existing:
         raise NotFound(f"document not found: {slug}")
@@ -977,26 +1062,53 @@ async def replace_document(
     )
     await upsert_glossary_terms(s, doc_id=existing["id"], content_json=validated)
     await s.commit()
-    await refresh_search_view(s)
-    await reindex_meili(s, doc_id=existing["id"])
+
+    # 응답 latency 에 직접 영향을 주지 않도록, doc 메타만 짚어서 webhook payload
+    # 를 미리 빌드. get_document_or_404 는 동기 경로에 남겨서 응답 본문이
+    # 최신 row 를 반환하도록 한다 (FE 가 ETag/version 의존).
     doc = await get_document_or_404(s, slug)
-    await fire_webhook(
-        "doc_edited",
+    after_tags = _extract_tag_names(validated)
+    tag_events = [
         {
-            "event": "doc_edited",
+            "event": "tag_added",
             "document_id": doc["id"],
             "slug": doc["slug"],
-            "title": doc["title"],
-            "version": doc["version"],
+            "tag": t,
             "actor_user_id": actor_id,
-            "change_log": log,
-        },
-        target_part_id=part_id,
-    )
-    await _fire_tag_added_events(
-        doc_id=doc["id"], slug=doc["slug"], actor_id=actor_id,
-        before=_before_tags, after=_extract_tag_names(validated),
-    )
+        }
+        for t in after_tags
+        if t not in set(_before_tags or [])
+    ]
+    webhook_payload = {
+        "event": "doc_edited",
+        "document_id": doc["id"],
+        "slug": doc["slug"],
+        "title": doc["title"],
+        "version": doc["version"],
+        "actor_user_id": actor_id,
+        "change_log": log,
+    }
+
+    if background_tasks is not None:
+        # H9: 응답 후 백그라운드에서 reindex + refresh + webhook 실행
+        background_tasks.add_task(
+            run_post_save_hooks,
+            doc_id=doc["id"],
+            webhook_event="doc_edited",
+            webhook_payload=webhook_payload,
+            target_part_id=part_id,
+            archived=False,
+            tag_added_events=tag_events,
+        )
+    else:
+        # 호환: BackgroundTasks 가 없으면 종전대로 동기 실행 (테스트/배치)
+        await refresh_search_view(s)
+        await reindex_meili(s, doc_id=existing["id"])
+        await fire_webhook("doc_edited", webhook_payload, target_part_id=part_id)
+        await _fire_tag_added_events(
+            doc_id=doc["id"], slug=doc["slug"], actor_id=actor_id,
+            before=_before_tags, after=after_tags,
+        )
     return doc, warnings
 
 

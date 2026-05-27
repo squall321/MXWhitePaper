@@ -10,7 +10,7 @@ import logging
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Response
 from fastapi.responses import Response as FastAPIResponse
 from sqlalchemy import text as _sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -397,6 +397,7 @@ async def replace_document(
     slug: str,
     payload: dict[str, Any],
     response: Response,
+    background_tasks: BackgroundTasks,
     if_match: str | None = Header(default=None, alias="If-Match"),
     x_mxwp_user: str | None = Header(default=None, alias="X-MXWP-User"),
     x_change_log: str | None = Header(default=None, alias="X-MXWP-Change-Log"),
@@ -411,6 +412,7 @@ async def replace_document(
         if_match=if_match,
         actor_id=actor,
         change_log=x_change_log,
+        background_tasks=background_tasks,
     )
     etag = document_service.make_etag(doc["id"], doc["version"])
     response.headers["ETag"] = etag

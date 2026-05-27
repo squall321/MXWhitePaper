@@ -272,13 +272,34 @@ toolbar 에서 즉시 override 후 "💾 저장" 으로 영구 반영. FE 진입
 
 매 저장/패치 flush 시:
 1. `update_links_for_document()` — 본문에서 `[[…]]` 추출 → `links` 테이블 갱신
-2. `reindex_meili()` — Meilisearch `documents` index 갱신
-3. `upsert_glossary_terms()` — 본문에 새 용어가 있으면 glossary 자동 등록
+   (★ 응답 경로 = 트랜잭션 일관성)
+2. `upsert_glossary_terms()` — 본문에 새 용어가 있으면 glossary 자동 등록
+   (응답 경로 = 같은 commit)
+3. `reindex_meili()` — Meilisearch `documents` index 갱신
 4. `fire_webhook()` — 등록된 외부 URL 에 이벤트 발송 (3 회 재시도)
 5. `refresh_search_view()` — PostgreSQL materialized view refresh
 
+★ H9: PUT `/{slug}` (replace_document) 의 응답 latency 단축을 위해 3·4·5 는
+**`BackgroundTasks` 로 응답 후 백그라운드 실행** (라우터 시그니처에
+`background_tasks: BackgroundTasks` 추가, service 에 옵션으로 전달).
+같은 트랜잭션 일관성이 필요한 1·2 만 응답 경로에 남는다.
+
+배경 실행은 [[src/app/services/document_service.py#run_post_save_hooks]] 가
+`session_scope()` 로 **새 session 을 열어** 수행한다 (요청 session 은 응답
+직후 dependency 가 close). 각 hook 은 1회 retry + 1s backoff
+([[src/app/services/document_service.py#_run_with_retry]]) — silent 실패 위험
+감소. `create_document` / `archive_document` 는 아직 동기 (follow-up).
+
 테스트 환경에선 5번이 **비활성화** (`MXWP_SKIP_VIEW_REFRESH=1` 가
 [[src/tests/conftest.py]] 에서 자동 세팅) — async engine reset 과 충돌 방지.
+
+### `links` 테이블 인덱스 (backlinks query)
+
+[[src/app/repos/document_repo.py#list_backlinks]] 의 `WHERE L.target_doc_id = ?
+OR L.target_slug = ?` 쿼리는 0001_init 의 `idx_links_target_doc` +
+`idx_links_target_slug` 로 BitmapOr 스캔. `idx_links_source` (source_doc_id)
+도 함께 만들어져 있어 `replace_links_for_document` 의 DELETE …
+WHERE source_doc_id 도 인덱스 스캔.
 
 ## CSS / Variable / Infobox patch
 
