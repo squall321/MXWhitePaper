@@ -155,13 +155,20 @@ LLM 작성 가이드: [[docs/llm-document-formats.md]] 의 "Phase 1 위젯 마�
 
 ### Mixed-content table cells
 
-셀이 `<w:drawing>` 을 가지면 [[src/app/services/docx_import.py#_table_cell_content]]
+셀이 `<w:drawing>` 또는 nested `<w:tbl>` 을 가지면 [[src/app/services/docx_import.py#_table_cell_content]]
 가 flat `text` 대신 `blocks` 리스트를 반환 — paragraph + image (+ list) 가
 한 셀 안에 공존. 이때 `_build_table_block()` 은 자동으로 sparse `cells` 모드로
 전환되어 (`has_mixed` 플래그) one-of 계약을 유지한다. PowerPoint 는 포맷
 자체가 셀 안 picture 를 불허해 pptx_import 측은 변경 없음.
 
+**Nested table 처리**: CellBlock 스키마가 `paragraph | image | list` 3 종만
+허용하므로 nested TableBlock 은 거부된다. [[src/app/services/docx_import.py#_flatten_nested_table]]
+가 각 nested row 를 `" | "` 로 join 한 ParagraphBlock 1개로 평탄화 — 구조는
+잃지만 데이터 손실 0. summary.warnings 에 `"nested table flattened to N
+paragraph(s)"` 가 들어가 사용자가 인지 가능.
+
 테스트: [[src/tests/test_mixed_cells.py]] — 4 렌더러 + docx 라운드트립 + 스키마 정규화.
+nested table: [[src/tests/test_imports.py#test_nested_table_in_cell_flattened_to_paragraphs]].
 
 ### Caption 휴리스틱
 
@@ -314,8 +321,11 @@ slug 중복은 `skipped` 로 카운트 (에러 아님).
    pydantic-driven coercion 에 의존하지 말 것.
 3. `is_docx_content()` 는 zip 안에 `word/document.xml` 가 있는지까지 확인.
    `is_docx_zip_magic()` 만으로는 잘못된 zip 도 통과한다.
-4. SVG 이미지는 Pillow 로 못 다뤄서 pre-pass 에서 **skip** — 결과 문서에서
-   해당 figure 가 사라질 수 있음.
+4. SVG 이미지는 Pillow 로 못 다뤄서 pre-pass 에서 **skip**. 결과 문서에서
+   해당 figure 가 사라지지만 [[src/app/routers/imports.py#_preprocess_zip_images]]
+   가 skip 한 SVG 파일명을 반환하고, docx/pptx import 라우터가 이를
+   `summary.warnings` 에 `"SVG 이미지 N장 처리 안 됨 (Pillow 미지원): …"` 으로
+   기록 — 사용자가 즉시 인지 가능 (silent drop 방지).
 5. Round-trip 응답 헤더의 모든 카운트는 **문자열** — 테스트에서
    `int(headers["X-MXWP-Roundtrip-Sections"])` 식으로 캐스팅.
 6. 라우터 모듈에 in-process rate-limit (`_history` 딕셔너리) 이 있어
@@ -326,6 +336,13 @@ slug 중복은 `skipped` 로 카운트 (에러 아님).
    `style:"check"` 로 승격 — 혼합 list 는 안전하게 일반 bullet 유지 (텍스트 보존).
    per-item checked 상태는 schema 의 `items: string[]` 컨벤션을 따라 web prefix
    `[x] ` / `[ ] ` 로 인코딩하지만, 본문에 이미 있으면 중복 마킹 안 함 (idempotent).
+8. **Header/Footer** — `word/header*.xml` / `word/footer*.xml` 의 텍스트만
+   [[src/app/services/docx_import.py#_extract_header_footer_text]] 가 추출해서
+   첫 섹션 최상단에 `CalloutBlock(variant="info", title="문서 상단/하단 정보")`
+   1개로 통합 — 사용자가 문서 시작부에서 즉시 인지 가능. 페이지 번호 같은
+   동적 필드는 텍스트 그대로 (재구성 안 함). round-trip export 측엔 별도
+   header/footer 재구성 로직 없음 — 회수된 callout 은 일반 본문 callout 처럼
+   다시 export 된다.
 
 ## 테스트 지도
 

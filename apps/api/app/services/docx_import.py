@@ -749,41 +749,106 @@ def _table_cell_content(
     """Return either ``{"text": str}`` or ``{"blocks": [...]}`` for a cell.
 
     Plain text-only cells take the fast path so existing fixtures aren't
-    rewritten. As soon as a cell contains a ``<w:drawing>`` (image) we fall
-    into mixed-content mode and emit a ``blocks`` list of paragraph + image
-    block dicts — the same shape DocumentJSON's TableBlock cell schema
-    accepts. This keeps Korean corporate-style tables (logo + caption,
-    photo grid cells) intact through import.
-    """
-    paragraphs = tc.findall(_q("w", "p"))
-    parsed: list[tuple[str, list[ET.Element]]] = []
-    has_drawings = False
-    for p in paragraphs:
-        text, drawings = _paragraph_text(p, ctx)
-        if drawings:
-            has_drawings = True
-        parsed.append((text, drawings))
+    rewritten. As soon as a cell contains a ``<w:drawing>`` (image) or a
+    nested ``<w:tbl>`` we fall into mixed-content mode and emit a ``blocks``
+    list of paragraph + image block dicts — the same shape DocumentJSON's
+    TableBlock cell schema accepts. This keeps Korean corporate-style tables
+    (logo + caption, photo grid cells) intact through import.
 
-    if not has_drawings:
-        return {"text": "\n".join(t for t, _ in parsed).strip()}
+    Nested tables: the cell schema only allows paragraph/image/list inside,
+    so we flatten the nested rows to one ParagraphBlock per row with
+    ``" | "`` between cells. Structure is lost but no text is dropped.
+    """
+    has_drawings = False
+    has_nested_table = False
+    # Walk direct children only so paragraphs/tables stay in order.
+    parsed_items: list[dict[str, Any]] = []
+    for child in tc:
+        if child.tag == _q("w", "p"):
+            text, drawings = _paragraph_text(child, ctx)
+            if drawings:
+                has_drawings = True
+            parsed_items.append({"kind": "p", "text": text, "drawings": drawings})
+        elif child.tag == _q("w", "tbl"):
+            has_nested_table = True
+            parsed_items.append({"kind": "tbl", "elem": child})
+
+    if not has_drawings and not has_nested_table:
+        # Fast path — pure text. _paragraph_text already ran above so reuse.
+        return {
+            "text": "\n".join(
+                item["text"] for item in parsed_items if item["kind"] == "p"
+            ).strip()
+        }
 
     blocks: list[dict[str, Any]] = []
-    for text, drawings in parsed:
-        for drawing in drawings:
-            img_block = _image_block_from_drawing(drawing, ctx)
-            if img_block is not None:
-                blocks.append(img_block)
-        clean = text.strip()
-        if clean:
-            blocks.append({
-                "type": "paragraph",
-                "id": _new_id(),
-                "text": text,
-            })
+    for item in parsed_items:
+        if item["kind"] == "p":
+            for drawing in item["drawings"]:
+                img_block = _image_block_from_drawing(drawing, ctx)
+                if img_block is not None:
+                    blocks.append(img_block)
+            clean = item["text"].strip()
+            if clean:
+                blocks.append({
+                    "type": "paragraph",
+                    "id": _new_id(),
+                    "text": item["text"],
+                })
+        else:  # nested table — flatten each row to a paragraph.
+            blocks.extend(_flatten_nested_table(item["elem"], ctx))
 
     if not blocks:
         return {"text": ""}
     return {"blocks": blocks}
+
+
+def _flatten_nested_table(
+    tbl: ET.Element, ctx: _ImportContext
+) -> list[dict[str, Any]]:
+    """Flatten a nested ``<w:tbl>`` to paragraph blocks (one per row).
+
+    The cell schema (CellBlock) only allows paragraph/image/list — nested
+    TableBlock isn't accepted, so we trade structure for no data loss.
+    Cells are joined with ``" | "``; image-bearing nested cells fall back
+    to ``[image]`` markers so the count is visible. A warning is emitted
+    so the user knows fidelity was reduced.
+    """
+    rows_out: list[dict[str, Any]] = []
+    row_count = 0
+    for tr in tbl.findall(_q("w", "tr")):
+        cell_texts: list[str] = []
+        for tc in tr.findall(_q("w", "tc")):
+            parts: list[str] = []
+            for p in tc.findall(_q("w", "p")):
+                text, drawings = _paragraph_text(p, ctx)
+                stripped = text.strip()
+                if stripped:
+                    parts.append(stripped)
+                if drawings:
+                    parts.append("[image]")
+            # Recurse — deeply-nested tables stay flattened with " | ".
+            for inner in tc.findall(_q("w", "tbl")):
+                inner_rows = _flatten_nested_table(inner, ctx)
+                parts.extend(
+                    b.get("text", "") for b in inner_rows if b.get("text")
+                )
+            cell_texts.append(" ".join(parts).strip())
+        line = " | ".join(cell_texts).strip()
+        if not line:
+            continue
+        rows_out.append({
+            "type": "paragraph",
+            "id": _new_id(),
+            "text": line,
+        })
+        row_count += 1
+    if row_count:
+        ctx.summary.warnings.append(
+            f"nested table flattened to {row_count} paragraph(s) "
+            "(cell schema disallows nested TableBlock)"
+        )
+    return rows_out
 
 
 def _image_block_from_drawing(
@@ -883,6 +948,43 @@ def _drawing_size_px(drawing: ET.Element) -> tuple[int | None, int | None]:
         except (TypeError, ValueError):
             return None, None
     return None, None
+
+
+def _extract_header_footer_text(zf: zipfile.ZipFile) -> tuple[str, str]:
+    """Concatenate text from every word/header*.xml and word/footer*.xml.
+
+    Word splits headers/footers by section (header1.xml, header2.xml…) and
+    by kind (first-page/even/odd). We grab every w:t in every header/footer
+    part and join with newlines — page numbers and dynamic fields surface
+    as literal text. Returns ``("header text", "footer text")``; either may
+    be empty.
+    """
+    def _collect(prefix: str) -> str:
+        chunks: list[str] = []
+        for name in zf.namelist():
+            base = name.rsplit("/", 1)[-1]
+            if not base.startswith(prefix) or not base.endswith(".xml"):
+                continue
+            if not name.startswith("word/"):
+                continue
+            try:
+                raw = zf.read(name)
+            except KeyError:
+                continue
+            try:
+                root = ET.fromstring(raw)
+            except ET.ParseError:
+                continue
+            parts: list[str] = []
+            for t in root.iter(_q("w", "t")):
+                if t.text:
+                    parts.append(t.text)
+            line = "".join(parts).strip()
+            if line:
+                chunks.append(line)
+        return "\n".join(chunks).strip()
+
+    return _collect("header"), _collect("footer")
 
 
 # ── 메인 변환 ────────────────────────────────────────────────────────
@@ -1048,6 +1150,27 @@ def docx_to_document(
             "blocks": [],
             "subsections": [],
         }]
+
+    # 3b) Header/footer extraction — Word 의 word/header*.xml + footer*.xml
+    #     은 본문 walker 가 못 보던 부분. 텍스트만 모아 최상단 섹션의 첫
+    #     블록으로 CalloutBlock 1개를 박는다 (사용자가 즉시 인지 가능).
+    #     완전 무시되던 과거 동작 대비 정보 손실 0. 페이지 번호 같은 동적
+    #     필드는 텍스트 그대로 — 자동 재구성 없음.
+    header_text, footer_text = _extract_header_footer_text(zf)
+    if header_text or footer_text:
+        callout_lines: list[str] = []
+        if header_text:
+            callout_lines.append(f"머리글: {header_text}")
+        if footer_text:
+            callout_lines.append(f"바닥글: {footer_text}")
+        callout_block = {
+            "type": "callout",
+            "id": _new_id(),
+            "variant": "info",
+            "title": "문서 상단/하단 정보",
+            "text": "\n".join(callout_lines),
+        }
+        sections[0]["blocks"].insert(0, callout_block)
 
     final_title = title or derived_title or slug
 

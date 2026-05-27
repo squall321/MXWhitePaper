@@ -140,23 +140,29 @@ async def _preprocess_zip_images(
     actor_id: str,
     *,
     media_prefix: str,
-) -> dict[str, str]:
+) -> tuple[dict[str, str], list[str]]:
     """Extract every `<media_prefix>/...` image from a docx/pptx zip and run
     the full upload pipeline (sha256 dedup → Pillow → MinIO put → DB INSERT).
 
-    Returns a ``{sha256: ulid}`` lookup the converter's sync image_uploader
-    can hit by hashing the bytes it receives. We commit per-image so a
-    corrupted file doesn't roll back successful uploads.
+    Returns ``(sha→ulid map, skipped_svg_filenames)``. The converter's sync
+    image_uploader hits the map by hashing the bytes it receives. We commit
+    per-image so a corrupted file doesn't roll back successful uploads.
+
+    SVGs (and other unknown mimes) are skipped because Pillow can't raster
+    them and the render pipeline only ships WebP variants. The caller surfaces
+    the skipped filenames as a warning in the import summary so users notice
+    the missing figures — silent drops bit us before.
 
     Without this pre-pass the importer used to mint placeholder ULIDs that
     weren't backed by any `images` row, so `useImage` 404'd in the FE and
     every imported figure rendered as a broken icon.
     """
     out: dict[str, str] = {}
+    skipped_svgs: list[str] = []
     try:
         zf = zipfile.ZipFile(io.BytesIO(buf))
     except zipfile.BadZipFile:
-        return out
+        return out, skipped_svgs
 
     bucket = get_settings().minio_bucket_images
     for name in zf.namelist():
@@ -184,7 +190,10 @@ async def _preprocess_zip_images(
         mime = _MEDIA_EXT_TO_MIME.get(ext)
         if mime is None or mime == "image/svg+xml":
             # Skip SVG / unknown — Pillow can't render SVG and our render
-            # pipeline only ships WebP variants.
+            # pipeline only ships WebP variants. Track SVGs explicitly so
+            # the caller can warn the user (silent drops bit us before).
+            if mime == "image/svg+xml":
+                skipped_svgs.append(name.rsplit("/", 1)[-1])
             continue
 
         try:
@@ -224,7 +233,7 @@ async def _preprocess_zip_images(
             await s.rollback()
             continue
         out[sha] = new_ulid
-    return out
+    return out, skipped_svgs
 
 
 def _build_image_uploader(sha_to_ulid: dict[str, str]):
@@ -295,7 +304,7 @@ async def import_docx(
         buf = unwrapped
 
     final_slug = slug or _derive_slug(file.filename or "imported.docx")
-    sha_to_ulid = await _preprocess_zip_images(
+    sha_to_ulid, skipped_svgs = await _preprocess_zip_images(
         s, buf, actor, media_prefix="word/media/"
     )
     image_uploader = _build_image_uploader(sha_to_ulid)
@@ -313,6 +322,12 @@ async def import_docx(
 
     document = result["document"]
     summary = result["summary"]
+    if skipped_svgs:
+        summary.warnings.append(
+            f"SVG 이미지 {len(skipped_svgs)}장 처리 안 됨 "
+            f"(Pillow 미지원): {', '.join(skipped_svgs[:5])}"
+            + (" …" if len(skipped_svgs) > 5 else "")
+        )
 
     # 감사 로그 (best-effort)
     try:
@@ -570,7 +585,7 @@ async def import_pptx(
         buf = unwrapped
 
     final_slug = slug or _derive_slug(file.filename or "imported.pptx")
-    sha_to_ulid = await _preprocess_zip_images(
+    sha_to_ulid, skipped_svgs = await _preprocess_zip_images(
         s, buf, actor, media_prefix="ppt/media/"
     )
     image_uploader = _build_image_uploader(sha_to_ulid)
@@ -588,6 +603,12 @@ async def import_pptx(
 
     document = result["document"]
     summary = result["summary"]
+    if skipped_svgs:
+        summary.warnings.append(
+            f"SVG 이미지 {len(skipped_svgs)}장 처리 안 됨 "
+            f"(Pillow 미지원): {', '.join(skipped_svgs[:5])}"
+            + (" …" if len(skipped_svgs) > 5 else "")
+        )
 
     try:
         await document_repo.insert_audit(
