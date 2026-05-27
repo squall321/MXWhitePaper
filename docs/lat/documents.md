@@ -290,6 +290,29 @@ toolbar 에서 즉시 override 후 "💾 저장" 으로 영구 반영. FE 진입
 ([[src/app/services/document_service.py#_run_with_retry]]) — silent 실패 위험
 감소. `create_document` / `archive_document` 는 아직 동기 (follow-up).
 
+### materialized view refresh debounce (Large-M #1)
+
+배경: 동시 PUT 두 건의 background task 가 같은 시점에 `refresh_search_view()`
+를 호출하면 두 번째 `REFRESH ... CONCURRENTLY` 가 "another refresh in
+progress" 로 실패 → plain `REFRESH` 폴백 → `AccessExclusiveLock` 획득 →
+SELECT 모두 stall (대형 view 10-30초). H9 가 응답 경로에서 분리만 했고
+background 동시성은 미해결이었음.
+
+해결: [[src/app/services/document_service.py#refresh_search_view_debounced]]
+가 5초 윈도우로 coalesce 한다.
+- 진행 중이 아니면 즉시 1회 실행 + 윈도우 끝까지 대기
+- 진행 중이면 `_view_refresh_pending` 만 set 하고 즉시 리턴
+- 첫 실행이 끝날 때 `_pending` 이면 *1회만 추가* 실행 (cap=2)
+- view 는 idempotent → 안전
+
+`run_post_save_hooks` 의 `_refresh` closure 만 debounced 호출 사용.
+동기 경로 (`insert_document`, `archive_document`, `_persist_content_change`,
+`replace_document` 의 background_tasks=None fallback) 는 그대로 — 한
+트랜잭션 안에서만 호출되어 충돌 가능성이 0.
+
+테스트: [[apps/api/tests/test_refresh_view_debounce.py]] — single/burst
+coalesce/pending flag/no-extra/sequential/inner-failure 6 케이스.
+
 ### 검색 인덱싱 retry 정책 (M2)
 
 `reindex_meili()` → `meili_indexer.upsert_document()` / `delete_document()` 의

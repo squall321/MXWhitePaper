@@ -552,6 +552,53 @@ async def refresh_search_view(s: AsyncSession) -> None:
                 pass
 
 
+# ── Background-task debounce for refresh_search_view (M-large #1) ──────────
+#
+# 문제: replace_document → BackgroundTasks → refresh_search_view 가 동시 PUT
+# 두 건에서 같은 시점에 발화하면 두 번째 CONCURRENTLY 가 "another refresh in
+# progress" 로 실패 → plain REFRESH (AccessExclusiveLock) 폴백 → 동시 SELECT
+# stall (대형 view 에서 10-30초).
+#
+# 해결: 5초 윈도우 안에 들어온 refresh 요청을 1개로 coalesce. 진행 중이면
+# `_pending` 플래그만 set 하고 종료 — 진행 중인 작업이 끝날 때 _pending 이면
+# 다시 한 번 실행하고 더는 누적 없이 종료. view 는 idempotent 이므로 안전.
+_view_refresh_lock = asyncio.Lock()
+_view_refresh_pending = False
+_view_refresh_window_s = 5.0
+
+
+async def refresh_search_view_debounced(
+    s: AsyncSession,
+    *,
+    window_s: float | None = None,
+) -> None:
+    """`refresh_search_view` 를 5초 윈도우로 coalesce.
+
+    여러 background task 가 동시에 refresh 를 요청해도 실제 REFRESH 는 *최대
+    1개* 만 진행 + 끝난 직후 *최대 1번* 추가 실행 (그 사이 들어온 요청들을
+    한 번에 흡수). CONCURRENT 충돌로 인한 plain 폴백 stall 제거.
+
+    Args:
+      s: AsyncSession (refresh_search_view 가 사용)
+      window_s: 디바운스 윈도우 초 (기본 5초; 테스트에서 단축 가능)
+    """
+    global _view_refresh_pending
+    win = window_s if window_s is not None else _view_refresh_window_s
+
+    if _view_refresh_lock.locked():
+        # 이미 진행 중 — 1회 추가 실행만 예약하고 즉시 리턴.
+        _view_refresh_pending = True
+        return
+
+    async with _view_refresh_lock:
+        await refresh_search_view(s)
+        await asyncio.sleep(win)
+        # 윈도우 동안 추가 요청이 쌓였으면 한 번 더만 실행 (cap=2).
+        if _view_refresh_pending:
+            _view_refresh_pending = False
+            await refresh_search_view(s)
+
+
 async def fire_webhook(
     event_kind: str,
     payload: dict[str, Any],
@@ -682,10 +729,12 @@ async def run_post_save_hooks(
         async with session_scope() as s2:
             await reindex_meili(s2, doc_id=doc_id, archived=archived)
 
-    # 2) materialized view refresh — 자체 session, CONCURRENTLY 시도
+    # 2) materialized view refresh — 자체 session, CONCURRENTLY 시도.
+    #    debounced wrapper 로 동시 PUT background task 간 CONCURRENT 충돌 회피
+    #    (충돌 시 plain REFRESH 폴백이 AccessExclusiveLock 잡아 SELECT stall).
     async def _refresh() -> None:
         async with session_scope() as s2:
-            await refresh_search_view(s2)
+            await refresh_search_view_debounced(s2)
 
     # 3) webhook + automation + subscription fanout — session 무관
     async def _webhook() -> None:
