@@ -141,19 +141,49 @@ export function useAutoSave(slug: string | undefined, opts: AutoSaveOptions = {}
   }, [draft, dirty, enabled, autoSaveEnabled, conflictRemote, online, performSave, bumpPending])
 
   // Drain the offline queue when connection is restored.
+  //
+  // H4 (Phase 2 hardening): before naively firing the queued PUT we GET the
+  // current server document to check whether another client edited it while
+  // we were offline. If the server ETag differs from our local base ETag,
+  // a lost-update would otherwise silently overwrite their changes — we
+  // surface the conflict modal instead and let the user choose.
   useEffect(() => {
     const wentOnline = !prevOnline.current && online
     prevOnline.current = online
     if (!wentOnline) return
     if (!needsFullSync.current) return
     if (!enabled || !autoSaveEnabled) return
-    // Reset pending counter then fire the merged-snapshot PUT. We drain
-    // synchronously (one PUT) — the local draft IS the merged result of all
-    // queued edits, so etag-threading per-queued-mutation is unnecessary.
     bumpPending(-useConnectionStore.getState().pendingMutations)
     needsFullSync.current = false
-    void performSave()
-  }, [online, enabled, autoSaveEnabled, performSave, bumpPending])
+    if (!slug) {
+      void performSave()
+      return
+    }
+    void (async () => {
+      try {
+        const fresh = await getDocument(slug)
+        const serverEtag = fresh.meta.etag ?? null
+        const localBaseEtag = useEditorStore.getState().baseEtag
+        // Server moved while we were offline → don't blindly PUT; let the
+        // user resolve via the conflict modal (which falls back to H2
+        // recovery actions if 3-way diff can't run).
+        if (serverEtag && localBaseEtag && serverEtag !== localBaseEtag) {
+          setConflict(fresh.document, serverEtag)
+          pushNotification({
+            category: 'system',
+            message: '오프라인 동안 다른 사용자가 문서를 수정했습니다',
+            detail: slug,
+            slug,
+          })
+          return
+        }
+      } catch {
+        // GET failed (network race, 404). Fall through to the regular
+        // save path — if it 412s the existing conflict path takes over.
+      }
+      void performSave()
+    })()
+  }, [slug, online, enabled, autoSaveEnabled, performSave, bumpPending, setConflict])
 
   // expose manual save (Cmd/Ctrl+S) for the shortcut hook
   return { saveNow: performSave }

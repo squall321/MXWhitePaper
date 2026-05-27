@@ -178,34 +178,21 @@ export function ConflictMergeModal({ slug }: ConflictMergeModalProps) {
 
   if (closed) return null
   if (!tw) {
-    // 3-way diff failed — render a minimal 2-way fallback instead of blanking.
-    return (
-      <div
-        role="dialog"
-        aria-label="저장 충돌"
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
-      >
-        <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-2xl">
-          <h2 className="text-base font-semibold text-smsg-900">저장 충돌</h2>
-          <p className="mt-2 text-sm text-gray-700">
-            3-way 비교에 필요한 데이터가 부족합니다. 저장된 내용을 다시 불러온
-            뒤 새로고침해 주세요.
-          </p>
-          <div className="mt-4 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setConflict(null)
-                setAutoApplied(null)
-              }}
-              className="rounded border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50"
-            >
-              닫기
-            </button>
-          </div>
-        </div>
-      </div>
-    )
+    // H2 (Phase 2 hardening): 3-way diff failed — give the user explicit
+    // recovery options instead of a dead-end "닫기". Without these, closing
+    // the modal leaves a stale draft that will fail on next save.
+    return <ConflictFallback
+      slug={slug}
+      localDraft={localDraft}
+      remote={remote}
+      remoteEtag={remoteEtag}
+      setConflict={setConflict}
+      applySnapshot={applySnapshot}
+      onClose={() => {
+        setConflict(null)
+        setAutoApplied(null)
+      }}
+    />
   }
 
   const close = (): void => {
@@ -503,6 +490,186 @@ export function ConflictMergeModal({ slug }: ConflictMergeModalProps) {
             </div>
           )}
           {error && <p className="border-t border-red-200 bg-red-50 px-5 py-2 text-xs text-red-700">{error}</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * H2 fallback panel — shown when threeWayDiff() can't produce a merge view
+ * (most often: BE returned a doc shape the diff helpers can't reason about,
+ * or `baseContent === null` after a page reload). Provides three explicit
+ * recovery actions plus a "copy draft" escape hatch so the user can always
+ * recover their work.
+ */
+interface ConflictFallbackProps {
+  slug: Slug
+  localDraft: DocumentJSONV10 | null
+  remote: DocumentJSONV10 | null
+  remoteEtag: string | null
+  setConflict: (
+    remote: DocumentJSONV10 | null,
+    remoteEtag?: string | null,
+  ) => void
+  applySnapshot: (
+    doc: DocumentJSONV10,
+    etag: string,
+    opts?: { internalNavigation?: boolean },
+  ) => void
+  onClose: () => void
+}
+
+function ConflictFallback({
+  slug,
+  localDraft,
+  remote,
+  remoteEtag,
+  setConflict,
+  applySnapshot,
+  onClose,
+}: ConflictFallbackProps) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  // Esc closes the fallback. Mirrors the main modal's keyboard contract.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (busy) return
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    if (typeof window === 'undefined') return
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [busy, onClose])
+
+  const acceptServer = (): void => {
+    if (!remote || !remoteEtag) {
+      setErr('서버 버전을 알 수 없어 덮어쓰기를 진행할 수 없습니다.')
+      return
+    }
+    applySnapshot(remote, remoteEtag)
+    setConflict(null)
+    onClose()
+  }
+
+  const forceMine = async (): Promise<void> => {
+    if (!localDraft || !remoteEtag) {
+      setErr('내 변경 또는 서버 ETag 가 없어 강제 저장할 수 없습니다.')
+      return
+    }
+    setBusy(true)
+    setErr(null)
+    try {
+      const r = await putDocument(slug, localDraft, remoteEtag, '강제 저장 (충돌 해결 실패 — 내 변경으로 덮어쓰기)')
+      applySnapshot(r.document, r.etag)
+      setConflict(null)
+      onClose()
+    } catch (e) {
+      setErr(`강제 저장 실패: ${(e as Error).message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const copyDraft = async (): Promise<void> => {
+    if (!localDraft) {
+      setErr('복사할 draft 가 없습니다.')
+      return
+    }
+    const json = JSON.stringify(localDraft, null, 2)
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(json)
+        setCopied(true)
+        return
+      }
+      throw new Error('Clipboard API not available')
+    } catch {
+      // Fallback for older browsers / test envs: dump to console so the
+      // user can still recover (right-click → Copy in devtools).
+      console.warn('[ConflictMergeModal] Clipboard unavailable — draft JSON dumped to console:\n', json)
+      setCopied(true)
+    }
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-label="저장 충돌 — 자동 머지 실패"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      data-testid="conflict-fallback-modal"
+    >
+      <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-2xl">
+        <h2 className="text-base font-semibold text-smsg-900">
+          저장 충돌 — 자동 머지 실패
+        </h2>
+        <p className="mt-2 text-sm text-gray-700">
+          3-way 비교에 필요한 데이터가 부족해 자동 머지를 수행할 수 없습니다.
+          아래에서 복구 방법을 선택하세요.
+        </p>
+        <ul className="mt-4 space-y-2 text-xs">
+          <li>
+            <button
+              type="button"
+              onClick={acceptServer}
+              disabled={busy || !remote}
+              aria-label="서버 버전으로 덮어쓰고 내 변경 버리기"
+              className="block w-full rounded border border-gray-300 bg-white px-3 py-2 text-left hover:bg-gray-50 disabled:opacity-50"
+              data-testid="conflict-fallback-accept-server"
+            >
+              <strong>서버 버전으로 덮어쓰기</strong>
+              <span className="ml-1 text-gray-500">— 내 draft 를 버립니다.</span>
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              onClick={() => void forceMine()}
+              disabled={busy || !localDraft || !remoteEtag}
+              aria-label="내 draft 를 강제로 저장하고 서버 변경 덮어쓰기"
+              className="block w-full rounded border border-red-300 bg-red-50 px-3 py-2 text-left hover:bg-red-100 disabled:opacity-50"
+              data-testid="conflict-fallback-force-mine"
+            >
+              <strong className="text-red-700">내 draft 강제 저장 (⚠ 서버 변경 손실)</strong>
+              <span className="ml-1 text-gray-600">— 상대방 변경이 사라집니다.</span>
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              onClick={() => void copyDraft()}
+              disabled={!localDraft}
+              aria-label="내 draft 를 JSON 으로 clipboard 에 복사"
+              className="block w-full rounded border border-blue-300 bg-blue-50 px-3 py-2 text-left hover:bg-blue-100 disabled:opacity-50"
+              data-testid="conflict-fallback-copy"
+            >
+              <strong className="text-blue-800">draft 를 clipboard 로 복사 후 닫기</strong>
+              <span className="ml-1 text-gray-600">— 수동 복구용. 닫아도 데이터가 남습니다.</span>
+              {copied && <span className="ml-2 text-emerald-700">✓ 복사됨</span>}
+            </button>
+          </li>
+        </ul>
+        {err && (
+          <p className="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-700">
+            {err}
+          </p>
+        )}
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="모달 닫기"
+            className="rounded border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50 disabled:opacity-50"
+            data-testid="conflict-fallback-close"
+          >
+            닫기 (Esc)
+          </button>
         </div>
       </div>
     </div>

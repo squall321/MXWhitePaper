@@ -69,23 +69,66 @@ function looksLikeFullDoc(doc: unknown): boolean {
   return Array.isArray(d.sections) && !!d.metadata && typeof d.metadata === 'object'
 }
 
+/**
+ * Coalesce concurrent fallback GETs for the same slug.
+ *
+ * H3 (Phase 2 hardening): when several partial mutations fire back-to-back
+ * (e.g. user typing → patchBlock + patchSection scheduled in parallel),
+ * each call hitting `GET /documents/:slug` independently can race and
+ * apply an *older* snapshot on top of a newer one. We serialise by slug:
+ * the first call performs the GET, all subsequent calls await the same
+ * in-flight promise.
+ */
+const fullDocFetchInFlight = new Map<string, Promise<EditorMutationResult | null>>()
+
+async function fetchFullDoc(
+  slug: Slug,
+  fallbackEtag: string,
+): Promise<EditorMutationResult | null> {
+  const existing = fullDocFetchInFlight.get(slug)
+  if (existing) return existing
+  const p = (async () => {
+    try {
+      // BE quirk: `GET /documents/:slug` returns the database row wrapped as
+      // `{data: {id, slug, ...row..., content: DocumentJSON}}` — the actual
+      // DocumentJSON we want lives at `data.content`, NOT `data` itself.
+      const res = await apiClient.get<ApiEnvelope<{ content?: DocumentJSONV10 }>>(
+        `/documents/${encodeURIComponent(slug)}`,
+      )
+      const row = res.data.data
+      const full = row?.content
+      if (!full || !looksLikeFullDoc(full)) return null
+      const headerEtag = (res.headers as Record<string, string | undefined>)['etag']
+      const meta = (res.data.meta ?? {}) as { etag?: string }
+      return { document: full, etag: headerEtag ?? meta.etag ?? fallbackEtag }
+    } catch {
+      // Network failure / 404 / auth race — never let a fallback failure
+      // bubble up as a mutation failure. Caller falls back to the original
+      // partial result, and `applyServerSnapshot` already guards against
+      // poisoning `draft.metadata`.
+      return null
+    } finally {
+      fullDocFetchInFlight.delete(slug)
+    }
+  })()
+  fullDocFetchInFlight.set(slug, p)
+  return p
+}
+
 async function withFullDocFallback(
   slug: Slug,
   result: EditorMutationResult,
 ): Promise<EditorMutationResult> {
   if (looksLikeFullDoc(result.document)) return result
-  // BE quirk: `GET /documents/:slug` returns the database row wrapped as
-  // `{data: {id, slug, ...row..., content: DocumentJSON}}` — the actual
-  // DocumentJSON we want lives at `data.content`, NOT `data` itself.
-  const res = await apiClient.get<ApiEnvelope<{ content?: DocumentJSONV10 }>>(
-    `/documents/${encodeURIComponent(slug)}`,
-  )
-  const row = res.data.data
-  const full = row?.content
-  if (!full) return result
-  const headerEtag = (res.headers as Record<string, string | undefined>)['etag']
-  const meta = (res.data.meta ?? {}) as { etag?: string }
-  return { document: full, etag: headerEtag ?? meta.etag ?? result.etag }
+  const full = await fetchFullDoc(slug, result.etag)
+  return full ?? result
+}
+
+/** Exposed for tests to assert serialisation behaviour. */
+export const __testing = {
+  fullDocFetchInFlight,
+  fetchFullDoc,
+  looksLikeFullDoc,
 }
 
 export type AnySection = SectionLevel1 | SectionLevel2 | SectionLevel3

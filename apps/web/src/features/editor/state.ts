@@ -119,6 +119,37 @@ const initialSnapshot: EditorStateSnapshot = {
   redoStack: [],
 }
 
+/** H1: sessionStorage key for the once-per-session undo warning dismiss. */
+const UNDO_WARNING_DISMISS_KEY = 'mxwp.editor.undoWarningDismissed'
+
+export function hasDismissedUndoWarning(): boolean {
+  if (typeof window === 'undefined') return true // SSR / tests w/o DOM — never block
+  try {
+    return window.sessionStorage.getItem(UNDO_WARNING_DISMISS_KEY) === '1'
+  } catch {
+    return true
+  }
+}
+
+export function dismissUndoWarning(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(UNDO_WARNING_DISMISS_KEY, '1')
+  } catch {
+    /* sessionStorage quota / private mode — best effort */
+  }
+}
+
+/** Exposed for tests so they can reset the flag between cases. */
+export function resetUndoWarningDismiss(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.removeItem(UNDO_WARNING_DISMISS_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Parse the server's weak ETag (`W/"<id>-<version>"`) into the trailing
  * version integer. Returns null when the header is missing or in an
@@ -238,6 +269,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (undoStack.length === 0 || !slug || !etag || currentVersion == null) return
     const target = undoStack[undoStack.length - 1]
     if (target == null) return
+    // H1 (Phase 2 hardening): undo is full-document restore, so any local
+    // edits since the snapshot we're undoing TO will be discarded. Warn the
+    // user once per session — sessionStorage stores the dismissal so we
+    // don't nag on every undo click. The proper fix (PATCH-level reverse
+    // replay) is deferred to a later cycle.
+    if (!hasDismissedUndoWarning() && typeof window !== 'undefined') {
+      const ok = window.confirm(
+        '실행 취소는 문서 전체를 이전 버전으로 되돌립니다.\n' +
+          '되돌리는 시점 이후의 모든 변경 사항(다른 섹션 포함)이 손실됩니다.\n\n' +
+          '계속하시겠습니까?\n\n' +
+          '(이 안내는 브라우저 세션 내에서 다시 표시되지 않습니다.)',
+      )
+      dismissUndoWarning()
+      if (!ok) return
+    }
     // Optimistically split the stacks; we'll roll back if the BE call
     // fails. The new redoStack entry is the version we're about to leave.
     set((s) => ({
