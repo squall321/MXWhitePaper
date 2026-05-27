@@ -4,10 +4,43 @@ import { putDocument, isPreconditionFailed, type EditorMutationResult } from '..
 import { getDocument } from '@/features/document/api'
 import { pushNotification } from '@/features/notifications/store'
 import { useConnectionStore } from '../connectionStore'
+import type { DocumentJSONV10, Section } from '@/types/document'
 
 /** Auto-save policy parameters. */
 const IDLE_MS = 5_000
 const CHAR_THRESHOLD = 200
+/**
+ * Adaptive idle: documents larger than this block count use a longer idle
+ * window so big-doc PUTs (1-2 MB JSON serialise → network → server) don't
+ * fire every 5 seconds and pile up. Small docs keep the snappy 5 s timing.
+ */
+const SMALL_DOC_BLOCKS = 100
+const BIG_DOC_IDLE_MS = 15_000
+/**
+ * "저장 중" pill is suppressed until a save has been in-flight for this long.
+ * Fast PUTs (small doc, healthy network) finish before this fires → the pill
+ * stays at "저장됨" instead of flickering saving→saved every few seconds.
+ */
+const SAVING_STATUS_DEBOUNCE_MS = 200
+
+/** Walk the section tree and count every block. Cheap — no allocations. */
+function countBlocks(doc: DocumentJSONV10): number {
+  let n = 0
+  const visit = (sections: Section[]) => {
+    for (const s of sections) {
+      n += s.blocks.length
+      if (s.subsections && s.subsections.length > 0) visit(s.subsections)
+    }
+  }
+  visit(doc.sections)
+  return n
+}
+
+/** Pick the idle window for the current draft size. */
+function pickIdleMs(doc: DocumentJSONV10 | null): number {
+  if (!doc) return IDLE_MS
+  return countBlocks(doc) > SMALL_DOC_BLOCKS ? BIG_DOC_IDLE_MS : IDLE_MS
+}
 
 interface AutoSaveOptions {
   /** Override the change-log header. Default: "auto-save". */
@@ -60,13 +93,31 @@ export function useAutoSave(slug: string | undefined, opts: AutoSaveOptions = {}
   const needsFullSync = useRef(false)
   /** Track previous online value so we detect the false→true edge. */
   const prevOnline = useRef(online)
+  /** True while a PUT is on the wire. Prevents overlapping requests. */
+  const saveInFlight = useRef(false)
+  /** Edit landed while a PUT was in flight → fire one more save after it. */
+  const queuedSave = useRef(false)
+  /** Pending "saving" status flip — cancelled if the PUT finishes first. */
+  const savingStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const performSave = useCallback(async () => {
     const state = useEditorStore.getState()
     if (!slug || !state.draft || !state.etag || !state.dirty) return
     // Pause while a conflict modal is open — user is mid-resolve.
     if (state.conflictRemote) return
-    setStatus('saving')
+    // Queue if a save is already on the wire — drain after it completes.
+    if (saveInFlight.current) {
+      queuedSave.current = true
+      return
+    }
+    saveInFlight.current = true
+    // Debounce the "saving" pill: only show after the PUT has been in flight
+    // for SAVING_STATUS_DEBOUNCE_MS. Fast saves never flash the spinner.
+    if (savingStatusTimer.current) clearTimeout(savingStatusTimer.current)
+    savingStatusTimer.current = setTimeout(() => {
+      setStatus('saving')
+      savingStatusTimer.current = null
+    }, SAVING_STATUS_DEBOUNCE_MS)
     try {
       const result: EditorMutationResult = await putDocument(
         slug,
@@ -100,6 +151,23 @@ export function useAutoSave(slug: string | undefined, opts: AutoSaveOptions = {}
         return
       }
       setStatus('error')
+    } finally {
+      // Cancel pending status flip if PUT finished before the debounce fired.
+      if (savingStatusTimer.current) {
+        clearTimeout(savingStatusTimer.current)
+        savingStatusTimer.current = null
+      }
+      saveInFlight.current = false
+      // Drain a queued edit that landed while we were on the wire.
+      if (queuedSave.current) {
+        queuedSave.current = false
+        // Re-check the store: the snapshot we just applied may have cleared
+        // dirty, in which case there's nothing to save.
+        const next = useEditorStore.getState()
+        if (next.dirty && !next.conflictRemote) {
+          void performSave()
+        }
+      }
     }
   }, [slug, changeLog, setStatus, setConflict, applySnapshot])
 
@@ -125,11 +193,13 @@ export function useAutoSave(slug: string | undefined, opts: AutoSaveOptions = {}
       return
     }
 
-    // schedule idle save
+    // schedule idle save — bigger documents get a longer idle window so
+    // expensive full-doc PUTs don't pile up every 5 s.
     if (idleTimer.current) clearTimeout(idleTimer.current)
+    const idleMs = pickIdleMs(draft)
     idleTimer.current = setTimeout(() => {
       void performSave()
-    }, IDLE_MS)
+    }, idleMs)
 
     // pressure save
     if (charsSinceSave.current >= CHAR_THRESHOLD) {
@@ -193,7 +263,13 @@ export function useAutoSave(slug: string | undefined, opts: AutoSaveOptions = {}
 export const AUTO_SAVE_THRESHOLDS = {
   IDLE_MS,
   CHAR_THRESHOLD,
+  SMALL_DOC_BLOCKS,
+  BIG_DOC_IDLE_MS,
+  SAVING_STATUS_DEBOUNCE_MS,
 } as const
+
+/** Exported for testing adaptive idle policy. */
+export { countBlocks, pickIdleMs }
 
 // re-export for convenience
 export { isPreconditionFailed }

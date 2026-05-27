@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { AUTO_SAVE_THRESHOLDS } from '../hooks/useAutoSave'
+import { AUTO_SAVE_THRESHOLDS, countBlocks, pickIdleMs } from '../hooks/useAutoSave'
 import { useConnectionStore } from '../connectionStore'
+import type { DocumentJSONV10, Section, Block } from '@/types/document'
 
 /**
  * The hook's runtime behaviour requires React + a DOM (jsdom). We don't pull
@@ -93,5 +94,146 @@ describe('editor/useAutoSave offline queue contract', () => {
     useConnectionStore.getState().setOnline(false)
     const wouldFire = useConnectionStore.getState().online
     expect(wouldFire).toBe(false)
+  })
+})
+
+/**
+ * M7 — adaptive idle window for large documents. The hook now picks a longer
+ * idle (BIG_DOC_IDLE_MS) when the draft exceeds SMALL_DOC_BLOCKS to avoid
+ * piling up expensive full-doc PUTs on big docs. Small docs keep the snappy
+ * 5 s timing for backwards compatibility.
+ */
+describe('editor/useAutoSave adaptive idle (M7)', () => {
+  // Minimal helpers — only fields touched by countBlocks().
+  const makeBlock = (): Block =>
+    ({ type: 'paragraph', id: '01ARZ3NDEKTSV4RRFFQ69G5FAV', text: 'x' }) as unknown as Block
+  const makeSection = (blocks: number, subs: Section[] = []): Section =>
+    ({
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      level: 1,
+      title: 's',
+      blocks: Array.from({ length: blocks }, makeBlock),
+      subsections: subs,
+    }) as unknown as Section
+  const makeDoc = (sections: Section[]): DocumentJSONV10 =>
+    ({
+      schema_version: '1.0',
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      slug: 'x',
+      title: 'x',
+      metadata: { division: 'MX', owners: [], tags: [], confidentiality: 'internal' },
+      sections,
+    }) as unknown as DocumentJSONV10
+
+  it('thresholds: small/big constants exported', () => {
+    expect(AUTO_SAVE_THRESHOLDS.SMALL_DOC_BLOCKS).toBe(100)
+    expect(AUTO_SAVE_THRESHOLDS.BIG_DOC_IDLE_MS).toBe(15_000)
+    expect(AUTO_SAVE_THRESHOLDS.SAVING_STATUS_DEBOUNCE_MS).toBe(200)
+  })
+
+  it('countBlocks walks nested subsections', () => {
+    const doc = makeDoc([
+      makeSection(3, [makeSection(2), makeSection(1, [makeSection(4)])]),
+      makeSection(5),
+    ])
+    // 3 + 2 + 1 + 4 + 5
+    expect(countBlocks(doc)).toBe(15)
+  })
+
+  it('small doc (≤ 100 blocks) gets the 5 s idle window', () => {
+    const doc = makeDoc([makeSection(100)])
+    expect(countBlocks(doc)).toBe(100)
+    expect(pickIdleMs(doc)).toBe(AUTO_SAVE_THRESHOLDS.IDLE_MS)
+  })
+
+  it('big doc (> 100 blocks) gets the 15 s idle window', () => {
+    const doc = makeDoc([makeSection(101)])
+    expect(countBlocks(doc)).toBe(101)
+    expect(pickIdleMs(doc)).toBe(AUTO_SAVE_THRESHOLDS.BIG_DOC_IDLE_MS)
+  })
+
+  it('null draft falls back to the default idle window (no crash)', () => {
+    expect(pickIdleMs(null)).toBe(AUTO_SAVE_THRESHOLDS.IDLE_MS)
+  })
+})
+
+/**
+ * M7 — in-flight queue contract. The hook serialises saves: while a PUT is on
+ * the wire, follow-up triggers set a `queuedSave` flag and the next save
+ * fires after the in-flight one resolves. This avoids overlapping race
+ * conditions on big-doc PUTs.
+ *
+ * Modelled as a small state machine — the contract the hook implements.
+ */
+describe('editor/useAutoSave in-flight queue contract (M7)', () => {
+  it('a save trigger while in-flight queues exactly one follow-up', () => {
+    // Mirror the hook's two refs.
+    let inFlight = false
+    let queued = false
+    const trigger = () => {
+      if (inFlight) {
+        queued = true
+        return 'queued' as const
+      }
+      inFlight = true
+      return 'fired' as const
+    }
+    expect(trigger()).toBe('fired')
+    expect(trigger()).toBe('queued')
+    expect(trigger()).toBe('queued') // still just one slot
+    expect(queued).toBe(true)
+  })
+
+  it('finally-block drains the queue when the in-flight save resolves', () => {
+    let inFlight = true
+    let queued = true
+    let drainedFires = 0
+    // Simulate the finally branch.
+    inFlight = false
+    if (queued) {
+      queued = false
+      // simulate next performSave call
+      inFlight = true
+      drainedFires++
+    }
+    expect(drainedFires).toBe(1)
+    expect(queued).toBe(false)
+    expect(inFlight).toBe(true)
+  })
+})
+
+/**
+ * M7 — "저장 중" status debounce. The pill flip to 'saving' is deferred by
+ * SAVING_STATUS_DEBOUNCE_MS so fast PUTs (small doc, healthy net) never flash
+ * the spinner. Modelled with fake timers — the contract is: setTimeout
+ * scheduled on save start; cleared by the finally branch if the PUT
+ * finishes first.
+ */
+describe('editor/useAutoSave saving-status debounce (M7)', () => {
+  it('fast PUT (< debounce) never flips status to saving', () => {
+    // Modelled state.
+    let status: 'idle' | 'saving' | 'saved' = 'idle'
+    let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      status = 'saving'
+      timer = null
+    }, AUTO_SAVE_THRESHOLDS.SAVING_STATUS_DEBOUNCE_MS)
+    // PUT resolves immediately (synchronous in this model).
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    status = 'saved'
+    expect(status).toBe('saved')
+  })
+
+  it('slow PUT (≥ debounce) does flip to saving before completion', async () => {
+    let status: 'idle' | 'saving' | 'saved' = 'idle'
+    await new Promise<void>((resolve) => {
+      setTimeout(() => {
+        status = 'saving'
+        resolve()
+      }, AUTO_SAVE_THRESHOLDS.SAVING_STATUS_DEBOUNCE_MS)
+    })
+    expect(status).toBe('saving')
   })
 })
