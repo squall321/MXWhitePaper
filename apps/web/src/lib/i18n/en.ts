@@ -398,6 +398,8 @@ export const en: Record<LocaleKey, string> = {
   'editor.gantt.newTaskName': 'Task {n}',
   'editor.gantt.preview': 'Preview',
   'editor.gantt.changeLog': 'Edit gantt',
+  'editor.gantt.barAriaLabel':
+    'Bar — task {n}: {name}, {start} to {end}. Arrow keys adjust end ±1 day, Shift+arrow moves both start and end.',
 
   'editor.chart.title': 'Title',
   'editor.chart.type': 'Chart type',

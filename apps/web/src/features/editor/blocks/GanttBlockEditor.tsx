@@ -34,6 +34,26 @@ export function shiftDate(iso: string, days: number): string {
 }
 
 /**
+ * Pure key → patch resolver used by the bar's `onKeyDown`. Extracted so it
+ * can be unit-tested without a DOM. Returns `null` for keys we don't handle
+ * (so the caller can let them propagate normally).
+ *
+ * - ArrowLeft  / ArrowRight        : shift end ±1 (resize)
+ * - Shift + ArrowLeft / ArrowRight : shift start + end ±1 (move whole bar)
+ */
+export function ganttKeyToPatch(
+  task: Pick<GanttBlock['tasks'][number], 'start' | 'end'>,
+  ev: { key: string; shiftKey: boolean },
+): Partial<GanttBlock['tasks'][number]> | null {
+  const delta = ev.key === 'ArrowLeft' ? -1 : ev.key === 'ArrowRight' ? 1 : 0
+  if (delta === 0) return null
+  if (ev.shiftKey) {
+    return { start: shiftDate(task.start, delta), end: shiftDate(task.end, delta) }
+  }
+  return { end: shiftDate(task.end, delta) }
+}
+
+/**
  * Editable Gantt chart. Rows have name / start / end / progress. Live preview
  * uses the same SVG renderer used in read mode (no mermaid here — we already
  * have a recharts-free SVG view).
@@ -137,11 +157,38 @@ export function GanttBlockEditor({ slug, block }: Props) {
               </tr>
             </thead>
             <tbody>
-              {local.tasks.map((t, i) => (
-                <tr key={i} className="border-t border-gray-100">
+              {local.tasks.map((task, i) => (
+                <tr
+                  key={i}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={t('editor.gantt.barAriaLabel', {
+                    n: i + 1,
+                    name: task.name,
+                    start: task.start,
+                    end: task.end,
+                  })}
+                  data-gantt-bar-row={i}
+                  onKeyDown={(e) => {
+                    // Don't hijack typing inside the row's <input>s.
+                    const target = e.target as HTMLElement
+                    if (
+                      target.tagName === 'INPUT' ||
+                      target.tagName === 'TEXTAREA' ||
+                      target.tagName === 'SELECT'
+                    ) {
+                      return
+                    }
+                    const patch = ganttKeyToPatch(task, e)
+                    if (patch === null) return
+                    e.preventDefault()
+                    update(i, patch)
+                  }}
+                  className="border-t border-gray-100 outline-none focus:ring-2 focus:ring-smsg-300"
+                >
                   <td className="px-2 py-1">
                     <Input
-                      value={t.name}
+                      value={task.name}
                       aria-label={`task ${i} name`}
                       onChange={(e) => update(i, { name: e.target.value })}
                     />
@@ -149,7 +196,7 @@ export function GanttBlockEditor({ slug, block }: Props) {
                   <td className="px-2 py-1">
                     <Input
                       type="date"
-                      value={t.start}
+                      value={task.start}
                       aria-label={`task ${i} start`}
                       onChange={(e) => update(i, { start: e.target.value })}
                     />
@@ -157,7 +204,7 @@ export function GanttBlockEditor({ slug, block }: Props) {
                   <td className="px-2 py-1">
                     <Input
                       type="date"
-                      value={t.end}
+                      value={task.end}
                       aria-label={`task ${i} end`}
                       onChange={(e) => update(i, { end: e.target.value })}
                     />
@@ -167,7 +214,7 @@ export function GanttBlockEditor({ slug, block }: Props) {
                       type="number"
                       min={0}
                       max={100}
-                      value={t.progress ?? 0}
+                      value={task.progress ?? 0}
                       aria-label={`task ${i} progress`}
                       onChange={(e) => {
                         const v = Number(e.target.value)

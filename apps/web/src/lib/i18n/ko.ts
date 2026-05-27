@@ -419,6 +419,8 @@ export const ko = {
   'editor.gantt.newTaskName': '작업 {n}',
   'editor.gantt.preview': '미리보기',
   'editor.gantt.changeLog': '간트 편집',
+  'editor.gantt.barAriaLabel':
+    '막대 — 작업 {n}: {name}, {start} ~ {end}. 화살표키로 종료일 ±1, Shift+화살표키로 전체 이동.',
 
   // Editor — chart
   'editor.chart.title': '제목',

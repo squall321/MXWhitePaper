@@ -168,7 +168,10 @@
   (default `true`, SVG `<rect fill="var(--smsg-gray-050)">` 로 task row 음영 —
   `<rect>`는 SVG 첫 자식이라 axis line / 막대 뒤에 paint). 다크 모드 자동 대응:
   모든 SVG fill/stroke 가 `var(--smsg-...)` 토큰 — `tokens.css` `.dark` 변형이
-  자동 치환. figure 배경도 `dark:bg-gray-900 dark:border-gray-700`.
+  자동 치환. figure 배경도 `dark:bg-gray-900 dark:border-gray-700`. 에디터
+  task row 는 keyboard-focusable (`tabIndex=0`, `role="button"`) — ←/→ 로
+  end ±1일, Shift+←/→ 로 start+end 동시 ±1일 (`ganttKeyToPatch` 순수 헬퍼,
+  widget-integrity-pass-4 G1).
 - `OrgChartBlock` — tidy-tree 레이아웃의 순수 SVG 조직도 (mermaid 아님).
   hover 시 descendant 하이라이트. 다크 모드 자동 (SVG fill/stroke `var(--smsg-...)`
   + figure/empty `dark:` 변형 — chart-darkmode 사이클과 별개로 gantt-darkmode
