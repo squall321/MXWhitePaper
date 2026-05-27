@@ -77,6 +77,7 @@ SEARCHABLE_ATTRS = [
     "body_text",
     "image_text",
     "tags",
+    "author",  # H6 — owner email is also searchable so q="alice@…" works
 ]
 FILTERABLE_ATTRS = [
     "part_slug",
@@ -86,6 +87,15 @@ FILTERABLE_ATTRS = [
     "tags",
     "status",
     "confidentiality",
+    # H5 — role-based hit filtering. `min_role_required` is the highest
+    # `meta.permission` seen across the document's blocks ("all" / "editor"
+    # / "admin"). The search router AND-s in a per-user level filter so a
+    # reader never receives a hit (or snippet) for a doc that has editor-only
+    # content. Conservative: a single restricted block hides the whole doc.
+    "min_role_required",
+    # H6 — author filter. Owner email (lower-cased) for the documents-side
+    # `?author=` chip. Future: extend to created_by once that column lands.
+    "author",
 ]
 SORTABLE_ATTRS = ["updated_at", "title"]
 
@@ -127,6 +137,79 @@ def ensure_index() -> dict[str, Any]:
     return {"uid": INDEX_UID, "primary_key": PRIMARY_KEY}
 
 
+# ── H5: role-based hit filtering ──────────────────────────────────────
+# Mirror of `_PERM_LEVEL` in app.services.document_service. Kept local to
+# avoid pulling the document_service into the indexer (one-way import).
+_PERM_LEVEL_INDEX: dict[str, int] = {"all": 1, "editor": 2, "admin": 4}
+_LEVEL_TO_PERM: dict[int, str] = {1: "all", 2: "editor", 4: "admin"}
+
+
+def _walk_all_blocks(content_json: Any) -> Any:
+    """Yield every block dict in a DocumentJSON tree, including those nested
+    inside columns/tabs/accordion. Generator — yields dicts only."""
+    if not isinstance(content_json, dict):
+        return
+    sections = content_json.get("sections")
+    if not isinstance(sections, list):
+        return
+
+    def _walk_sec(sec: Any) -> Any:
+        if not isinstance(sec, dict):
+            return
+        for blk in sec.get("blocks") or []:
+            yield from _walk_block(blk)
+        for sub in sec.get("subsections") or []:
+            yield from _walk_sec(sub)
+
+    def _walk_block(blk: Any) -> Any:
+        if not isinstance(blk, dict):
+            return
+        yield blk
+        btype = blk.get("type")
+        if btype == "columns":
+            for col in blk.get("columns") or []:
+                if isinstance(col, list):
+                    for child in col:
+                        yield from _walk_block(child)
+        elif btype == "tabs":
+            for tab in blk.get("tabs") or []:
+                if isinstance(tab, dict):
+                    for child in tab.get("blocks") or []:
+                        yield from _walk_block(child)
+        elif btype == "accordion":
+            for item in blk.get("items") or []:
+                if isinstance(item, dict):
+                    for child in item.get("blocks") or []:
+                        yield from _walk_block(child)
+
+    for sec in sections:
+        yield from _walk_sec(sec)
+
+
+def _max_permission_required(content_json: Any) -> str:
+    """Return the highest `meta.permission` seen across all blocks.
+
+    Output is one of: ``"all"`` (default, no restriction), ``"editor"``, or
+    ``"admin"``. Unknown values are treated as ``"all"`` (most-permissive)
+    so a typo in `meta.permission` doesn't accidentally hide a doc. The
+    *opposite* default would silently lock content; conservative wins are
+    handled at the *search filter* layer (we only return docs whose
+    requirement is <= caller's role-level).
+    """
+    max_level = 1  # "all"
+    for blk in _walk_all_blocks(content_json):
+        meta = blk.get("meta")
+        if not isinstance(meta, dict):
+            continue
+        perm = meta.get("permission")
+        if not isinstance(perm, str):
+            continue
+        lvl = _PERM_LEVEL_INDEX.get(perm, 1)
+        if lvl > max_level:
+            max_level = lvl
+    return _LEVEL_TO_PERM.get(max_level, "all")
+
+
 # ── DB → Meilisearch 도큐먼트 변환 ────────────────────────────────────
 async def _fetch_flat_row(s: AsyncSession, doc_id: str) -> dict[str, Any] | None:
     """documents_flat_v + documents 메타에서 인덱싱용 row 1건 fetch.
@@ -150,13 +233,16 @@ async def _fetch_flat_row(s: AsyncSession, doc_id: str) -> dict[str, Any] | None
               t.slug AS team_slug,
               dv.slug AS division_slug,
               d.status,
-              COALESCE(d.content_json->'metadata'->>'confidentiality', 'internal') AS confidentiality
+              COALESCE(d.content_json->'metadata'->>'confidentiality', 'internal') AS confidentiality,
+              d.content_json,
+              LOWER(COALESCE(u.email, '')) AS author_email
             FROM documents_flat_v v
             JOIN documents d ON d.id = v.id
             LEFT JOIN parts p ON p.id = d.part_id
             LEFT JOIN groups g ON g.id = p.group_id
             LEFT JOIN teams t ON t.id = g.team_id
             LEFT JOIN divisions dv ON dv.id = t.division_id
+            LEFT JOIN users u ON u.id = d.owner_id
             WHERE v.id = CAST(:id AS uuid)
         """),
         {"id": doc_id},
@@ -181,6 +267,12 @@ async def _fetch_flat_row(s: AsyncSession, doc_id: str) -> dict[str, Any] | None
         "division_slug": row[11],
         "status": row[12],
         "confidentiality": row[13],
+        # H5 — max(meta.permission) across all blocks (incl. nested in
+        # columns/tabs/accordion). Default "all" = no restriction.
+        "min_role_required": _max_permission_required(row[14]),
+        # H6 — owner email (lowercased). Empty string if no owner — Meili
+        # accepts it as a value but filters require exact match.
+        "author": row[15] or "",
     }
 
 
@@ -201,13 +293,16 @@ async def _fetch_all_flat_rows(s: AsyncSession) -> list[dict[str, Any]]:
               t.slug AS team_slug,
               dv.slug AS division_slug,
               d.status,
-              COALESCE(d.content_json->'metadata'->>'confidentiality', 'internal') AS confidentiality
+              COALESCE(d.content_json->'metadata'->>'confidentiality', 'internal') AS confidentiality,
+              d.content_json,
+              LOWER(COALESCE(u.email, '')) AS author_email
             FROM documents_flat_v v
             JOIN documents d ON d.id = v.id
             LEFT JOIN parts p ON p.id = d.part_id
             LEFT JOIN groups g ON g.id = p.group_id
             LEFT JOIN teams t ON t.id = g.team_id
             LEFT JOIN divisions dv ON dv.id = t.division_id
+            LEFT JOIN users u ON u.id = d.owner_id
         """)
     )).all()
     return [
@@ -229,6 +324,8 @@ async def _fetch_all_flat_rows(s: AsyncSession) -> list[dict[str, Any]]:
             "division_slug": r[11],
             "status": r[12],
             "confidentiality": r[13],
+            "min_role_required": _max_permission_required(r[14]),
+            "author": r[15] or "",
         }
         for r in rows
     ]
@@ -287,6 +384,36 @@ async def reindex_all(s: AsyncSession, *, wait: bool = True) -> dict[str, Any]:
     if n is None and isinstance(stats, dict):
         n = stats.get("numberOfDocuments")
     return {"indexed": len(rows), "stats_count": n}
+
+
+# ── H5: role → filter helper ──────────────────────────────────────────
+# Caller (`routers/search.py`) uses this to AND in a clause that hides
+# every hit whose `min_role_required` exceeds the viewer's level. Mirrors
+# the role/perm matrix in `app.services.document_service`.
+_ROLE_TO_PERM_LEVEL: dict[str, int] = {
+    "reader": 1,
+    "editor": 2,
+    "owner": 2,  # treated like editor for content visibility
+    "admin": 4,
+}
+
+
+def role_filter_exprs(role: str | None) -> list[str]:
+    """Return the Meilisearch filter expressions required to hide hits whose
+    `min_role_required` is above the caller's level.
+
+    - reader → ``[min_role_required = "all"]``
+    - editor / owner → ``[min_role_required IN ["all", "editor"]]``
+    - admin → ``[]`` (no restriction)
+    - unknown / None → reader-equivalent (most-restrictive). This protects
+      anonymous flows like ``/share/:token`` against a missing role string.
+    """
+    lvl = _ROLE_TO_PERM_LEVEL.get((role or "").lower(), 1)
+    if lvl >= _PERM_LEVEL_INDEX["admin"]:
+        return []
+    if lvl >= _PERM_LEVEL_INDEX["editor"]:
+        return ['min_role_required IN ["all", "editor"]']
+    return ['min_role_required = "all"']
 
 
 # ── search ────────────────────────────────────────────────────────────

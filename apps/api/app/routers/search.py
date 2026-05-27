@@ -110,7 +110,8 @@ async def search(
         # tags 는 array 필드. Meilisearch 는 `tags = "x"` 도 array contains 처리.
         filters["tags"] = tag
     if author:
-        filters["author"] = author
+        # H6 — owner email is lower-cased at index time, so match the same way.
+        filters["author"] = str(author).lower()
     if confidentiality:
         filters["confidentiality"] = confidentiality
 
@@ -121,6 +122,12 @@ async def search(
         raw_exprs.append(f'updated_at >= "{df}"')
     if dt:
         raw_exprs.append(f'updated_at <= "{dt}"')
+
+    # H5 — block redaction guard. AND in a clause that drops every hit whose
+    # max-required role exceeds the caller's level. Always-on (cannot be
+    # overridden by the FE) so a reader never sees an editor-only doc's text
+    # in a snippet.
+    raw_exprs.extend(meili_indexer.role_filter_exprs(user.get("role")))
 
     try:
         result = meili_indexer.search(
@@ -252,7 +259,13 @@ async def search_suggest(
     # 최근 문서 — Meili 호출 (실패 시 빈 배열)
     documents: list[dict[str, Any]] = []
     try:
-        result = meili_indexer.search(q=needle, limit=limit, filters={})
+        # H5 — same role filter as /search so suggest never leaks restricted hits.
+        result = meili_indexer.search(
+            q=needle,
+            limit=limit,
+            filters={},
+            raw_filter_exprs=meili_indexer.role_filter_exprs(_user.get("role")),
+        )
         for h in (result.get("hits") or []) if isinstance(result, dict) else []:
             documents.append({
                 "slug": h.get("slug"),
