@@ -124,6 +124,29 @@ export function GanttBlockEditor({ slug, block }: Props) {
           {t('editor.gantt.tasksHeader', { n: local.tasks.length })}
         </p>
         <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1 text-xs text-gray-600">
+            <span>{t('editor.gantt.axisUnit')}</span>
+            <select
+              data-gantt-axis-unit
+              aria-label={t('editor.gantt.axisUnit')}
+              value={local.options?.axisUnit ?? 'month'}
+              onChange={(e) =>
+                void push({
+                  ...local,
+                  options: {
+                    ...local.options,
+                    axisUnit: e.target.value as 'day' | 'week' | 'month' | 'quarter',
+                  },
+                })
+              }
+              className="rounded border border-gray-300 bg-white px-1 py-0.5 text-xs focus:border-smsg-500 focus:outline-none"
+            >
+              <option value="day">{t('editor.gantt.axisUnit.day')}</option>
+              <option value="week">{t('editor.gantt.axisUnit.week')}</option>
+              <option value="month">{t('editor.gantt.axisUnit.month')}</option>
+              <option value="quarter">{t('editor.gantt.axisUnit.quarter')}</option>
+            </select>
+          </label>
           <ZebraToggle
             blockType="gantt"
             options={local.options}

@@ -714,6 +714,10 @@ export interface GanttBlock {
      * task row 단위 zebra-striping (label 영역 포함 전체 행). SVG `<rect fill='#F9FAFB'>` 로 paint.
      */
     stripe?: boolean
+    /**
+     * x-axis tick 단위. 미지정 시 'month'. tick 위치는 view 가 [minStart, maxEnd] 구간에서 해당 단위 경계마다 SVG `<line>` 으로 paint.
+     */
+    axisUnit?: 'day' | 'week' | 'month' | 'quarter'
   }
   meta?: BlockMeta
 }

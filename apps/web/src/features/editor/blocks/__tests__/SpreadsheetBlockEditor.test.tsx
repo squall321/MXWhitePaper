@@ -97,6 +97,16 @@ describe('<SpreadsheetBlockEditor /> smoke', () => {
     expect(html).toContain('data-spreadsheet-delete-col="A"')
   })
 
+  it('renders CSV/TSV export buttons in toolbar (SSR)', () => {
+    const html = renderToStaticMarkup(
+      harness(<SpreadsheetBlockEditor slug={SLUG} block={baseBlock} />),
+    )
+    expect(html).toContain('data-spreadsheet-export-csv')
+    expect(html).toContain('data-spreadsheet-export-tsv')
+    expect(html).toContain('aria-label="CSV 내보내기"')
+    expect(html).toContain('aria-label="TSV 내보내기"')
+  })
+
   it('hides ✕ delete buttons when there is only a single row/col', () => {
     const oneByOne: SpreadsheetBlock = {
       ...baseBlock,

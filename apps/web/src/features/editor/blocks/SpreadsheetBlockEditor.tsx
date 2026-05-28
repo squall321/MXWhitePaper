@@ -4,6 +4,7 @@ import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { evaluateAll, refOf, parseRef } from './spreadsheet/formulaEngine'
 import { remapCells } from './spreadsheet/referenceShift'
+import { spreadsheetToDelimited, type CsvDialect } from './spreadsheet/csvExport'
 import { getZebraClass } from './zebra'
 
 interface Props {
@@ -193,6 +194,39 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
     schedule({ ...local, cols: cols - 1, cells: nextCells })
   }
 
+  /**
+   * Browser-side download. CSV/TSV 는 *평가된 값* (formula 결과) 으로 내보내서
+   * Excel/Google Sheets 가 그대로 paste 받을 수 있게 한다 (raw formula 가
+   * 아니라 사람이 보는 값).
+   */
+  const downloadDelimited = (dialect: CsvDialect) => {
+    if (typeof window === 'undefined') return
+    const text = spreadsheetToDelimited({
+      cols,
+      rows,
+      cells,
+      computed,
+      dialect,
+    })
+    const ext = dialect === 'tsv' ? 'tsv' : 'csv'
+    // CSV/TSV 는 charset utf-8 + BOM 으로 Excel 의 mojibake 회피.
+    const blob = new Blob(['﻿', text], {
+      type: dialect === 'tsv'
+        ? 'text/tab-separated-values;charset=utf-8'
+        : 'text/csv;charset=utf-8',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const title = (local.title ?? 'spreadsheet').replace(/[^\w가-힣.-]+/g, '_')
+    a.download = `${title}.${ext}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    // 다음 tick 에 revoke — 일부 브라우저에서 click 이 비동기로 url 을 fetch.
+    setTimeout(() => URL.revokeObjectURL(url), 0)
+  }
+
   const focusedRaw = focused ? (local.cells?.[focused] ?? '') : ''
 
   return (
@@ -225,6 +259,26 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
           className="rounded border border-smsg-300 bg-white px-2 py-1 text-xs text-smsg-700 hover:bg-smsg-100 disabled:opacity-50"
         >
           + 열 추가
+        </button>
+        <button
+          type="button"
+          onClick={() => downloadDelimited('csv')}
+          data-spreadsheet-export-csv
+          aria-label="CSV 내보내기"
+          title="CSV (값) — Excel/Google Sheets paste 가능"
+          className="rounded border border-smsg-300 bg-white px-2 py-1 text-xs text-smsg-700 hover:bg-smsg-100"
+        >
+          ⬇ CSV
+        </button>
+        <button
+          type="button"
+          onClick={() => downloadDelimited('tsv')}
+          data-spreadsheet-export-tsv
+          aria-label="TSV 내보내기"
+          title="TSV (값) — Excel/Google Sheets paste 가능"
+          className="rounded border border-smsg-300 bg-white px-2 py-1 text-xs text-smsg-700 hover:bg-smsg-100"
+        >
+          ⬇ TSV
         </button>
         <label
           className="flex items-center gap-1 text-xs text-gray-600"

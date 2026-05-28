@@ -788,6 +788,17 @@ class Task(BaseModel):
     progress: float | None = Field(None, ge=0.0, le=100.0)
 
 
+class AxisUnit(Enum):
+    """
+    x-axis tick 단위. 미지정 시 'month'. tick 위치는 view 가 [minStart, maxEnd] 구간에서 해당 단위 경계마다 SVG `<line>` 으로 paint.
+    """
+
+    day = 'day'
+    week = 'week'
+    month = 'month'
+    quarter = 'quarter'
+
+
 class Options3(BaseModel):
     """
     표시 옵션. 모두 optional, default 동작은 ON.
@@ -799,6 +810,10 @@ class Options3(BaseModel):
     stripe: bool | None = True
     """
     task row 단위 zebra-striping (label 영역 포함 전체 행). SVG `<rect fill='#F9FAFB'>` 로 paint.
+    """
+    axis_unit: AxisUnit | None = Field('month', alias='axisUnit')
+    """
+    x-axis tick 단위. 미지정 시 'month'. tick 위치는 view 가 [minStart, maxEnd] 구간에서 해당 단위 경계마다 SVG `<line>` 으로 paint.
     """
 
 

@@ -1,4 +1,5 @@
 import type { GanttBlock } from '@/types/document'
+import { axisTicks, type GanttAxisUnit } from './ganttAxis'
 
 /**
  * Minimal Gantt chart — single SVG with horizontal bars positioned by
@@ -6,6 +7,9 @@ import type { GanttBlock } from '@/types/document'
  * indicated by a darker overlay.
  *
  * `today` prop 은 테스트/SSR 안정성용 (YYYY-MM-DD). 미지정 시 `new Date()` 사용.
+ *
+ * `options.axisUnit` (day | week | month | quarter, default 'month') 가
+ * 주어지면 x-axis 에 해당 단위 경계마다 세로 tick 선과 label 을 그린다.
  */
 export function GanttBlockView({
   block,
@@ -34,6 +38,8 @@ export function GanttBlockView({
   const totalH = tasks.length * rowH + 24
 
   const stripeOn = block.options?.stripe !== false
+  const axisUnit: GanttAxisUnit = block.options?.axisUnit ?? 'month'
+  const ticks = axisTicks(minMs, maxMs, axisUnit)
 
   // today marker — 오늘 날짜가 gantt 범위 [minMs, maxMs] 안에 있으면 빨간 점선
   // 세로선을 task bars 위에 그린다. 범위 밖이면 미렌더.
@@ -68,6 +74,31 @@ export function GanttBlockView({
               />
             ) : null,
           )}
+        {/* axis tick lines + labels (axisUnit 단위 경계마다) — bars 뒤에 그려 가독성 확보 */}
+        {ticks.map((tk, i) => {
+          const x = labelW + ((tk.ms - minMs) / span) * barAreaW
+          return (
+            <g key={`tick-${i}`} data-gantt-tick={tk.label}>
+              <line
+                x1={x}
+                x2={x}
+                y1={4}
+                y2={totalH - 16}
+                stroke="var(--smsg-gray-200)"
+                strokeDasharray="2 3"
+              />
+              <text
+                x={x}
+                y={totalH - 4}
+                fontSize={9}
+                fill="var(--smsg-gray-500)"
+                textAnchor="middle"
+              >
+                {tk.label}
+              </text>
+            </g>
+          )
+        })}
         {/* axis line */}
         <line
           x1={labelW}
