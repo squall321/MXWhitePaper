@@ -8,7 +8,10 @@
 > **Feature**: glossary-knowledge-graph
 > **Version**: 0.1.0
 > **Date**: 2026-05-17
-> **Status**: Draft
+> **Status**: Sprint AB Complete (BE 100%) — Sprint C (FE UI) pending
+>
+> **Sprint AB** (2026-05-28): alembic 0048 + 13 endpoints + chunker glossary
+> + wiki link alias. api pytest 1090/1090. 2 commits (`488c2d0`, `9a9f3d4`).
 
 ---
 
