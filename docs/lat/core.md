@@ -269,6 +269,24 @@ collision 을 일찍 거부 (alternative 정책) 함으로써 SSO 머지 시점�
 7. **JWT 알고리즘은 HS256 (대칭키)** — `jwt_secret` 만 갖고 있으면 누구나
    발급 가능. 운영에서 RS256 으로 전환 검토 시 발급/검증 양쪽 모두 코드 수정.
 
+## Notifications 흐름 — BE INSERT → FE poll → store → drawer
+
+BE 가 `notifications` 테이블에 INSERT 하는 모든 알림은 FE 가 polling 으로
+가져와 zustand store 에 합쳐서 TopBar 의 종 + drawer 에 표시한다.
+
+| 단계 | 위치 | 비고 |
+|---|---|---|
+| INSERT | `routers/comments.py` (`comment_mention`), `routers/approvals.py` (`review_request`, `review_decision`), `routers/reactions.py` (`reaction_added`), `routers/read_receipts.py` (`read_ack_reminder`), `services/{reminder,digest,retention,automation}_runner.py` | 항상 `notification_prefs.is_channel_enabled(... channel="in_app")` 가드 |
+| READ API | `GET /api/v1/notifications?unread=&limit=` (`routers/notifications.py`) | envelope `{data:[…], meta:{count, unread}}` |
+| FE poll | `apps/web/src/features/notifications/hooks/useNotificationPolling.ts` | TanStack Query, 30 s 간격, `useAuthStore.user` 있을 때만, AppShell 에서 1회 mount |
+| kind→message | `apps/web/src/features/notifications/kindToMessage.ts` | payload 키 (`actor_name`/`doc_title`/`slug`/`emoji`/`status` …) 누락 graceful |
+| store | `apps/web/src/features/notifications/store.ts` | id 로 dedupe — 같은 row 가 다음 polling 라운드에 와도 무시 |
+| MARK READ | `POST /api/v1/notifications/{id}/read` → `NotificationDrawer` 의 row click + 전체 읽음 처리 | 서버 UUID 만 POST, 로컬 `n-…` id 는 skip |
+
+새 알림 kind 추가 시 `kindToMessage.ts` 의 `categoryForKind` + `buildMessage`
+switch 에 case 추가. payload 키 컨벤션: `actor_name`, `doc_title`, `slug`,
+`from_user_id`, kind 별 부가 키 (`emoji`/`status`/`message` 등).
+
 ## 테스트 지도
 
 | 파일 | 무엇 |

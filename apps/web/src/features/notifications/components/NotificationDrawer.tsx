@@ -9,6 +9,7 @@ import {
   type NotificationCategory,
   type NotificationItem,
 } from '../store'
+import { markNotificationRead } from '../api'
 
 interface NotificationDrawerProps {
   open: boolean
@@ -45,6 +46,28 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
     () => (Array.isArray(items) ? items : []).some((it) => it && !it.read),
     [items],
   )
+
+  // 서버에서 push 된 알림은 `id` 가 UUID — 로컬 이벤트 (`n-…`) 와 구분되니
+  // mark-read 시 BE 에도 동기화한다. 로컬 이벤트는 BE 가 모르므로 skip.
+  const handleMarkRead = (id: string) => {
+    markRead(id)
+    if (isServerId(id)) {
+      void markNotificationRead(id).catch(() => {
+        /* 다음 polling 라운드가 read_at 을 다시 가져와 결국 정합 — 토스트 안 띄움. */
+      })
+    }
+  }
+  const handleMarkAllRead = () => {
+    const unreadServerIds = (Array.isArray(items) ? items : [])
+      .filter((it) => it && !it.read && isServerId(it.id))
+      .map((it) => it.id)
+    markAllRead()
+    for (const id of unreadServerIds) {
+      void markNotificationRead(id).catch(() => {
+        /* 같은 이유로 swallow. */
+      })
+    }
+  }
 
   return (
     <Drawer open={open} onClose={onClose} side="right" ariaLabel="알림 센터">
@@ -84,7 +107,7 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => markAllRead()}
+              onClick={handleMarkAllRead}
               disabled={!hasUnread}
               data-testid="bell-mark-all"
             >
@@ -111,7 +134,7 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
                 <NotificationRow
                   key={it.id}
                   item={it}
-                  onActivate={() => markRead(it.id)}
+                  onActivate={() => handleMarkRead(it.id)}
                   onClose={onClose}
                 />
               ))}
@@ -197,6 +220,14 @@ function categoryLabel(c: NotificationCategory): string {
   if (c === 'system') return '시스템'
   if (c === 'comment') return '댓글'
   return '활동'
+}
+
+/**
+ * Server-issued notification rows use a UUID v4 id (36 chars, 4 dashes).
+ * Local-only events use the `n-…` prefix from `store.makeId()`.
+ */
+function isServerId(id: string): boolean {
+  return id.length === 36 && id.split('-').length === 5
 }
 
 function formatRelative(ts: number, now: number = Date.now()): string {

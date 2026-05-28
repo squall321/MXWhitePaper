@@ -5,6 +5,7 @@ import { useGChord } from './useGChord'
 import { MobileNavDrawer } from './MobileNavDrawer'
 import { OrgTree } from '@/features/org/components/OrgTree'
 import { SavedViewsList } from '@/features/saved-views/SavedViewsList'
+import { useNotificationPolling } from '@/features/notifications/hooks/useNotificationPolling'
 import { Drawer } from '@/components/ui/Drawer'
 import { Modal } from '@/components/ui/Modal'
 import { RailBoundary } from '@/components/blocks/BlockBoundary'
@@ -67,6 +68,10 @@ export function AppShell({ children, left, right, onOpenPalette }: AppShellProps
 
   // Wire vim-style "G then key" navigation chords.
   useGChord()
+
+  // BE notifications → FE store. Mount-once here (not next to the bell) so
+  // polling state survives bell re-renders.
+  useNotificationPolling()
 
   // 좌측 sidebar 접기 — localStorage 에 상태 영구화 (페이지 새로고침 / 이동 후에도 유지).
   const [leftCollapsed, setLeftCollapsed] = useState<boolean>(() => {
