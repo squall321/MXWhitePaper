@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-28T00:19:42.430912+00:00",
+  "generated_at": "2026-05-28T03:44:13.564621+00:00",
   "source_hashes": {
-    "packages/shared/schemas/document.json": "32cb7e14c60ee259cb9fafa67d2a2e4528136302c94f639effb33e1a61a660e1",
+    "packages/shared/schemas/document.json": "09148d70f2d66f5a1a2c135bb3bec9936e1343888436c4fbdde59fd45eb521c6",
     "apps/api/app/services/widget_markers.py": "29b9da045c859288c6bcb1195176ee9ebb9b50c2c5376c419d5c293632a5658e",
-    "apps/api/app/services/docx_import.py": "718178a46dbb64ea6bd6332e341879929754bccbc84dc75e5215b78cb22151cc",
-    "docs/llm-input-rules.md": "505e69c5297bbd9f7d28039c4f099b0b4de55a2994c9c464e1a1ccc2a9a7b2bb",
+    "apps/api/app/services/docx_import.py": "d94c9ff2c7460aad728531dd574675e35170e718ae69681f4434593daf63fc47",
+    "docs/llm-input-rules.md": "7b3ce123cce1dcd9814652493e1239da71fd04fd8b0198b5b6f40aa3c5c56a72",
     "dist/llm-docx-toolkit/llm-system-prompt.md": "57916c20b5819cf9ce7f92f5f9c93dcef3ca3dcb2f1c10d2590e4e30f584dbfa"
   },
   "widget_types": [
@@ -28,9 +28,9 @@
     "video",
     "whiteboard"
   ],
-  "chunk_count": 151,
+  "chunk_count": 152,
   "embedding_backend_fingerprint": "chunks-only:v1",
-  "chunks_sha256": "d9b48da2a5f056524d1647656580c7ed2c875f1ee5f56bf7aaf0f23255b9f544",
+  "chunks_sha256": "ba9f1dd48a22e99c049f4f5955869d4737109612404625b306978968e12d7bd4",
   "sources": [
     "document.json",
     "example:all",

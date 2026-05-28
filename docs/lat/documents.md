@@ -104,7 +104,11 @@
   `title?`, `options.stripe` (default `true` — zebra data rows, header 미영향).
   TableBlock 과 달리 docx import 가 만들지 않고 사이트 에디터에서 직접 추가/편집.
   docx export 는 `_b_spreadsheet()` 가 `stripe=True` → `Light Grid Accent 1`,
-  `False` → `Table Grid` 로 분기.
+  `False` → `Table Grid` 로 분기. 에디터 toolbar 의 "⬇ CSV / ⬇ TSV" 버튼은
+  [[src/features/editor/blocks/spreadsheet/csvExport.ts#spreadsheetToDelimited]]
+  를 호출 — *평가된 값* (formula 결과) 으로 직렬화해 Excel/Google Sheets paste
+  호환. CSV 는 RFC 4180, TSV 는 탭/CR/LF 를 공백으로 강제 escape. UTF-8 BOM
+  포함해 Excel mojibake 회피.
 - `BibliographyBlock` — `entries[]` ( `{key?, text, doi?, url?}` ), `title?`, `style?`,
   `options.stripe?` (default `true`, FE-only zebra). 본문의 `[[cite:KEY]]` 가
   `<li id="cite-{key}">` anchor 로 연결. ★ 4 export (docx / html / pptx / markdown)
@@ -166,12 +170,15 @@
   "(용어 사전에 없음)" 으로 시각화, `data-glossary-ref-broken` 속성 노출.
 - `GanttBlock` — `tasks[]` (`{name, start, end, progress?}`), `options.stripe?`
   (default `true`, SVG `<rect fill="var(--smsg-gray-050)">` 로 task row 음영 —
-  `<rect>`는 SVG 첫 자식이라 axis line / 막대 뒤에 paint). 다크 모드 자동 대응:
+  `<rect>`는 SVG 첫 자식이라 axis line / 막대 뒤에 paint), `options.axisUnit?`
+  (`day|week|month|quarter`, default `month`). 다크 모드 자동 대응:
   모든 SVG fill/stroke 가 `var(--smsg-...)` 토큰 — `tokens.css` `.dark` 변형이
   자동 치환. figure 배경도 `dark:bg-gray-900 dark:border-gray-700`. 에디터
   task row 는 keyboard-focusable (`tabIndex=0`, `role="button"`) — ←/→ 로
   end ±1일, Shift+←/→ 로 start+end 동시 ±1일 (`ganttKeyToPatch` 순수 헬퍼,
-  widget-integrity-pass-4 G1).
+  widget-integrity-pass-4 G1). x-axis ticks 는
+  [[src/components/blocks/ganttAxis.ts#axisTicks]] 가 `[minMs, maxMs]` 구간의
+  단위 경계만 emit; tick 이 40개 초과면 자동으로 한 단계 큰 단위로 fallback.
 - `OrgChartBlock` — tidy-tree 레이아웃의 순수 SVG 조직도 (mermaid 아님).
   hover 시 descendant 하이라이트. 다크 모드 자동 (SVG fill/stroke `var(--smsg-...)`
   + figure/empty `dark:` 변형 — chart-darkmode 사이클과 별개로 gantt-darkmode

@@ -292,6 +292,11 @@ chart 는 표와 모양이 같아서 자동 인식 위험. **marker 권장.**
 | 설계 | 2026-01-01 | 2026-01-15 | 50%      |
 ```
 
+- 사이트 렌더 옵션 `options.axisUnit` ∈ `day | week | month | quarter`
+  (default `month`) — x-axis tick 단위. docx 본문에서는 표현 수단이 없으므로
+  사이트 에디터에서 변경. tick 이 40 개를 넘으면 자동으로 한 단계 큰 단위로
+  fallback (day → week → month → quarter).
+
 ### 3.5 flow (플로우/다이어그램)
 
 code block (회색 음영 paragraph + Consolas 폰트) 에 mermaid DSL:
