@@ -32,6 +32,7 @@ from app.search import meili_indexer
 from app.services import section_numbering, webhook_dispatcher
 from app.services.heading_promote import promote_inline_headings
 from app.services.section_numbering import renumber_sections
+from app.services.wiki_link_alias import resolve_term_aliases
 from app.services.wiki_link_extractor import extract_wiki_links
 
 logger = logging.getLogger(__name__)
@@ -510,8 +511,12 @@ async def update_links_for_document(
     doc_id: str,
     content_json: dict[str, Any],
 ) -> int:
-    """links 테이블을 doc_id 기준으로 재구축. 같은 트랜잭션 내에서 실행."""
+    """links 테이블을 doc_id 기준으로 재구축. 같은 트랜잭션 내에서 실행.
+
+    `[[alias]]` 가 approved term 의 aliases 에 들어 있으면 canonical term
+    슬러그로 redirect 한 뒤 저장한다 (glossary-knowledge-graph § 8.4)."""
     extracted = extract_wiki_links(content_json)
+    extracted = await resolve_term_aliases(s, extracted)
     return await document_repo.replace_links_for_document(
         s, source_doc_id=doc_id, links=extracted
     )
@@ -781,11 +786,18 @@ async def upsert_glossary_terms(
             continue
         t = term.strip()
         new_terms.add(t)
+        # glossary-knowledge-graph (0048) 이후: terms.term UNIQUE 가 제거되고
+        # (term, domain) WHERE domain IS NOT NULL UNIQUE 가 됨. 문서 본문에서
+        # 자동 등록되는 용어는 status='approved', domain='general' 로 등록.
         await s.execute(
             text("""
-                INSERT INTO terms (term, definition, related_docs)
-                VALUES (:t, :d, ARRAY[CAST(:doc AS uuid)])
-                ON CONFLICT (term) DO UPDATE SET
+                INSERT INTO terms
+                    (term, definition, domain, status, related_docs)
+                VALUES
+                    (:t, :d, 'general', 'approved',
+                     ARRAY[CAST(:doc AS uuid)])
+                ON CONFLICT (term, domain) WHERE domain IS NOT NULL
+                DO UPDATE SET
                   definition = EXCLUDED.definition,
                   related_docs = (
                     SELECT ARRAY(

@@ -927,6 +927,40 @@
         "title": "DivisionUpdate",
         "type": "object"
       },
+      "DomainIn": {
+        "additionalProperties": false,
+        "description": "POST /domains 본문.",
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "slug": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,99}$",
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name"
+        ],
+        "title": "DomainIn",
+        "type": "object"
+      },
       "ExtractRequest": {
         "properties": {
           "subject_slug": {
@@ -1855,6 +1889,23 @@
           "code"
         ],
         "title": "RegenIn",
+        "type": "object"
+      },
+      "RejectIn": {
+        "additionalProperties": false,
+        "description": "POST /glossary/{id}/reject 본문 — reason 필수.",
+        "properties": {
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "RejectIn",
         "type": "object"
       },
       "RemindIn": {
@@ -2840,6 +2891,159 @@
           "target_slug"
         ],
         "title": "TemplateUseIn",
+        "type": "object"
+      },
+      "TermPatchIn": {
+        "additionalProperties": false,
+        "description": "PATCH /glossary/{id} (admin) 또는 /glossary/proposals/{id} (본인) 본문.\n\n모든 필드 optional — 부분 갱신.",
+        "properties": {
+          "aliases": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aliases"
+          },
+          "definition": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "subdomain": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subdomain"
+          },
+          "term": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term"
+          },
+          "term_en": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term En"
+          }
+        },
+        "title": "TermPatchIn",
+        "type": "object"
+      },
+      "TermProposeIn": {
+        "additionalProperties": false,
+        "description": "POST /glossary/propose 본문.",
+        "properties": {
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Aliases",
+            "type": "array"
+          },
+          "definition": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Definition",
+            "type": "string"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "subdomain": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subdomain"
+          },
+          "term": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Term",
+            "type": "string"
+          },
+          "term_en": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term En"
+          }
+        },
+        "required": [
+          "term",
+          "definition"
+        ],
+        "title": "TermProposeIn",
         "type": "object"
       },
       "TestIn": {
@@ -10528,6 +10732,70 @@
         ]
       }
     },
+    "/api/v1/domains": {
+      "get": {
+        "operationId": "list_domains_api_v1_domains_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Domains Api V1 Domains Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Domains",
+        "tags": [
+          "glossary"
+        ]
+      },
+      "post": {
+        "operationId": "create_domain_api_v1_domains_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DomainIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Domain Api V1 Domains Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Domain",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
     "/api/v1/exports/artifacts/{artifact_id}": {
       "get": {
         "operationId": "download_export_artifact_api_v1_exports_artifacts__artifact_id__get",
@@ -11236,10 +11504,10 @@
     },
     "/api/v1/glossary": {
       "get": {
+        "description": "approved 만 public 노출. 그 외 status 는 admin 인증 시에만.\n\n'all' 은 admin 에게만 — status 필터 자체를 제거 (None 전달).",
         "operationId": "list_glossary_api_v1_glossary_get",
         "parameters": [
           {
-            "description": "term ILIKE %q% 검색",
             "in": "query",
             "name": "q",
             "required": false,
@@ -11252,19 +11520,64 @@
                   "type": "null"
                 }
               ],
-              "description": "term ILIKE %q% 검색",
               "title": "Q"
             }
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "domain",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domain"
+            }
+          },
+          {
+            "description": "필터할 상태. 미인증/비관리자는 'approved' 만 보임. admin 은 'proposed'/'rejected'/'deprecated'/'all' 가능.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "approved",
+              "description": "필터할 상태. 미인증/비관리자는 'approved' 만 보임. admin 은 'proposed'/'rejected'/'deprecated'/'all' 가능.",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
             "required": false,
             "schema": {
               "default": 50,
               "maximum": 200,
               "minimum": 1,
-              "title": "Limit",
+              "title": "Size",
               "type": "integer"
             }
           }
@@ -11299,9 +11612,230 @@
         ]
       }
     },
+    "/api/v1/glossary/import": {
+      "post": {
+        "description": "CSV multipart 또는 JSON {rows:[...]} 둘 다 허용.\n\nContent-Type 으로 분기:\n  - `multipart/form-data` → field `file` 의 CSV 파일\n  - `application/json` → `{rows:[...]}` (BulkImportIn 검증)\n\nCSV 컬럼: term,definition,domain,subdomain,term_en,aliases (aliases는 '|' 구분)",
+        "operationId": "bulk_import_api_v1_glossary_import_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Bulk Import Api V1 Glossary Import Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Bulk Import",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
+    "/api/v1/glossary/pending": {
+      "get": {
+        "operationId": "list_pending_api_v1_glossary_pending_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Pending Api V1 Glossary Pending Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Pending",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
+    "/api/v1/glossary/proposals/{term_id}": {
+      "delete": {
+        "operationId": "delete_proposal_api_v1_glossary_proposals__term_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "term_id",
+            "required": true,
+            "schema": {
+              "title": "Term Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Proposal Api V1 Glossary Proposals  Term Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Proposal",
+        "tags": [
+          "glossary"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_proposal_api_v1_glossary_proposals__term_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "term_id",
+            "required": true,
+            "schema": {
+              "title": "Term Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TermPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Proposal Api V1 Glossary Proposals  Term Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Proposal",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
+    "/api/v1/glossary/propose": {
+      "post": {
+        "operationId": "propose_api_v1_glossary_propose_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TermProposeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Propose Api V1 Glossary Propose Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Propose",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
     "/api/v1/glossary/term/{term}": {
       "get": {
-        "description": "Single-term lookup for the `glossary-ref` block renderer.",
+        "description": "단건 조회. domain 지정 시 같은 분야 우선, 아니면 status 우선순위.",
         "operationId": "get_term_api_v1_glossary_term__term__get",
         "parameters": [
           {
@@ -11311,6 +11845,22 @@
             "schema": {
               "title": "Term",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "domain",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domain"
             }
           }
         ],
@@ -11339,6 +11889,202 @@
           }
         },
         "summary": "Get Term",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
+    "/api/v1/glossary/{term_id}": {
+      "patch": {
+        "operationId": "patch_term_api_v1_glossary__term_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "term_id",
+            "required": true,
+            "schema": {
+              "title": "Term Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TermPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Term Api V1 Glossary  Term Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Term",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
+    "/api/v1/glossary/{term_id}/approve": {
+      "post": {
+        "operationId": "approve_api_v1_glossary__term_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "term_id",
+            "required": true,
+            "schema": {
+              "title": "Term Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Approve Api V1 Glossary  Term Id  Approve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
+    "/api/v1/glossary/{term_id}/reject": {
+      "post": {
+        "operationId": "reject_api_v1_glossary__term_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "term_id",
+            "required": true,
+            "schema": {
+              "title": "Term Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reject Api V1 Glossary  Term Id  Reject Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reject",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
+    "/api/v1/graph/terms/{term_id}": {
+      "get": {
+        "operationId": "graph_for_term_api_v1_graph_terms__term_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "term_id",
+            "required": true,
+            "schema": {
+              "title": "Term Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Graph For Term Api V1 Graph Terms  Term Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Graph For Term",
         "tags": [
           "glossary"
         ]

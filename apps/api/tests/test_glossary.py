@@ -41,10 +41,11 @@ async def test_save_doc_with_glossary_upserts_terms_and_get_returns_them() -> No
         r1 = await ac.post("/api/v1/documents", json=sample)
         assert r1.status_code == 201, r1.text
 
-        # 용어집 GET — DPS 검색
+        # 용어집 GET — DPS 검색 (신규 응답 envelope: data:{items,total,page,size})
         r2 = await ac.get("/api/v1/glossary", params={"q": "DPS"})
     assert r2.status_code == 200, r2.text
-    items = r2.json()["data"]
+    data = r2.json()["data"]
+    items = data["items"]
     terms = [it["term"] for it in items]
     assert "DPS" in terms
     dps = next(it for it in items if it["term"] == "DPS")
