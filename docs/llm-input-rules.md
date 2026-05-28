@@ -218,6 +218,35 @@ markdown 마커 (`**bold**`, `*italic*`, `[text](url)`) 도 인식.
 → 이 6 블록은 사이트 에디터에서 *사람이* 직접 추가하는 게 정답. LLM 은 본문에
 "여기에 form 블록 추가 예정" 같은 단락만 남기면 사용자 review 시 보강 가능.
 
+### 2.18 meta.slideBreak (발표 모드 슬라이드 분할 명시)
+
+- 본 시스템에는 *발표(presentation) 모드* 가 있어 같은 DocumentJSON 을 슬라이드
+  덱으로도 본다. 자동 분할 알고리즘(`buildSlides`)이 BUDGET 기반으로 청크를
+  나누지만, LLM 이 *명시적으로* 분할 지점을 지정하고 싶을 때 블록의
+  `meta.slideBreak` 를 사용.
+- 값: `'before' | 'after'` (스키마 `packages/shared/schemas/document.json`
+  `BlockMeta`).
+  - `before`: 이 블록부터 새 슬라이드 시작 (현재 청크 flush).
+  - `after`: 이 블록을 포함한 청크 flush 후 다음 블록부터 새 슬라이드.
+- 자동 BUDGET 분할보다 *우선*. solo-visual 같은 다른 휴리스틱과 충돌하면
+  `slideBreak` 이 이긴다 (`apps/web/src/features/presentation/slideMachine.ts`).
+- docx 본문에서는 표현 수단이 없으므로 LLM 이 docx 로 만들 때는 안 들어간다 —
+  *DocumentJSON API 로 직접 작성* (§8) 할 때만 적용. 즉 발표용으로 흐름을
+  통제하고 싶으면 docx → import → 사이트 에디터에서 분할 지점 지정.
+
+### 2.19 TOC (목차) — 자동 생성되지 않음
+
+- docx import 가 본문에서 *기존 TOC* 가 발견되면 (`<w:sdt>` real-TOC,
+  `TOC1/목차1..` 스타일 단락, `TOC` 필드) 별도 블록으로 보존하지 *않고* 헤딩
+  구조로 흡수 (`apps/api/app/services/toc_extract.py`).
+- 결과 DocumentJSON 에는 TOC 블록이 없다 — 사이트 read 컴포넌트가 헤딩
+  계층에서 동적으로 사이드바 목차를 그린다.
+- docx 로 *내보낼 때* TOC 가 필요하면 export 옵션 `include_toc=true` (default
+  false; `apps/api/app/services/docx_export.py` `DocxOptions`). 현재 API 파라
+  미터로 노출돼 있진 않아 내부 호출/서비스 경로 한정 — 일반 사용자는 임포트
+  후 MX 에디터에서 수동으로 헤딩만 잘 잡아두면 사이트 사이드바가 대신함.
+- LLM 이 docx 생성 시: TOC 단락을 직접 만들 필요 없음. 헤딩 스타일만 잘 잡아라.
+
 ---
 
 ## 3. 위젯 룰 — *형태* 가 자동 인식의 키
@@ -436,6 +465,12 @@ import 시 응답에 `summary.warnings` 가 포함됨:
 
 import 후 MX 에디터에서 확인하고 필요시 수정.
 
+> **워크플로우 안내**: import 직후 문서는 *draft* 상태로 들어간다. admin 이
+> reviewer 를 지정하고 (`review_decided` 이벤트), 검토 통과 후 *published* 로
+> 전이하면 일반 사용자에게 노출된다 (`doc_published` 이벤트가 구독자/팔로워
+> 에게 fan-out). LLM 이 docx 생성 시점엔 알 필요 없지만, "내가 만든 문서가
+> 왜 사이트에 안 보이나?" 라는 질문이 들어오면 이 흐름을 안내할 것.
+
 ---
 
 ## 7. 빠른 체크리스트 — LLM 에게 줄 마지막 명령
@@ -505,24 +540,49 @@ approved 용어에 `aliases` 가 등록돼 있으면 `[[alias]]` 도 canonical t
   파싱된다. 공백이 포함된 alias 는 별도 `[[term|alias 표시]]` 로 작성.
 - redirect 시 원본 alias 는 link metadata 의 `alias_of` 필드에 보존된다.
 
-### 9.3 미등록 용어 발견 시
+### 9.3 미등록 용어 발견 시 — propose 흐름
 
 LLM 이 RAG 컨텍스트에 없는 새 전문 용어를 본문에 도입했다면, 사용자에게
-*제안 엔드포인트* (`POST /api/v1/glossary/propose`) 를 안내한다.
+*제안 엔드포인트* (`POST /api/v1/glossary/propose`, reader 이상 권한) 를
+안내한다. 본문 schema 는 `apps/api/app/schemas/glossary.py` `TermProposeIn`.
 
 ```jsonc
 POST /api/v1/glossary/propose
 Authorization: Bearer <token>
+Content-Type: application/json
+
 {
-  "term": "GaN 소자",
-  "definition": "질화갈륨 기반의 광대역 갭 반도체 소자.",
-  "domain": "semiconductor",
-  "subdomain": "power",
-  "aliases": ["GaN", "질화갈륨"]
+  "term":       "GaN 소자",          // 필수, 1–200자
+  "definition": "질화갈륨 기반의 광대역 갭 반도체 소자.",  // 필수, 1–5000자
+  "domain":     "semiconductor",     // 선택, ≤100자 — 분야 슬러그
+  "subdomain":  "power",             // 선택, ≤100자 — 세부 분야
+  "term_en":    "GaN device",        // 선택, ≤200자 — 영문 표기
+  "aliases":    ["GaN", "질화갈륨"]   // 선택, ≤20개 (개별 슬러그 규칙은 §9.2)
 }
 ```
 
-admin 이 승인하면 다음 RAG 재인덱싱 시점부터 LLM 이 자동으로 해당 용어를
-컨텍스트로 사용한다 (chunker 의 glossary 소스가 DB 의 approved terms 를
-직접 읽는다).
+응답: `{ "data": { id, status: "proposed", ... } }` (HTTP 202).
+
+필드 가이드:
+
+- `domain` / `subdomain` 은 *문자열 자유 입력* — 시스템이 고정 enum 으로 강제
+  하지는 않는다 (DB 의 `domains` 테이블이 정식 트리지만, propose 시점엔 미등록
+  도메인도 허용). 일관성 위해 *기존 분야와 같은 슬러그* 를 재사용 권장.
+  현 시점 자주 쓰이는 분야 예: `semiconductor`, `display`, `software`,
+  `manufacturing`, `materials` (실제 목록은 `GET /api/v1/glossary/domains`
+  로 조회 후 매칭하는 게 안전).
+- `aliases` 의 각 항목도 본문 wiki-link 로 자동 매칭하려면 §9.2 의 슬러그 규칙
+  (`[a-z0-9가-힣-]{1,100}`) 을 따라야 한다. 공백/대문자 포함 표기는 alias 로
+  넣어도 본문 `[[...]]` 가 못 잡으므로 표시용으로만 활용.
+- 동일 term 이 이미 다른 status (proposed/approved 등) 로 존재하면 409.
+
+승인 흐름 (참조):
+
+- admin 이 `POST /api/v1/glossary/{id}/approve` 로 승인 → `status='approved'`
+  로 전이.
+- 다음 RAG 재인덱싱 (`dist/llm-docx-toolkit/rag/chunker.py` 실행) 시점부터
+  chunker 의 glossary 소스가 DB 의 approved terms 를 *직접* 읽어 chunk 화하므로
+  LLM 컨텍스트에 자동 합류.
+- 잘못된 제안은 `POST /api/v1/glossary/{id}/reject` (reason 필수) 또는
+  `PATCH /api/v1/glossary/proposals/{id}` (제안자 본인 수정) 로 정정.
 

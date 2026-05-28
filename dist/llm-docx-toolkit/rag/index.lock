@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-28T03:44:13.564621+00:00",
+  "generated_at": "2026-05-28T11:06:27.118263+00:00",
   "source_hashes": {
     "packages/shared/schemas/document.json": "09148d70f2d66f5a1a2c135bb3bec9936e1343888436c4fbdde59fd45eb521c6",
     "apps/api/app/services/widget_markers.py": "29b9da045c859288c6bcb1195176ee9ebb9b50c2c5376c419d5c293632a5658e",
     "apps/api/app/services/docx_import.py": "d94c9ff2c7460aad728531dd574675e35170e718ae69681f4434593daf63fc47",
-    "docs/llm-input-rules.md": "7b3ce123cce1dcd9814652493e1239da71fd04fd8b0198b5b6f40aa3c5c56a72",
+    "docs/llm-input-rules.md": "59e9cb9ebc0ec51105e2b2160d0219df0f918d1053302c2167498db26f3f2f80",
     "dist/llm-docx-toolkit/llm-system-prompt.md": "57916c20b5819cf9ce7f92f5f9c93dcef3ca3dcb2f1c10d2590e4e30f584dbfa"
   },
   "widget_types": [
@@ -28,15 +28,14 @@
     "video",
     "whiteboard"
   ],
-  "chunk_count": 152,
+  "chunk_count": 140,
   "embedding_backend_fingerprint": "chunks-only:v1",
-  "chunks_sha256": "ba9f1dd48a22e99c049f4f5955869d4737109612404625b306978968e12d7bd4",
+  "chunks_sha256": "e457a0f6a7bb032c1854c9875cdeb3c6f20cee8dcf4c3df64af4ae5a2f0226ed",
   "sources": [
     "document.json",
     "example:all",
     "example:bad",
     "example:good",
-    "glossary",
     "llm-input-rules.md",
     "llm-system-prompt.md",
     "widget_markers.py"
