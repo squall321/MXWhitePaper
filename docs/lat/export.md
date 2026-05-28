@@ -91,6 +91,7 @@ renderer 별 추가 책임:
 | 옵션 | 모듈 | 용도 |
 |---|---|---|
 | `image_resolver: (image_id) → {bytes, mime}` | docx, pptx | 이미지 ID 를 실제 바이트로 해소. None 이면 figure 자리에 placeholder. |
+| `include_toc: bool` | docx | True 면 title 직후에 자동 TOC (level 1/2) emit. Default False — round-trip 호환성. `_render_toc()` 가 'List Bullet' / 'List Bullet 2' 스타일로 정적 텍스트 emit (python-docx 가 진짜 `TOC` 필드 빌드 API 미제공). html_renderer 와 동일한 level 1/2 한정 정책. pptx/markdown 은 미지원 (포맷이 TOC 의미를 자체적으로 갖지 않음). |
 | `requester_role` | 전부 | redaction 적용용. None = 원본 그대로. |
 | `theme` / `css_inline` 등 | html | 사용자 정의 스타일 |
 

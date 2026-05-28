@@ -475,8 +475,17 @@ _FIGURE_PREFIX_RE = re.compile(
 # Detect caption-like paragraphs by their leading word + numbering even when
 # the Word `Caption` style is missing — common for documents authored by
 # pasting text instead of using Word's "Insert Caption" tool.
+#
+# Two accepted shapes (the trailing separator is what tells "그림 1: 제목"
+# apart from prose like "Figure 1 shows our results"):
+#   A. ``그림 1: …`` / ``Figure 1. …`` — explicit separator (:, ., -, )) before text
+#   B. Bare ``그림 1`` / ``Figure 1`` with NO trailing text — title-only caption
+# We deliberately reject ``Figure 1 shows ...`` (no separator + trailing prose)
+# so a body paragraph that happens to start with a figure reference isn't
+# slurped into the previous figure as a caption.
 _CAPTION_LIKE_RE = re.compile(
-    r"^\s*(?:그림|표|차트|Figure|Table|Chart|Fig\.?)\s*\d+(?:[-.]\d+)*\s*[:.\-)]?\s*\S",
+    r"^\s*(?:그림|표|차트|Figure|Table|Chart|Fig\.?)\s*\d+(?:[-.]\d+)*"
+    r"(?:\s*[:.\-)]\s*\S|\s*$)",
     re.IGNORECASE,
 )
 

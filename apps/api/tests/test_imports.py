@@ -188,6 +188,54 @@ def test_table_with_caption_uses_meta_note() -> None:
     assert (tb.get("meta") or {}).get("note") == "표 1: 매출 요약"
 
 
+def test_caption_pattern_requires_separator_not_prose() -> None:
+    """L9 regression — "Figure 1 shows our results" 같은 본문이 직전 표/
+    이미지의 caption 으로 잘못 슬립되지 않는다. 표 직후 단락이라도 separator
+    (':', '.', '-', ')') 없이 trailing prose 가 따라오면 일반 paragraph 로
+    유지."""
+    docx = docx_import.build_minimal_docx(
+        headings=[(1, "T")],
+        table=[["분기", "매출"], ["Q1", "100"]],
+        paragraphs=[("Figure 1 shows our quarterly results in detail.", None)],
+    )
+    result = docx_import.docx_to_document(
+        docx, slug="t", title="", owner_user_id="u"
+    )
+    blocks = result["document"]["sections"][0]["blocks"]
+    table_blocks = [b for b in blocks if b["type"] == "table"]
+    paragraph_blocks = [b for b in blocks if b["type"] == "paragraph"]
+    assert len(table_blocks) == 1
+    # caption 으로 슬립되면 안 됨.
+    assert "caption" not in table_blocks[0]
+    # 본문 단락으로 살아 있어야 함.
+    assert any(
+        "Figure 1 shows" in (b.get("text") or "") for b in paragraph_blocks
+    )
+
+
+def test_caption_pattern_with_separator_still_attaches() -> None:
+    """L9 regression — separator (`:`, `.`, `-`, `)`) 가 있으면 여전히
+    caption 으로 attached. 기존 동작 회귀 가드."""
+    # 다양한 separator variant.
+    for cap_text, expected_clean in [
+        ("Figure 1: 분기별 매출 요약", "분기별 매출 요약"),
+        ("Figure 1. Quarterly summary", "Quarterly summary"),
+        ("그림 1 - 추세 그래프", "추세 그래프"),
+    ]:
+        docx = docx_import.build_minimal_docx(
+            headings=[(1, "T")],
+            table=[["분기", "매출"], ["Q1", "100"]],
+            paragraphs=[(cap_text, None)],
+        )
+        result = docx_import.docx_to_document(
+            docx, slug="t", title="", owner_user_id="u"
+        )
+        blocks = result["document"]["sections"][0]["blocks"]
+        table_blocks = [b for b in blocks if b["type"] == "table"]
+        assert len(table_blocks) == 1, cap_text
+        assert table_blocks[0].get("caption") == expected_clean, cap_text
+
+
 # ── HTTP-level tests ─────────────────────────────────────────────────
 @pytest.mark.asyncio
 async def test_import_docx_happy_path() -> None:

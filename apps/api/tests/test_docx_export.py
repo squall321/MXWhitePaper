@@ -541,3 +541,83 @@ def test_renderer_skips_substitution_inside_code_blocks() -> None:
     text = _all_text(Document(io.BytesIO(out)))
     assert "{{secret}}" in text
     assert "topsecret" not in text
+
+
+# ── TOC (include_toc opt-in) ─────────────────────────────────────────
+
+
+def _multi_section_doc() -> dict:
+    """두 개의 top-level section + 한 개의 subsection — TOC 라벨이 모두
+    뽑히는지 검증할 픽스처."""
+    return {
+        "schema_version": "1.0",
+        "id": "01TESTTOC0000000000000000Z",
+        "slug": "fixture-toc",
+        "title": "TOC 테스트",
+        "summary": "",
+        "metadata": {
+            "division": "MX",
+            "owners": ["someone@example.com"],
+            "confidentiality": "internal",
+        },
+        "sections": [
+            {
+                "id": "01SECTOC00000000000000001",
+                "number": "1",
+                "level": 1,
+                "title": "서론",
+                "blocks": [],
+                "subsections": [
+                    {
+                        "id": "01SECTOC00000000000000002",
+                        "number": "1.1",
+                        "level": 2,
+                        "title": "배경",
+                        "blocks": [],
+                        "subsections": [],
+                    }
+                ],
+            },
+            {
+                "id": "01SECTOC00000000000000003",
+                "number": "2",
+                "level": 1,
+                "title": "결론",
+                "blocks": [],
+                "subsections": [],
+            },
+        ],
+    }
+
+
+def test_renderer_include_toc_default_off_no_toc_heading() -> None:
+    """``include_toc`` 디폴트 False — '목차' 헤딩 안 박힘 (호환성)."""
+    out = render_docx(_multi_section_doc())
+    text = _all_text(Document(io.BytesIO(out)))
+    assert "목차" not in text
+
+
+def test_renderer_include_toc_opt_in_emits_section_titles() -> None:
+    """``include_toc=True`` 면 title 직후에 '목차' 헤딩 + level 1/2 단락이
+    나오고, 본문 헤딩은 그 뒤에 정상 emit."""
+    out = render_docx(
+        _multi_section_doc(), options=DocxOptions(include_toc=True)
+    )
+    doc = Document(io.BytesIO(out))
+    text = _all_text(doc)
+    # TOC heading + entries
+    assert "목차" in text
+    assert "1 서론" in text
+    assert "1.1 배경" in text
+    assert "2 결론" in text
+    # 본문 헤딩이 여전히 emit
+    headings = [
+        p.text for p in doc.paragraphs
+        if p.style is not None
+        and p.style.name is not None
+        and p.style.name.startswith("Heading")
+    ]
+    # '목차' 가 첫 헤딩, 그 뒤에 본문 섹션 헤딩
+    assert headings[0] == "목차"
+    assert any("1 서론" in h for h in headings[1:])
+    assert any("2 결론" in h for h in headings[1:])

@@ -95,9 +95,14 @@ class DocxOptions:
     """렌더 옵션.
 
     ``image_resolver``: image_id → ``{bytes: bytes, mime: str}`` 또는 None.
+    ``include_toc``: True 면 title 직후에 자동 생성 TOC (level 1/2) 를 emit.
+        round-trip 에서는 importer 가 본문 헤딩을 그대로 보존하므로
+        default False (호환성). html_renderer 와 동일한 정책 (level 1/2 만,
+        level 3+ 는 생략 — 인쇄 친화).
     """
 
     image_resolver: ImageResolver | None = None
+    include_toc: bool = False
 
 
 def render_docx(
@@ -131,6 +136,8 @@ def render_docx(
     ctx.figure_index = _precompute_figure_index(doc)
 
     _render_title(document, doc)
+    if opts.include_toc:
+        _render_toc(document, doc.get("sections") or [])
     for section in doc.get("sections") or []:
         _render_section(document, section, ctx)
 
@@ -186,6 +193,41 @@ def _render_title(document: Any, doc: dict[str, Any]) -> None:
         run = meta_p.add_run(" / ".join(meta_parts))
         run.italic = True
         run.font.size = Pt(10)
+
+
+# ── Optional TOC (opt-in via DocxOptions.include_toc) ────────────────
+
+
+def _render_toc(document: Any, sections: list[dict[str, Any]]) -> None:
+    """Title 직후에 ``목차`` 헤딩 + level 1/2 nested 리스트로 TOC emit.
+
+    html_renderer ``_render_toc`` 와 동일한 정책: level 3+ 는 인쇄 친화로
+    생략. Word 의 진짜 ``TOC`` 필드 (페이지 번호 자동 채움) 는 python-docx
+    가 빌드 API 를 제공하지 않아 사용 불가 — 정적 텍스트 목록으로 emit.
+    빈 sections 면 no-op (heading 도 안 찍음).
+    """
+    if not sections:
+        return
+    document.add_heading("목차", level=1)
+    for s in sections:
+        _toc_entry(document, s, indent=0)
+        for sub in s.get("subsections") or []:
+            _toc_entry(document, sub, indent=1)
+
+
+def _toc_entry(document: Any, section: dict[str, Any], *, indent: int) -> None:
+    number = _str(section.get("number"))
+    title = _str(section.get("title"))
+    if not (number or title):
+        return
+    label = f"{number} {title}".strip()
+    # 'List Bullet' / 'List Bullet 2' 는 python-docx default template 에
+    # 포함된 스타일. indent 1 은 두 번째 들여쓰기.
+    style = "List Bullet 2" if indent else "List Bullet"
+    try:
+        document.add_paragraph(label, style=style)
+    except KeyError:
+        document.add_paragraph(label)
 
 
 # ── Section rendering ────────────────────────────────────────────────

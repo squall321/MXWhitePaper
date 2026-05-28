@@ -179,6 +179,13 @@ caption 으로 묶는다 — [[src/app/services/docx_import.py#_looks_like_capti
 [[src/tests/test_imports.py#test_caption_pattern_without_style_attaches_to_table]]
 가 가드.
 
+**L9 가드** — `_CAPTION_LIKE_RE` 는 separator (`:` / `.` / `-` / `)`) 가
+text 와 함께 있을 때만 매치한다. ``Figure 1 shows our results`` 같이
+separator 없는 본문 prose 는 caption 으로 슬립되지 않음 (의도된 회귀
+가드: [[src/tests/test_imports.py#test_caption_pattern_requires_separator_not_prose]]).
+title-only caption (``Figure 1`` 단독 한 줄) 은 separator 없이도 허용 —
+``\d+(?:\s*$)`` 분기.
+
 ### TOC detection (요약)
 
 | Method | 방법 | 신뢰도 |
