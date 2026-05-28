@@ -207,7 +207,8 @@
 | `patch_section()`, `patch_block()`, … | [[src/app/services/document_service.py#patch_section]] 부근 | 부분 수정 패밀리 |
 | `move_block()`, `reorder_sections()` | [[src/app/services/document_service.py#move_block]] | 트리 재배열 |
 | `restore_version()` | [[src/app/services/document_service.py#restore_version]] | 과거 버전 → 새 버전 INSERT |
-| `update_links_for_document()` | [[src/app/services/document_service.py#update_links_for_document]] | 본문 위키링크 → `links` 테이블 |
+| `update_links_for_document()` | [[src/app/services/document_service.py#update_links_for_document]] | 본문 위키링크 → `links` 테이블 (alias → canonical redirect 포함) |
+| `resolve_term_aliases()` | [[src/app/services/wiki_link_alias.py#resolve_term_aliases]] | approved glossary term 의 aliases 슬러그를 canonical term 으로 rewrite |
 | `refresh_search_view()` | [[src/app/services/document_service.py#refresh_search_view]] | materialized view refresh (테스트는 `MXWP_SKIP_VIEW_REFRESH=1`) |
 | `reindex_meili()` | [[src/app/services/document_service.py#reindex_meili]] | Meilisearch 색인 |
 
@@ -274,10 +275,15 @@ toolbar 에서 즉시 override 후 "💾 저장" 으로 영구 반영. FE 진입
 ## Webhooks + Meilisearch + Glossary
 
 매 저장/패치 flush 시:
-1. `update_links_for_document()` — 본문에서 `[[…]]` 추출 → `links` 테이블 갱신
-   (★ 응답 경로 = 트랜잭션 일관성)
+1. `update_links_for_document()` — 본문에서 `[[…]]` 추출 → `resolve_term_aliases()`
+   로 approved glossary alias → canonical term 슬러그 redirect → `links` 테이블 갱신
+   (★ 응답 경로 = 트랜잭션 일관성). alias 가 hit 되면 link 의 `metadata.alias_of`
+   에 원본이 보존된다.
 2. `upsert_glossary_terms()` — 본문에 새 용어가 있으면 glossary 자동 등록
-   (응답 경로 = 같은 commit)
+   (응답 경로 = 같은 commit). ★ glossary-knowledge-graph (0048) 이후 INSERT 가
+   `domain='general', status='approved'` 로 명시되고 `ON CONFLICT (term, domain)
+   WHERE domain IS NOT NULL` partial-UNIQUE 와 매칭됨 — 기존 `(term)` UNIQUE 는
+   migration 0048 에서 drop.
 3. `reindex_meili()` — Meilisearch `documents` index 갱신
 4. `fire_webhook()` — 등록된 외부 URL 에 이벤트 발송 (3 회 재시도)
 5. `refresh_search_view()` — PostgreSQL materialized view refresh

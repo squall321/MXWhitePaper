@@ -654,6 +654,136 @@ def _chunks_from_examples(repo_root: Path) -> list[Chunk]:
     return out
 
 
+# ── 6. glossary (DB-backed — approved terms) ──────────────────────────
+
+
+def _glossary_database_url() -> str | None:
+    """Resolve a *sync* asyncpg-compatible URL for the chunker. We accept the
+    same env var apps/api uses (`DATABASE_URL`) but strip the SQLAlchemy
+    dialect prefix because asyncpg.connect speaks plain DSN."""
+    import os
+
+    raw = os.environ.get("DATABASE_URL") or os.environ.get("MXWP_DATABASE_URL")
+    if not raw:
+        return None
+    # postgresql+asyncpg://user:pw@host:port/db  →  postgresql://user:pw@host:port/db
+    if raw.startswith("postgresql+asyncpg://"):
+        return "postgresql://" + raw[len("postgresql+asyncpg://"):]
+    if raw.startswith("postgres+asyncpg://"):
+        return "postgres://" + raw[len("postgres+asyncpg://"):]
+    return raw
+
+
+def _fetch_glossary_rows(dsn: str) -> list[dict[str, Any]]:
+    """Pull approved terms from `terms` joined to `term_domains` for the
+    domain display name. Returns plain dicts (no driver objects) so the
+    caller can stay sync-friendly."""
+    import asyncio
+
+    import asyncpg  # type: ignore[import-not-found]
+
+    async def _go() -> list[dict[str, Any]]:
+        conn = await asyncpg.connect(dsn)
+        try:
+            # term_en / aliases were added in 0048; columns may be absent on
+            # older deployments. We guard so a stale DB doesn't crash the
+            # chunker — it just yields fewer chunks.
+            cols = await conn.fetch(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'terms'"
+            )
+            colset = {r["column_name"] for r in cols}
+            if not {"status", "domain", "aliases"}.issubset(colset):
+                return []
+            term_en_sql = "t.term_en" if "term_en" in colset else "NULL"
+            rows = await conn.fetch(
+                f"""
+                SELECT
+                  t.term,
+                  t.definition,
+                  t.domain,
+                  COALESCE(d.name, t.domain) AS domain_name,
+                  t.subdomain,
+                  {term_en_sql} AS term_en,
+                  t.aliases
+                FROM terms t
+                LEFT JOIN term_domains d ON d.slug = t.domain
+                WHERE t.status = 'approved'
+                ORDER BY COALESCE(t.domain, ''), t.term
+                """
+            )
+            return [dict(r) for r in rows]
+        finally:
+            await conn.close()
+
+    try:
+        return asyncio.run(_go())
+    except RuntimeError:
+        # If a loop is already running (rare for the CLI), fall back to
+        # creating a fresh loop. This keeps the function importable from
+        # async contexts as well.
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(_go())
+        finally:
+            loop.close()
+
+
+def _chunks_from_glossary(*, verbose: bool = False) -> list[Chunk]:
+    """Produce one chunk per approved term in the DB. Skips silently when
+    DATABASE_URL is unset or the DB is unreachable — the chunker still
+    succeeds for file-based sources, mirroring how the optional
+    llm-system-prompt source behaves."""
+    dsn = _glossary_database_url()
+    if not dsn:
+        if verbose:
+            print("  glossary: DATABASE_URL not set — skipping")
+        return []
+    try:
+        rows = _fetch_glossary_rows(dsn)
+    except Exception as e:  # noqa: BLE001 — DB unreachable is non-fatal here
+        if verbose:
+            print(f"  glossary: skipped ({type(e).__name__}: {e})")
+        return []
+
+    out: list[Chunk] = []
+    for r in rows:
+        term = r["term"]
+        domain = r.get("domain") or "general"
+        domain_name = r.get("domain_name") or domain
+        definition = r.get("definition") or ""
+        term_en = r.get("term_en")
+        aliases = r.get("aliases") or []
+        subdomain = r.get("subdomain")
+
+        lines = [f"용어: {term}"]
+        if term_en:
+            lines.append(f"영문: {term_en}")
+        if subdomain:
+            lines.append(f"분야: {domain_name} / {subdomain}")
+        else:
+            lines.append(f"분야: {domain_name}")
+        lines.append(f"정의: {definition}")
+        if aliases:
+            lines.append(f"동의어: {', '.join(aliases)}")
+        text = "\n".join(lines)
+
+        out.append(Chunk(
+            id=f"glossary:{domain}:{_slugify(term)}",
+            source="glossary",
+            heading=f"glossary: {term} ({domain})",
+            text=text,
+            metadata={
+                "term": term,
+                "domain": domain,
+                "subdomain": subdomain,
+                "term_en": term_en,
+                "aliases": list(aliases),
+            },
+        ))
+    return out
+
+
 # ── public API ────────────────────────────────────────────────────────
 
 
@@ -666,6 +796,7 @@ def build_chunks(repo_root: Path) -> list[Chunk]:
     chunks.extend(_chunks_from_schema(repo_root))
     chunks.extend(_chunks_from_system_prompt(repo_root))
     chunks.extend(_chunks_from_examples(repo_root))
+    chunks.extend(_chunks_from_glossary())
     chunks.sort(key=lambda c: c.id)
     return chunks
 
@@ -761,6 +892,7 @@ def main(argv: list[str] | None = None) -> int:
         chunk_count=len(chunks),
         embedding_backend_fingerprint="chunks-only:v1",
         chunks_sha256=sha,
+        sources=sorted({c.source for c in chunks}),
     )
 
     by_source: dict[str, int] = {}
@@ -771,12 +903,17 @@ def main(argv: list[str] | None = None) -> int:
     widgets_n = by_source.get("widget_markers.py", 0)
     schema_n = by_source.get("document.json", 0)
     prompt_n = by_source.get("llm-system-prompt.md", 0)
+    glossary_n = by_source.get("glossary", 0)
     examples_n = sum(v for k, v in by_source.items() if k.startswith("example:"))
 
     prompt_path = repo_root / "dist" / "llm-docx-toolkit" / "llm-system-prompt.md"
     prompt_label = (
         f"{prompt_n}" if prompt_path.exists() else "skipped — file missing"
     )
+    if _glossary_database_url():
+        glossary_label = f"{glossary_n}"
+    else:
+        glossary_label = "skipped — DATABASE_URL unset"
 
     print(f"wrote {len(chunks)} chunks to {out_path} (sha={sha})")
     print(f"wrote lock     to {lock_path}")
@@ -787,6 +924,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  widget_markers.py: {widgets_n}")
     print(f"  document.json: {schema_n}")
     print(f"  llm-system-prompt.md: {prompt_label}")
+    print(f"  glossary (DB): {glossary_label}")
     print(f"  examples: {examples_n}")
     print(f"sha256: {sha}")
     return 0

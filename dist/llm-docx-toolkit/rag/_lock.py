@@ -31,6 +31,10 @@ LOCK_SCHEMA_VERSION = 1
 
 # Files whose content the RAG index reflects. ANY change here REQUIRES
 # regenerating chunks + embeddings. Listed in build order (most-stable first).
+#
+# Glossary chunks (source="glossary") come from the live `terms` table — they
+# are not file-backed so they cannot be hashed here. The `glossary` source is
+# advertised in the lock's `sources` field instead (see chunker.py main()).
 TRACKED_SOURCES = (
     "packages/shared/schemas/document.json",
     "apps/api/app/services/widget_markers.py",
@@ -65,8 +69,9 @@ def write_lock(
     chunk_count: int,
     embedding_backend_fingerprint: str,
     chunks_sha256: str,
+    sources: list[str] | None = None,
 ) -> None:
-    payload = {
+    payload: dict[str, Any] = {
         "schema_version": LOCK_SCHEMA_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source_hashes": source_hashes,
@@ -75,6 +80,12 @@ def write_lock(
         "embedding_backend_fingerprint": embedding_backend_fingerprint,
         "chunks_sha256": chunks_sha256,
     }
+    # Per-chunk-source label list (e.g. file paths + non-file "glossary" DB
+    # source). Lets `cli.py --check` enumerate everything the index covers
+    # without parsing chunks.jsonl. Only emitted when caller provides it so
+    # older callers stay backward-compatible.
+    if sources is not None:
+        payload["sources"] = sorted(set(sources))
     path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

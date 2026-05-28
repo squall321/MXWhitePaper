@@ -475,3 +475,49 @@ Content-Type: application/json
 
 자세한 스키마는 `packages/shared/schemas/document.json`, LLM 친화 가이드는
 `docs/llm-widgets-via-api.md` 참고.
+
+## 9. 어휘 사전 활용
+
+본 시스템에는 분야별 어휘 사전 (`/api/v1/glossary`) 이 있다. RAG 인덱스에
+`status='approved'` 인 모든 용어가 chunk 로 들어가 있어, LLM 이 정의 / 분야 /
+동의어를 본문 작성에 참고할 수 있다.
+
+### 9.1 본문 작성 시
+
+- 전문 용어를 처음 도입할 때는 `[[용어]]` 형식의 위키 링크를 사용. 독자가
+  hover 또는 클릭으로 정의를 즉시 확인할 수 있다.
+- 위키 링크의 슬러그는 정규식 `[a-z0-9가-힣-]{1,100}` 만 허용. 공백 / 대문자 /
+  특수문자는 자동으로 매칭 실패한다.
+- 같은 용어가 분야마다 의미가 다를 수 있으므로 (`커널` = ML | OS), 가능하면
+  `[[term|표시명]]` 으로 분야 컨텍스트를 본문에 명시.
+
+### 9.2 동의어 (alias) 자동 인식
+
+approved 용어에 `aliases` 가 등록돼 있으면 `[[alias]]` 도 canonical term 으로
+자동 redirect 된다 (links 테이블 저장 시점). 단:
+
+- alias 역시 슬러그 규칙 (소문자/숫자/한글/하이픈) 을 따라야 본문에서
+  파싱된다. 공백이 포함된 alias 는 별도 `[[term|alias 표시]]` 로 작성.
+- redirect 시 원본 alias 는 link metadata 의 `alias_of` 필드에 보존된다.
+
+### 9.3 미등록 용어 발견 시
+
+LLM 이 RAG 컨텍스트에 없는 새 전문 용어를 본문에 도입했다면, 사용자에게
+*제안 엔드포인트* (`POST /api/v1/glossary/propose`) 를 안내한다.
+
+```jsonc
+POST /api/v1/glossary/propose
+Authorization: Bearer <token>
+{
+  "term": "GaN 소자",
+  "definition": "질화갈륨 기반의 광대역 갭 반도체 소자.",
+  "domain": "semiconductor",
+  "subdomain": "power",
+  "aliases": ["GaN", "질화갈륨"]
+}
+```
+
+admin 이 승인하면 다음 RAG 재인덱싱 시점부터 LLM 이 자동으로 해당 용어를
+컨텍스트로 사용한다 (chunker 의 glossary 소스가 DB 의 approved terms 를
+직접 읽는다).
+
