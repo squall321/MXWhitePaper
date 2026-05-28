@@ -179,7 +179,9 @@ export function QuickInsertBar({ slug, items = ITEMS, onInserted }: Props) {
       data-quick-insert-bar
       role="toolbar"
       aria-label="빠른 블록 삽입"
-      className="-mx-4 flex items-stretch gap-1 overflow-x-auto border-t border-gray-200 bg-white/95 px-4 py-1.5 text-xs sm:-mx-6 sm:px-6"
+      // `scroll-fade-x` — mobile (375px) only fits ~3 of the 13 buttons; the
+      // fade hints there's more to scroll. Same affordance utility as TableBlock.
+      className="scroll-fade-x -mx-4 flex items-stretch gap-1 overflow-x-auto border-t border-gray-200 bg-white/95 px-4 py-1.5 text-xs sm:-mx-6 sm:px-6"
     >
       {items.map((it) => {
         const glow = it.kind === 'image' && clipboardHasImage

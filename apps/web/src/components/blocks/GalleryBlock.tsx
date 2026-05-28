@@ -48,7 +48,11 @@ export function GalleryBlockView({ block }: { block: GalleryBlock }) {
   return (
     <>
       {block.layout === 'carousel' ? (
-        <div className="my-4 flex snap-x gap-3 overflow-x-auto">{tiles}</div>
+        // `scroll-fade-x` paints a soft edge gradient that shrinks as the
+        // user scrolls — gives mobile users a visible cue that more tiles
+        // exist off-screen (otherwise the snap-x scrollbar stays invisible
+        // until they drag). Same utility used by TableBlock / SpreadsheetBlock.
+        <div className="scroll-fade-x my-4 flex snap-x gap-3 overflow-x-auto">{tiles}</div>
       ) : (
         <div className="my-4 grid grid-cols-2 gap-3 sm:grid-cols-3">{tiles}</div>
       )}

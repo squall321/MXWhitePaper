@@ -67,6 +67,12 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
   const [filters, setFilters] = useState<DocFilters>(EMPTY_FILTERS)
   const [activeIdx, setActiveIdx] = useState(0)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  // Track the visual-viewport height so the results list can shrink when the
+  // mobile soft-keyboard pops up. Without this, the keyboard can cover the
+  // input (the dialog is `items-end` on mobile and `max-h-80` on the list,
+  // so the bottom keyboard-hint row + list together push the input above
+  // the keyboard, sometimes off-screen).
+  const [listMaxPx, setListMaxPx] = useState<number | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const listboxId = useId()
   const navigate = useNavigate()
@@ -202,6 +208,36 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
+
+  // Mobile keyboard guard — when the soft-keyboard pops up the visual
+  // viewport shrinks but the layout viewport doesn't, so a bottom-pinned
+  // dialog can be covered. We subtract chrome (input + tabs + hint row
+  // ≈ 160px) from the viewport height and use that as the results-list
+  // cap. Only kicks in below the `sm` breakpoint; desktop keeps `max-h-80`.
+  useEffect(() => {
+    if (!open) return
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null
+    if (!vv) return
+    const recompute = () => {
+      const isMobile = window.innerWidth < 640 // tailwind `sm`
+      if (!isMobile) {
+        setListMaxPx(null)
+        return
+      }
+      // Reserve room for input (~52), tab bar (~36), filter chips (~36 when
+      // present), and footer hints (~36). 160 is a safe minimum.
+      const reserved = 160
+      const available = Math.max(120, vv.height - reserved)
+      setListMaxPx(available)
+    }
+    recompute()
+    vv.addEventListener('resize', recompute)
+    window.addEventListener('resize', recompute)
+    return () => {
+      vv.removeEventListener('resize', recompute)
+      window.removeEventListener('resize', recompute)
+    }
+  }, [open])
 
   if (!open) return null
 
@@ -350,7 +386,11 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
             />
           )}
 
-          <div className="max-h-80 overflow-y-auto p-2">
+          <div
+            className="max-h-80 overflow-y-auto p-2"
+            data-testid="palette-results"
+            style={listMaxPx ? { maxHeight: `${listMaxPx}px` } : undefined}
+          >
             {tab === 'docs' ? (
               <DocResults
                 q={q}
