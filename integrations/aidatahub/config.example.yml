@@ -1,0 +1,47 @@
+# MXWhitePaper → AX Hub 동기화 설정
+#
+# 환경변수 ${VAR} 자동 치환.
+
+aidatahub:
+  base_url: "http://aidatahub:8001"
+  api_key: "${AIDH_API_KEY}"
+  external_source: "mxwp"
+
+mxwp:
+  base_url: "http://mxwp-api:8000"
+  api_key: "${MXWP_API_KEY}"
+  filter:
+    # 'published' 만 동기화 (draft / archived 제외)
+    status: "published"
+
+sync:
+  # AX Hub 한 호출당 record 수
+  batch_size: 50
+
+  # MXWP 목록 페이지 크기 (max 100, Sprint 2 cursor 미구현 — 1페이지만 가져옴)
+  # 100문서 초과시 MXWP 측에 cursor 보강 요청 필요.
+  page_size: 100
+
+  # 우리 측 throttle (req/s) — list + detail 각각에 적용
+  max_rps: 2.0
+
+  # 이미지 처리 정책
+  # url_ref          : MinIO presigned URL 을 record_attachments.source_url 에 저장 (빠름, 권장)
+  # download_upload  : MinIO 다운 → AX Hub /attachments 로 업로드 (무거움, MXWP 폐기 후에도 보존)
+  attachment_mode: "url_ref"
+
+  # DocumentJSON 의 어느 필드를 우리가 보존할지
+  fields_keep:
+    - document_id
+    - slug
+    - title
+    - summary
+    - status
+    - tags
+    - authors
+    - keywords
+    - version
+    - etag
+    - created_at
+    - updated_at
+    - sections

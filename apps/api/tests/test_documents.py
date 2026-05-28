@@ -61,6 +61,29 @@ async def test_list_documents_returns_seed() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_documents_offset_pagination_aidatahub() -> None:
+    """Sprint 3 — AIDataHub 통합용 limit/offset 페이지네이션.
+
+    page1 (limit=2, offset=0) 와 page2 (limit=2, offset=2) 의 slug 가 겹치지
+    않고, page1 의 meta.next_offset = 2 인지 검증. seed >= 5 문서.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        p1 = await ac.get("/api/v1/documents", params={"limit": 2, "offset": 0})
+        p2 = await ac.get("/api/v1/documents", params={"limit": 2, "offset": 2})
+    assert p1.status_code == 200 and p2.status_code == 200
+    b1, b2 = p1.json(), p2.json()
+    slugs1 = {d["slug"] for d in b1["data"]}
+    slugs2 = {d["slug"] for d in b2["data"]}
+    assert len(slugs1) == 2 and len(slugs2) == 2
+    assert slugs1.isdisjoint(slugs2), "offset 페이지가 겹침"
+    # meta.next_offset
+    assert b1["meta"]["offset"] == 0
+    assert b1["meta"]["next_offset"] == 2
+    assert b2["meta"]["offset"] == 2
+
+
+@pytest.mark.asyncio
 async def test_post_then_get_round_trip() -> None:
     """sample doc 을 신규 slug 로 복제 등록 → GET 으로 동일 slug 조회 가능."""
     sample = json.loads((SAMPLES / "05-minimal-doc.json").read_text(encoding="utf-8"))

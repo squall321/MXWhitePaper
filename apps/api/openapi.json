@@ -7892,6 +7892,19 @@
             }
           },
           {
+            "description": "Sprint 3 — limit/offset 페이지네이션 (AIDataHub 통합용)",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Sprint 3 — limit/offset 페이지네이션 (AIDataHub 통합용)",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
             "in": "query",
             "name": "cursor",
             "required": false,

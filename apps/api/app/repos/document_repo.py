@@ -55,6 +55,7 @@ async def list_documents(
     q: str | None = None,
     status_filter: str = "published",
     limit: int = 20,
+    offset: int = 0,  # Sprint 3 — limit/offset 페이지네이션 (AIDataHub 통합용)
 ) -> list[dict[str, Any]]:
     """Sprint 2 — 계층 슬러그 필터.
 
@@ -74,7 +75,10 @@ async def list_documents(
     where: list[str] = ["d.status != 'archived'"]
     if status_filter and status_filter != "all":
         where = [f"d.status = '{status_filter}'"]  # 상수만 들어옴
-    params: dict[str, Any] = {"limit": min(max(limit, 1), 100)}
+    params: dict[str, Any] = {
+        "limit": min(max(limit, 1), 100),
+        "offset": max(0, int(offset)),
+    }
     join = ""
 
     needs_part = bool(part_slug or group_slug or team_slug or division_slug)
@@ -113,8 +117,8 @@ async def list_documents(
                d.version, d.updated_at, d.part_id
         FROM documents d {join}
         WHERE {' AND '.join(where)}
-        ORDER BY d.updated_at DESC
-        LIMIT :limit
+        ORDER BY d.updated_at DESC, d.id
+        LIMIT :limit OFFSET :offset
     """
     rows = (await s.execute(text(sql), params)).all()
     return [

@@ -62,6 +62,7 @@ async def list_documents(
     tag: str | None = Query(default=None, description="태그 이름 필터"),
     q: str | None = Query(default=None, description="title/summary LIKE 검색"),
     limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, description="Sprint 3 — limit/offset 페이지네이션 (AIDataHub 통합용)"),
     cursor: str | None = Query(default=None),  # Sprint 2+ 에서 구현
     s: AsyncSession = Depends(get_db),
     _user: dict = Depends(require_reader),
@@ -81,10 +82,19 @@ async def list_documents(
         tag=tag,
         q=q,
         limit=limit,
+        offset=offset,
     )
+    # next_offset: 한 페이지 가득 채워졌으면 다음 offset 제공
+    next_offset = offset + limit if len(items) == limit else None
     return envelope(
         data=items,
-        meta={"count": len(items), "cursor": None, "limit": limit},
+        meta={
+            "count": len(items),
+            "cursor": None,
+            "limit": limit,
+            "offset": offset,
+            "next_offset": next_offset,
+        },
     )
 
 
