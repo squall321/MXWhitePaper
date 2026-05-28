@@ -49,6 +49,13 @@ export interface EditorStateSnapshot {
    */
   pendingCaptionFocusBlockId: Ulid | null
   /**
+   * ID of any block that was just inserted (slash menu / palette / wrap /
+   * etc.) and should scroll into view on mount. Cleared by the consuming
+   * block wrapper after one render cycle. Independent of caption focus so
+   * non-image blocks (code/list/callout/...) also get the affordance.
+   */
+  pendingScrollBlockId: Ulid | null
+  /**
    * Patch-level undo / redo history. Each entry is a server document
    * version we can restore back to. The lists are populated automatically
    * by `applyServerSnapshot`: every successful mutation pushes the
@@ -96,6 +103,9 @@ export interface EditorActions {
   setConflict(remote: DocumentJSONV10 | null, remoteEtag?: string | null): void
   /** Mark a freshly-inserted image block for caption auto-focus. */
   setPendingCaptionFocus(blockId: Ulid | null): void
+  /** Mark a freshly-inserted block (any type) so its wrapper scrolls it
+   *  into view on mount. Cleared by the wrapper after consuming once. */
+  setPendingScrollFocus(blockId: Ulid | null): void
 }
 
 export type EditorStore = EditorStateSnapshot & EditorActions
@@ -114,6 +124,7 @@ const initialSnapshot: EditorStateSnapshot = {
   baseContent: null,
   baseEtag: null,
   pendingCaptionFocusBlockId: null,
+  pendingScrollBlockId: null,
   currentVersion: null,
   undoStack: [],
   redoStack: [],
@@ -335,6 +346,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   setPendingCaptionFocus: (blockId) =>
     set({ pendingCaptionFocusBlockId: blockId }),
+  setPendingScrollFocus: (blockId) => set({ pendingScrollBlockId: blockId }),
 }))
 
 /** Convenience selectors. */

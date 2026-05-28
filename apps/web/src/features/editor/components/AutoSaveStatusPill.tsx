@@ -16,7 +16,12 @@ import { useConnectionStore } from '../connectionStore'
  *
  * Test seam: `nowOverride` lets unit tests pin "now" without faking timers.
  */
-export type AutoSaveVisualKind = 'idle' | 'saving' | 'offline' | 'conflict'
+export type AutoSaveVisualKind =
+  | 'idle'
+  | 'saving'
+  | 'offline'
+  | 'conflict'
+  | 'error'
 
 export interface AutoSaveStatusPillProps {
   /** Click handler for the conflict state — typically opens the merge modal. */
@@ -37,6 +42,7 @@ const PALETTE: Record<AutoSaveVisualKind, string> = {
   saving: 'border-smsg-200 bg-smsg-50 text-smsg-700',
   offline: 'border-amber-300 bg-amber-100 text-amber-900',
   conflict: 'border-red-300 bg-red-50 text-red-800',
+  error: 'border-red-300 bg-red-50 text-red-800',
 }
 
 /** Plain-Korean relative-time formatter. */
@@ -88,6 +94,8 @@ export function AutoSaveStatusPill({
     kind = 'offline'
   } else if (status === 'saving') {
     kind = 'saving'
+  } else if (status === 'error') {
+    kind = 'error'
   } else {
     kind = 'idle'
   }
@@ -119,6 +127,10 @@ export function AutoSaveStatusPill({
       label = '충돌 — 새로고침 필요'
       tooltip = '다른 곳에서 같은 문서가 수정되었습니다. 클릭해 병합하세요.'
       break
+    case 'error':
+      label = '저장 실패 — 알림함 확인'
+      tooltip = '알림함에서 자세한 사유와 다음 조치를 확인하세요.'
+      break
     case 'idle':
     default: {
       const rel = formatRelative(lastSavedAt, nowOverride ?? now)
@@ -142,7 +154,9 @@ export function AutoSaveStatusPill({
         ? '💾'
         : kind === 'offline'
           ? '📡'
-          : '⚠'
+          : kind === 'error'
+            ? '✕'
+            : '⚠'
 
   return (
     <Tag

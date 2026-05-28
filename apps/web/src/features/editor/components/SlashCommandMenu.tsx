@@ -104,6 +104,7 @@ export function SlashCommandMenu({ slug, sectionId, index, open, onClose, anchor
   const applySnapshot = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
   const setPendingCaptionFocus = useEditorStore((s) => s.setPendingCaptionFocus)
+  const setPendingScrollFocus = useEditorStore((s) => s.setPendingScrollFocus)
 
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
@@ -134,14 +135,18 @@ export function SlashCommandMenu({ slug, sectionId, index, open, onClose, anchor
     if (!etag) return
     setBusy(true)
     setError(null)
+    const built = item.build()
     try {
       const result = await insertBlock(
         slug,
-        { section_id: sectionId, index, block: item.build() },
+        { section_id: sectionId, index, block: built },
         etag,
         `블록 추가: ${item.label}`,
       )
       applySnapshot(result.document, result.etag)
+      // Scroll the new block into view — image blocks get caption focus
+      // via the separate `pendingCaptionFocus` flow and don't need this.
+      setPendingScrollFocus(built.id)
       onClose()
     } catch (err) {
       if (isPreconditionFailed(err)) {

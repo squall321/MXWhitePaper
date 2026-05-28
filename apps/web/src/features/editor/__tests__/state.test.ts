@@ -87,4 +87,25 @@ describe('editor/state', () => {
     expect(s.dirty).toBe(false)
     expect(s.mode.kind).toBe('reader')
   })
+
+  // L1: non-image block inserts need a scroll affordance. The slash menu and
+  // insert palette set `pendingScrollBlockId`; the SortableBlock wrapper
+  // consumes it on mount via scrollIntoView + focus, then clears.
+  it('setPendingScrollFocus() stores and clears the target id', () => {
+    const id = '01TEST00000000000000BLOCK1' as const
+    expect(useEditorStore.getState().pendingScrollBlockId).toBeNull()
+    useEditorStore.getState().setPendingScrollFocus(id)
+    expect(useEditorStore.getState().pendingScrollBlockId).toBe(id)
+    useEditorStore.getState().setPendingScrollFocus(null)
+    expect(useEditorStore.getState().pendingScrollBlockId).toBeNull()
+  })
+
+  it('pendingScrollBlockId is independent of pendingCaptionFocusBlockId', () => {
+    const a = '01TEST00000000000000BLOCKA' as const
+    const b = '01TEST00000000000000BLOCKB' as const
+    useEditorStore.getState().setPendingCaptionFocus(a)
+    useEditorStore.getState().setPendingScrollFocus(b)
+    expect(useEditorStore.getState().pendingCaptionFocusBlockId).toBe(a)
+    expect(useEditorStore.getState().pendingScrollBlockId).toBe(b)
+  })
 })

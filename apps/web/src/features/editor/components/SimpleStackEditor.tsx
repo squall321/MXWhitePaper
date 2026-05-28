@@ -172,6 +172,10 @@ export function SimpleStackEditor({ slug, section, autoFocusTitle }: Props) {
           `${it.label} 추가`,
         )
         apply(result.document, result.etag)
+        // Surface the new block to the user — non-image types lack the
+        // image flow's caption-focus path, so without this they could be
+        // off-screen in a long section.
+        useEditorStore.getState().setPendingScrollFocus(block.id)
       } catch (err) {
         if (isPreconditionFailed(err)) setConflict(null)
       } finally {
@@ -951,14 +955,45 @@ function SortableBlock({
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
   })
+  // When this block id matches the editor's `pendingScrollBlockId`, scroll
+  // it into view once on mount. Lets non-image blocks (code/list/callout/...)
+  // get the same "jumped into view" affordance the image flow already has.
+  // Cleared after consuming so a re-render doesn't keep yanking the viewport.
+  const pendingScrollId = useEditorStore((s) => s.pendingScrollBlockId)
+  const clearScroll = useEditorStore((s) => s.setPendingScrollFocus)
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (pendingScrollId !== block.id) return
+    const node = wrapperRef.current
+    if (!node) return
+    const r = requestAnimationFrame(() => {
+      try {
+        node.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      } catch {
+        /* JSDOM and old browsers — best effort. */
+      }
+      // Focus the first editable surface so the user can immediately type.
+      const editable = node.querySelector<HTMLElement>(
+        '[contenteditable="true"], input[type="text"]:not([readonly]), textarea:not([readonly])',
+      )
+      editable?.focus()
+    })
+    clearScroll(null)
+    return () => cancelAnimationFrame(r)
+  }, [pendingScrollId, block.id, clearScroll])
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
   }
+  // Compose dnd-kit's setNodeRef with our own ref for scroll targeting.
+  const setRef = (node: HTMLDivElement | null) => {
+    setNodeRef(node)
+    wrapperRef.current = node
+  }
   return (
     <div
-      ref={setNodeRef}
+      ref={setRef}
       style={style}
       {...attributes}
       data-sortable-block-id={block.id}

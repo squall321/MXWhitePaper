@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { AUTO_SAVE_THRESHOLDS, countBlocks, pickIdleMs } from '../hooks/useAutoSave'
+import {
+  AUTO_SAVE_THRESHOLDS,
+  countBlocks,
+  pickIdleMs,
+  classifyAutoSaveError,
+} from '../hooks/useAutoSave'
 import { useConnectionStore } from '../connectionStore'
 import type { DocumentJSONV10, Section, Block } from '@/types/document'
 
@@ -235,5 +240,44 @@ describe('editor/useAutoSave saving-status debounce (M7)', () => {
       }, AUTO_SAVE_THRESHOLDS.SAVING_STATUS_DEBOUNCE_MS)
     })
     expect(status).toBe('saving')
+  })
+})
+
+/**
+ * L3 — error classification. The auto-save loop now turns axios failures into
+ * distinct user-facing copy so the notification bell can tell "권한 없음" from
+ * "오프라인" from "서버 점검 중". 412 is intentionally NOT routed through this
+ * classifier — the conflict modal owns that path.
+ */
+describe('editor/useAutoSave error classification (L3)', () => {
+  const make = (status?: number) =>
+    status == null ? new Error('Network Error') : { response: { status } }
+
+  it('no response → offline / retry copy', () => {
+    const v = classifyAutoSaveError(make())
+    expect(v.message).toContain('오프라인')
+    expect(v.category).toBe('system')
+  })
+
+  it('401 / 403 → permission copy', () => {
+    expect(classifyAutoSaveError(make(401)).message).toContain('권한')
+    expect(classifyAutoSaveError(make(403)).message).toContain('권한')
+  })
+
+  it('503 → maintenance copy', () => {
+    const v = classifyAutoSaveError(make(503))
+    expect(v.message).toContain('점검')
+  })
+
+  it('500 → generic server-error copy with status code in detail', () => {
+    const v = classifyAutoSaveError(make(500))
+    expect(v.message).toContain('서버 오류')
+    expect(v.detail).toContain('500')
+  })
+
+  it('4xx other than 401/403 → validation copy', () => {
+    const v = classifyAutoSaveError(make(422))
+    expect(v.message).toContain('저장 거부')
+    expect(v.detail).toContain('422')
   })
 })

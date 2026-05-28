@@ -23,6 +23,61 @@ const BIG_DOC_IDLE_MS = 15_000
  */
 const SAVING_STATUS_DEBOUNCE_MS = 200
 
+/**
+ * Map an auto-save failure to a user-facing message + a notification channel.
+ * Earlier behaviour collapsed every non-412 into a generic "error" status with
+ * no copy — users couldn't tell "permissions" from "server down" from
+ * "offline". This classifier is the single source of truth for the four
+ * buckets the UI cares about. 412 is intentionally NOT handled here; the
+ * conflict modal owns that path.
+ */
+export interface AutoSaveErrorView {
+  /** Korean copy surfaced via the notification bell. */
+  message: string
+  /** Slightly longer hint shown as the notification detail line. */
+  detail: string
+  /** Notification bell category. `system` for everything actionable. */
+  category: 'system'
+}
+export function classifyAutoSaveError(err: unknown): AutoSaveErrorView {
+  const status = (err as { response?: { status?: number } })?.response?.status
+  // Network / fetch-failure — axios sets no `response`.
+  if (status == null) {
+    return {
+      message: '오프라인 — 자동 재시도 중',
+      detail: '서버에 도달할 수 없습니다. 연결이 복구되면 다시 저장합니다.',
+      category: 'system',
+    }
+  }
+  if (status === 401 || status === 403) {
+    return {
+      message: '저장 권한이 없습니다',
+      detail: '이 문서를 편집할 권한이 없거나 세션이 만료되었습니다. 다시 로그인해 주세요.',
+      category: 'system',
+    }
+  }
+  if (status === 503) {
+    return {
+      message: '서버 점검 중 — 잠시 후 다시 시도',
+      detail: '서버가 일시적으로 응답할 수 없습니다. 자동 재시도가 진행됩니다.',
+      category: 'system',
+    }
+  }
+  if (status >= 500) {
+    return {
+      message: '서버 오류로 저장에 실패했습니다',
+      detail: `상태 코드 ${status}. 잠시 후 다시 시도하거나 관리자에게 문의하세요.`,
+      category: 'system',
+    }
+  }
+  // 4xx other than 401/403/412 — likely a validation / payload issue.
+  return {
+    message: '저장 거부됨 — 입력을 확인해 주세요',
+    detail: `상태 코드 ${status}. 문서 내용이 서버 검증을 통과하지 못했습니다.`,
+    category: 'system',
+  }
+}
+
 /** Walk the section tree and count every block. Cheap — no allocations. */
 function countBlocks(doc: DocumentJSONV10): number {
   let n = 0
@@ -150,6 +205,16 @@ export function useAutoSave(slug: string | undefined, opts: AutoSaveOptions = {}
         }
         return
       }
+      // Non-412: classify so the user knows what to do instead of seeing a
+      // generic red pill. The status pill itself stays at `error` for the
+      // visual cue, but the notification bell gets the actionable copy.
+      const view = classifyAutoSaveError(err)
+      pushNotification({
+        category: view.category,
+        message: view.message,
+        detail: view.detail,
+        slug,
+      })
       setStatus('error')
     } finally {
       // Cancel pending status flip if PUT finished before the debounce fired.
