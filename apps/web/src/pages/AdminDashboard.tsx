@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/features/auth/store'
 import { Button } from '@/components/ui/Button'
@@ -8,6 +8,7 @@ import { Input, Select } from '@/components/ui/Input'
 import { toast } from '@/components/ui/Toast'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { ActivityWidget } from '@/features/activity/ActivityWidget'
+import { listPendingGlossary } from '@/features/glossary/api'
 import { AdminOrgsPage } from './AdminOrgs'
 import { ArchivedDocsPage } from './ArchivedDocs'
 import { AuditLogPage } from './AuditLog'
@@ -108,6 +109,10 @@ export function AdminDashboardPage() {
           {t('page.adminDashboard.subtitle')}
         </p>
       </header>
+
+      <div className="mb-4" data-testid="admin-quick-links">
+        <GlossaryPendingLink />
+      </div>
 
       <div className="mb-6" data-testid="admin-activity-widget-slot">
         <ActivityWidget title={t('page.adminDashboard.activityTitle')} />
@@ -595,5 +600,38 @@ function TriplesTab() {
         )}
       </Card>
     </section>
+  )
+}
+
+// ── Glossary pending quick link (Sprint C-3) ────────────────────────────
+/**
+ * Surfaces the count of pending glossary proposals (size=1 just for the
+ * `total` count) and links to /admin/glossary-pending. Sibling to the
+ * dashboard tabs so admins notice queue depth without opening the page.
+ */
+function GlossaryPendingLink() {
+  const { data } = useQuery({
+    queryKey: ['glossary', 'pending', { page: 1, size: 1 }],
+    queryFn: () => listPendingGlossary({ page: 1, size: 1 }),
+    staleTime: 60_000,
+  })
+  const count = data?.total ?? 0
+  return (
+    <Link
+      to="/admin/glossary-pending"
+      className="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-smsg-900 shadow-sm transition-colors hover:border-smsg-500"
+      data-testid="admin-link-glossary-pending"
+    >
+      <span>용어집 승인 대기</span>
+      {count > 0 && (
+        <span
+          className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white"
+          data-testid="admin-link-glossary-pending-badge"
+          aria-label={`승인 대기 ${count}건`}
+        >
+          {count}
+        </span>
+      )}
+    </Link>
   )
 }

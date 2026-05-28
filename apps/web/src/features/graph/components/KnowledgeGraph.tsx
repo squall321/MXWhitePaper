@@ -21,7 +21,7 @@ import noverlap from 'graphology-layout-noverlap'
 import { Sigma } from 'sigma'
 import { createNodeBorderProgram } from '@sigma/node-border'
 import type { Settings } from 'sigma/settings'
-import type { GraphNode, GraphNodeDoc, GraphNodeTag, GraphEdge } from '@/features/graph/api'
+import type { GraphNode, GraphNodeDoc, GraphNodeTag, GraphNodeTerm, GraphEdge } from '@/features/graph/api'
 
 // ── Domain palette ────────────────────────────────────────────────────────────
 const DOMAIN_COLOR: Record<string, string> = {
@@ -45,6 +45,15 @@ const HIGHLIGHT_COLOR = '#22d3ee'  // cyan-400
 // triple(술어) 엣지 색 — wiki(회색)/tag(도메인색)/highlight(cyan) 와 구분되는 보라 톤
 const TRIPLE_COLOR = '#c084fc'  // purple-400
 
+// Sprint C-4: term 노드 팔레트 — domain 별 색이 있으면 거기에 매핑,
+// 없으면 violet 폴백. doc/tag 와 시각 구분되도록 border 가 더 굵음 + 색조가
+// purple 톤이라 한눈에 "용어" 인지 알 수 있다. sigma circle program 은 다이아
+// 몬드/별 모양을 트리비얼하게 그릴 수 없어 *색상* 으로만 구분한다 — 모양
+// 변경은 follow-up.
+const TERM_FALLBACK_COLOR = '#a855f7'  // violet-500
+const TERM_DOC_EDGE_COLOR = '#a78bfa'  // violet-400 (term ↔ doc)
+const TERM_COOC_EDGE_COLOR = '#c084fc' // purple-400 (term ↔ term)
+
 /**
  * triple 엣지 — BE 가 include_triples 켜졌을 때 보내는 술어 엣지.
  * api.ts 의 GraphEdge 타입에는 아직 'triple' kind 가 없어서 (다른 에이전트 담당),
@@ -59,13 +68,20 @@ interface GraphEdgeTriple {
   confidence: number | null
 }
 
+export type KnowledgeGraphEdgeKind =
+  | 'wiki'
+  | 'doc_tag'
+  | 'tag_cooc'
+  | 'term_doc'
+  | 'term_cooc'
+
 export interface KnowledgeGraphProps {
   nodes: GraphNode[]
   edges: GraphEdge[]
   rootSlug?: string | null
   highlight?: string
   height?: number
-  edgeKinds?: Set<'wiki' | 'doc_tag' | 'tag_cooc'>
+  edgeKinds?: Set<KnowledgeGraphEdgeKind>
   showOrphans?: boolean
   minDegree?: number
   focusedTag?: string | null
@@ -77,6 +93,8 @@ export interface KnowledgeGraphProps {
   hugeSpread?: boolean
   onPickNode?: (slug: string) => void
   onPickTag?: (slug: string) => void
+  /** Sprint C-4 — term 노드 클릭. slug 는 'term:<id>' 형태. */
+  onPickTerm?: (slug: string) => void
   onContextMenu?: (slug: string, x: number, y: number) => void
 }
 
@@ -210,7 +228,7 @@ function buildGraph(
   edges: GraphEdge[],
   opts: {
     rootSlug?: string | null
-    edgeKinds: Set<'wiki' | 'doc_tag' | 'tag_cooc'>
+    edgeKinds: Set<KnowledgeGraphEdgeKind>
     showOrphans: boolean
     minDegree: number
     highlight: string
@@ -267,6 +285,29 @@ function buildGraph(
         x: Math.random(),
         y: Math.random(),
       })
+    } else if (node.kind === 'term') {
+      // Sprint C-4 — term 노드. domain 별 색상 (없으면 violet 폴백). 사이즈는
+      // 약간 작게 (doc 평균보다 살짝 작은 18~26) 두어 doc 허브와 시각 분리.
+      const t = node as GraphNodeTerm
+      const color = (t.domain && DOMAIN_COLOR[t.domain]) ?? TERM_FALLBACK_COLOR
+      const size = 22
+      const isHighlighted = q && (
+        t.slug.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)
+      )
+      const finalColor = isHighlighted ? HIGHLIGHT_COLOR : color
+      g.addNode(t.slug, {
+        label: t.name,
+        type: 'circle',
+        size: isHighlighted ? size * 1.25 : size,
+        color: finalColor,
+        // term 노드는 border 를 더 밝게 두어 doc/tag 와 시각 구분.
+        borderColor: lightenHex(finalColor, 80),
+        _baseColor: finalColor,
+        kind: 'term',
+        domain: t.domain,
+        x: Math.random(),
+        y: Math.random(),
+      })
     } else {
       const d = node as GraphNodeDoc
       const isMissing = d.status === 'missing'
@@ -316,7 +357,7 @@ function buildGraph(
     // triple 엣지는 edgeKinds(wiki/doc_tag/tag_cooc) 필터 대상이 아니다 —
     // include_triples 토글이 별도로 BE fetch 단계에서 결정한다.
     const isTriple = kind === 'triple'
-    if (!isTriple && !edgeKinds.has(kind as 'wiki' | 'doc_tag' | 'tag_cooc')) continue
+    if (!isTriple && !edgeKinds.has(kind as KnowledgeGraphEdgeKind)) continue
     if (!g.hasNode(e.source) || !g.hasNode(e.target)) continue
     if (e.source === e.target) continue
     let color: string
@@ -330,6 +371,14 @@ function buildGraph(
       const base = DOMAIN_COLOR[srcDomain ?? ''] ?? '#a78bfa'
       color = base + '66'
       size = Math.max(0.8, (e.weight ?? 1) / 5)
+    } else if (kind === 'term_doc') {
+      // term ↔ doc — violet, 살짝 가는 실선.
+      color = TERM_DOC_EDGE_COLOR + '99'
+      size = 1.2
+    } else if (kind === 'term_cooc') {
+      // term ↔ term (cooccurs_with) — purple, 약간 두꺼움.
+      color = TERM_COOC_EDGE_COLOR + 'aa'
+      size = 1.6
     } else if (isTriple) {
       const t = e as unknown as GraphEdgeTriple
       // llm 추출은 흐리게(alpha 낮춤), manual 입력은 진하게 — 출처 시각 구분.
@@ -358,7 +407,14 @@ function buildGraph(
 }
 
 // ── KnowledgeGraph component ──────────────────────────────────────────────────
-const DEFAULT_EDGE_KINDS = new Set<'wiki' | 'doc_tag' | 'tag_cooc'>(['wiki', 'doc_tag'])
+// Sprint C-4: term_doc/term_cooc 도 기본 ON — term focus 그래프에서 자동으로
+// 보이도록. wiki/tag_cooc 같은 다른 모드 호출자는 prop 으로 직접 Set 을 넘긴다.
+const DEFAULT_EDGE_KINDS = new Set<KnowledgeGraphEdgeKind>([
+  'wiki',
+  'doc_tag',
+  'term_doc',
+  'term_cooc',
+])
 
 const FA2_CALM = {
   gravity: 0.05,
@@ -387,6 +443,7 @@ export function KnowledgeGraph({
   hugeSpread = false,
   onPickNode,
   onPickTag,
+  onPickTerm,
   onContextMenu,
 }: KnowledgeGraphProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -799,6 +856,8 @@ export function KnowledgeGraph({
       const kind = g.getNodeAttribute(node, 'kind') as string
       if (kind === 'tag') {
         if (onPickTag) onPickTag(node)
+      } else if (kind === 'term') {
+        if (onPickTerm) onPickTerm(node)
       } else {
         const isMissing = g.getNodeAttribute(node, 'isMissing') as boolean
         if (!isMissing && onPickNode) onPickNode(node)
@@ -1271,7 +1330,7 @@ export function KnowledgeGraph({
       sigmaRef.current = null
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges, rootSlug, highlight, edgeKinds, showOrphans, minDegree, onPickNode, onPickTag, onContextMenu])
+  }, [nodes, edges, rootSlug, highlight, edgeKinds, showOrphans, minDegree, onPickNode, onPickTag, onPickTerm, onContextMenu])
 
   return (
     <div

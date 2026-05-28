@@ -139,6 +139,7 @@ export function TopBar({
           {/* Secondary group — visible on lg+, collapsed into overflow on md/sm */}
           <div className="hidden items-center gap-1.5 lg:flex">
             <NavLinkPill to="/orgs" label={t('topbar.org')} active={isActive('/orgs')} />
+            <NavLinkPill to="/glossary" label="용어집" active={isActive('/glossary')} />
             <NavLinkPill to="/recent" label={t('topbar.recent')} active={isActive('/recent')} />
             <NavLinkPill to="/reads" label={t('topbar.reads')} active={isActive('/reads')} />
             {canSeeAnalytics && (
@@ -188,6 +189,12 @@ export function TopBar({
                   to="/orgs"
                   label={t('topbar.orgFull')}
                   current={isActive('/orgs')}
+                  onClick={() => setOverflowOpen(false)}
+                />
+                <OverflowItem
+                  to="/glossary"
+                  label="용어집"
+                  current={isActive('/glossary')}
                   onClick={() => setOverflowOpen(false)}
                 />
                 <OverflowItem

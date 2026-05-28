@@ -34,6 +34,7 @@ import { select } from 'd3-selection'
 import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom'
 import { fetchGraph, type GraphEdge, type GraphNode, type GraphNodeDoc, type GraphNodeTag } from '@/features/graph/api'
 import { KnowledgeGraph } from '@/features/graph/components/KnowledgeGraph'
+import { getTermGraph, termGraphToKnowledge } from '@/features/glossary/api'
 
 /**
  * Unified sim node — doc + tag 둘 다 표현.
@@ -773,6 +774,11 @@ export function GraphPage() {
   // S3: ?domain=X — 도메인 진입. tag 노드 + (옵션) doc_tag/tag_cooc edge 포함.
   const domain = searchParams.get('domain') || null
 
+  // Sprint C-4: ?term=<id> — 용어 중심 그래프. FR-12 의 /graph/terms/{id} 호출 →
+  // KnowledgeGraph 가 이해할 수 있는 nodes/edges 로 변환해서 그대로 렌더.
+  // domain/slug 모드와 직교 — term 이 있으면 그 모드만 활성화 (다른 두 쿼리는 skip).
+  const termId = searchParams.get('term') || null
+
   // 엣지 모드 — wiki / tag / 모두. domain 그래프에서 doc_tag 양이 압도적이라
   // 기본은 wiki 만. 사용자가 모드 토글로 명시적으로 전환.
   // (내부 표현은 기존 Set<edgeKind> 유지 — buildGraph/fetchGraph 와 호환.)
@@ -851,7 +857,21 @@ export function GraphPage() {
       include_triples: showTriples,
     }),
     staleTime: 30_000,
+    enabled: !termId,  // term 모드일 땐 wiki 그래프 쿼리 skip
   })
+
+  // Sprint C-4: term focus 모드 — ?term=<id> 일 때만 BE 호출.
+  // 결과를 KnowledgeGraph 가 이해하는 nodes/edges 로 어댑터 변환.
+  const termGraph = useQuery({
+    queryKey: ['term-graph', termId],
+    queryFn: () => getTermGraph(termId!),
+    enabled: !!termId,
+    staleTime: 30_000,
+  })
+  const termGraphMapped = useMemo(
+    () => (termGraph.data ? termGraphToKnowledge(termGraph.data) : null),
+    [termGraph.data],
+  )
 
   // fullscreen 모드: position fixed overlay 로 화면 전체 차지.
   const rootCls = fullscreen
@@ -865,7 +885,9 @@ export function GraphPage() {
         <div className="min-w-0 flex-1">
           <h1 className="text-lg font-semibold text-smsg-900 dark:text-gray-100">위키 그래프</h1>
           <p className="text-xs text-gray-500">
-            {domain
+            {termId
+              ? `용어 그래프${termGraph.data ? ` · ${termGraph.data.center.label}` : ''}`
+              : domain
               ? `도메인: ${domain}${slug ? ` · 루트: ${slug}` : ''}`
               : slug
               ? `루트: ${slug} · 깊이 ${depth}`
@@ -1005,7 +1027,37 @@ export function GraphPage() {
       </header>
 
       <div className={fullscreen ? 'min-h-0 flex-1' : ''}>
-        {isPending ? (
+        {termId ? (
+          // Sprint C-4: term focus 모드 — wiki/domain UI 는 그대로 유지하되
+          // 데이터 소스만 term graph 로 전환. 검색/cluster/depth 같은 컨트롤은
+          // 이 모드에선 의미가 약하지만 UX 일관성 위해 그대로 노출 (대부분 무시).
+          termGraph.isPending ? (
+            <p className="text-sm text-gray-500" data-testid="term-graph-loading">용어 그래프 불러오는 중…</p>
+          ) : termGraph.isError ? (
+            <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" data-testid="term-graph-error">
+              용어 그래프를 불러오지 못했습니다: {(termGraph.error as Error).message}
+            </p>
+          ) : !termGraphMapped || termGraphMapped.nodes.length === 0 ? (
+            <p className="text-sm text-gray-500">표시할 노드가 없습니다.</p>
+          ) : (
+            <div className="hidden lg:block" data-testid="term-graph-canvas">
+              <KnowledgeGraph
+                nodes={termGraphMapped.nodes as unknown as GraphNode[]}
+                edges={termGraphMapped.edges as unknown as GraphEdge[]}
+                highlight={query}
+                edgeKinds={new Set(['term_doc', 'term_cooc'])}
+                onPickNode={(s) => navigate(`/docs/${encodeURIComponent(s)}`)}
+                onPickTerm={(s) => {
+                  // term node 클릭 시 그 term 으로 focus 이동.
+                  const next = new URLSearchParams(searchParams)
+                  next.set('term', s.replace(/^term:/, ''))
+                  setSearchParams(next, { replace: false })
+                }}
+                onContextMenu={(s, x, y) => setMenu({ slug: s, x, y })}
+              />
+            </div>
+          )
+        ) : isPending ? (
           <p className="text-sm text-gray-500">불러오는 중…</p>
         ) : isError ? (
           <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

@@ -31,11 +31,32 @@ export interface GraphNodeTag {
   super_domain: string  // 'mobile' | 'software' | 'hardware' | 'telecom'
 }
 
-export type GraphNode = GraphNodeDoc | GraphNodeTag
+/**
+ * Term node (Sprint C-4 / FR-12) — slug='term:<id>'.
+ *
+ * Only emitted when the graph payload was built from a glossary term
+ * focus (see [[features/glossary/api.ts#getTermGraph]] + GraphPage's
+ * `?term=<id>` mode). Rendered with a distinct purple-tinted palette so
+ * users can tell terms apart from docs/tags at a glance.
+ */
+export interface GraphNodeTerm {
+  kind: 'term'
+  slug: string          // "term:<uuid>"
+  name: string          // raw term text (label)
+  domain: string | null // 분야별 색상 매핑 — null 이면 폴백 색
+}
+
+export type GraphNode = GraphNodeDoc | GraphNodeTag | GraphNodeTerm
 
 export interface GraphEdge {
-  /** Edge kind — default 'wiki' when missing (backward compat). */
-  kind?: 'wiki' | 'doc_tag' | 'tag_cooc' | 'triple'
+  /**
+   * Edge kind — default 'wiki' when missing (backward compat).
+   *
+   * Sprint C-4 added the term-graph kinds:
+   *   - 'term_doc'   : term ↔ document  (referenced_in / has_page)
+   *   - 'term_cooc'  : term ↔ term      (cooccurs_with)
+   */
+  kind?: 'wiki' | 'doc_tag' | 'tag_cooc' | 'triple' | 'term_doc' | 'term_cooc'
   source: string
   target: string
   /** count for wiki / weight for tag_cooc. doc_tag has neither. */

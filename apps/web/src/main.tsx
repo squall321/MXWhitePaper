@@ -85,6 +85,11 @@ const AdminOrgsPage = lazyLogged('AdminOrgs', () =>
 const AdminDashboardPage = lazyLogged('AdminDashboard', () =>
   import('./pages/AdminDashboard').then((m) => ({ default: m.AdminDashboardPage })),
 )
+const AdminGlossaryPendingPage = lazyLogged('AdminGlossaryPending', () =>
+  import('./pages/AdminGlossaryPending').then((m) => ({
+    default: m.AdminGlossaryPendingPage,
+  })),
+)
 const HealthDashboardPage = lazyLogged('HealthDashboard', () =>
   import('./pages/HealthDashboard').then((m) => ({ default: m.HealthDashboardPage })),
 )
@@ -232,6 +237,9 @@ const PresenterViewPage = lazyLogged('PresenterView', () =>
 )
 const GraphPage = lazyLogged('Graph', () =>
   import('./pages/Graph').then((m) => ({ default: m.GraphPage })),
+)
+const GlossaryPage = lazyLogged('Glossary', () =>
+  import('./pages/Glossary').then((m) => ({ default: m.GlossaryPage })),
 )
 const DepGraphPage = lazyLogged('DepGraph', () =>
   import('./pages/DepGraph').then((m) => ({ default: m.DepGraphPage })),
@@ -384,6 +392,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                   element={<Boundaried name="compare"><CrossDocComparePage /></Boundaried>}
                 />
                 <Route path="orgs" element={<Boundaried name="orgs"><OrgsPage /></Boundaried>} />
+                <Route path="glossary" element={<Boundaried name="glossary"><GlossaryPage /></Boundaried>} />
                 <Route path="admin/orgs" element={<Boundaried name="admin/orgs"><AdminOrgsPage /></Boundaried>} />
                 <Route path="admin/dashboard" element={<Boundaried name="admin/dashboard"><AdminDashboardPage /></Boundaried>} />
                 <Route path="admin/health" element={<Boundaried name="admin/health"><HealthDashboardPage /></Boundaried>} />
@@ -399,6 +408,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="admin/workflow-chains" element={<Boundaried name="admin/workflow-chains"><WorkflowChainsPage /></Boundaried>} />
                 <Route path="admin/sso" element={<Boundaried name="admin/sso"><SsoProvidersPage /></Boundaried>} />
                 <Route path="admin/retention" element={<Boundaried name="admin/retention"><RetentionPoliciesPage /></Boundaried>} />
+                <Route path="admin/glossary-pending" element={<Boundaried name="admin/glossary-pending"><AdminGlossaryPendingPage /></Boundaried>} />
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
                 <Route path="activity" element={<Boundaried name="activity"><ActivityFeedPage /></Boundaried>} />

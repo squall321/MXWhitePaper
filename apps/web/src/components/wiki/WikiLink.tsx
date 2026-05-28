@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom'
-import { useRef, useState, type MouseEvent } from 'react'
+import { useRef, useState, type MouseEvent, type TouchEvent } from 'react'
 import { useDocumentExists } from '@/features/document/hooks/useDocumentExists'
 import { useEditorStore } from '@/features/editor/state'
+import { useAuthStore } from '@/features/auth/store'
 import type {
   SectionLevel1,
   SectionLevel2,
@@ -9,6 +10,11 @@ import type {
 } from '@/types/document'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
 import { LinkPreview } from './LinkPreview'
+import { ProposeTermModal } from '@/features/glossary/components/ProposeTermModal'
+
+// Long-press threshold (ms) on touch — matches the project's other
+// long-press affordances (BlockRenderer drag-handle, SectionRenderer).
+const LONG_PRESS_MS = 500
 
 // 500ms mouseenter debounce before the preview popup fetches/shows.
 const HOVER_DELAY_MS = 500
@@ -38,11 +44,21 @@ export function WikiLink({ slug, anchor, display }: WikiLinkProps) {
   // Skip the existence query for same-doc anchors (slug === '').
   const { data: exists, isPending } = useDocumentExists(slug || undefined)
 
+  // editor+admin gating for the redlink → propose-term secondary action.
+  // Viewers never see the affordance — the BE would 403 anyway, and the
+  // tooltip noise would confuse readers.
+  const role = useAuthStore((s) => s.user?.role)
+  const canPropose = role === 'admin' || role === 'editor'
+
   // Hover state for the preview popup. Only enabled for cross-doc links;
   // same-doc anchors already show the section title via the inline label.
   const [hovered, setHovered] = useState(false)
+  // Propose-term modal state — opens on right-click / long-press of a
+  // redlink for editor+admin. Initial term defaults to the wiki slug.
+  const [proposeOpen, setProposeOpen] = useState(false)
   const anchorElRef = useRef<HTMLAnchorElement | null>(null)
   const hoverTimerRef = useRef<number | null>(null)
+  const longPressTimerRef = useRef<number | null>(null)
   const handleEnter = (e: MouseEvent<HTMLAnchorElement>) => {
     anchorElRef.current = e.currentTarget
     if (hoverTimerRef.current != null) window.clearTimeout(hoverTimerRef.current)
@@ -56,6 +72,12 @@ export function WikiLink({ slug, anchor, display }: WikiLinkProps) {
       hoverTimerRef.current = null
     }
     setHovered(false)
+  }
+  const clearLongPress = () => {
+    if (longPressTimerRef.current != null) {
+      window.clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
   }
 
   const sameDoc = slug === ''
@@ -85,20 +107,54 @@ export function WikiLink({ slug, anchor, display }: WikiLinkProps) {
   if (isMissing) {
     // Missing target → land on the new-doc wizard with the slug pre-filled,
     // so a click straight from a red wiki-link starts authoring immediately.
+    //
+    // Secondary action (editor+admin only): the same slug is often a candidate
+    // term. Right-click or long-press opens the propose-term modal with the
+    // slug pre-filled instead of navigating to the new-doc wizard. We keep
+    // it as a secondary gesture so the primary click still does the obvious
+    // thing (create document) — the redlink isn't necessarily a term.
     const target = `/docs/new?slug=${encodeURIComponent(slug)}`
     const handleClick = (e: MouseEvent<HTMLAnchorElement>) => {
       e.preventDefault()
+      clearLongPress()
       navigate(target)
     }
+    const handleContextMenu = (e: MouseEvent<HTMLAnchorElement>) => {
+      if (!canPropose) return
+      e.preventDefault()
+      setProposeOpen(true)
+    }
+    const handleTouchStart = () => {
+      if (!canPropose) return
+      clearLongPress()
+      longPressTimerRef.current = window.setTimeout(() => {
+        setProposeOpen(true)
+      }, LONG_PRESS_MS)
+    }
+    const handleTouchEnd = (e: TouchEvent<HTMLAnchorElement>) => {
+      // If long-press already fired and opened the modal, suppress the
+      // synthetic click so the user doesn't jump to /docs/new behind the
+      // modal. Otherwise let the click through.
+      clearLongPress()
+      if (proposeOpen) e.preventDefault()
+    }
+    const titleHint = canPropose
+      ? `'${slug}' 문서가 아직 없습니다. 클릭해 생성하거나, 우클릭/길게-누르기로 용어를 제안하세요.`
+      : `'${slug}' 문서가 아직 없습니다. 클릭해 생성하세요.`
     return (
       <>
         <a
           href={target}
           onClick={handleClick}
+          onContextMenu={handleContextMenu}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={clearLongPress}
           onMouseEnter={handleEnter}
           onMouseLeave={handleLeave}
           className="text-link-missing hover:underline"
-          title={`'${slug}' 문서가 아직 없습니다. 클릭해 생성하세요.`}
+          title={titleHint}
+          data-redlink-slug={slug}
         >
           {label}
         </a>
@@ -108,6 +164,13 @@ export function WikiLink({ slug, anchor, display }: WikiLinkProps) {
             anchor={anchor}
             anchorEl={anchorElRef.current}
             onClose={handleLeave}
+          />
+        )}
+        {canPropose && (
+          <ProposeTermModal
+            open={proposeOpen}
+            initialTerm={slug}
+            onClose={() => setProposeOpen(false)}
           />
         )}
       </>
