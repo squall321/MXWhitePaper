@@ -3,6 +3,7 @@ import * as echarts from 'echarts/core'
 import { useResolvedTheme, type ResolvedTheme } from '@/features/theme/useResolvedTheme'
 import {
   BarChart as EBar,
+  BoxplotChart as EBoxplot,
   CustomChart as ECustom,
   LineChart as ELine,
   PieChart as EPie,
@@ -48,6 +49,7 @@ echarts.use([
   EPie,
   ERadar,
   EScatter,
+  EBoxplot,
   ECustom,
   GridComponent,
   TooltipComponent,
@@ -879,6 +881,73 @@ export function buildOption(
       }
       break
     }
+    case 'boxplot': {
+      // 분포 비교 차트 — 시리즈마다 1 박스 (raw mode = values:number[] 관측값
+      // 배열에서 자동 사분위 계산, precomputed mode = values:[min, Q1, median,
+      // Q3, max] 직접 입력). 모드는 block.options.boxplotMode 로 분기 (기본 raw).
+      // labels 가 비어 있으면 series.name 을 카테고리 라벨로 사용.
+      const mode =
+        (block.options as { boxplotMode?: 'raw' | 'precomputed' } | undefined)
+          ?.boxplotMode === 'precomputed'
+          ? 'precomputed'
+          : 'raw'
+      const categories =
+        labels.length === series.length ? labels : series.map((s) => s.name)
+      const boxData: (number[] | null)[] = series.map((s) => {
+        const vals = s.values ?? []
+        if (mode === 'precomputed') {
+          // [min, Q1, median, Q3, max] — 길이 != 5 또는 비숫자 포함이면 skip.
+          if (vals.length !== 5) return null
+          for (const v of vals) if (!Number.isFinite(v)) return null
+          return [vals[0]!, vals[1]!, vals[2]!, vals[3]!, vals[4]!]
+        }
+        // raw — 관측값 ≥ 1 개 (단일 점은 min=q1=median=q3=max). 비숫자 제거.
+        const clean = vals.filter((v) => Number.isFinite(v))
+        if (clean.length === 0) return null
+        return computeBoxStats(clean)
+      })
+      // null (잘못된 데이터) 시리즈는 제외하면서 카테고리/색 인덱스 동기화.
+      const boxes: { cat: string; stats: number[]; color: string }[] = []
+      boxData.forEach((stats, i) => {
+        if (!stats) return
+        boxes.push({
+          cat: categories[i] ?? series[i]?.name ?? `s${i + 1}`,
+          stats,
+          color: series[i]?.color ?? palette[i % palette.length]!,
+        })
+      })
+      typedOption = {
+        tooltip: { trigger: 'item' },
+        legend: { show: false },
+        grid: { left: 56, right: 24, top: 24, bottom: 56, containLabel: true },
+        xAxis: {
+          type: 'category',
+          data: boxes.map((b) => b.cat),
+          name: block.data?.xAxisLabel ?? '',
+          nameLocation: 'middle',
+          nameGap: 30,
+          splitLine: { show: false },
+          boundaryGap: true,
+        },
+        yAxis: {
+          type: 'value',
+          name: block.data?.yAxisLabel ?? '',
+          nameLocation: 'middle',
+          nameGap: 50,
+          splitLine: { show: gridOn },
+        },
+        series: [
+          {
+            type: 'boxplot',
+            data: boxes.map((b) => ({
+              value: b.stats,
+              itemStyle: { color: b.color, borderColor: b.color },
+            })),
+          },
+        ],
+      }
+      break
+    }
     case 'line':
     case 'area':
     case 'bar':
@@ -1011,6 +1080,23 @@ function buildFitLineSeries(
     },
     silent: true, // tooltip/legend 동작에서 제외 — fit 은 보조선.
   }
+}
+
+// boxplot 의 raw mode — 관측값 배열에서 [min, Q1, median, Q3, max] 계산.
+// 사분위는 type-7 (Excel/Google Sheets) 선형 보간. 호출자가 빈 배열 / NaN
+// 필터링을 책임진다 (여기서는 전제: 입력은 정렬 가능한 finite 숫자 배열).
+export function computeBoxStats(vals: readonly number[]): number[] {
+  const sorted = [...vals].sort((a, b) => a - b)
+  const n = sorted.length
+  const q = (p: number): number => {
+    if (n === 1) return sorted[0]!
+    const pos = p * (n - 1)
+    const lo = Math.floor(pos)
+    const hi = Math.ceil(pos)
+    const frac = pos - lo
+    return sorted[lo]! * (1 - frac) + sorted[hi]! * frac
+  }
+  return [sorted[0]!, q(0.25), q(0.5), q(0.75), sorted[n - 1]!]
 }
 
 // xy-line tooltip 용 숫자 포맷 — 크기에 따라 자릿수 자동 조절. 비숫자는 그대로.

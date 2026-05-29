@@ -702,7 +702,7 @@ figure-index / gantt) 이 공유한다. 모두 `options.stripe` (boolean, defaul
 
 (첫 슬라이드의 시각 디자인은 export 시 자동 표지 페이지로 재생성됨.)
 
-### 혼합 셀 표 (이미지 + 텍스트 + 숫자) — 현재 미지원 ⚠️
+### 혼합 셀 표 (이미지 + 텍스트 + 리스트)
 
 ```text
 ┌──────────┬────────────────┬─────────┐
@@ -711,34 +711,73 @@ figure-index / gantt) 이 공유한다. 모두 `options.stripe` (boolean, defaul
 └──────────┴────────────────┴─────────┘
 ```
 
-현재 `TableBlock` 의 cell 은 **string only**. 혼합 콘텐츠가 필요하면 **임시
-회피책**:
+`TableBlock` 의 sparse `cells` 모드를 쓰면 셀 안에 혼합 콘텐츠를 넣을 수 있다.
+각 셀은 `text` (string) **또는** `blocks` (Block 배열) 중 정확히 하나를 가진다.
+`blocks` 에 허용된 타입은 다음 **3 종 (CellBlock)**:
 
-- **columns** 위젯 사용 — 표를 "수직 stack of columns" 로 표현
-- 또는 캡션이 잘 잡힌 **여러 image + paragraph** 그룹으로 분해
+- `paragraph` — 본문 텍스트 (마크다운 지원)
+- `image` — `imageId` 로 이미지 참조
+- `list` — bullet / number / check 리스트
+
+> 표 안의 표 (table-in-table) 와 callout / chart / iframe 등 다른 블록은
+> 의도적으로 금지 — 셀 레이아웃을 단순하게 유지하기 위해서.
+
+**예제 1 — 제품 카탈로그 표 (이미지 + 본문 + 가격):**
 
 ```json
 {
-  "type": "columns",
+  "type": "table",
   "id": "<ULID>",
-  "columns": [
-    [
-      {"type": "image", "id": "<ULID>", "imageId": "<ULID>"},
+  "headers": ["사진", "제품", "가격"],
+  "rows": [],
+  "cells": [
+    {"r": 0, "c": 0, "header": true, "text": "사진"},
+    {"r": 0, "c": 1, "header": true, "text": "제품"},
+    {"r": 0, "c": 2, "header": true, "text": "가격"},
+
+    {"r": 1, "c": 0, "blocks": [
+      {"type": "image", "id": "<ULID>", "imageId": "<ULID>", "width": "sm"}
+    ]},
+    {"r": 1, "c": 1, "blocks": [
       {"type": "paragraph", "id": "<ULID>", "text": "**제품 A** — 프리미엄 모델"},
-      {"type": "paragraph", "id": "<ULID>", "text": "₩99,000"}
-    ],
-    [
-      {"type": "image", "id": "<ULID>", "imageId": "<ULID>"},
-      {"type": "paragraph", "id": "<ULID>", "text": "**제품 B** — 표준 모델"},
-      {"type": "paragraph", "id": "<ULID>", "text": "₩45,000"}
-    ]
-  ],
-  "widths": [50, 50]
+      {"type": "paragraph", "id": "<ULID>", "text": "고급 마감, 3 년 보증."}
+    ]},
+    {"r": 1, "c": 2, "text": "₩99,000"},
+
+    {"r": 2, "c": 0, "blocks": [
+      {"type": "image", "id": "<ULID>", "imageId": "<ULID>", "width": "sm"}
+    ]},
+    {"r": 2, "c": 1, "blocks": [
+      {"type": "paragraph", "id": "<ULID>", "text": "**제품 B** — 표준 모델"}
+    ]},
+    {"r": 2, "c": 2, "text": "₩45,000"}
+  ]
 }
 ```
 
-→ 진짜 표 의미가 필요하면 schema 확장 후 가능. (`docs/lat/imports.md` 의
-B 구현 우선순위 #2 참고.)
+**예제 2 — 셀 안에 리스트 (스펙 비교):**
+
+```json
+{
+  "type": "table",
+  "id": "<ULID>",
+  "headers": ["항목", "주요 특징"],
+  "rows": [],
+  "cells": [
+    {"r": 0, "c": 0, "header": true, "text": "항목"},
+    {"r": 0, "c": 1, "header": true, "text": "주요 특징"},
+
+    {"r": 1, "c": 0, "text": "성능"},
+    {"r": 1, "c": 1, "blocks": [
+      {"type": "list", "id": "<ULID>", "style": "bullet",
+       "items": ["8 코어 CPU", "16GB RAM", "NVMe SSD"]}
+    ]}
+  ]
+}
+```
+
+`text` 가 비어있을 때는 빈 문자열 (`"text": ""`) 로 표기. `text` 와 `blocks`
+는 동시에 쓸 수 없다 (XOR).
 
 ---
 

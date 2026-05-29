@@ -460,11 +460,43 @@ class Trend(Enum):
     flat = 'flat'
 
 
+class Kind(Enum):
+    """
+    line=경향선, bar=막대, win-loss=양/음 1px 막대.
+    """
+
+    line = 'line'
+    bar = 'bar'
+    win_loss = 'win-loss'
+
+
+class Sparkline(BaseModel):
+    """
+    Excel Insert→Sparkline 동등. 카드 하단의 작은 인-카드 차트.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    values: list[float]
+    """
+    시계열 값. 빈 배열이면 sparkline 미렌더.
+    """
+    kind: Kind | None = Kind.line
+    """
+    line=경향선, bar=막대, win-loss=양/음 1px 막대.
+    """
+
+
 class Item(BaseModel):
     label: str
     value: str | float
     delta: str | float | None = None
     trend: Trend | None = None
+    sparkline: Sparkline | None = None
+    """
+    Excel Insert→Sparkline 동등. 카드 하단의 작은 인-카드 차트.
+    """
 
 
 class Options2(BaseModel):
@@ -497,7 +529,7 @@ class KpiCardsBlock(BaseModel):
 
 class ChartType(Enum):
     """
-    차트 타입. 'xy-line' 은 시리즈마다 자유로운 (x, y) 쌍 — labels 공유 안 함. 두 stress-strain 곡선처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교할 때 사용. data.labels 는 무시되고 각 series 의 points: [{x, y}] 가 그려진다.
+    차트 타입. 'xy-line' 은 시리즈마다 자유로운 (x, y) 쌍 — labels 공유 안 함. 두 stress-strain 곡선처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교할 때 사용. data.labels 는 무시되고 각 series 의 points: [{x, y}] 가 그려진다. 'boxplot' 은 분포 비교용 — 시리즈마다 한 박스. raw mode (기본) 는 values:number[] 에서 min/Q1/median/Q3/max 자동 계산. precomputed mode (block.options.boxplotMode='precomputed') 는 values:[min, Q1, median, Q3, max] (length=5) 로 직접 지정.
     """
 
     line = 'line'
@@ -507,6 +539,7 @@ class ChartType(Enum):
     radar = 'radar'
     scatter = 'scatter'
     xy_line = 'xy-line'
+    boxplot = 'boxplot'
 
 
 class Engine(Enum):
@@ -754,7 +787,7 @@ class ChartBlock(BaseModel):
     id: Ulid
     chart_type: ChartType = Field(..., alias='chartType')
     """
-    차트 타입. 'xy-line' 은 시리즈마다 자유로운 (x, y) 쌍 — labels 공유 안 함. 두 stress-strain 곡선처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교할 때 사용. data.labels 는 무시되고 각 series 의 points: [{x, y}] 가 그려진다.
+    차트 타입. 'xy-line' 은 시리즈마다 자유로운 (x, y) 쌍 — labels 공유 안 함. 두 stress-strain 곡선처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교할 때 사용. data.labels 는 무시되고 각 series 의 points: [{x, y}] 가 그려진다. 'boxplot' 은 분포 비교용 — 시리즈마다 한 박스. raw mode (기본) 는 values:number[] 에서 min/Q1/median/Q3/max 자동 계산. precomputed mode (block.options.boxplotMode='precomputed') 는 values:[min, Q1, median, Q3, max] (length=5) 로 직접 지정.
     """
     engine: Engine | None = None
     """
@@ -1072,7 +1105,7 @@ class Width1(RootModel[float]):
     root: float = Field(..., ge=5.0, le=95.0)
 
 
-class Kind(Enum):
+class Kind1(Enum):
     image = 'image'
     table = 'table'
     chart = 'chart'
@@ -1103,7 +1136,7 @@ class FigureIndexBlock(BaseModel):
     type: Literal['figure-index']
     id: Ulid
     title: str | None = '그림 목차'
-    kinds: list[Kind] | None = Field(None, max_length=3, min_length=1)
+    kinds: list[Kind1] | None = Field(None, max_length=3, min_length=1)
     """
     Which figure types to include — 'image' (그림), 'table' (표), 'chart' (차트). Order in this array determines section order. Omit for all three.
     """
@@ -1149,6 +1182,7 @@ class ChartType1(Enum):
     radar = 'radar'
     scatter = 'scatter'
     xy_line = 'xy-line'
+    boxplot = 'boxplot'
 
 
 class Engine2(Enum):
@@ -1221,7 +1255,7 @@ class DashboardEmbedBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
-class Kind1(Enum):
+class Kind2(Enum):
     number = 'number'
     text = 'text'
     select = 'select'
@@ -1231,7 +1265,7 @@ class Input(BaseModel):
     name: str
     label: str
     default: str | float | bool | None = None
-    kind: Kind1 | None = Kind1.number
+    kind: Kind2 | None = Kind2.number
 
 
 class CalculatorBlock(BaseModel):
@@ -1314,7 +1348,7 @@ class WhiteboardElement(
     root: WhiteboardElement1 | WhiteboardElement2 | WhiteboardElement3
 
 
-class Kind2(Enum):
+class Kind3(Enum):
     text = 'text'
     long_text = 'long-text'
     email = 'email'
@@ -1331,14 +1365,14 @@ class FormQuestion(BaseModel):
         extra='forbid',
     )
     id: str
-    kind: Kind2
+    kind: Kind3
     label: str
     required: bool | None = False
     placeholder: str | None = None
     options: list[str] | None = None
 
 
-class Kind3(Enum):
+class Kind4(Enum):
     single_choice = 'single-choice'
     multi_choice = 'multi-choice'
     true_false = 'true-false'
@@ -1350,7 +1384,7 @@ class QuizQuestion(BaseModel):
         extra='forbid',
     )
     id: str
-    kind: Kind3
+    kind: Kind4
     label: str
     options: list[str] | None = None
     correct: str | list[str] | bool

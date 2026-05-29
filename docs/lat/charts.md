@@ -10,7 +10,7 @@
 ```ts
 {
   type: 'chart',
-  chartType: 'line'|'bar'|'pie'|'area'|'radar'|'scatter'|'xy-line',
+  chartType: 'line'|'bar'|'pie'|'area'|'radar'|'scatter'|'xy-line'|'boxplot',
   engine?: 'recharts'|'echarts',  // xy-line 은 항상 echarts
   title?: string,
   data: {

@@ -509,6 +509,19 @@ export interface KpiCardsBlock {
     value: string | number
     delta?: string | number
     trend?: 'up' | 'down' | 'flat'
+    /**
+     * Excel Insert→Sparkline 동등. 카드 하단의 작은 인-카드 차트.
+     */
+    sparkline?: {
+      /**
+       * 시계열 값. 빈 배열이면 sparkline 미렌더.
+       */
+      values: number[]
+      /**
+       * line=경향선, bar=막대, win-loss=양/음 1px 막대.
+       */
+      kind?: 'line' | 'bar' | 'win-loss'
+    }
   }[]
   /**
    * 표시 옵션. 모두 optional, default 동작은 ON.
@@ -528,9 +541,9 @@ export interface ChartBlock {
   type: 'chart'
   id: Ulid
   /**
-   * 차트 타입. 'xy-line' 은 시리즈마다 자유로운 (x, y) 쌍 — labels 공유 안 함. 두 stress-strain 곡선처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교할 때 사용. data.labels 는 무시되고 각 series 의 points: [{x, y}] 가 그려진다.
+   * 차트 타입. 'xy-line' 은 시리즈마다 자유로운 (x, y) 쌍 — labels 공유 안 함. 두 stress-strain 곡선처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교할 때 사용. data.labels 는 무시되고 각 series 의 points: [{x, y}] 가 그려진다. 'boxplot' 은 분포 비교용 — 시리즈마다 한 박스. raw mode (기본) 는 values:number[] 에서 min/Q1/median/Q3/max 자동 계산. precomputed mode (block.options.boxplotMode='precomputed') 는 values:[min, Q1, median, Q3, max] (length=5) 로 직접 지정.
    */
-  chartType: 'line' | 'bar' | 'pie' | 'area' | 'radar' | 'scatter' | 'xy-line'
+  chartType: 'line' | 'bar' | 'pie' | 'area' | 'radar' | 'scatter' | 'xy-line' | 'boxplot'
   /**
    * Chart renderer. Default 'recharts' for back-compat; choose 'echarts' for rich interactivity (markPoint / markArea / brush / dataZoom).
    */
@@ -874,7 +887,7 @@ export interface DataSourceBlock {
    * Per-document chart styling overrides (only for render=chart). Deep-merged ON TOP of widget-provided defaults — set just the fields you want to change.
    */
   chartOptions?: {
-    chartType?: 'line' | 'bar' | 'pie' | 'area' | 'radar' | 'scatter' | 'xy-line'
+    chartType?: 'line' | 'bar' | 'pie' | 'area' | 'radar' | 'scatter' | 'xy-line' | 'boxplot'
     engine?: 'recharts' | 'echarts'
     title?: string
     interactions?: {

@@ -36,4 +36,27 @@ describe('<Sparkline />', () => {
     // Verify path starts with M command
     expect(html).toMatch(/d="M [\d.]+/)
   })
+
+  it('renders <rect> bars and no <path> when kind="bar"', () => {
+    const data = [1, 2, 3, 4, 5]
+    const html = renderToStaticMarkup(
+      <Sparkline data={data} kind="bar" width={50} height={20} ariaLabel="bar trend" />,
+    )
+    expect(html).toContain('<svg')
+    expect(html).not.toContain('<path')
+    expect(html.match(/<rect/g)?.length).toBe(5)
+  })
+
+  it('renders win-loss bars skipping zeros and differentiating sign by y position', () => {
+    const data = [2, -1, 0, 3, -2]
+    const html = renderToStaticMarkup(
+      <Sparkline data={data} kind="win-loss" width={50} height={20} ariaLabel="win-loss" />,
+    )
+    expect(html).toContain('<svg')
+    // 4 non-zero values → 4 rects (0 skipped)
+    expect(html.match(/<rect/g)?.length).toBe(4)
+    // Sign differentiation: positives use opacity 0.9, negatives 0.55
+    expect(html).toContain('opacity="0.9"')
+    expect(html).toContain('opacity="0.55"')
+  })
 })
