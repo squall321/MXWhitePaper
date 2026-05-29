@@ -140,6 +140,23 @@ markdown 마커 (`**bold**`, `*italic*`, `[text](url)`) 도 인식.
   ↔ `Table Grid` 분기로 반영 (html 에는 spreadsheet 핸들러 없음 — 사이트 자체
   React 컴포넌트가 렌더).
 - 권장: 가능하면 `table` 로 두고 사이트에서 변환.
+- 지원 함수 (formulaEngine.ts):
+  - 기본 9종: `SUM`, `AVG`/`AVERAGE`, `MIN`, `MAX`, `COUNT`, `IF`, `ROUND`,
+    `CONCAT`.
+  - 기술통계 12종: `MEDIAN`, `MODE`, `STDEV`, `STDEVP`, `VAR`, `VARP`,
+    `QUARTILE(arr, q)` (q=0..4), `PERCENTILE(arr, p)` (p=0..1),
+    `LARGE(arr, k)`, `SMALL(arr, k)`, `PERCENTRANK(arr, x)`,
+    `RANK(x, arr, [order])` (order=0 desc, 1 asc).
+  - 상관/회귀 6종: `CORREL(x, y)`, `PEARSON(x, y)` (CORREL alias),
+    `RSQ(y, x)`, `SLOPE(y, x)`, `INTERCEPT(y, x)`, `STEYX(y, x)`.
+  - Lookup 7종: `VLOOKUP(k, table, col, [exact])`,
+    `HLOOKUP(k, table, row, [exact])`, `INDEX(arr, r, [c])`,
+    `MATCH(k, arr, [mt])`, `XLOOKUP(k, lookArr, retArr, [default])`,
+    `XMATCH(k, arr, [mm])`, `CHOOSE(idx, v1, v2, ...)`.
+  - 도트 별칭: `STDEV.S`/`STDEV.P`/`VAR.S`/`VAR.P`/`MODE.SNGL`/`QUARTILE.INC`/
+    `PERCENTILE.INC`/`PERCENTRANK.INC`/`RANK.EQ` 모두 입력 가능 (내부에서
+    primary 로 rewrite).
+  - 에러 코드: `#DIV/0!`, `#N/A`, `#NUM!`, `#VALUE!`, `#REF!`, `#CYCLE!`, `#ERR!`.
 
 ### 2.10 spacer (여백)
 

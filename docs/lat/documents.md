@@ -90,7 +90,11 @@
 - `MathBlock` — LaTeX `expression`, `display: "block"|"inline"`
 - `TableBlock` — `headers[]`, `rows[][]`, `caption?`, `options{}` (sortable,
   searchable, density, stickyFirstCol, rowNumbers, **stripe** (default `true`,
-  zebra-striped data rows; header row 미영향), borderStyle). 두 가지 셀 모드:
+  zebra-striped data rows; header row 미영향), borderStyle,
+  **conditionalFormatting?** — gt/gte/lt/lte/eq/neq/between/top_n/bottom_n/contains/
+  not_contains 규칙 배열 (FE-only Phase 1, helper:
+  [[apps/web/src/components/blocks/conditionalFormatting.ts#applyConditionalFormatting]];
+  sparse `cells[].bg/color/bold` override 우선)). 두 가지 셀 모드:
   1. **flat**: `headers` + `rows` (단순 텍스트 그리드)
   2. **sparse**: `cells[]` — 각 항목 `{r, c, text?, blocks?, header?, rowSpan?, colSpan?}`.
      ★ 셀은 `text` **또는** `blocks` 중 하나만 — `blocks` 가 있으면
@@ -102,6 +106,10 @@
 - `SpreadsheetBlock` — 편집 가능한 *살아있는* 표. `cols` (1-26), `rows` (1-200),
   `cells: { "A1": "42", "B2": "=SUM(A1:A10)" }` (sparse cell-ref map), `headers?`,
   `title?`, `options.stripe` (default `true` — zebra data rows, header 미영향).
+  ★ 지원 함수 25종 추가 (formulaEngine.ts) — 기술통계 (MEDIAN/MODE/STDEV/STDEVP/
+  VAR/VARP/QUARTILE/PERCENTILE/LARGE/SMALL/PERCENTRANK/RANK), 상관/회귀 (CORREL/
+  PEARSON/RSQ/SLOPE/INTERCEPT/STEYX), lookup (VLOOKUP/HLOOKUP/INDEX/MATCH/XLOOKUP/
+  XMATCH/CHOOSE). 도트 별칭 (STDEV.S, MODE.SNGL 등) 은 tokenizer 직전 rewrite.
   TableBlock 과 달리 docx import 가 만들지 않고 사이트 에디터에서 직접 추가/편집.
   docx export 는 `_b_spreadsheet()` 가 `stripe=True` → `Light Grid Accent 1`,
   `False` → `Table Grid` 로 분기. 에디터 toolbar 의 "⬇ CSV / ⬇ TSV" 버튼은
