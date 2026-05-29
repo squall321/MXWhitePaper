@@ -201,6 +201,16 @@
   유지 결정, whiteboard-darkmode-decision 사이클에서 *재확인* (HSL inversion / dark
   캔버스 모두 yagni, 사용자 그린 의도 보존 우선). 향후 사용자 요청 시 escape hatch
   (`darkBehavior?: 'invert'`) 추가 가능 — 현재 미요청.
+- `FormBlock` / `FormQuestion` — embedded survey. `questions[]` items support
+  optional validation fields (WIDGET-03 cycle 4): `min` / `max` (number kind),
+  `minLength` / `maxLength` / `pattern` (text · long-text · email). `pattern`
+  is an ECMA-262 RegExp source — BE compiles with length cap 200 +
+  `re.compile` try/except (compile/oversize failures are logged and silently
+  skipped so author mistakes never block submission). FE/BE rules are
+  symmetric (`apps/api/app/routers/forms.py` `_validate_numeric_range` /
+  `_validate_text_constraints`; `apps/web/src/components/blocks/FormBlock.tsx`
+  `validateAnswers`). Editor exposes inputs conditionally by kind
+  (FormBlockEditor `QuestionRow`).
 - `ChartBlock`, `ColumnsBlock`, `TabsBlock`, `AccordionBlock`,
   `GalleryBlock`, …
 

@@ -16,6 +16,19 @@ const initialAnswer = (q: FormQuestion): AnswerValue => {
   return ''
 }
 
+/** Defense-in-depth cap mirrored from BE (forms.py:_PATTERN_MAX_LEN). */
+const PATTERN_MAX_LEN = 200
+
+/** Compile a FormQuestion.pattern safely. Returns null on invalid/too-long. */
+function compilePattern(pattern: string | undefined): RegExp | null {
+  if (!pattern || pattern.length > PATTERN_MAX_LEN) return null
+  try {
+    return new RegExp(pattern)
+  } catch {
+    return null
+  }
+}
+
 /**
  * Pure helper: client-side validate `answers` against `questions`. Returns
  * a map of `{questionId: errorMessage}` for any failure (empty when ok).
@@ -42,7 +55,15 @@ export function validateAnswers(
     }
     if (q.kind === 'number') {
       const n = typeof v === 'number' ? v : Number(v)
-      if (!Number.isFinite(n)) errs[q.id] = '숫자만 입력하세요.'
+      if (!Number.isFinite(n)) {
+        errs[q.id] = '숫자만 입력하세요.'
+      } else {
+        if (typeof q.min === 'number' && n < q.min) {
+          errs[q.id] = `값이 너무 작습니다 — 최소 ${q.min}`
+        } else if (typeof q.max === 'number' && n > q.max) {
+          errs[q.id] = `값이 너무 큽니다 — 최대 ${q.max}`
+        }
+      }
     }
     if (q.kind === 'rating-5') {
       const n = typeof v === 'number' ? v : Number(v)
@@ -50,6 +71,22 @@ export function validateAnswers(
     }
     if (q.kind === 'date' && typeof v === 'string' && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
       errs[q.id] = 'YYYY-MM-DD 형식이어야 합니다.'
+    }
+    if (
+      (q.kind === 'text' || q.kind === 'long-text' || q.kind === 'email') &&
+      typeof v === 'string' &&
+      !errs[q.id]
+    ) {
+      if (typeof q.minLength === 'number' && v.length < q.minLength) {
+        errs[q.id] = `글자 수가 너무 적습니다 — 최소 ${q.minLength}자`
+      } else if (typeof q.maxLength === 'number' && v.length > q.maxLength) {
+        errs[q.id] = `글자 수가 너무 많습니다 — 최대 ${q.maxLength}자`
+      } else if (q.pattern) {
+        const re = compilePattern(q.pattern)
+        if (re !== null && !re.test(v)) {
+          errs[q.id] = '형식이 올바르지 않습니다.'
+        }
+      }
     }
   }
   return errs

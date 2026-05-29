@@ -273,6 +273,9 @@ function QuestionRow({
     transition: sortable.transition,
   } as React.CSSProperties
   const showOptions = question.kind === 'select' || question.kind === 'multi-select'
+  const isNumeric = question.kind === 'number'
+  const isText =
+    question.kind === 'text' || question.kind === 'long-text' || question.kind === 'email'
 
   return (
     <li
@@ -339,6 +342,66 @@ function QuestionRow({
               })
             }
           />
+        </div>
+      )}
+      {isNumeric && (
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2" data-form-validation="numeric">
+          <Field label="최소값">
+            <Input
+              type="number"
+              value={question.min == null ? '' : String(question.min)}
+              onChange={(e) => {
+                const raw = e.target.value
+                onChange({ min: raw === '' ? undefined : Number(raw) })
+              }}
+            />
+          </Field>
+          <Field label="최대값">
+            <Input
+              type="number"
+              value={question.max == null ? '' : String(question.max)}
+              onChange={(e) => {
+                const raw = e.target.value
+                onChange({ max: raw === '' ? undefined : Number(raw) })
+              }}
+            />
+          </Field>
+        </div>
+      )}
+      {isText && (
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3" data-form-validation="text">
+          <Field label="최소 글자 수">
+            <Input
+              type="number"
+              min={0}
+              value={question.minLength == null ? '' : String(question.minLength)}
+              onChange={(e) => {
+                const raw = e.target.value
+                onChange({ minLength: raw === '' ? undefined : Number(raw) })
+              }}
+            />
+          </Field>
+          <Field label="최대 글자 수">
+            <Input
+              type="number"
+              min={0}
+              value={question.maxLength == null ? '' : String(question.maxLength)}
+              onChange={(e) => {
+                const raw = e.target.value
+                onChange({ maxLength: raw === '' ? undefined : Number(raw) })
+              }}
+            />
+          </Field>
+          <Field label="패턴 (RegExp)">
+            <Input
+              value={question.pattern ?? ''}
+              placeholder="예: ^010-\d{4}-\d{4}$"
+              onChange={(e) => {
+                const raw = e.target.value
+                onChange({ pattern: raw === '' ? undefined : raw })
+              }}
+            />
+          </Field>
         </div>
       )}
     </li>

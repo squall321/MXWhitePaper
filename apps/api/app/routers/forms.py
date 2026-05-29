@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections import Counter
 from datetime import datetime
@@ -84,6 +85,34 @@ async def get_form_definition(
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
+_log = logging.getLogger(__name__)
+
+# Hard cap on FormQuestion.pattern length — defense in depth against ReDoS via
+# pathological inputs. Anything longer is silently skipped (same treatment as
+# a compile failure) so author misconfiguration never breaks submission.
+_PATTERN_MAX_LEN = 200
+
+
+def _compile_question_pattern(pattern: str) -> re.Pattern[str] | None:
+    """Compile a user-supplied RegExp source for FormQuestion.pattern.
+
+    Returns the compiled pattern, or None if the source is missing, too long,
+    or fails to compile. Failures are logged but never raised — author error
+    must not block the end-user submitting their answer.
+    """
+    if not pattern or len(pattern) > _PATTERN_MAX_LEN:
+        if pattern and len(pattern) > _PATTERN_MAX_LEN:
+            _log.warning(
+                "form.question.pattern length %d exceeds cap %d — skipped",
+                len(pattern), _PATTERN_MAX_LEN,
+            )
+        return None
+    try:
+        return re.compile(pattern)
+    except re.error as err:
+        _log.warning("form.question.pattern compile failed: %s", err)
+        return None
+
 
 class FormValidationError(APIError):
     code = "VALIDATION_ERROR"
@@ -125,6 +154,43 @@ def _find_form_block(doc_content: dict[str, Any], block_id: str) -> dict[str, An
     return None
 
 
+def _validate_numeric_range(
+    question: dict[str, Any], value: float, label: str,
+) -> None:
+    """Enforce optional min/max on a numeric answer (already coerced to float)."""
+    lo = question.get("min")
+    hi = question.get("max")
+    if isinstance(lo, (int, float)) and not isinstance(lo, bool) and value < lo:
+        raise FormValidationError(f"'{label}' 값이 너무 작습니다 — 최소 {lo}")
+    if isinstance(hi, (int, float)) and not isinstance(hi, bool) and value > hi:
+        raise FormValidationError(f"'{label}' 값이 너무 큽니다 — 최대 {hi}")
+
+
+def _validate_text_constraints(
+    question: dict[str, Any], value: str, label: str,
+) -> None:
+    """Enforce optional minLength / maxLength / pattern on a text answer.
+
+    pattern compile failures are silenced (logged + skipped) so author
+    misconfiguration doesn't block end-user submission.
+    """
+    min_len = question.get("minLength")
+    max_len = question.get("maxLength")
+    if isinstance(min_len, int) and not isinstance(min_len, bool) and len(value) < min_len:
+        raise FormValidationError(
+            f"'{label}' 글자 수가 너무 적습니다 — 최소 {min_len}자"
+        )
+    if isinstance(max_len, int) and not isinstance(max_len, bool) and len(value) > max_len:
+        raise FormValidationError(
+            f"'{label}' 글자 수가 너무 많습니다 — 최대 {max_len}자"
+        )
+    pattern = question.get("pattern")
+    if isinstance(pattern, str) and pattern:
+        compiled = _compile_question_pattern(pattern)
+        if compiled is not None and not compiled.search(value):
+            raise FormValidationError(f"'{label}' 형식이 올바르지 않습니다")
+
+
 def _validate_answer(question: dict[str, Any], value: Any) -> Any:
     """질문 정의에 따른 답변 검증 + 정규화. 위반 시 FormValidationError."""
     kind = question["kind"]
@@ -149,20 +215,25 @@ def _validate_answer(question: dict[str, Any], value: Any) -> Any:
         max_len = 5000 if kind == "long-text" else 500
         if len(value) > max_len:
             raise FormValidationError(f"'{label}' exceeds {max_len} chars")
+        _validate_text_constraints(question, value, label)
         return value
     if kind == "email":
         if not isinstance(value, str) or not EMAIL_RE.match(value):
             raise FormValidationError(f"'{label}' is not a valid email")
+        _validate_text_constraints(question, value, label)
         return value
     if kind == "number":
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             # 문자열 숫자도 허용
             if isinstance(value, str):
                 try:
-                    return float(value)
+                    coerced = float(value)
                 except ValueError as e:
                     raise FormValidationError(f"'{label}' is not a number") from e
+                _validate_numeric_range(question, coerced, label)
+                return coerced
             raise FormValidationError(f"'{label}' is not a number")
+        _validate_numeric_range(question, float(value), label)
         return value
     if kind == "select":
         opts = question.get("options") or []

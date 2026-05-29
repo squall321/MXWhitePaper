@@ -1429,6 +1429,26 @@ class FormQuestion(BaseModel):
     required: bool | None = False
     placeholder: str | None = None
     options: list[str] | None = None
+    min: float | None = None
+    """
+    Numeric kinds (number): minimum allowed value (inclusive).
+    """
+    max: float | None = None
+    """
+    Numeric kinds (number): maximum allowed value (inclusive).
+    """
+    min_length: int | None = Field(None, alias='minLength', ge=0)
+    """
+    Text kinds (text/long-text/email): minimum string length.
+    """
+    max_length: int | None = Field(None, alias='maxLength', ge=0)
+    """
+    Text kinds (text/long-text/email): maximum string length.
+    """
+    pattern: str | None = None
+    """
+    Text kinds: ECMA-262 RegExp source. BE compiles defensively (silent skip on invalid).
+    """
 
 
 class Kind4(Enum):

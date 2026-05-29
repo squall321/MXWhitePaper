@@ -1280,7 +1280,12 @@
         "options": {
           "type": "array",
           "items": { "type": "string" }
-        }
+        },
+        "min": { "type": "number", "description": "Numeric kinds (number): minimum allowed value (inclusive)." },
+        "max": { "type": "number", "description": "Numeric kinds (number): maximum allowed value (inclusive)." },
+        "minLength": { "type": "integer", "minimum": 0, "description": "Text kinds (text/long-text/email): minimum string length." },
+        "maxLength": { "type": "integer", "minimum": 0, "description": "Text kinds (text/long-text/email): maximum string length." },
+        "pattern": { "type": "string", "description": "Text kinds: ECMA-262 RegExp source. BE compiles defensively (silent skip on invalid)." }
       }
     },
 

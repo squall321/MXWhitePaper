@@ -1005,6 +1005,26 @@ export interface FormQuestion {
   required?: boolean
   placeholder?: string
   options?: string[]
+  /**
+   * Numeric kinds (number): minimum allowed value (inclusive).
+   */
+  min?: number
+  /**
+   * Numeric kinds (number): maximum allowed value (inclusive).
+   */
+  max?: number
+  /**
+   * Text kinds (text/long-text/email): minimum string length.
+   */
+  minLength?: number
+  /**
+   * Text kinds (text/long-text/email): maximum string length.
+   */
+  maxLength?: number
+  /**
+   * Text kinds: ECMA-262 RegExp source. BE compiles defensively (silent skip on invalid).
+   */
+  pattern?: string
 }
 export interface PdfBlock {
   type: 'pdf'
