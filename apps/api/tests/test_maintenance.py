@@ -93,7 +93,8 @@ def test_select_versions_compacts_old_per_day() -> None:
 
 def test_select_versions_compacts_ancient_per_month() -> None:
     # 60일 전 동일 월에 두 개 → 한 개만 keep
-    base = datetime.now(UTC) - timedelta(days=60)
+    # base 를 월 중반(15일)으로 고정 → +2 day 가 항상 같은 월 안에 머무름
+    base = (datetime.now(UTC) - timedelta(days=60)).replace(day=15)
     versions = [
         _mk_version("v1", 1, hours_ago=99999),  # baseline forced
         {"id": "old1", "version": 2, "edited_at": base},
