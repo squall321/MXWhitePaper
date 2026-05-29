@@ -20,6 +20,9 @@ export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
   const showMeasureRow = measures.length > 1
   const colDimDepth = block.cols.length
   const rowDimDepth = block.rows.length
+  const showRowTotals = !!block.totals?.row && !!result.rowTotals
+  const showColTotals = !!block.totals?.col && !!result.colTotals
+  const showGrandTotal = !!block.totals?.grand && !!result.grandTotals
 
   const isEmpty = result.rowHeaders.length === 0 || result.colHeaders.length === 0
 
@@ -69,6 +72,15 @@ export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
                     {tuple[colDimIdx] ?? ''}
                   </th>
                 ))}
+                {showRowTotals && (
+                  <th
+                    colSpan={measures.length}
+                    className="border-b border-l border-gray-200 bg-amber-50 px-2 py-1.5 text-center font-semibold text-amber-900 dark:border-gray-700 dark:bg-amber-900/30 dark:text-amber-100"
+                    data-testid="pivot-total-col-header"
+                  >
+                    {colDimIdx === 0 ? 'Total' : ' '}
+                  </th>
+                )}
               </tr>
             ))}
             {/* measure label row — only when >1 measure */}
@@ -86,10 +98,19 @@ export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
                       key={`measure-${ci}-${mi}`}
                       className="border-b border-l border-gray-200 bg-gray-50 px-2 py-1 text-center text-[11px] font-medium text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
                     >
-                      {m.label ?? `${m.agg.toUpperCase()}(${m.field})`}
+                      {measureDisplayLabel(m)}
                     </th>
                   )),
                 )}
+                {showRowTotals &&
+                  measures.map((m, mi) => (
+                    <th
+                      key={`total-measure-${mi}`}
+                      className="border-b border-l border-gray-200 bg-amber-50 px-2 py-1 text-center text-[11px] font-medium text-amber-800 dark:border-gray-700 dark:bg-amber-900/30 dark:text-amber-200"
+                    >
+                      {measureDisplayLabel(m)}
+                    </th>
+                  ))}
               </tr>
             )}
             {/* row-dim label row when no col dims & no measure row to take that slot */}
@@ -106,9 +127,18 @@ export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
                     key={`m-only-${mi}`}
                     className="border-b border-gray-200 bg-gray-50 px-2 py-1.5 text-center font-semibold text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
                   >
-                    {m.label ?? `${m.agg.toUpperCase()}(${m.field})`}
+                    {measureDisplayLabel(m)}
                   </th>
                 ))}
+                {showRowTotals && (
+                  <th
+                    colSpan={measures.length}
+                    className="border-b border-l border-gray-200 bg-amber-50 px-2 py-1.5 text-center font-semibold text-amber-900 dark:border-gray-700 dark:bg-amber-900/30 dark:text-amber-100"
+                    data-testid="pivot-total-col-header"
+                  >
+                    Total
+                  </th>
+                )}
               </tr>
             )}
           </thead>
@@ -135,13 +165,70 @@ export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
                       {v === null ? (
                         <span className="text-gray-400 dark:text-gray-500">{empty}</span>
                       ) : (
-                        formatNumber(v)
+                        formatNumber(v, measures[mi])
                       )}
                     </td>
                   )),
                 )}
+                {showRowTotals &&
+                  result.rowTotals?.[ri]?.map((v, mi) => (
+                    <td
+                      key={`row-total-${ri}-${mi}`}
+                      className="border-l border-gray-200 bg-amber-50 px-2 py-1.5 text-right font-semibold tabular-nums text-amber-900 dark:border-gray-700 dark:bg-amber-900/30 dark:text-amber-100"
+                      data-testid={`pivot-row-total-${ri}-${mi}`}
+                    >
+                      {v === null ? (
+                        <span className="text-amber-400 dark:text-amber-500/70">{empty}</span>
+                      ) : (
+                        formatNumber(v, measures[mi])
+                      )}
+                    </td>
+                  ))}
               </tr>
             ))}
+            {showColTotals && (
+              <tr
+                className="border-t-2 border-amber-300 dark:border-amber-700"
+                data-testid="pivot-col-total-row"
+              >
+                <th
+                  colSpan={rowDimDepth || 1}
+                  scope="row"
+                  className="sticky left-0 z-[1] border-r border-amber-300 bg-amber-50 px-2 py-1.5 text-left font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
+                >
+                  Total
+                </th>
+                {result.colTotals?.flatMap((cell, ci) =>
+                  cell.map((v, mi) => (
+                    <td
+                      key={`col-total-${ci}-${mi}`}
+                      className="border-l border-amber-200 bg-amber-50 px-2 py-1.5 text-right font-semibold tabular-nums text-amber-900 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-100"
+                      data-testid={`pivot-col-total-${ci}-${mi}`}
+                    >
+                      {v === null ? (
+                        <span className="text-amber-400 dark:text-amber-500/70">{empty}</span>
+                      ) : (
+                        formatNumber(v, measures[mi])
+                      )}
+                    </td>
+                  )),
+                )}
+                {showGrandTotal &&
+                  result.grandTotals?.map((v, mi) => (
+                    <td
+                      key={`grand-total-${mi}`}
+                      className="border-l border-amber-300 bg-amber-100 px-2 py-1.5 text-right font-bold tabular-nums text-amber-900 dark:border-amber-700 dark:bg-amber-800/40 dark:text-amber-50"
+                      data-testid={`pivot-grand-total-${mi}`}
+                    >
+                      {v === null ? (
+                        <span className="text-amber-500 dark:text-amber-300/70">{empty}</span>
+                      ) : (
+                        formatNumber(v, measures[mi])
+                      )}
+                    </td>
+                  ))}
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -149,11 +236,60 @@ export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
   )
 }
 
-function formatNumber(n: number): string {
+type Measure = PivotTableBlock['values'][number]
+
+/**
+ * Display label for one measure. Sprint 4 — falls back to `{AGG}({expr})`
+ * when the measure is calculated-field; uses `{AGG}({field})` otherwise.
+ * Honours explicit `label` first (matches engine's measureLabel for sort).
+ */
+function measureDisplayLabel(m: Measure): string {
+  if (m.label) return m.label
+  const source = m.expr ?? m.field ?? ''
+  return `${m.agg.toUpperCase()}(${source})`
+}
+
+/**
+ * Format a numeric cell. When `measure.numberFormat` is set we honour a small
+ * Excel-style pattern subset; otherwise (default) up to 4 decimals with
+ * trailing zeros stripped and comma thousands.
+ *
+ * Supported patterns (auto-detected from the string):
+ *   - ends with '%'   → percent (multiply by 100); fraction-digits from the
+ *                       count of '0' chars after the decimal point in pattern.
+ *   - contains ','    → thousands grouping on.
+ *   - count of '0' after the '.' → fixed minimum/maximum fraction digits.
+ *   - no '.'          → 0 fraction digits.
+ */
+export function formatNumber(n: number, measure?: Measure): string {
   if (!Number.isFinite(n)) return String(n)
-  // Up to 4 decimals, trailing zeros stripped. Comma thousands.
+  const pattern = measure?.numberFormat
+  if (pattern) return formatPattern(n, pattern)
+  // Default — up to 4 decimals, trailing zeros stripped. Comma thousands.
   const rounded = Math.round(n * 1e4) / 1e4
   return rounded.toLocaleString(undefined, { maximumFractionDigits: 4 })
+}
+
+function formatPattern(n: number, pattern: string): string {
+  const isPercent = pattern.trim().endsWith('%')
+  const useGrouping = pattern.includes(',')
+  const dotIdx = pattern.indexOf('.')
+  let fracDigits = 0
+  if (dotIdx >= 0) {
+    // Count consecutive '0' after the '.', stopping at any non-0/non-# char.
+    for (let i = dotIdx + 1; i < pattern.length; i++) {
+      const c = pattern[i]
+      if (c === '0' || c === '#') fracDigits++
+      else break
+    }
+  }
+  const value = isPercent ? n * 100 : n
+  const body = value.toLocaleString(undefined, {
+    minimumFractionDigits: fracDigits,
+    maximumFractionDigits: fracDigits,
+    useGrouping,
+  })
+  return isPercent ? `${body}%` : body
 }
 
 function buildCsv(
@@ -166,8 +302,14 @@ function buildCsv(
   for (const colTuple of result.colHeaders) {
     const colLabel = colTuple.join('/') || '_'
     for (const m of measures) {
-      const measureLabel = m.label ?? `${m.agg.toUpperCase()}(${m.field})`
+      const measureLabel = measureDisplayLabel(m)
       headers.push(`${colLabel} | ${measureLabel}`)
+    }
+  }
+  if (result.rowTotals) {
+    for (const m of measures) {
+      const measureLabel = measureDisplayLabel(m)
+      headers.push(`Total | ${measureLabel}`)
     }
   }
   lines.push(headers.map(csvEscape).join(','))
@@ -177,6 +319,27 @@ function buildCsv(
     const rowValues = result.values[ri] ?? []
     for (const cell of rowValues) {
       for (const v of cell) {
+        cells.push(v === null ? empty : String(v))
+      }
+    }
+    if (result.rowTotals) {
+      for (const v of result.rowTotals[ri] ?? []) {
+        cells.push(v === null ? empty : String(v))
+      }
+    }
+    lines.push(cells.map(csvEscape).join(','))
+  }
+  if (result.colTotals) {
+    const cells: string[] = ['Total']
+    // pad row-dim cols beyond first
+    for (let i = 1; i < (result.rowDims.length || 1); i++) cells.push('')
+    for (const cell of result.colTotals) {
+      for (const v of cell) {
+        cells.push(v === null ? empty : String(v))
+      }
+    }
+    if (result.grandTotals) {
+      for (const v of result.grandTotals) {
         cells.push(v === null ? empty : String(v))
       }
     }

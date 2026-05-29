@@ -1285,15 +1285,43 @@ class Agg(Enum):
     var = 'var'
 
 
+class ShowAs(Enum):
+    """
+    Sprint 3 — 값 표시 방식. value=raw, pct_row=row total 대비 %, pct_col=col total 대비 %, pct_total=grand total 대비 %, running=row 안 col 순서 누적 합.
+    """
+
+    value = 'value'
+    pct_row = 'pct_row'
+    pct_col = 'pct_col'
+    pct_total = 'pct_total'
+    running = 'running'
+
+
 class Value1(BaseModel):
+    """
+    Measure spec — 'field' 또는 'expr' 중 하나가 반드시 있어야 한다 (engine runtime 에서 검증). expr 가 있으면 field 는 무시.
+    """
+
     model_config = ConfigDict(
         extra='forbid',
     )
-    field: str = Field(..., min_length=1)
+    field: str | None = Field(None, min_length=1)
+    expr: str | None = Field(None, min_length=1)
+    """
+    Sprint 4 — calculated field 식. 각 row 의 fields 를 식별자로 참조하는 산술식 (예: 'revenue - cost', 'profit / revenue * 100'). 지원 연산: + - * / 와 괄호. 평가 결과를 numeric 으로 모은 뒤 agg 적용 (sum/avg/...). 잘못된 식이거나 row 에 필드 없을 시 그 row 는 무시.
+    """
     agg: Agg
     label: str | None = None
     """
-    표시 이름; default = '{agg}({field})'
+    표시 이름; default = '{agg}({field})' 또는 '{agg}({expr})'
+    """
+    show_as: ShowAs | None = Field('value', alias='showAs')
+    """
+    Sprint 3 — 값 표시 방식. value=raw, pct_row=row total 대비 %, pct_col=col total 대비 %, pct_total=grand total 대비 %, running=row 안 col 순서 누적 합.
+    """
+    number_format: str | None = Field(None, alias='numberFormat')
+    """
+    Sprint 3 — viewer 포맷 패턴. 예: '#,##0.00' (thousands+2dp), '0.0%' (percent 1dp), '#,##0' (integer thousands). 미설정 시 default toLocaleString (≤4dp, trailing 0 strip).
     """
 
 
@@ -1307,9 +1335,71 @@ class Options5(BaseModel):
     """
 
 
+class Totals(BaseModel):
+    """
+    Sprint 2 — subtotal/grand total 토글
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    grand: bool | None = None
+    """
+    row+col 교차 grand total cell
+    """
+    row: bool | None = None
+    """
+    각 row 마지막 col 에 row total
+    """
+    col: bool | None = None
+    """
+    각 col 마지막 row 에 col total
+    """
+
+
+class Axis(Enum):
+    row = 'row'
+    col = 'col'
+
+
+class Order(Enum):
+    asc = 'asc'
+    desc = 'desc'
+
+
+class Sort(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    axis: Axis
+    by: str
+    """
+    dimension 이름 또는 measure label
+    """
+    order: Order | None = Order.desc
+
+
+class Op(Enum):
+    in_ = 'in'
+    not_in = 'not_in'
+    gt = 'gt'
+    lt = 'lt'
+    top_n = 'top_n'
+    bottom_n = 'bottom_n'
+
+
+class Filter(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    field: str
+    op: Op
+    value: Any
+
+
 class PivotTableBlock(BaseModel):
     """
-    Pivot table widget — Excel pivot table 동등. raw rows 를 rows × cols × values 축으로 cross-tab 집계. Sprint 1 = inline source + 기본 집계 (sum/count/avg/min/max). Subtotal/grand total/sort/filter 는 Sprint 2, % of total + numberFormat 은 Sprint 3, calculated field 는 Sprint 4.
+    Pivot table widget — Excel pivot table 동등. raw rows 를 rows × cols × values 축으로 cross-tab 집계. Sprint 1 = inline source + 기본 집계 (sum/count/avg/min/max). Subtotal/grand total/sort/filter 는 Sprint 2, % of total / 누적 / numberFormat 은 Sprint 3 (measure.showAs + measure.numberFormat). Sprint 4 = calculated field (measure.expr — 'revenue - cost' 같은 식, formulaEngine 산술 subset 평가 후 agg).
     """
 
     model_config = ConfigDict(
@@ -1331,6 +1421,12 @@ class PivotTableBlock(BaseModel):
     Measure(s) — Sprint 1 은 1개 이상.
     """
     options: Options5 | None = None
+    totals: Totals | None = None
+    """
+    Sprint 2 — subtotal/grand total 토글
+    """
+    sort: Sort | None = None
+    filters: list[Filter] | None = None
     meta: BlockMeta | None = None
 
 

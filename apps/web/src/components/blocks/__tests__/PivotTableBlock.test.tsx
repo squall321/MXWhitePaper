@@ -111,6 +111,211 @@ describe('PivotTableBlockView', () => {
     expect(html).toContain('1')
   })
 
+  // ── Sprint 2 — totals row/col/grand 렌더 ────────────────────────────
+
+  it('Sprint 2 — totals.row → 각 row 끝에 row-total td (highlight bg) 노출', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockView
+        block={mk({
+          source: {
+            kind: 'inline',
+            rows: [
+              { d: 'A', y: '24', v: 5 },
+              { d: 'A', y: '25', v: 3 },
+              { d: 'B', y: '24', v: 7 },
+            ],
+          },
+          rows: ['d'],
+          cols: ['y'],
+          totals: { row: true },
+        })}
+      />,
+    )
+    // 2 rows × 1 measure → 2 row-total cells
+    expect(html).toContain('data-testid="pivot-row-total-0-0"')
+    expect(html).toContain('data-testid="pivot-row-total-1-0"')
+    // amber highlight class present
+    expect(html).toMatch(/bg-amber-50/)
+    // "Total" col header
+    expect(html).toContain('data-testid="pivot-total-col-header"')
+    // A 합 = 8, B 합 = 7
+    expect(html).toContain('>8<')
+    expect(html).toContain('>7<')
+  })
+
+  it('Sprint 2 — totals.col → 하단에 col-total row (highlight) 노출', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockView
+        block={mk({
+          source: {
+            kind: 'inline',
+            rows: [
+              { d: 'A', y: '24', v: 5 },
+              { d: 'B', y: '24', v: 3 },
+              { d: 'A', y: '25', v: 7 },
+            ],
+          },
+          rows: ['d'],
+          cols: ['y'],
+          totals: { col: true },
+        })}
+      />,
+    )
+    expect(html).toContain('data-testid="pivot-col-total-row"')
+    expect(html).toContain('data-testid="pivot-col-total-0-0"')
+    expect(html).toContain('data-testid="pivot-col-total-1-0"')
+    // 24 합 = 8, 25 합 = 7
+    expect(html).toContain('>8<')
+    expect(html).toContain('>7<')
+  })
+
+  it('Sprint 2 — totals.grand → row total × col total 교차 cell (더 강한 highlight)', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockView
+        block={mk({
+          source: {
+            kind: 'inline',
+            rows: [
+              { d: 'A', y: '24', v: 5 },
+              { d: 'B', y: '24', v: 3 },
+              { d: 'A', y: '25', v: 7 },
+            ],
+          },
+          rows: ['d'],
+          cols: ['y'],
+          totals: { row: true, col: true, grand: true },
+        })}
+      />,
+    )
+    expect(html).toContain('data-testid="pivot-grand-total-0"')
+    // 더 강한 highlight = bg-amber-100 또는 dark 800/40
+    expect(html).toMatch(/bg-amber-100|bg-amber-800/)
+    // grand total = 5+3+7 = 15
+    expect(html).toContain('>15<')
+  })
+
+  it('Sprint 2 — totals 없을 때 (default) row/col total cell 없음', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockView
+        block={mk({
+          source: { kind: 'inline', rows: [{ d: 'A', y: '24', v: 5 }] },
+          rows: ['d'],
+          cols: ['y'],
+        })}
+      />,
+    )
+    expect(html).not.toContain('pivot-row-total')
+    expect(html).not.toContain('pivot-col-total')
+    expect(html).not.toContain('pivot-grand-total')
+    expect(html).not.toContain('pivot-total-col-header')
+  })
+
+  it('Sprint 2 — totals.row + 빈 cell 인 row 의 row-total 도 정확히 합산 (empty cell 영향 X)', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockView
+        block={mk({
+          source: {
+            kind: 'inline',
+            rows: [
+              { d: 'A', y: '24', v: 5 },
+              { d: 'B', y: '25', v: 7 },
+            ],
+          },
+          rows: ['d'],
+          cols: ['y'],
+          totals: { row: true },
+        })}
+      />,
+    )
+    // A 행: (24,v)=5, (25,v)=empty → row total = 5
+    // B 행: (24,v)=empty, (25,v)=7 → row total = 7
+    expect(html).toContain('data-testid="pivot-row-total-0-0"')
+    expect(html).toContain('data-testid="pivot-row-total-1-0"')
+    // 빈 데이터 cell 은 그대로 emptyCell
+    expect(html).toMatch(/>-</)
+  })
+
+  // ── Sprint 3 — numberFormat + showAs 렌더 ───────────────────────────
+
+  it('Sprint 3 — numberFormat "0.0%" 적용: percent 1dp', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockView
+        block={mk({
+          source: {
+            kind: 'inline',
+            rows: [
+              { d: 'A', q: 'Q1', v: 10 },
+              { d: 'A', q: 'Q2', v: 30 },
+            ],
+          },
+          rows: ['d'],
+          cols: ['q'],
+          values: [{ field: 'v', agg: 'sum', showAs: 'pct_row', numberFormat: '0.0%' }],
+        })}
+      />,
+    )
+    // 10/40=0.25 → 25.0%, 30/40=0.75 → 75.0%
+    expect(html).toContain('25.0%')
+    expect(html).toContain('75.0%')
+  })
+
+  it('Sprint 3 — numberFormat "#,##0.00" 적용: thousands + 2dp', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockView
+        block={mk({
+          source: {
+            kind: 'inline',
+            rows: [{ d: 'A', q: 'Q1', v: 12345.678 }],
+          },
+          rows: ['d'],
+          cols: ['q'],
+          values: [{ field: 'v', agg: 'sum', numberFormat: '#,##0.00' }],
+        })}
+      />,
+    )
+    expect(html).toContain('12,345.68')
+  })
+
+  it('Sprint 3 — numberFormat 없으면 기존 default formatter 동작', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockView
+        block={mk({
+          source: { kind: 'inline', rows: [{ d: 'A', q: 'Q1', v: 1234 }] },
+          rows: ['d'],
+          cols: ['q'],
+          values: [{ field: 'v', agg: 'sum' }],
+        })}
+      />,
+    )
+    // default toLocaleString — 1,234
+    expect(html).toContain('1,234')
+    expect(html).not.toContain('1,234.00')
+  })
+
+  it('Sprint 3 — showAs=running 렌더 누적 표시', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockView
+        block={mk({
+          source: {
+            kind: 'inline',
+            rows: [
+              { d: 'A', q: 'Q1', v: 10 },
+              { d: 'A', q: 'Q2', v: 20 },
+              { d: 'A', q: 'Q3', v: 30 },
+            ],
+          },
+          rows: ['d'],
+          cols: ['q'],
+          values: [{ field: 'v', agg: 'sum', showAs: 'running' }],
+        })}
+      />,
+    )
+    // 누적: 10, 30, 60
+    expect(html).toContain('>10<')
+    expect(html).toContain('>30<')
+    expect(html).toContain('>60<')
+  })
+
   it('export menu (CSV) — WidgetExportMenu mount + data-export-root', () => {
     const html = renderToStaticMarkup(
       <PivotTableBlockView

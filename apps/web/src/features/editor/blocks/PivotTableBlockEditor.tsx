@@ -16,6 +16,18 @@ import { PivotTableBlockView } from '@/components/blocks/PivotTableBlock'
 type Agg = PivotTableBlock['values'][number]['agg']
 const AGGS: Agg[] = ['sum', 'count', 'avg', 'min', 'max', 'median', 'stdev', 'var']
 
+type FilterOp = NonNullable<PivotTableBlock['filters']>[number]['op']
+const FILTER_OPS: FilterOp[] = ['in', 'not_in', 'gt', 'lt', 'top_n', 'bottom_n']
+type SortAxis = NonNullable<PivotTableBlock['sort']>['axis']
+type SortOrder = NonNullable<NonNullable<PivotTableBlock['sort']>['order']>
+
+function measureLabel(m: PivotTableBlock['values'][number]): string {
+  if (m.label) return m.label
+  // Sprint 4 — expr 가 있으면 expr 기반 label, 없으면 field 기반.
+  const source = m.expr ?? m.field ?? ''
+  return `${m.agg}(${source})`
+}
+
 interface PivotTableBlockEditorProps {
   block: PivotTableBlock
   onChange: (next: PivotTableBlock) => void
@@ -140,6 +152,11 @@ export function PivotTableBlockEditor({ block, onChange }: PivotTableBlockEditor
         />
       </div>
 
+      {/* Totals / Sort / Filters (Sprint 2) */}
+      <TotalsPicker block={block} onChange={onChange} />
+      <SortPicker block={block} onChange={onChange} />
+      <FiltersPicker block={block} fields={fields} onChange={onChange} />
+
       {/* Preview */}
       <section className="border-t border-gray-200 pt-2 dark:border-gray-700">
         <h5 className="mb-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
@@ -215,64 +232,124 @@ function ValuesPicker({
   onChange: (next: PivotTableBlock['values']) => void
   // (caller passes maybe-empty arrays during edits — cast as ValuesArr inside)
 }) {
+  // Sprint 4 — each measure is either field-based (default) or expr-based
+  // (calculated field). Toggle replaces the field <select> with an <input>
+  // expression editor and shows the detected fields as a hint.
+  const updateAt = (i: number, patch: Partial<PivotTableBlock['values'][number]>) =>
+    onChange(
+      values.map((x, j) => (j === i ? { ...x, ...patch } : x)) as PivotTableBlock['values'],
+    )
+
   return (
     <div data-testid="pivot-values-picker">
       <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Values</p>
       <div className="mt-1 space-y-1">
-        {values.map((v, i) => (
-          <div key={i} className="flex items-center gap-1">
-            <select
-              value={v.field}
-              onChange={(e) =>
-                onChange(
-                  values.map((x, j) =>
-                    j === i ? { ...x, field: e.target.value } : x,
-                  ) as PivotTableBlock['values'],
-                )
-              }
-              aria-label={`value ${i + 1} field`}
-              className="flex-1 rounded border border-gray-300 bg-white p-1 text-[11px] dark:border-gray-600 dark:bg-gray-800"
+        {values.map((v, i) => {
+          const mode: 'field' | 'expr' = v.expr != null ? 'expr' : 'field'
+          return (
+            <div
+              key={i}
+              className="rounded border border-gray-200 p-1 dark:border-gray-700"
+              data-testid={`pivot-value-row-${i}`}
             >
-              <option value="">필드</option>
-              {fields.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
-            <select
-              value={v.agg}
-              onChange={(e) =>
-                onChange(
-                  values.map((x, j) =>
-                    j === i ? { ...x, agg: e.target.value as Agg } : x,
-                  ) as PivotTableBlock['values'],
-                )
-              }
-              aria-label={`value ${i + 1} agg`}
-              className="w-20 rounded border border-gray-300 bg-white p-1 text-[11px] dark:border-gray-600 dark:bg-gray-800"
-            >
-              {AGGS.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={values.length <= 1}
-              onClick={() =>
-                onChange(
-                  values.filter((_, j) => j !== i) as PivotTableBlock['values'],
-                )
-              }
-              aria-label={`value ${i + 1} 제거`}
-              className="text-smsg-600 hover:text-red-600 disabled:opacity-40 dark:text-smsg-400"
-            >
-              ×
-            </button>
-          </div>
-        ))}
+              <div className="mb-1 flex items-center gap-2 text-[11px]">
+                <span className="text-gray-500 dark:text-gray-400">mode:</span>
+                <label className="flex items-center gap-1">
+                  <input
+                    type="radio"
+                    name={`pivot-value-mode-${i}`}
+                    checked={mode === 'field'}
+                    onChange={() => {
+                      // Switching to field mode: drop expr.
+                      const next = values.map((x, j) =>
+                        j === i ? { field: x.field ?? '', agg: x.agg, label: x.label, showAs: x.showAs, numberFormat: x.numberFormat } : x,
+                      ) as PivotTableBlock['values']
+                      onChange(next)
+                    }}
+                    data-testid={`pivot-value-mode-field-${i}`}
+                  />
+                  field
+                </label>
+                <label className="flex items-center gap-1">
+                  <input
+                    type="radio"
+                    name={`pivot-value-mode-${i}`}
+                    checked={mode === 'expr'}
+                    onChange={() => {
+                      // Switching to expr mode: drop field, seed empty expr.
+                      const next = values.map((x, j) =>
+                        j === i ? { expr: x.expr ?? '', agg: x.agg, label: x.label, showAs: x.showAs, numberFormat: x.numberFormat } : x,
+                      ) as PivotTableBlock['values']
+                      onChange(next)
+                    }}
+                    data-testid={`pivot-value-mode-expr-${i}`}
+                  />
+                  expr
+                </label>
+              </div>
+              <div className="flex items-center gap-1">
+                {mode === 'field' ? (
+                  <select
+                    value={v.field ?? ''}
+                    onChange={(e) => updateAt(i, { field: e.target.value })}
+                    aria-label={`value ${i + 1} field`}
+                    className="flex-1 rounded border border-gray-300 bg-white p-1 text-[11px] dark:border-gray-600 dark:bg-gray-800"
+                  >
+                    <option value="">필드</option>
+                    {fields.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <textarea
+                    value={v.expr ?? ''}
+                    onChange={(e) => updateAt(i, { expr: e.target.value })}
+                    aria-label={`value ${i + 1} expr`}
+                    placeholder="revenue - cost"
+                    rows={1}
+                    className="flex-1 rounded border border-gray-300 bg-white p-1 font-mono text-[11px] dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                    data-testid={`pivot-value-expr-${i}`}
+                  />
+                )}
+                <select
+                  value={v.agg}
+                  onChange={(e) => updateAt(i, { agg: e.target.value as Agg })}
+                  aria-label={`value ${i + 1} agg`}
+                  className="w-20 rounded border border-gray-300 bg-white p-1 text-[11px] dark:border-gray-600 dark:bg-gray-800"
+                >
+                  {AGGS.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={values.length <= 1}
+                  onClick={() =>
+                    onChange(
+                      values.filter((_, j) => j !== i) as PivotTableBlock['values'],
+                    )
+                  }
+                  aria-label={`value ${i + 1} 제거`}
+                  className="text-smsg-600 hover:text-red-600 disabled:opacity-40 dark:text-smsg-400"
+                >
+                  ×
+                </button>
+              </div>
+              {mode === 'expr' && fields.length > 0 && (
+                <p
+                  className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400"
+                  data-testid={`pivot-value-expr-fields-${i}`}
+                >
+                  사용 가능 fields: {fields.join(', ')}
+                </p>
+              )}
+            </div>
+          )
+        })}
         <button
           type="button"
           onClick={() =>
@@ -288,6 +365,281 @@ function ValuesPicker({
         </button>
       </div>
     </div>
+  )
+}
+
+function TotalsPicker({
+  block,
+  onChange,
+}: {
+  block: PivotTableBlock
+  onChange: (next: PivotTableBlock) => void
+}) {
+  const totals = block.totals ?? {}
+  const update = (patch: Partial<NonNullable<PivotTableBlock['totals']>>) => {
+    const next = { ...totals, ...patch }
+    // Drop totals key entirely when all toggles are off (yagni).
+    const anyOn = next.grand || next.row || next.col
+    const out = { ...block }
+    if (anyOn) out.totals = next
+    else delete out.totals
+    onChange(out)
+  }
+  return (
+    <section
+      className="mb-2 rounded border border-dashed border-gray-200 p-2 dark:border-gray-700"
+      data-testid="pivot-totals-picker"
+    >
+      <p className="mb-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200">Totals</p>
+      <div className="flex flex-wrap gap-3 text-[11px]">
+        <label className="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={!!totals.grand}
+            onChange={(e) => update({ grand: e.target.checked })}
+            data-testid="pivot-totals-grand"
+          />
+          Grand
+        </label>
+        <label className="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={!!totals.row}
+            onChange={(e) => update({ row: e.target.checked })}
+            data-testid="pivot-totals-row"
+          />
+          Row
+        </label>
+        <label className="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={!!totals.col}
+            onChange={(e) => update({ col: e.target.checked })}
+            data-testid="pivot-totals-col"
+          />
+          Col
+        </label>
+      </div>
+    </section>
+  )
+}
+
+function SortPicker({
+  block,
+  onChange,
+}: {
+  block: PivotTableBlock
+  onChange: (next: PivotTableBlock) => void
+}) {
+  const sort = block.sort
+  const axis: SortAxis = sort?.axis ?? 'row'
+  const byOptions =
+    axis === 'row'
+      ? [...block.rows, ...block.values.map(measureLabel)]
+      : [...block.cols, ...block.values.map(measureLabel)]
+  const update = (next: PivotTableBlock['sort'] | undefined) => {
+    const out = { ...block }
+    if (next && next.by) out.sort = next
+    else delete out.sort
+    onChange(out)
+  }
+  return (
+    <section
+      className="mb-2 rounded border border-dashed border-gray-200 p-2 dark:border-gray-700"
+      data-testid="pivot-sort-picker"
+    >
+      <p className="mb-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200">Sort</p>
+      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        <span>axis:</span>
+        <label className="flex items-center gap-1">
+          <input
+            type="radio"
+            name={`pivot-sort-axis-${block.id}`}
+            checked={axis === 'row'}
+            onChange={() =>
+              update({ axis: 'row', by: sort?.by ?? '', order: sort?.order ?? 'asc' })
+            }
+          />
+          row
+        </label>
+        <label className="flex items-center gap-1">
+          <input
+            type="radio"
+            name={`pivot-sort-axis-${block.id}`}
+            checked={axis === 'col'}
+            onChange={() =>
+              update({ axis: 'col', by: sort?.by ?? '', order: sort?.order ?? 'asc' })
+            }
+          />
+          col
+        </label>
+        <span className="ml-2">by:</span>
+        <select
+          value={sort?.by ?? ''}
+          onChange={(e) =>
+            update(
+              e.target.value
+                ? { axis, by: e.target.value, order: sort?.order ?? 'asc' }
+                : undefined,
+            )
+          }
+          data-testid="pivot-sort-by"
+          aria-label="sort by"
+          className="rounded border border-gray-300 bg-white p-0.5 text-[11px] dark:border-gray-600 dark:bg-gray-800"
+        >
+          <option value="">(none)</option>
+          {byOptions.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </select>
+        <span className="ml-2">order:</span>
+        <label className="flex items-center gap-1">
+          <input
+            type="radio"
+            name={`pivot-sort-order-${block.id}`}
+            checked={(sort?.order ?? 'asc') === 'asc'}
+            disabled={!sort?.by}
+            onChange={() =>
+              sort?.by && update({ axis, by: sort.by, order: 'asc' as SortOrder })
+            }
+          />
+          asc
+        </label>
+        <label className="flex items-center gap-1">
+          <input
+            type="radio"
+            name={`pivot-sort-order-${block.id}`}
+            checked={sort?.order === 'desc'}
+            disabled={!sort?.by}
+            onChange={() =>
+              sort?.by && update({ axis, by: sort.by, order: 'desc' as SortOrder })
+            }
+          />
+          desc
+        </label>
+      </div>
+    </section>
+  )
+}
+
+function FiltersPicker({
+  block,
+  fields,
+  onChange,
+}: {
+  block: PivotTableBlock
+  fields: string[]
+  onChange: (next: PivotTableBlock) => void
+}) {
+  const filters = block.filters ?? []
+  const update = (next: NonNullable<PivotTableBlock['filters']>) => {
+    const out = { ...block }
+    if (next.length > 0) out.filters = next
+    else delete out.filters
+    onChange(out)
+  }
+  const add = () => {
+    const first = fields[0] ?? ''
+    update([...filters, { field: first, op: 'in', value: '' }])
+  }
+  return (
+    <section
+      className="mb-2 rounded border border-dashed border-gray-200 p-2 dark:border-gray-700"
+      data-testid="pivot-filters-picker"
+    >
+      <div className="mb-1 flex items-center justify-between">
+        <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Filters</p>
+        <button
+          type="button"
+          onClick={add}
+          className="rounded bg-smsg-600 px-1.5 py-0.5 text-[11px] font-medium text-white hover:bg-smsg-700"
+          data-testid="pivot-add-filter"
+        >
+          + Add filter
+        </button>
+      </div>
+      <div className="space-y-1">
+        {filters.map((f, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-1 text-[11px]"
+            data-testid={`pivot-filter-row-${i}`}
+          >
+            <select
+              value={f.field}
+              onChange={(e) =>
+                update(
+                  filters.map((x, j) => (j === i ? { ...x, field: e.target.value } : x)),
+                )
+              }
+              aria-label={`filter ${i + 1} field`}
+              className="flex-1 rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+            >
+              <option value="">필드</option>
+              {fields.map((fld) => (
+                <option key={fld} value={fld}>
+                  {fld}
+                </option>
+              ))}
+            </select>
+            <select
+              value={f.op}
+              onChange={(e) =>
+                update(
+                  filters.map((x, j) =>
+                    j === i ? { ...x, op: e.target.value as FilterOp } : x,
+                  ),
+                )
+              }
+              aria-label={`filter ${i + 1} op`}
+              className="w-20 rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+            >
+              {FILTER_OPS.map((op) => (
+                <option key={op} value={op}>
+                  {op}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={
+                Array.isArray(f.value)
+                  ? (f.value as unknown[]).join(',')
+                  : f.value == null
+                    ? ''
+                    : String(f.value)
+              }
+              onChange={(e) => {
+                const raw = e.target.value
+                const isList = f.op === 'in' || f.op === 'not_in'
+                const value: unknown = isList
+                  ? raw
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter((s) => s.length > 0)
+                  : raw
+                update(filters.map((x, j) => (j === i ? { ...x, value } : x)))
+              }}
+              aria-label={`filter ${i + 1} value`}
+              placeholder={
+                f.op === 'in' || f.op === 'not_in' ? 'a,b,c' : 'value'
+              }
+              className="flex-1 rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+            />
+            <button
+              type="button"
+              onClick={() => update(filters.filter((_, j) => j !== i))}
+              aria-label={`filter ${i + 1} 제거`}
+              className="text-smsg-600 hover:text-red-600 dark:text-smsg-400"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 

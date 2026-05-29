@@ -1194,7 +1194,7 @@ export interface FigureIndexBlock {
   meta?: BlockMeta
 }
 /**
- * Pivot table widget — Excel pivot table 동등. raw rows 를 rows × cols × values 축으로 cross-tab 집계. Sprint 1 = inline source + 기본 집계 (sum/count/avg/min/max). Subtotal/grand total/sort/filter 는 Sprint 2, % of total + numberFormat 은 Sprint 3, calculated field 는 Sprint 4.
+ * Pivot table widget — Excel pivot table 동등. raw rows 를 rows × cols × values 축으로 cross-tab 집계. Sprint 1 = inline source + 기본 집계 (sum/count/avg/min/max). Subtotal/grand total/sort/filter 는 Sprint 2, % of total / 누적 / numberFormat 은 Sprint 3 (measure.showAs + measure.numberFormat). Sprint 4 = calculated field (measure.expr — 'revenue - cost' 같은 식, formulaEngine 산술 subset 평가 후 agg).
  */
 export interface PivotTableBlock {
   type: 'pivot-table'
@@ -1232,20 +1232,44 @@ export interface PivotTableBlock {
    */
   values: [
     {
-      field: string
+      field?: string
+      /**
+       * Sprint 4 — calculated field 식. 각 row 의 fields 를 식별자로 참조하는 산술식 (예: 'revenue - cost', 'profit / revenue * 100'). 지원 연산: + - * / 와 괄호. 평가 결과를 numeric 으로 모은 뒤 agg 적용 (sum/avg/...). 잘못된 식이거나 row 에 필드 없을 시 그 row 는 무시.
+       */
+      expr?: string
       agg: 'sum' | 'count' | 'avg' | 'min' | 'max' | 'median' | 'stdev' | 'var'
       /**
-       * 표시 이름; default = '{agg}({field})'
+       * 표시 이름; default = '{agg}({field})' 또는 '{agg}({expr})'
        */
       label?: string
+      /**
+       * Sprint 3 — 값 표시 방식. value=raw, pct_row=row total 대비 %, pct_col=col total 대비 %, pct_total=grand total 대비 %, running=row 안 col 순서 누적 합.
+       */
+      showAs?: 'value' | 'pct_row' | 'pct_col' | 'pct_total' | 'running'
+      /**
+       * Sprint 3 — viewer 포맷 패턴. 예: '#,##0.00' (thousands+2dp), '0.0%' (percent 1dp), '#,##0' (integer thousands). 미설정 시 default toLocaleString (≤4dp, trailing 0 strip).
+       */
+      numberFormat?: string
     },
     ...{
-      field: string
+      field?: string
+      /**
+       * Sprint 4 — calculated field 식. 각 row 의 fields 를 식별자로 참조하는 산술식 (예: 'revenue - cost', 'profit / revenue * 100'). 지원 연산: + - * / 와 괄호. 평가 결과를 numeric 으로 모은 뒤 agg 적용 (sum/avg/...). 잘못된 식이거나 row 에 필드 없을 시 그 row 는 무시.
+       */
+      expr?: string
       agg: 'sum' | 'count' | 'avg' | 'min' | 'max' | 'median' | 'stdev' | 'var'
       /**
-       * 표시 이름; default = '{agg}({field})'
+       * 표시 이름; default = '{agg}({field})' 또는 '{agg}({expr})'
        */
       label?: string
+      /**
+       * Sprint 3 — 값 표시 방식. value=raw, pct_row=row total 대비 %, pct_col=col total 대비 %, pct_total=grand total 대비 %, running=row 안 col 순서 누적 합.
+       */
+      showAs?: 'value' | 'pct_row' | 'pct_col' | 'pct_total' | 'running'
+      /**
+       * Sprint 3 — viewer 포맷 패턴. 예: '#,##0.00' (thousands+2dp), '0.0%' (percent 1dp), '#,##0' (integer thousands). 미설정 시 default toLocaleString (≤4dp, trailing 0 strip).
+       */
+      numberFormat?: string
     }[]
   ]
   options?: {
@@ -1254,6 +1278,36 @@ export interface PivotTableBlock {
      */
     emptyCell?: string
   }
+  /**
+   * Sprint 2 — subtotal/grand total 토글
+   */
+  totals?: {
+    /**
+     * row+col 교차 grand total cell
+     */
+    grand?: boolean
+    /**
+     * 각 row 마지막 col 에 row total
+     */
+    row?: boolean
+    /**
+     * 각 col 마지막 row 에 col total
+     */
+    col?: boolean
+  }
+  sort?: {
+    axis: 'row' | 'col'
+    /**
+     * dimension 이름 또는 measure label
+     */
+    by: string
+    order?: 'asc' | 'desc'
+  }
+  filters?: {
+    field: string
+    op: 'in' | 'not_in' | 'gt' | 'lt' | 'top_n' | 'bottom_n'
+    value: any
+  }[]
   meta?: BlockMeta
 }
 export interface RelatedDoc {
