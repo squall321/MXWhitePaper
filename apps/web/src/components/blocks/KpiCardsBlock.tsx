@@ -1,6 +1,8 @@
 import type { KpiCardsBlock } from '@/types/document'
 import { getZebraClass } from '@/features/editor/blocks/zebra'
 import { Sparkline } from '@/features/home/components/Sparkline'
+import { WidgetExportMenu } from './WidgetExportMenu'
+import { kpiCardsToCsv } from '@/lib/widgetExport'
 
 const TREND_GLYPH: Record<NonNullable<KpiCardsBlock['items'][number]['trend']>, string> = {
   up: '▲',
@@ -19,8 +21,14 @@ const TREND_COLOR: Record<NonNullable<KpiCardsBlock['items'][number]['trend']>, 
  */
 export function KpiCardsBlockView({ block }: { block: KpiCardsBlock }) {
   return (
-    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-      {block.items.map((item, idx) => {
+    <div className="group relative" data-export-root="kpi-cards">
+      <WidgetExportMenu
+        formats={['csv']}
+        getCsv={() => kpiCardsToCsv(block.items)}
+        filename="kpi-cards"
+      />
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+        {block.items.map((item, idx) => {
         const zebra = getZebraClass('kpi-cards', block.options, idx)
         const surface = zebra || 'bg-white dark:bg-gray-900'
         return (
@@ -55,6 +63,7 @@ export function KpiCardsBlockView({ block }: { block: KpiCardsBlock }) {
           </li>
         )
       })}
-    </ul>
+      </ul>
+    </div>
   )
 }

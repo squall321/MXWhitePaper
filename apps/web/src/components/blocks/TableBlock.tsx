@@ -24,6 +24,8 @@ import {
   type ConditionalRule,
   type ConditionalStyle,
 } from './conditionalFormatting'
+import { WidgetExportMenu } from './WidgetExportMenu'
+import { flatTableToCsv } from '@/lib/widgetExport'
 
 /**
  * Schema → helper bridge. The generated DocumentJSON type uses a tuple
@@ -578,7 +580,12 @@ export function TableBlockView({ block }: { block: TableBlock }) {
   }
 
   return (
-    <div className="group relative">
+    <div className="group relative" data-export-root="table">
+      <WidgetExportMenu
+        formats={['csv']}
+        getCsv={() => flatTableToCsv(block.headers, block.rows)}
+        filename="table"
+      />
       {searchable && !isSparse && (
         <div className="mb-2 flex items-center gap-2 text-xs">
           <input
