@@ -117,6 +117,23 @@
   를 호출 — *평가된 값* (formula 결과) 으로 직렬화해 Excel/Google Sheets paste
   호환. CSV 는 RFC 4180, TSV 는 탭/CR/LF 를 공백으로 강제 escape. UTF-8 BOM
   포함해 Excel mojibake 회피.
+- `PivotTableBlock` — ★ 36번째 블록 (pivot-table-sprint1 47번 archive +
+  pivot-table-sprint2-4 48번 archive). 키: `type`, `source` (`{kind:"inline"|"csv",
+  rows[], schema?}`), `rows[]` (행 차원), `cols[]` (열 차원), `values[]`
+  (`{field|expr, agg, label?, showAs?, numberFormat?}` — agg 8 종: sum/avg/count/
+  countDistinct/min/max/median/stdev; showAs: `pct_row|pct_col|pct_grand|running`;
+  numberFormat: `"#,##0.00"|"0.0%"` 등 sister grammar), `totals?` (row/col/grand
+  토글), `sort?` (차원/측정값 기준), `filters?` (raw row 필터), `options?`.
+  파이프라인: **filter → group → aggregate → sort → totals** (raw row 재집계로
+  총합 정확성 보장). helper:
+  [[apps/web/src/components/blocks/pivotEngine.ts#buildPivot]] (순수 함수,
+  expr eval 은 SpreadsheetBlock sister grammar 재사용). viewer:
+  [[apps/web/src/components/blocks/PivotTableBlock.tsx]] — cross-tab + row/col/
+  grand total amber 하이라이트 + showAs (pct_*/running) 변환 + numberFormat 적용.
+  editor: [[apps/web/src/features/editor/blocks/PivotTableBlockEditor.tsx]] —
+  source paste (CSV/JSON) + DimPicker + ValuesPicker (field/expr 2 모드) +
+  TotalsPicker + SortPicker + FiltersPicker. widgetExport CSV 매트릭스 직렬화
+  (cycle 3, [[apps/web/src/features/widgetExport.ts]]).
 - `BibliographyBlock` — `entries[]` ( `{key?, text, doi?, url?}` ), `title?`, `style?`,
   `options.stripe?` (default `true`, FE-only zebra). 본문의 `[[cite:KEY]]` 가
   `<li id="cite-{key}">` anchor 로 연결. ★ 4 export (docx / html / pptx / markdown)
@@ -152,8 +169,11 @@
 - `CalloutBlock` — `variant: "info"|"warn"|"danger"|"success"|"tip"`, `title?`, `text`.
   docx export 시 `Widget: callout (variant)` hidden marker emit (검증:
   `test_renderer_callout_emits_hidden_marker_run`).
-- `KpiCardsBlock` — `items[]` (label, value, trend), `options.stripe?` (default `true`,
-  카드 단위 `:nth-of-type(2n)` blue-050 zebra — grid 컬럼 수와 무관).
+- `KpiCardsBlock` — `items[]` (label, value, trend, **`sparkline?` `{values:number[],
+  kind: "line"|"bar"|"win-loss"}`**), `options.stripe?` (default `true`,
+  카드 단위 `:nth-of-type(2n)` blue-050 zebra — grid 컬럼 수와 무관). ★ sparkline 은
+  kpi-cards-sparkline 사이클 (cycle 2) 추가 — 카드 우하단 inline mini-chart, line/bar/
+  win-loss 3 종, SVG 직접 렌더.
 - `ListBlock` — `style: "bullet"|"number"|"check"`, `items[]` (depth 는 indent
   prefix), `options.stripe?` (default `true`, depth=0 항목 한정 zebra — 중첩 항목
   무영향).
@@ -211,8 +231,13 @@
   `_validate_text_constraints`; `apps/web/src/components/blocks/FormBlock.tsx`
   `validateAnswers`). Editor exposes inputs conditionally by kind
   (FormBlockEditor `QuestionRow`).
-- `ChartBlock`, `ColumnsBlock`, `TabsBlock`, `AccordionBlock`,
-  `GalleryBlock`, …
+- `ChartBlock` — `chartType: "line"|"bar"|"stackedBar"|"groupedBar"|"area"|"pie"|
+  "doughnut"|"scatter"|"bubble"|"radar"|"heatmap"|"waterfall"|"funnel"|"sankey"|
+  "boxplot"`, `data` (series/labels), `options?` (legend, axes, fit-range, stats).
+  ★ `boxplot` 은 chart-boxplot 사이클 (cycle 2) 추가 — Q1/median/Q3/min/max + outlier
+  렌더, single-series numeric array 입력. helper:
+  [[apps/web/src/components/blocks/chartBoxplot.ts#computeQuartiles]].
+- `ColumnsBlock`, `TabsBlock`, `AccordionBlock`, `GalleryBlock`, …
 
 전체 enum 은 [[src/app/schemas/document.py]] 참고. 새 block type 추가 시:
 1. 스키마 클래스 + Union 등록
