@@ -101,27 +101,51 @@ Content-Type: application/json
       "title": "...",
       "summary": "...",
       "status": "published",
-      "tags": ["..."],
-      "authors": ["..."],
-      "keywords": ["..."],
       "version": "1.0",
       "etag": "...",
       "created_at": "2026-03-15T...",
       "updated_at": "2026-05-28T..."
     }
   ],
-  "next_cursor": "..."
+  "next_offset": 100
 }
 ```
 
 응답 (단건 `GET /api/v1/documents/{slug}`):
-- 위 + `sections[]` 트리 (재귀)
+- 위 + `content.sections[]` 트리 (재귀, **`subsections` 키 사용**) + `content.metadata`
+
+> **중요 — DocumentJSON v1.0 키 구조**
+> tags/owners/keywords/division/team/group/part/confidentiality 등 분류성 필드는
+> *전부* `content.metadata` 안에 들어있다. top-level 에는 없다.
+> 어댑터는 편의를 위해 `fetch_document_detail` 에서 `content.metadata` 를
+> `doc.metadata` 로 평탄화하지만, 안전하게 두 경로를 모두 시도하는
+> `_metadata(doc)` 헬퍼를 사용한다.
+>
+> 마찬가지로 `sections` 의 자식은 v1.0 에서 **`subsections`** 키. (구버전/호환
+> 응답은 `children` 으로 올 수 있어 어댑터는 둘 다 허용.)
 
 ### Target: AX Hub Record
 
 ```python
+CLASSIFICATION_MAP = {
+    "public": "public",
+    "internal": "internal",
+    "restricted": "confidential",  # MXWP "restricted" → AX Hub "confidential"
+}
+
+
+def _metadata(doc: dict) -> dict:
+    """content.metadata 또는 top-level metadata — fetch 평탄화 양쪽 호환."""
+    md = doc.get("metadata")
+    if not isinstance(md, dict):
+        md = (doc.get("content") or {}).get("metadata")
+    return md if isinstance(md, dict) else {}
+
+
 def doc_to_record(doc: dict) -> dict:
-    sections_flat = flatten_sections(doc.get("sections", []))
+    md = _metadata(doc)
+    sections_flat = flatten_sections(_sections_from_doc(doc))
+    confidentiality = (md.get("confidentiality") or "internal").lower()
     return {
         "_external_id": doc["document_id"],
         "data_type": "DOC",
@@ -130,26 +154,60 @@ def doc_to_record(doc: dict) -> dict:
         "year": parse_year(doc.get("created_at")),
         "title": doc["title"],
         "summary": doc.get("summary") or "",
-        "doc_type": classify_doc_type(doc),   # "whitepaper" or "feasibility_study"
-        "tags": collect_tags(doc),
+        "doc_type": classify_doc_type(doc),  # tags/division 기반
+        "tags": collect_tags(doc),           # metadata.tags + owners + status + ...
         "agents": ["mx-whitepaper-analyst"],
-        "classification": "internal",
-        "language": "ko",
+        "classification": CLASSIFICATION_MAP.get(confidentiality, "internal"),
+        "language": doc.get("lang") or md.get("lang") or "ko",
         "author": "mxwp",
         "department": "MX/WP",
         "valid_from": parse_date(doc.get("created_at")),
-        "subject_keywords": doc.get("keywords") or [],
-        "version": doc.get("version") or "1.0",
+        # v1.0 은 keywords 미정 → metadata.tags 로 fallback
+        "subject_keywords": list(md.get("keywords") or md.get("tags") or [])[:30],
+        "version": str(doc.get("version") or "1.0"),
         "content": {"sections": sections_flat},
     }
+
+
+def collect_tags(doc: dict) -> list[str]:
+    """metadata 안의 tags + owners + status + 조직 hint 누적."""
+    md = _metadata(doc)
+    tags: list[str] = list(md.get("tags") or [])
+    for owner in (md.get("owners") or []):     # ★ "authors" 아님 — v1.0 은 "owners"
+        tags.append(f"author:{owner}")
+    if doc.get("status"):
+        tags.append(f"status:{doc['status']}")
+    for key in ("division", "team", "group", "confidentiality"):
+        if md.get(key):
+            tags.append(f"{key}:{md[key]}")
+    # 중복 제거 후 30개 컷
+    seen: set[str] = set()
+    return [t for t in tags if not (t in seen or seen.add(t))][:30]
 ```
 
+### confidentiality → classification 매핑
+
+| MXWP `metadata.confidentiality` | AX Hub `classification` |
+|---|---|
+| `public` | `public` |
+| `internal` (기본값) | `internal` |
+| `restricted` | `confidential` |
+| (그 외/누락) | `internal` |
+
 ### sections 트리 → 평탄화 (DFS)
+
 ```python
+def _sections_from_doc(doc: dict) -> list:
+    """sections 위치 — top-level / content.sections 둘 다 허용."""
+    if isinstance(doc.get("sections"), list):
+        return doc["sections"]
+    return (doc.get("content") or {}).get("sections") or []
+
+
 def flatten_sections(sections, parent_path=""):
     out = []
     for s in sections:
-        sid = s.get("number") or s.get("id") or "0"
+        sid = s.get("number") or s.get("id") or s.get("section_id") or "0"
         out.append({
             "section_id": sid,
             "level": s.get("level", 1),
@@ -158,9 +216,10 @@ def flatten_sections(sections, parent_path=""):
             "figure_refs": collect_image_ids(s.get("blocks", [])),
             "table_refs": [],
         })
-        # 자식 재귀
-        if s.get("children"):
-            out.extend(flatten_sections(s["children"], parent_path=sid))
+        # v1.0 = "subsections", 호환 fallback = "children"
+        children = s.get("subsections") or s.get("children")
+        if children:
+            out.extend(flatten_sections(children, parent_path=sid))
     return out
 ```
 

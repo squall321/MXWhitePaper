@@ -52,10 +52,13 @@ published 문서 전부 → DocumentJSON 변환 → AX Hub 일괄 적재.
 주요 필드:
 - `document_id` (UUID), `slug` (URL-friendly)
 - `title`, `summary`, `status` (draft|published|archived)
-- `tags[]`, `authors[]`, `keywords[]`
-- `created_at`, `updated_at`, `version`, `etag`
-- `sections[]` — 트리 구조, 재귀
-  - `{number, title, level, blocks, children}`
+- `version`, `etag`, `created_at`, `updated_at`
+- `content.metadata` — 분류성 필드 *모두 여기 안*:
+  - `tags[]`, `owners[]` (★ `authors` 아님), `keywords[]?`
+  - `division`, `team`, `group`, `part` (조직 hint)
+  - `confidentiality` (`public` | `internal` | `restricted`)
+- `content.sections[]` — 트리 구조, 재귀
+  - `{number, title, level, blocks, subsections}` (★ v1.0 = `subsections`; 호환 fallback = `children`)
   - blocks: `paragraph | heading | list | table | code | math | quote | callout | image-attachment`
 
 ### Target: AX Hub Record
@@ -65,19 +68,22 @@ published 문서 전부 → DocumentJSON 변환 → AX Hub 일괄 적재.
 | `document_id` | `_external_id` |
 | `title` | `title` |
 | `summary` | `summary` |
-| `tags + authors + ["status:" + status]` | `tags` |
-| `keywords` | `subject_keywords` |
+| `metadata.tags + [f"author:{o}" for o in metadata.owners] + [f"status:{status}"] + division/team/group/confidentiality hint` | `tags` |
+| `metadata.keywords ?? metadata.tags` (fallback) | `subject_keywords` |
 | `created_at.year` | `year` |
 | `created_at.date()` | `valid_from` |
-| `version` | `version` |
-| `sections` (재귀) → DFS 평탄화 | `content.sections[]` |
+| `version` (str 강제) | `version` |
+| `content.sections` (재귀, `subsections` 우선) → DFS 평탄화 | `content.sections[]` |
+| `metadata.confidentiality` (`public/internal/restricted`) | `classification` (`public/internal/confidential`) |
+| `metadata.division` | (필요시) `team`/`group` fallback hint |
 | `images (MinIO URL)` | `record_attachments` (URL 참조 — config.attachment_mode) |
 
 자동 부여:
-- `data_type = "DOC"`, `team = "MX"`, `group = "WP"`
-- `doc_type = "whitepaper"` (또는 mapping_rules 로 `feasibility_study` 분기)
+- `data_type = "DOC"`, `team = "MX"`, `group = "WP"` (hardcoded — metadata.division 은 *tag* hint 로만)
+- `doc_type = "whitepaper"` (metadata.tags / metadata.division 에 `feasibility` 가 있으면 `feasibility_study`)
 - `agents = ["mx-whitepaper-analyst"]`
-- `classification = "internal"`, `language = "ko"`
+- `classification`: confidentiality 매핑 — 누락 시 `internal`
+- `language = doc.lang ?? metadata.lang ?? "ko"`
 - `author = "mxwp"`, `department = "MX/WP"`
 
 ### sections DFS 평탄화 룰

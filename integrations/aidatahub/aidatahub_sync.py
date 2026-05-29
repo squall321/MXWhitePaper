@@ -53,24 +53,45 @@ def _parse_date(iso: str | None) -> str | None:
         return None
 
 
+def _metadata(doc: dict[str, Any]) -> dict[str, Any]:
+    """DocumentJSON v1.0 의 ``content.metadata`` 또는 top-level ``metadata``.
+
+    fetch_document_detail 이 content.metadata 를 doc.metadata 로 평탄화하므로
+    두 경로 모두 안전하게 시도.
+    """
+    md = doc.get("metadata")
+    if not isinstance(md, dict):
+        content = doc.get("content") or {}
+        md = content.get("metadata") if isinstance(content, dict) else None
+    return md if isinstance(md, dict) else {}
+
+
 def _classify_doc_type(doc: dict[str, Any]) -> str:
-    """tags / keywords / category 보고 doc_type 선택."""
-    cat_hint = (doc.get("category") or "").lower()
-    tags = [t.lower() for t in (doc.get("tags") or [])]
-    if any("feasibility" in t for t in tags) or "feasibility" in cat_hint:
+    """metadata.tags / metadata.division 보고 doc_type 선택."""
+    md = _metadata(doc)
+    division = (md.get("division") or "").lower()
+    tags = [str(t).lower() for t in (md.get("tags") or [])]
+    if any("feasibility" in t for t in tags) or "feasibility" in division:
         return "feasibility_study"
     return "whitepaper"
 
 
 def _collect_tags(doc: dict[str, Any]) -> list[str]:
+    md = _metadata(doc)
     tags: list[str] = []
-    tags.extend(doc.get("tags") or [])
-    for a in (doc.get("authors") or []):
+    tags.extend(str(t) for t in (md.get("tags") or []))
+    for a in (md.get("owners") or []):  # DocumentJSON v1.0 uses "owners", not "authors"
         tags.append(f"author:{a}")
     if doc.get("status"):
         tags.append(f"status:{doc['status']}")
-    if doc.get("category"):
-        tags.append(f"category:{doc['category']}")
+    if md.get("division"):
+        tags.append(f"division:{md['division']}")
+    if md.get("team"):
+        tags.append(f"team:{md['team']}")
+    if md.get("group"):
+        tags.append(f"group:{md['group']}")
+    if md.get("confidentiality"):
+        tags.append(f"confidentiality:{md['confidentiality']}")
     seen: set[str] = set()
     return [t for t in tags if not (t in seen or seen.add(t))][:30]
 
@@ -145,7 +166,11 @@ def _collect_image_ids(blocks: list[dict[str, Any]]) -> list[str]:
 def flatten_sections(
     sections: list[dict[str, Any]], parent_path: str = ""
 ) -> list[dict[str, Any]]:
-    """sections 트리 → 평탄 리스트 (DFS)."""
+    """sections 트리 → 평탄 리스트 (DFS).
+
+    DocumentJSON v1.0 는 자식을 ``subsections`` 키로 저장. 그러나 일부 응답
+    경로는 ``children`` 으로 올 수도 있어 두 가지 모두 허용.
+    """
     out: list[dict[str, Any]] = []
     for s in sections or []:
         sid = str(s.get("number") or s.get("id") or s.get("section_id") or len(out) + 1)
@@ -157,13 +182,32 @@ def flatten_sections(
             "figure_refs": _collect_image_ids(s.get("blocks") or []),
             "table_refs": [],
         })
-        if s.get("children"):
-            out.extend(flatten_sections(s["children"], parent_path=sid))
+        # DocumentJSON v1.0 는 subsections — children 도 호환 fallback.
+        children = s.get("subsections") or s.get("children")
+        if children:
+            out.extend(flatten_sections(children, parent_path=sid))
     return out
 
 
+def _sections_from_doc(doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """sections 위치 — top-level / content.sections 둘 다 허용."""
+    if isinstance(doc.get("sections"), list):
+        return doc["sections"]
+    content = doc.get("content") or {}
+    if isinstance(content, dict) and isinstance(content.get("sections"), list):
+        return content["sections"]
+    return []
+
+
 def doc_to_record(doc: dict[str, Any]) -> dict[str, Any]:
-    sections_flat = flatten_sections(doc.get("sections") or [])
+    md = _metadata(doc)
+    sections_flat = flatten_sections(_sections_from_doc(doc))
+    confidentiality = (md.get("confidentiality") or "internal").lower()
+    classification_map = {
+        "public": "public",
+        "internal": "internal",
+        "restricted": "confidential",
+    }
     return {
         "_external_id": str(doc.get("document_id") or doc.get("id") or ""),
         "data_type": "DOC",
@@ -175,13 +219,14 @@ def doc_to_record(doc: dict[str, Any]) -> dict[str, Any]:
         "doc_type": _classify_doc_type(doc),
         "tags": _collect_tags(doc),
         "agents": ["mx-whitepaper-analyst"],
-        "classification": "internal",
-        "language": doc.get("lang") or "ko",
+        "classification": classification_map.get(confidentiality, "internal"),
+        "language": doc.get("lang") or md.get("lang") or "ko",
         "author": "mxwp",
         "department": "MX/WP",
         "valid_from": _parse_date(doc.get("created_at")),
-        "subject_keywords": doc.get("keywords") or [],
-        "version": doc.get("version") or "1.0",
+        "subject_keywords": list(md.get("keywords") or md.get("tags") or [])[:30],
+        # version 은 항상 string (int → str coercion 으로 semver 비교 보존)
+        "version": str(doc.get("version") or "1.0"),
         "content": {"sections": sections_flat},
     }
 
@@ -248,10 +293,13 @@ async def fetch_document_detail(
         meta = body.get("meta") or {}
         if "etag" in meta:
             d["etag"] = meta["etag"]
-        # content.sections 를 doc.sections 로 평탄화 (호환성)
+        # content.{sections,metadata} 를 top-level 로 평탄화 (편의)
         content = d.get("content") or {}
-        if "sections" in content and "sections" not in d:
-            d["sections"] = content["sections"]
+        if isinstance(content, dict):
+            if "sections" in content and "sections" not in d:
+                d["sections"] = content["sections"]
+            if "metadata" in content and "metadata" not in d:
+                d["metadata"] = content["metadata"]
         # MXWP 의 document_id = id 또는 doc["id"] (UUID)
         if "document_id" not in d and "id" in d:
             d["document_id"] = d["id"]
@@ -389,11 +437,23 @@ def _load_config(path: str | Path) -> dict[str, Any]:
         logger.error("config not found: %s", p)
         sys.exit(2)
     body = p.read_text(encoding="utf-8")
-    body = re.sub(
-        r"\$\{([A-Z_][A-Z0-9_]*)\}",
-        lambda m: os.environ.get(m.group(1), ""),
-        body,
-    )
+    missing: list[str] = []
+
+    def _sub(m):
+        name = m.group(1)
+        val = os.environ.get(name)
+        if val is None or val == "":
+            missing.append(name)
+            return f"<MISSING_{name}>"
+        return val
+
+    body = re.sub(r"\$\{([A-Z_][A-Z0-9_]*)\}", _sub, body)
+    if missing:
+        logger.error(
+            "config has unset env vars: %s — set them or remove from config.yml",
+            ", ".join(sorted(set(missing))),
+        )
+        sys.exit(2)
     return yaml.safe_load(body) or {}
 
 
@@ -456,13 +516,23 @@ async def run(args: argparse.Namespace) -> int:
     )
 
     if summary["dead_letter"]:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        dump_path = Path(f"dead_letter_{ts}.json")
-        dump_path.write_text(
-            json.dumps(summary["dead_letter"], ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        dl_dir = (
+            args.dead_letter_dir
+            or sync_cfg.get("dead_letter_dir")
+            or os.environ.get("AIDH_DEAD_LETTER_DIR")
+            or "/tmp"
         )
-        logger.warning("dead_letter dumped: %s", dump_path)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dump_path = Path(dl_dir) / f"aidh_mxwp_dead_letter_{ts}_{os.getpid()}.json"
+        try:
+            dump_path.parent.mkdir(parents=True, exist_ok=True)
+            dump_path.write_text(
+                json.dumps(summary["dead_letter"], ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            logger.warning("dead_letter dumped: %s", dump_path)
+        except OSError as exc:
+            logger.error("dead_letter dump failed (path=%s): %s", dump_path, exc)
 
     return 0 if summary["failed"] == 0 else 1
 
@@ -478,6 +548,10 @@ def main() -> None:
     ap.add_argument("--since", default=None, help="ISO 8601")
     ap.add_argument("--since-minutes", type=int, default=35)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--dead-letter-dir", default=None,
+        help="dead_letter 덤프 디렉토리. 기본: config / $AIDH_DEAD_LETTER_DIR / /tmp",
+    )
     ap.add_argument("--aidh-url", default=None)
     ap.add_argument("--aidh-key", default=None)
     ap.add_argument(

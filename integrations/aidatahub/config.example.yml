@@ -3,6 +3,8 @@
 # 환경변수 ${VAR} 자동 치환.
 
 aidatahub:
+  # 컨테이너간 호출은 "http://aidatahub:8001"
+  # 호스트(쉘)에서 직접 실행 시: --aidh-url http://127.0.0.1:8001 로 override.
   base_url: "http://aidatahub:8001"
   api_key: "${AIDH_API_KEY}"
   external_source: "mxwp"
@@ -18,8 +20,9 @@ sync:
   # AX Hub 한 호출당 record 수
   batch_size: 50
 
-  # MXWP 목록 페이지 크기 (max 100, Sprint 2 cursor 미구현 — 1페이지만 가져옴)
-  # 100문서 초과시 MXWP 측에 cursor 보강 요청 필요.
+  # MXWP 목록 페이지 크기 (max 100).
+  # a4304ae 에서 offset 페이지네이션 추가 — fetch_all_documents 가
+  # next_offset 기반으로 페이지 끝까지 가져옴 (100문서 초과해도 OK).
   page_size: 100
 
   # 우리 측 throttle (req/s) — list + detail 각각에 적용
@@ -30,7 +33,9 @@ sync:
   # download_upload  : MinIO 다운 → AX Hub /attachments 로 업로드 (무거움, MXWP 폐기 후에도 보존)
   attachment_mode: "url_ref"
 
-  # DocumentJSON 의 어느 필드를 우리가 보존할지
+  # DocumentJSON 의 어느 필드를 우리가 보존할지.
+  # 주: tags/owners/keywords/division 등은 실제로는 content.metadata 안에 있고,
+  # aidatahub_sync._metadata() 가 거기서 읽음. 본 리스트는 참고용 화이트리스트.
   fields_keep:
     - document_id
     - slug
@@ -38,7 +43,7 @@ sync:
     - summary
     - status
     - tags
-    - authors
+    - owners        # ★ DocumentJSON v1.0 은 "authors" 가 아니라 "owners"
     - keywords
     - version
     - etag
