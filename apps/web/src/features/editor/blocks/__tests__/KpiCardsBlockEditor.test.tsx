@@ -64,4 +64,94 @@ describe('<KpiCardsBlockEditor /> static render', () => {
     const html = renderToStaticMarkup(<KpiCardsBlockEditor slug="test" block={blockOff} />)
     expect(html).not.toContain('bg-[var(--smsg-blue-050)]')
   })
+
+  describe('sparkline color swatches', () => {
+    const blockWithSpark: KpiCardsBlock = {
+      type: 'kpi-cards',
+      id: '01TESTBLOCK000000000000KPI',
+      items: [
+        { label: 'DAU', value: 1230, sparkline: { values: [1, 2, 3, 4] } },
+        { label: 'Revenue', value: '4.2M' },
+      ],
+    }
+
+    it('renders a swatch row per item that has a sparkline (and not for items without)', () => {
+      useEditorStore.getState().reset()
+      useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+      const html = renderToStaticMarkup(
+        <KpiCardsBlockEditor slug="test" block={blockWithSpark} />,
+      )
+      // Item 0 has sparkline → swatch row present (editor area only — preview
+      // never renders the swatches so both occurrences must be the editor row).
+      expect(html).toContain('data-testid="kpi-sparkline-color-0"')
+      // Item 1 has no sparkline → no swatch row
+      expect(html).not.toContain('data-testid="kpi-sparkline-color-1"')
+    })
+
+    it('exposes all four preset color swatches as buttons with aria-labels', () => {
+      useEditorStore.getState().reset()
+      useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+      const html = renderToStaticMarkup(
+        <KpiCardsBlockEditor slug="test" block={blockWithSpark} />,
+      )
+      expect(html).toContain('aria-label="kpi 0 sparkline color #1428A0"')
+      expect(html).toContain('aria-label="kpi 0 sparkline color #10B981"')
+      expect(html).toContain('aria-label="kpi 0 sparkline color #F59E0B"')
+      expect(html).toContain('aria-label="kpi 0 sparkline color #DC2626"')
+    })
+
+    it('exposes a custom hex input alongside the presets', () => {
+      useEditorStore.getState().reset()
+      useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+      const html = renderToStaticMarkup(
+        <KpiCardsBlockEditor slug="test" block={blockWithSpark} />,
+      )
+      expect(html).toContain('aria-label="kpi 0 sparkline color custom"')
+    })
+
+    it('marks the active preset with aria-pressed="true" when sparkline.color matches', () => {
+      useEditorStore.getState().reset()
+      useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+      const active: KpiCardsBlock = {
+        ...blockWithSpark,
+        items: [
+          {
+            label: 'DAU',
+            value: 1230,
+            sparkline: { values: [1, 2, 3], color: '#10B981' },
+          },
+        ],
+      }
+      const html = renderToStaticMarkup(<KpiCardsBlockEditor slug="test" block={active} />)
+      expect(html).toMatch(
+        /aria-label="kpi 0 sparkline color #10B981"[^>]*aria-pressed="true"/,
+      )
+      // Other presets must be aria-pressed="false"
+      expect(html).toMatch(
+        /aria-label="kpi 0 sparkline color #1428A0"[^>]*aria-pressed="false"/,
+      )
+    })
+
+    it('renders the clear button only when sparkline.color is set', () => {
+      useEditorStore.getState().reset()
+      useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+      const noColor = renderToStaticMarkup(
+        <KpiCardsBlockEditor slug="test" block={blockWithSpark} />,
+      )
+      expect(noColor).not.toContain('aria-label="kpi 0 sparkline color clear"')
+
+      const withColor: KpiCardsBlock = {
+        ...blockWithSpark,
+        items: [
+          {
+            label: 'DAU',
+            value: 1230,
+            sparkline: { values: [1, 2, 3], color: '#1428A0' },
+          },
+        ],
+      }
+      const html = renderToStaticMarkup(<KpiCardsBlockEditor slug="test" block={withColor} />)
+      expect(html).toContain('aria-label="kpi 0 sparkline color clear"')
+    })
+  })
 })

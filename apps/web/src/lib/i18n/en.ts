@@ -496,6 +496,9 @@ export const en: Record<LocaleKey, string> = {
   'editor.kpi.newItem': 'Metric {n}',
   'editor.kpi.preview': 'Preview',
   'editor.kpi.changeLog': 'Edit KPI cards',
+  'editor.kpi.sparklineColor': 'Sparkline color',
+  'editor.kpi.sparklineColorClear': 'Default',
+  'editor.kpi.sparklineColorCustom': '#hex',
 
   'editor.math.display': 'Display mode',
   'editor.math.displayBlock': 'block (single line)',

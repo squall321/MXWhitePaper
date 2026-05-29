@@ -54,6 +54,8 @@ export function KpiCardsBlockView({ block }: { block: KpiCardsBlock }) {
                 <Sparkline
                   data={item.sparkline.values}
                   kind={item.sparkline.kind ?? 'line'}
+                  color={item.sparkline.color}
+                  palette={item.sparkline.palette}
                   width={120}
                   height={24}
                   ariaLabel={`${item.label} sparkline`}

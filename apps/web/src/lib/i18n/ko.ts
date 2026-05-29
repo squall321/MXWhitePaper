@@ -519,6 +519,9 @@ export const ko = {
   'editor.kpi.newItem': '지표 {n}',
   'editor.kpi.preview': '미리보기',
   'editor.kpi.changeLog': 'KPI 카드 편집',
+  'editor.kpi.sparklineColor': '스파크라인 색',
+  'editor.kpi.sparklineColorClear': '기본값',
+  'editor.kpi.sparklineColorCustom': '#hex',
 
   // Editor — math
   'editor.math.display': '표시 방식',

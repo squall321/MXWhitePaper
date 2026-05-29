@@ -94,7 +94,16 @@
   **conditionalFormatting?** — gt/gte/lt/lte/eq/neq/between/top_n/bottom_n/contains/
   not_contains 규칙 배열 (FE-only Phase 1, helper:
   [[apps/web/src/components/blocks/conditionalFormatting.ts#applyConditionalFormatting]];
-  sparse `cells[].bg/color/bold` override 우선)). 두 가지 셀 모드:
+  sparse `cells[].bg/color/bold` override 우선)).
+  ★ Phase 2 (WIDGET-02): Excel-style preset 5종 (상위 10%, 하위 10%, 평균 초과,
+  0 이하, 중복) 빠른 적용 — pure helper
+  [[apps/web/src/components/blocks/conditionalPresets.ts#buildPresetRules]] +
+  editor panel
+  [[apps/web/src/features/editor/blocks/ConditionalFormattingPresetsPanel.tsx#ConditionalFormattingPresetsPanel]]
+  ([[apps/web/src/features/editor/blocks/TableBlockEditor.tsx]] 의 flat/sparse 양쪽
+  분기에서 `TableOptionsPanel` 바로 아래에 렌더). "중복" 은 schema 에 `duplicates`
+  operator 가 없으므로 컬럼 스캔 → 중복 값마다 `eq` rule 한 개씩 expand.
+  두 가지 셀 모드:
   1. **flat**: `headers` + `rows` (단순 텍스트 그리드)
   2. **sparse**: `cells[]` — 각 항목 `{r, c, text?, blocks?, header?, rowSpan?, colSpan?}`.
      ★ 셀은 `text` **또는** `blocks` 중 하나만 — `blocks` 가 있으면
@@ -131,9 +140,18 @@
   [[apps/web/src/components/blocks/PivotTableBlock.tsx]] — cross-tab + row/col/
   grand total amber 하이라이트 + showAs (pct_*/running) 변환 + numberFormat 적용.
   editor: [[apps/web/src/features/editor/blocks/PivotTableBlockEditor.tsx]] —
-  source paste (CSV/JSON) + DimPicker + ValuesPicker (field/expr 2 모드) +
-  TotalsPicker + SortPicker + FiltersPicker. widgetExport CSV 매트릭스 직렬화
-  (cycle 3, [[apps/web/src/features/widgetExport.ts]]).
+  source paste (CSV/JSON) + **Available Fields drag panel + Rows/Cols/Values 드롭존**
+  (`@dnd-kit/core` augment, 기존 dropdown 은 keyboard fallback 으로 유지) +
+  DimPicker + ValuesPicker (field/expr 2 모드) +
+  TotalsPicker + SortPicker + FiltersPicker. 순수 reducer
+  [[apps/web/src/features/editor/blocks/PivotTableBlockEditor.tsx#applyPivotDragEnd]] —
+  dnd-kit DragEndEvent id 두 개 → 다음 pivot block (no-op 시 같은 reference 반환).
+  widgetExport CSV 매트릭스 직렬화
+  (cycle 3, [[apps/web/src/features/widgetExport.ts]]). drill-down: viewer 의
+  data cell 클릭 → [[apps/web/src/components/blocks/pivotEngine.ts#drillRows]] 가
+  filter 재적용 + dim 매칭으로 raw rows 추출 → `Modal`
+  ([[apps/web/src/components/ui/Modal.tsx]]) 에 field-by-row table 표시 (Esc /
+  backdrop 닫기, focus trap). total cell 은 클릭 affordance 없음.
 - `BibliographyBlock` — `entries[]` ( `{key?, text, doi?, url?}` ), `title?`, `style?`,
   `options.stripe?` (default `true`, FE-only zebra). 본문의 `[[cite:KEY]]` 가
   `<li id="cite-{key}">` anchor 로 연결. ★ 4 export (docx / html / pptx / markdown)
@@ -170,10 +188,14 @@
   docx export 시 `Widget: callout (variant)` hidden marker emit (검증:
   `test_renderer_callout_emits_hidden_marker_run`).
 - `KpiCardsBlock` — `items[]` (label, value, trend, **`sparkline?` `{values:number[],
-  kind: "line"|"bar"|"win-loss"}`**), `options.stripe?` (default `true`,
-  카드 단위 `:nth-of-type(2n)` blue-050 zebra — grid 컬럼 수와 무관). ★ sparkline 은
-  kpi-cards-sparkline 사이클 (cycle 2) 추가 — 카드 우하단 inline mini-chart, line/bar/
-  win-loss 3 종, SVG 직접 렌더.
+  kind: "line"|"bar"|"win-loss", color?: string, palette?: string[]}`**),
+  `options.stripe?` (default `true`, 카드 단위 `:nth-of-type(2n)` blue-050 zebra —
+  grid 컬럼 수와 무관). ★ sparkline 은 kpi-cards-sparkline 사이클 (cycle 2) 추가 —
+  카드 우하단 inline mini-chart, line/bar/win-loss 3 종, SVG 직접 렌더. **★ color
+  override 는 sparkline-color-picker 사이클 추가** — `color` 미지정시 trend 색
+  (emerald/red/gray) → `currentColor` fallback. `palette` 는 bar kind 한정 per-bar
+  cycle (line/win-loss 무시), `color` 보다 우선. editor 는 4-preset 스와치 (chart
+  PALETTE 의 #1428A0 / #10B981 / #F59E0B / #DC2626) + custom hex input 노출.
 - `ListBlock` — `style: "bullet"|"number"|"check"`, `items[]` (depth 는 indent
   prefix), `options.stripe?` (default `true`, depth=0 항목 한정 zebra — 중첩 항목
   무영향).

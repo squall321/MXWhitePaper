@@ -2,7 +2,7 @@
  * Sprint 1 — pivotEngine cross-tab + 8 aggregator 단위 검증.
  */
 import { describe, expect, it } from 'vitest'
-import { buildPivot, parseExpr, evalExprForRow } from '../pivotEngine'
+import { buildPivot, parseExpr, evalExprForRow, drillRows } from '../pivotEngine'
 import type { PivotTableBlock } from '@/types/document'
 
 function mk(
@@ -908,6 +908,111 @@ describe('parseExpr / evalExprForRow', () => {
     expect(() => parseExpr('a +')).toThrow()
     expect(() => parseExpr('(a + b')).toThrow()
     expect(() => parseExpr('a @ b')).toThrow()
+  })
+})
+
+describe('drillRows (cell → raw rows)', () => {
+  it('row + col 일치하는 raw rows 만 반환 (1 dim row × 1 dim col)', () => {
+    const block = mk({
+      sourceRows: [
+        { dept: 'Sales', year: '2024', v: 100 },
+        { dept: 'Sales', year: '2025', v: 150 },
+        { dept: 'R&D', year: '2024', v: 80 },
+        { dept: 'Sales', year: '2024', v: 20 },
+      ],
+      rows: ['dept'],
+      cols: ['year'],
+    })
+    expect(drillRows(block, ['Sales'], ['2024'])).toEqual([
+      { dept: 'Sales', year: '2024', v: 100 },
+      { dept: 'Sales', year: '2024', v: 20 },
+    ])
+    expect(drillRows(block, ['R&D'], ['2024'])).toEqual([
+      { dept: 'R&D', year: '2024', v: 80 },
+    ])
+    // 빈 셀 (R&D × 2025) → no rows
+    expect(drillRows(block, ['R&D'], ['2025'])).toEqual([])
+  })
+
+  it('multi-dim row + multi-dim col 도 정확 일치', () => {
+    const block = mk({
+      sourceRows: [
+        { dept: 'Sales', team: 'A', y: '24', q: 'Q1', v: 1 },
+        { dept: 'Sales', team: 'A', y: '24', q: 'Q2', v: 2 },
+        { dept: 'Sales', team: 'B', y: '24', q: 'Q1', v: 3 },
+        { dept: 'Sales', team: 'A', y: '25', q: 'Q1', v: 4 },
+      ],
+      rows: ['dept', 'team'],
+      cols: ['y', 'q'],
+    })
+    expect(drillRows(block, ['Sales', 'A'], ['24', 'Q1'])).toEqual([
+      { dept: 'Sales', team: 'A', y: '24', q: 'Q1', v: 1 },
+    ])
+    expect(drillRows(block, ['Sales', 'A'], ['25', 'Q1'])).toEqual([
+      { dept: 'Sales', team: 'A', y: '25', q: 'Q1', v: 4 },
+    ])
+  })
+
+  it('cols=[] (flat aggregation) — colKey=[] 면 row 조건만 매칭', () => {
+    const block = mk({
+      sourceRows: [
+        { dept: 'Sales', v: 10 },
+        { dept: 'R&D', v: 20 },
+        { dept: 'Sales', v: 30 },
+      ],
+      rows: ['dept'],
+      cols: [],
+    })
+    expect(drillRows(block, ['Sales'], [])).toEqual([
+      { dept: 'Sales', v: 10 },
+      { dept: 'Sales', v: 30 },
+    ])
+  })
+
+  it('숫자 vs 문자열 dim value 도 dimValue (String 변환) 로 일치', () => {
+    const block = mk({
+      sourceRows: [
+        // 숫자 year — header 는 '2024'
+        { dept: 'Sales', year: 2024, v: 100 },
+        { dept: 'Sales', year: 2024, v: 50 },
+      ],
+      rows: ['dept'],
+      cols: ['year'],
+    })
+    // viewer header 는 '2024' 문자열로 표시되므로 drillRows 도 '2024' 로 들어옴
+    expect(drillRows(block, ['Sales'], ['2024'])).toEqual([
+      { dept: 'Sales', year: 2024, v: 100 },
+      { dept: 'Sales', year: 2024, v: 50 },
+    ])
+  })
+
+  it('filters 가 buildPivot 과 동일하게 적용된 뒤 dim 매칭', () => {
+    const block = mk({
+      sourceRows: [
+        { dept: 'Sales', v: 10 },
+        { dept: 'Sales', v: 50 }, // gt:20 으로 살아남음
+        { dept: 'R&D', v: 30 },
+      ],
+      rows: ['dept'],
+      cols: [],
+      filters: [{ field: 'v', op: 'gt', value: 20 }],
+    })
+    expect(drillRows(block, ['Sales'], [])).toEqual([
+      { dept: 'Sales', v: 50 },
+    ])
+    expect(drillRows(block, ['R&D'], [])).toEqual([
+      { dept: 'R&D', v: 30 },
+    ])
+  })
+
+  it('일치하는 row 가 없으면 빈 배열', () => {
+    const block = mk({
+      sourceRows: [{ dept: 'Sales', y: '24', v: 1 }],
+      rows: ['dept'],
+      cols: ['y'],
+    })
+    expect(drillRows(block, ['Marketing'], ['24'])).toEqual([])
+    expect(drillRows(block, ['Sales'], ['99'])).toEqual([])
   })
 })
 

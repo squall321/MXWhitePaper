@@ -8,6 +8,19 @@ import { BlockHelpDrawer } from '@/features/editor/components/BlockHelpDrawer'
 import { ZebraToggle } from './ZebraToggle'
 import { useT } from '@/lib/i18n'
 
+/**
+ * Sparkline color preset swatches — first four entries from the chart light
+ * palette ([[src/components/blocks/ChartBlock.tsx#PALETTE]]) so KPI sparklines
+ * pick from the same hues users already see in chart blocks. Custom hex input
+ * lets users go outside this list.
+ */
+const SPARKLINE_PRESETS = ['#1428A0', '#10B981', '#F59E0B', '#DC2626'] as const
+
+/** Loose hex validator — '#' + 3 or 6 hex digits. Used to gate custom input. */
+function isHexColor(s: string): boolean {
+  return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(s.trim())
+}
+
 interface Props {
   slug: Slug
   block: KpiCardsBlock
@@ -81,6 +94,15 @@ export function KpiCardsBlockEditor({ slug, block }: Props) {
   const removeItem = (idx: number) => {
     void push({ ...local, items: local.items.filter((_, i) => i !== idx) })
   }
+  const updateSparklineColor = (idx: number, color: string | undefined) => {
+    const items = local.items.map((it, i) => {
+      if (i !== idx || !it.sparkline) return it
+      // Strip the field on clear so we don't emit `color: undefined` into JSON.
+      const { color: _drop, ...rest } = it.sparkline
+      return { ...it, sparkline: color ? { ...rest, color } : { ...rest } }
+    })
+    void push({ ...local, items })
+  }
 
   const isEmpty = local.items.length === 0
 
@@ -118,38 +140,47 @@ export function KpiCardsBlockEditor({ slug, block }: Props) {
           />
         </div>
         {local.items.map((it, i) => (
-          <div
-            key={i}
-            className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]"
-          >
-            <Field label={t('editor.kpi.label')}>
-              <Input
-                value={it.label}
-                onChange={(e) => updateItem(i, { label: e.target.value })}
-                aria-label={`kpi ${i} label`}
+          <div key={i} className="space-y-1">
+            <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
+              <Field label={t('editor.kpi.label')}>
+                <Input
+                  value={it.label}
+                  onChange={(e) => updateItem(i, { label: e.target.value })}
+                  aria-label={`kpi ${i} label`}
+                />
+              </Field>
+              <Field label={t('editor.kpi.value')}>
+                <Input
+                  value={String(it.value)}
+                  onChange={(e) => updateItem(i, { value: e.target.value })}
+                  aria-label={`kpi ${i} value`}
+                />
+              </Field>
+              <Field label={t('editor.kpi.delta')}>
+                <Input
+                  value={it.delta == null ? '' : String(it.delta)}
+                  placeholder={t('editor.kpi.deltaPlaceholder')}
+                  onChange={(e) => updateItem(i, { delta: e.target.value })}
+                  aria-label={`kpi ${i} delta`}
+                />
+              </Field>
+              <IconButton
+                aria-label={`kpi ${i} remove`}
+                onClick={() => removeItem(i)}
+              >
+                <span aria-hidden="true">×</span>
+              </IconButton>
+            </div>
+            {it.sparkline && it.sparkline.values.length > 0 && (
+              <SparklineColorSwatches
+                index={i}
+                color={it.sparkline.color}
+                onChange={(color) => updateSparklineColor(i, color)}
+                label={t('editor.kpi.sparklineColor')}
+                clearLabel={t('editor.kpi.sparklineColorClear')}
+                customLabel={t('editor.kpi.sparklineColorCustom')}
               />
-            </Field>
-            <Field label={t('editor.kpi.value')}>
-              <Input
-                value={String(it.value)}
-                onChange={(e) => updateItem(i, { value: e.target.value })}
-                aria-label={`kpi ${i} value`}
-              />
-            </Field>
-            <Field label={t('editor.kpi.delta')}>
-              <Input
-                value={it.delta == null ? '' : String(it.delta)}
-                placeholder={t('editor.kpi.deltaPlaceholder')}
-                onChange={(e) => updateItem(i, { delta: e.target.value })}
-                aria-label={`kpi ${i} delta`}
-              />
-            </Field>
-            <IconButton
-              aria-label={`kpi ${i} remove`}
-              onClick={() => removeItem(i)}
-            >
-              <span aria-hidden="true">×</span>
-            </IconButton>
+            )}
           </div>
         ))}
         <Button variant="secondary" size="sm" type="button" onClick={addItem}>
@@ -186,6 +217,94 @@ export function KpiCardsBlockEditor({ slug, block }: Props) {
           ],
         }}
       />
+    </div>
+  )
+}
+
+interface SwatchProps {
+  index: number
+  color: string | undefined
+  onChange: (color: string | undefined) => void
+  label: string
+  clearLabel: string
+  customLabel: string
+}
+
+/**
+ * Inline color picker for a single sparkline. Shows the 4 chart-palette
+ * presets as round swatches + a custom hex input. Empty input + clear-button
+ * reverts to the default (trend-driven) color by removing the `color` field.
+ */
+export function SparklineColorSwatches({
+  index,
+  color,
+  onChange,
+  label,
+  clearLabel,
+  customLabel,
+}: SwatchProps) {
+  const [draft, setDraft] = useState(color ?? '')
+  const commitCustom = () => {
+    const v = draft.trim()
+    if (!v) {
+      onChange(undefined)
+      return
+    }
+    if (isHexColor(v)) onChange(v)
+  }
+  return (
+    <div
+      data-testid={`kpi-sparkline-color-${index}`}
+      className="flex flex-wrap items-center gap-2 pl-1 text-[11px] text-gray-600"
+    >
+      <span className="font-medium">{label}</span>
+      {SPARKLINE_PRESETS.map((preset) => {
+        const active = color === preset
+        return (
+          <button
+            key={preset}
+            type="button"
+            aria-label={`kpi ${index} sparkline color ${preset}`}
+            aria-pressed={active}
+            onClick={() => {
+              setDraft(preset)
+              onChange(preset)
+            }}
+            className={
+              'h-5 w-5 rounded-full border ' +
+              (active ? 'ring-2 ring-offset-1 ring-smsg-600 border-smsg-600' : 'border-gray-300')
+            }
+            style={{ backgroundColor: preset }}
+          />
+        )
+      })}
+      <Input
+        aria-label={`kpi ${index} sparkline color custom`}
+        placeholder={customLabel}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commitCustom}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            commitCustom()
+          }
+        }}
+        className="!w-20 !text-[11px]"
+      />
+      {color != null && (
+        <button
+          type="button"
+          aria-label={`kpi ${index} sparkline color clear`}
+          onClick={() => {
+            setDraft('')
+            onChange(undefined)
+          }}
+          className="text-[11px] text-link hover:underline"
+        >
+          {clearLabel}
+        </button>
+      )}
     </div>
   )
 }

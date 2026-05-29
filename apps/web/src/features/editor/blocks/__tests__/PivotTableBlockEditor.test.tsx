@@ -5,8 +5,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import {
   PivotTableBlockEditor,
+  applyPivotDragEnd,
   detectFields,
+  fieldDragId,
+  itemDragId,
   parseCsv,
+  zoneDropId,
 } from '../PivotTableBlockEditor'
 import type { PivotTableBlock } from '@/types/document'
 
@@ -204,5 +208,119 @@ describe('PivotTableBlockEditor', () => {
     expect(html).toMatch(/data-testid="pivot-value-mode-expr-0"[^>]*checked/)
     // 식 본문이 textarea 안에 들어가 있음
     expect(html).toContain('revenue - cost')
+  })
+
+  // ── DnD pivot pickers ──────────────────────────────────────────────────
+
+  it('DnD SSR — Available Fields panel 렌더 + 각 필드가 draggable 버튼으로 노출', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockEditor
+        block={mkBlock({
+          source: {
+            kind: 'inline',
+            rows: [{ department: 'Sales', year: 2024, revenue: 100 }],
+          },
+        })}
+        onChange={vi.fn()}
+      />,
+    )
+    expect(html).toContain('data-testid="pivot-available-fields"')
+    expect(html).toContain('Available Fields')
+    expect(html).toContain('data-testid="pivot-field-department"')
+    expect(html).toContain('data-testid="pivot-field-year"')
+    expect(html).toContain('data-testid="pivot-field-revenue"')
+    // 사용자 힌트 (드래그하라)
+    expect(html).toContain('드래그하여')
+  })
+
+  it('DnD SSR — Rows / Cols / Values 모두 droppable zone wrapper 보유', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockEditor
+        block={mkBlock({
+          source: { kind: 'inline', rows: [{ a: 1, b: 2 }] },
+        })}
+        onChange={vi.fn()}
+      />,
+    )
+    expect(html).toContain('data-testid="pivot-dropzone-rows"')
+    expect(html).toContain('data-testid="pivot-dropzone-cols"')
+    expect(html).toContain('data-testid="pivot-dropzone-values"')
+    // 빈 Rows/Cols zone 은 "필드 드래그" 힌트
+    expect(html).toContain('필드 드래그')
+  })
+
+  it('DnD accessibility — DnD 추가 후에도 기존 dropdown fallback 보존 (회귀 가드)', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockEditor
+        block={mkBlock({
+          source: { kind: 'inline', rows: [{ a: 1, b: 2 }] },
+        })}
+        onChange={vi.fn()}
+      />,
+    )
+    // 키보드 사용자 fallback — Rows / Cols dropdown 라벨 + 옵션 1개 이상
+    expect(html).toContain('aria-label="Rows 필드 추가"')
+    expect(html).toContain('aria-label="Cols 필드 추가"')
+    expect(html).toContain('+ 필드 추가')
+    // Values 의 + measure 버튼 + agg select 도 그대로
+    expect(html).toContain('data-testid="pivot-add-value"')
+    expect(html).toContain('aria-label="value 1 agg"')
+  })
+
+  // ── applyPivotDragEnd — 순수 reducer (테스트가 dnd-kit 이벤트를 시뮬레이션
+  //     하지 않고 reducer 만 통해 상태 전이를 검증한다) ──────────────────────
+
+  describe('applyPivotDragEnd', () => {
+    const base = mkBlock({
+      source: { kind: 'inline', rows: [{ dept: 'A', year: 2024, revenue: 1 }] },
+      rows: ['dept'],
+      cols: [],
+      values: [{ field: 'revenue', agg: 'sum' }],
+    })
+
+    it('Available field → Rows zone: rows 배열 끝에 push', () => {
+      const next = applyPivotDragEnd(base, fieldDragId('year'), zoneDropId('rows'))
+      expect(next).not.toBe(base)
+      expect(next.rows).toEqual(['dept', 'year'])
+    })
+
+    it('Available field → Values zone: agg=sum default + multi-value 유지', () => {
+      const next = applyPivotDragEnd(base, fieldDragId('year'), zoneDropId('values'))
+      expect(next.values).toHaveLength(2)
+      expect(next.values[1]).toEqual({ field: 'year', agg: 'sum' })
+    })
+
+    it('Available field → Rows zone with dup: 변경 없음 (같은 dim 중복 방지)', () => {
+      const next = applyPivotDragEnd(base, fieldDragId('dept'), zoneDropId('rows'))
+      expect(next).toBe(base)
+    })
+
+    it('Rows item → Cols zone: dim 이 zone 간 이동', () => {
+      const next = applyPivotDragEnd(base, itemDragId('rows', 0), zoneDropId('cols'))
+      expect(next.rows).toEqual([])
+      expect(next.cols).toEqual(['dept'])
+    })
+
+    it('Rows item → 같은 zone 의 다른 item: arrayMove reorder', () => {
+      const twoRows = { ...base, rows: ['dept', 'year'] }
+      const next = applyPivotDragEnd(twoRows, itemDragId('rows', 1), itemDragId('rows', 0))
+      expect(next.rows).toEqual(['year', 'dept'])
+    })
+
+    it('Values item ↔ rows/cols zone: 차원 metadata 가 다르므로 변경 없음', () => {
+      // values → rows
+      expect(applyPivotDragEnd(base, itemDragId('values', 0), zoneDropId('rows'))).toBe(base)
+      // field 일반 케이스는 values 로 들어갈 수 있지만, dim item 이 values 로 들어가는 건
+      // 동일하게 거부 (cross-mapping 없음).
+      const withColDim = { ...base, cols: ['year'] }
+      expect(
+        applyPivotDragEnd(withColDim, itemDragId('cols', 0), zoneDropId('values')),
+      ).toBe(withColDim)
+    })
+
+    it('드래그 over 가 없거나 (drop 외부) 같은 위치면 변경 없음', () => {
+      expect(applyPivotDragEnd(base, fieldDragId('year'), null)).toBe(base)
+      expect(applyPivotDragEnd(base, itemDragId('rows', 0), itemDragId('rows', 0))).toBe(base)
+    })
   })
 })

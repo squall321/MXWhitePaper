@@ -7,9 +7,25 @@
  *
  * Values picker: field + agg (8 aggregators). Multi-value via Add button.
  *
+ * DnD augmentation — Available Fields panel + drop zones for Rows / Cols /
+ * Values. Dropdowns/buttons remain as accessibility fallback (the DnD layer
+ * only *adds* an Excel-pivot-style gesture). The reducer `applyPivotDragEnd`
+ * is exported as a pure function for testing without simulating pointer events.
+ *
  * Preview: PivotTableBlockView renders the live cross-tab.
  */
 import { useCallback, useMemo, useState } from 'react'
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
 import type { PivotTableBlock } from '@/types/document'
 import { PivotTableBlockView } from '@/components/blocks/PivotTableBlock'
 
@@ -37,8 +53,29 @@ export function PivotTableBlockEditor({ block, onChange }: PivotTableBlockEditor
   const [pasteText, setPasteText] = useState('')
   const [pasteKind, setPasteKind] = useState<'csv' | 'json'>('csv')
   const [pasteError, setPasteError] = useState<string | null>(null)
+  const [dragLabel, setDragLabel] = useState<string | null>(null)
 
   const fields = useMemo(() => detectFields(block.source.rows), [block.source.rows])
+
+  // ── DnD wiring — small distance constraint so chip-internal clicks (× remove
+  //    button, etc.) keep working when the pointer barely moves.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+
+  const onDragStart = useCallback((e: DragStartEvent) => {
+    const id = String(e.active.id)
+    if (id.startsWith('field:')) setDragLabel(id.slice('field:'.length))
+    else if (id.includes(':')) setDragLabel(id.split(':')[1] ?? id)
+    else setDragLabel(id)
+  }, [])
+
+  const onDragEnd = useCallback(
+    (e: DragEndEvent) => {
+      setDragLabel(null)
+      const next = applyPivotDragEnd(block, e.active.id as string, (e.over?.id as string) ?? null)
+      if (next !== block) onChange(next)
+    },
+    [block, onChange],
+  )
 
   const applyPaste = useCallback(() => {
     setPasteError(null)
@@ -122,35 +159,48 @@ export function PivotTableBlockEditor({ block, onChange }: PivotTableBlockEditor
         </div>
       </section>
 
-      {/* Detected fields */}
-      {fields.length > 0 && (
-        <p className="mb-2 text-[11px] text-gray-600 dark:text-gray-400">
-          감지된 필드: {fields.join(', ')}
-        </p>
-      )}
+      <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+        {/* Available Fields panel — drag source for Excel-pivot UX. The
+            existing dropdowns inside each zone remain as accessibility/
+            keyboard fallback. */}
+        <AvailableFieldsPanel fields={fields} />
 
-      {/* Pickers */}
-      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <DimPicker
-          label="Rows"
-          dims={block.rows}
-          fields={fields}
-          onChange={(rows) => onChange({ ...block, rows })}
-          testid="pivot-rows-picker"
-        />
-        <DimPicker
-          label="Cols"
-          dims={block.cols}
-          fields={fields}
-          onChange={(cols) => onChange({ ...block, cols })}
-          testid="pivot-cols-picker"
-        />
-        <ValuesPicker
-          values={block.values}
-          fields={fields}
-          onChange={(values) => onChange({ ...block, values })}
-        />
-      </div>
+        {/* Pickers — each is a drop zone */}
+        <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <DimPicker
+            label="Rows"
+            zone="rows"
+            dims={block.rows}
+            fields={fields}
+            onChange={(rows) => onChange({ ...block, rows })}
+            testid="pivot-rows-picker"
+          />
+          <DimPicker
+            label="Cols"
+            zone="cols"
+            dims={block.cols}
+            fields={fields}
+            onChange={(cols) => onChange({ ...block, cols })}
+            testid="pivot-cols-picker"
+          />
+          <ValuesPicker
+            values={block.values}
+            fields={fields}
+            onChange={(values) => onChange({ ...block, values })}
+          />
+        </div>
+
+        <DragOverlay>
+          {dragLabel ? (
+            <span
+              className="inline-flex items-center rounded bg-smsg-600 px-2 py-0.5 text-[11px] font-medium text-white shadow"
+              data-testid="pivot-drag-overlay"
+            >
+              {dragLabel}
+            </span>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* Totals / Sort / Filters (Sprint 2) */}
       <TotalsPicker block={block} onChange={onChange} />
@@ -168,57 +218,175 @@ export function PivotTableBlockEditor({ block, onChange }: PivotTableBlockEditor
   )
 }
 
+function AvailableFieldsPanel({ fields }: { fields: string[] }) {
+  if (fields.length === 0) return null
+  return (
+    <section
+      className="mb-2 rounded border border-dashed border-gray-300 p-2 dark:border-gray-700"
+      data-testid="pivot-available-fields"
+    >
+      <p className="mb-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+        Available Fields
+      </p>
+      <p className="mb-1 text-[10px] text-gray-500 dark:text-gray-400">
+        감지된 필드: {fields.join(', ')}{' '}
+        <span className="text-[10px] text-gray-400">(드래그하여 Rows/Cols/Values 에 추가)</span>
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {fields.map((f) => (
+          <DraggableField key={f} name={f} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function DraggableField({ name }: { name: string }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: fieldDragId(name),
+  })
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      {...attributes}
+      {...listeners}
+      aria-label={`${name} 드래그`}
+      data-testid={`pivot-field-${name}`}
+      className={
+        'inline-flex cursor-grab items-center rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[11px] text-gray-700 hover:border-smsg-400 hover:bg-smsg-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 ' +
+        (isDragging ? 'opacity-30' : '')
+      }
+    >
+      <span aria-hidden="true" className="mr-1 text-gray-400">⋮⋮</span>
+      {name}
+    </button>
+  )
+}
+
+function DroppableZone({
+  zone,
+  children,
+  className = '',
+}: {
+  zone: PivotZone
+  children: React.ReactNode
+  className?: string
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: zoneDropId(zone) })
+  return (
+    <div
+      ref={setNodeRef}
+      data-testid={`pivot-dropzone-${zone}`}
+      className={
+        className +
+        ' rounded transition-colors ' +
+        (isOver ? 'bg-smsg-50 ring-1 ring-smsg-400 dark:bg-smsg-900/30' : '')
+      }
+    >
+      {children}
+    </div>
+  )
+}
+
+function DraggableDimChip({
+  name,
+  zone,
+  index,
+  onRemove,
+}: {
+  name: string
+  zone: PivotZone
+  index: number
+  onRemove: () => void
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: itemDragId(zone, index),
+  })
+  return (
+    <span
+      ref={setNodeRef}
+      data-testid={`pivot-${zone}-chip-${index}`}
+      className={
+        'inline-flex cursor-grab items-center gap-0.5 rounded bg-smsg-100 px-1.5 py-0.5 text-[11px] text-smsg-800 dark:bg-smsg-900/40 dark:text-smsg-200 ' +
+        (isDragging ? 'opacity-30' : '')
+      }
+    >
+      <span
+        {...attributes}
+        {...listeners}
+        aria-label={`${name} 드래그`}
+        className="cursor-grab text-smsg-500"
+      >
+        ⋮⋮
+      </span>
+      {name}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`${name} 제거`}
+        className="ml-0.5 text-smsg-600 hover:text-red-600 dark:text-smsg-400"
+      >
+        ×
+      </button>
+    </span>
+  )
+}
+
 function DimPicker({
   label,
+  zone,
   dims,
   fields,
   onChange,
   testid,
 }: {
   label: string
+  zone: PivotZone
   dims: string[]
   fields: string[]
   onChange: (next: string[]) => void
   testid: string
 }) {
   return (
-    <div data-testid={testid}>
-      <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">{label}</p>
-      <div className="mt-1 flex flex-wrap gap-1">
-        {dims.map((d, i) => (
-          <span
-            key={`${d}-${i}`}
-            className="inline-flex items-center gap-0.5 rounded bg-smsg-100 px-1.5 py-0.5 text-[11px] text-smsg-800 dark:bg-smsg-900/40 dark:text-smsg-200"
-          >
-            {d}
-            <button
-              type="button"
-              onClick={() => onChange(dims.filter((_, j) => j !== i))}
-              aria-label={`${d} 제거`}
-              className="ml-0.5 text-smsg-600 hover:text-red-600 dark:text-smsg-400"
-            >
-              ×
-            </button>
-          </span>
-        ))}
-      </div>
-      <select
-        value=""
-        onChange={(e) => {
-          if (e.target.value) onChange([...dims, e.target.value])
-        }}
-        className="mt-1 block w-full rounded border border-gray-300 bg-white p-1 text-[11px] dark:border-gray-600 dark:bg-gray-800"
-      >
-        <option value="">+ 필드 추가</option>
-        {fields
-          .filter((f) => !dims.includes(f))
-          .map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
+    <DroppableZone zone={zone} className="p-1">
+      <div data-testid={testid}>
+        <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">{label}</p>
+        <div className="mt-1 flex min-h-[1.5rem] flex-wrap gap-1">
+          {dims.length === 0 && (
+            <span className="text-[10px] italic text-gray-400 dark:text-gray-500">
+              필드 드래그
+            </span>
+          )}
+          {dims.map((d, i) => (
+            <DraggableDimChip
+              key={`${d}-${i}`}
+              name={d}
+              zone={zone}
+              index={i}
+              onRemove={() => onChange(dims.filter((_, j) => j !== i))}
+            />
           ))}
-      </select>
-    </div>
+        </div>
+        <select
+          value=""
+          onChange={(e) => {
+            if (e.target.value) onChange([...dims, e.target.value])
+          }}
+          aria-label={`${label} 필드 추가`}
+          className="mt-1 block w-full rounded border border-gray-300 bg-white p-1 text-[11px] dark:border-gray-600 dark:bg-gray-800"
+        >
+          <option value="">+ 필드 추가</option>
+          {fields
+            .filter((f) => !dims.includes(f))
+            .map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+        </select>
+      </div>
+    </DroppableZone>
   )
 }
 
@@ -241,17 +409,18 @@ function ValuesPicker({
     )
 
   return (
-    <div data-testid="pivot-values-picker">
-      <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Values</p>
-      <div className="mt-1 space-y-1">
-        {values.map((v, i) => {
-          const mode: 'field' | 'expr' = v.expr != null ? 'expr' : 'field'
-          return (
-            <div
-              key={i}
-              className="rounded border border-gray-200 p-1 dark:border-gray-700"
-              data-testid={`pivot-value-row-${i}`}
-            >
+    <DroppableZone zone="values" className="p-1">
+      <div data-testid="pivot-values-picker">
+        <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Values</p>
+        <div className="mt-1 space-y-1">
+          {values.map((v, i) => {
+            const mode: 'field' | 'expr' = v.expr != null ? 'expr' : 'field'
+            return (
+              <DraggableValueRow key={i} zone="values" index={i}>
+                <div
+                  className="rounded border border-gray-200 p-1 dark:border-gray-700"
+                  data-testid={`pivot-value-row-${i}`}
+                >
               <div className="mb-1 flex items-center gap-2 text-[11px]">
                 <span className="text-gray-500 dark:text-gray-400">mode:</span>
                 <label className="flex items-center gap-1">
@@ -347,23 +516,57 @@ function ValuesPicker({
                   사용 가능 fields: {fields.join(', ')}
                 </p>
               )}
-            </div>
-          )
-        })}
-        <button
-          type="button"
-          onClick={() =>
-            onChange([
-              ...values,
-              { field: '', agg: 'sum' },
-            ] as PivotTableBlock['values'])
-          }
-          className="mt-0.5 text-[11px] text-smsg-700 hover:underline dark:text-smsg-300"
-          data-testid="pivot-add-value"
-        >
-          + measure 추가
-        </button>
+                </div>
+              </DraggableValueRow>
+            )
+          })}
+          <button
+            type="button"
+            onClick={() =>
+              onChange([
+                ...values,
+                { field: '', agg: 'sum' },
+              ] as PivotTableBlock['values'])
+            }
+            className="mt-0.5 text-[11px] text-smsg-700 hover:underline dark:text-smsg-300"
+            data-testid="pivot-add-value"
+          >
+            + measure 추가
+          </button>
+        </div>
       </div>
+    </DroppableZone>
+  )
+}
+
+function DraggableValueRow({
+  zone,
+  index,
+  children,
+}: {
+  zone: PivotZone
+  index: number
+  children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: itemDragId(zone, index),
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      data-testid={`pivot-${zone}-row-drag-${index}`}
+      className={'relative ' + (isDragging ? 'opacity-30' : '')}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={`value ${index + 1} 드래그`}
+        className="absolute right-1 top-1 cursor-grab text-gray-400 hover:text-gray-700"
+      >
+        ⋮⋮
+      </button>
+      {children}
     </div>
   )
 }
@@ -641,6 +844,137 @@ function FiltersPicker({
       </div>
     </section>
   )
+}
+
+// ── DnD identifiers + reducer (exported for testing) ──────────────────
+
+export type PivotZone = 'rows' | 'cols' | 'values'
+
+/** DnD id grammar — single string so dnd-kit's UniqueIdentifier works.
+ *  - `field:<name>`        — Available Fields panel item (source only)
+ *  - `zone:<rows|cols|values>` — drop zone container itself
+ *  - `<rows|cols|values>:<index>` — chip/row inside a zone (source + over) */
+export function fieldDragId(name: string): string {
+  return `field:${name}`
+}
+export function zoneDropId(zone: PivotZone): string {
+  return `zone:${zone}`
+}
+export function itemDragId(zone: PivotZone, index: number): string {
+  return `${zone}:${index}`
+}
+
+interface ParsedDragId {
+  kind: 'field' | 'zone' | 'item'
+  zone?: PivotZone
+  name?: string
+  index?: number
+}
+
+function parseDragId(id: string | number | null | undefined): ParsedDragId | null {
+  if (id == null) return null
+  const s = String(id)
+  if (s.startsWith('field:')) return { kind: 'field', name: s.slice('field:'.length) }
+  if (s.startsWith('zone:')) {
+    const z = s.slice('zone:'.length) as PivotZone
+    if (z === 'rows' || z === 'cols' || z === 'values') return { kind: 'zone', zone: z }
+    return null
+  }
+  const m = /^(rows|cols|values):(\d+)$/.exec(s)
+  if (m) return { kind: 'item', zone: m[1] as PivotZone, index: Number(m[2]) }
+  return null
+}
+
+/** Resolve which zone a drag is over — direct zone drop or a chip within
+ *  the zone both count. */
+function resolveTargetZone(over: ParsedDragId | null): PivotZone | null {
+  if (!over) return null
+  if (over.kind === 'zone') return over.zone ?? null
+  if (over.kind === 'item') return over.zone ?? null
+  return null
+}
+
+/** Pure reducer — pivot block + dnd-kit DragEndEvent ids → next pivot block.
+ *  Returns the same `block` reference (no-op) when the drag is meaningless
+ *  so callers can cheap-check via `next === block` if they want. */
+export function applyPivotDragEnd(
+  block: PivotTableBlock,
+  activeId: string | null | undefined,
+  overId: string | null | undefined,
+): PivotTableBlock {
+  const active = parseDragId(activeId)
+  const over = parseDragId(overId)
+  if (!active || !over) return block
+  const targetZone = resolveTargetZone(over)
+  if (!targetZone) return block
+
+  // ── Available Fields → drop zone ──
+  if (active.kind === 'field' && active.name != null) {
+    const name = active.name
+    if (targetZone === 'values') {
+      // Push a new measure with default agg=sum (multi-mode preserved).
+      const nextValues = [...block.values, { field: name, agg: 'sum' as const }]
+      return { ...block, values: nextValues as PivotTableBlock['values'] }
+    }
+    // rows / cols — skip if already present (same-zone dup avoided).
+    const arr = targetZone === 'rows' ? block.rows : block.cols
+    if (arr.includes(name)) return block
+    const nextArr = [...arr, name]
+    return targetZone === 'rows'
+      ? { ...block, rows: nextArr }
+      : { ...block, cols: nextArr }
+  }
+
+  // ── Item drag (reorder within zone OR move between dim zones) ──
+  if (active.kind === 'item' && active.zone && active.index != null) {
+    const sourceZone = active.zone
+    const sourceIndex = active.index
+
+    // values <-> rows/cols cross moves don't have a sensible mapping
+    // (values carry agg/expr metadata). Restrict to dim<->dim or same-zone.
+    if (sourceZone === 'values' && targetZone !== 'values') return block
+    if (targetZone === 'values' && sourceZone !== 'values') return block
+
+    if (sourceZone === targetZone) {
+      // Reorder within the same zone.
+      const overIndex = over.kind === 'item' && over.index != null ? over.index : -1
+      if (overIndex < 0 || overIndex === sourceIndex) return block
+      if (sourceZone === 'values') {
+        const arr = [...block.values]
+        const [moved] = arr.splice(sourceIndex, 1)
+        if (!moved) return block
+        arr.splice(overIndex, 0, moved)
+        return { ...block, values: arr as PivotTableBlock['values'] }
+      }
+      const arr = sourceZone === 'rows' ? [...block.rows] : [...block.cols]
+      const [moved] = arr.splice(sourceIndex, 1)
+      if (moved == null) return block
+      arr.splice(overIndex, 0, moved)
+      return sourceZone === 'rows' ? { ...block, rows: arr } : { ...block, cols: arr }
+    }
+
+    // Cross-zone dim move (rows <-> cols).
+    const sourceArr = sourceZone === 'rows' ? block.rows : block.cols
+    const moved = sourceArr[sourceIndex]
+    if (moved == null) return block
+    const nextSource = sourceArr.filter((_, i) => i !== sourceIndex)
+    const targetArr = targetZone === 'rows' ? block.rows : block.cols
+    if (targetArr.includes(moved)) {
+      // Already present in target — just remove from source.
+      return sourceZone === 'rows'
+        ? { ...block, rows: nextSource }
+        : { ...block, cols: nextSource }
+    }
+    const nextTarget = [...targetArr, moved]
+    const out = { ...block }
+    if (sourceZone === 'rows') out.rows = nextSource
+    else out.cols = nextSource
+    if (targetZone === 'rows') out.rows = nextTarget
+    else out.cols = nextTarget
+    return out
+  }
+
+  return block
 }
 
 // ── helpers (exported for testing) ─────────────────────────────────────

@@ -19,6 +19,7 @@ import {
 } from './tableCells'
 import { CellBlockEditor } from './CellBlockEditor'
 import { TableOptionsPanel } from './TableOptionsPanel'
+import { ConditionalFormattingPresetsPanel } from './ConditionalFormattingPresetsPanel'
 import { ColumnHeaderMenu } from './ColumnHeaderMenu'
 import { CellStyleToolbar } from './CellStyleToolbar'
 import { ColumnResizer } from './ColumnResizer'
@@ -435,6 +436,22 @@ export function TableBlockEditor({ slug, block }: Props) {
           colCount={sparseColCount}
           onChange={(patch) => schedule({ ...local, ...patch })}
         />
+        <ConditionalFormattingPresetsPanel
+          block={local}
+          // Sparse mode lifts header text from cells flagged `header: true`
+          // so the column picker mirrors the visible header row.
+          headerNames={(() => {
+            const names: string[] = []
+            for (let c = 0; c < sparseColCount; c++) names.push('')
+            for (const cell of cells) {
+              if (cell.header && typeof cell.text === 'string') {
+                names[cell.c] = cell.text
+              }
+            }
+            return names
+          })()}
+          onChange={(patch) => schedule({ ...local, ...patch })}
+        />
       </div>
     )
   }
@@ -620,6 +637,11 @@ export function TableBlockEditor({ slug, block }: Props) {
       <TableOptionsPanel
         block={local}
         colCount={local.headers.length}
+        onChange={(patch) => schedule({ ...local, ...patch })}
+      />
+      <ConditionalFormattingPresetsPanel
+        block={local}
+        headerNames={local.headers}
         onChange={(patch) => schedule({ ...local, ...patch })}
       />
     </div>

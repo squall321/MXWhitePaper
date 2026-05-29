@@ -79,4 +79,38 @@ describe('<KpiCardsBlockView /> — sparkline (WIDGET-09)', () => {
     )
     expect(html).not.toContain('<svg')
   })
+
+  describe('sparkline color forwarding (color-picker cycle)', () => {
+    it('forwards `sparkline.color` to Sparkline (line stroke)', () => {
+      const html = renderToStaticMarkup(
+        <KpiCardsBlockView
+          block={block([
+            { label: 'Sales', value: 100, sparkline: { values: [1, 2, 3], color: '#1428A0' } },
+          ])}
+        />,
+      )
+      expect(html).toContain('stroke="#1428A0"')
+    })
+
+    it('forwards `sparkline.palette` to Sparkline bars', () => {
+      const html = renderToStaticMarkup(
+        <KpiCardsBlockView
+          block={block([
+            {
+              label: 'Quarters',
+              value: 'Q4',
+              sparkline: {
+                values: [10, 20, 30, 40],
+                kind: 'bar',
+                palette: ['#aa0000', '#00aa00'],
+              },
+            },
+          ])}
+        />,
+      )
+      // 4 bars cycling between two colors
+      expect(html.match(/fill="#aa0000"/g)?.length).toBe(2)
+      expect(html.match(/fill="#00aa00"/g)?.length).toBe(2)
+    })
+  })
 })

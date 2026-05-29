@@ -8,6 +8,16 @@ interface SparklineProps {
    * Excel Insert→Sparkline 동등. default 'line'.
    */
   kind?: 'line' | 'bar' | 'win-loss'
+  /**
+   * Single color override. Applied as stroke (line) or fill (bar/win-loss).
+   * Falls back to `currentColor` so parent text color drives the sparkline.
+   */
+  color?: string
+  /**
+   * bar-only — per-bar color cycle (`palette[i % palette.length]`). Wins over
+   * `color` when present. Ignored for line/win-loss (single-color shapes).
+   */
+  palette?: string[]
 }
 
 export function Sparkline({
@@ -16,6 +26,8 @@ export function Sparkline({
   height = 20,
   ariaLabel,
   kind = 'line',
+  color,
+  palette,
 }: SparklineProps) {
   if (!data?.length) return null
   const max = Math.max(...data, 1)
@@ -23,6 +35,8 @@ export function Sparkline({
   const range = Math.max(max - min, 1)
   const n = data.length
   const slot = width / Math.max(n, 1)
+  const fill = color ?? 'currentColor'
+  const hasPalette = Array.isArray(palette) && palette.length > 0
 
   let body: React.ReactNode
   if (kind === 'bar') {
@@ -30,6 +44,7 @@ export function Sparkline({
     const barW = Math.max(slot - 1, 1)
     body = data.map((v, i) => {
       const h = ((v - min) / range) * height
+      const barFill = hasPalette ? palette![i % palette!.length] : fill
       return (
         <rect
           key={i}
@@ -37,7 +52,7 @@ export function Sparkline({
           y={(height - h).toFixed(1)}
           width={barW.toFixed(1)}
           height={Math.max(h, 0.5).toFixed(1)}
-          fill="currentColor"
+          fill={barFill}
         />
       )
     })
@@ -55,7 +70,7 @@ export function Sparkline({
           y={(up ? half - half * 0.8 : half).toFixed(1)}
           width={barW.toFixed(1)}
           height={(half * 0.8).toFixed(1)}
-          fill="currentColor"
+          fill={fill}
           opacity={up ? 0.9 : 0.55}
         />
       )
@@ -71,7 +86,7 @@ export function Sparkline({
       <path
         d={path}
         fill="none"
-        stroke="currentColor"
+        stroke={fill}
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"

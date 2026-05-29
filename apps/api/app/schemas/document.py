@@ -545,6 +545,14 @@ class Sparkline(BaseModel):
     """
     line=경향선, bar=막대, win-loss=양/음 1px 막대.
     """
+    color: str | None = None
+    """
+    Sparkline 색 override. 미지정이면 trend 색 (▲↗ emerald / ▼↘ red / → gray) 또는 currentColor 사용. line=stroke, bar=fill, win-loss=양수 fill (음수는 같은 색 + opacity 0.55).
+    """
+    palette: list[str] | None = None
+    """
+    bar kind 전용 — 막대별 색 cycle. i 번째 막대는 palette[i % palette.length] 사용. line/win-loss 에서는 무시 (color 사용). 둘 다 지정되면 palette 우선.
+    """
 
 
 class Item(BaseModel):

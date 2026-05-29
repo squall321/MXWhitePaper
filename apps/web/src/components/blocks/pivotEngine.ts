@@ -440,6 +440,48 @@ export { parseExpr, evalExprForRow }
 export type { ExprNode }
 
 /**
+ * Drill-down helper — return the raw rows that fall into a single
+ * (rowTuple, colTuple) bucket of the pivot.
+ *
+ * `rowKey` / `colKey` are the dim-value tuples shown in the viewer's
+ * row/col headers (i.e. one entry per `block.rows` / `block.cols`, in the
+ * same order). For `block.cols=[]` pass an empty array as `colKey` — the
+ * "virtual" single-col bucket matches every row.
+ *
+ * Filters are replayed (same `applyFilters` chain `buildPivot` uses) so
+ * top_n / not_in / gt etc. are honoured before dim matching, keeping the
+ * drill-down consistent with what the viewer shows.
+ *
+ * Field comparison uses `dimValue` (same coercion as header construction)
+ * so e.g. `2024` (number) and `"2024"` (string) match the `"2024"` header.
+ */
+export function drillRows(
+  block: PivotTableBlock,
+  rowKey: string[],
+  colKey: string[],
+): RawRow[] {
+  const rowDims = block.rows
+  const colDims = block.cols
+  const rawRows: RawRow[] = block.source?.rows ?? []
+  const filtered = applyFilters(rawRows, block.filters)
+  return filtered.filter((r) => {
+    for (let i = 0; i < rowDims.length; i++) {
+      const field = rowDims[i] as string
+      const want = rowKey[i] ?? ''
+      if (dimValue(r, field) !== want) return false
+    }
+    for (let i = 0; i < colDims.length; i++) {
+      const field = colDims[i] as string
+      const want = colKey[i] ?? ''
+      if (dimValue(r, field) !== want) return false
+    }
+    return true
+  })
+}
+
+export type { RawRow }
+
+/**
  * Apply `filters` to the raw rows. Operators applied left-to-right; each
  * shrinks the working set.
  *

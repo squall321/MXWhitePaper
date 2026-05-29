@@ -3,7 +3,7 @@
  */
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { PivotTableBlockView } from '../PivotTableBlock'
+import { PivotTableBlockView, PivotDrillModal } from '../PivotTableBlock'
 import type { PivotTableBlock } from '@/types/document'
 
 function mk(over: Partial<PivotTableBlock> = {}): PivotTableBlock {
@@ -329,5 +329,127 @@ describe('PivotTableBlockView', () => {
     // WidgetExportMenu 가 button (label include 'CSV' or aria) — 정확한 텍스트는 i18n
     // 둘 다 안 잡히면 menu button 자체는 보임 (button[aria])
     expect(html).toMatch(/button|menu/i)
+  })
+
+  // ── Drill-down — data cell click affordance ────────────────────────
+
+  it('drill-down — data cell 은 role=button + cursor-pointer + data-drill="cell"', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockView
+        block={mk({
+          source: {
+            kind: 'inline',
+            rows: [
+              { d: 'A', y: '24', v: 5 },
+              { d: 'B', y: '24', v: 7 },
+            ],
+          },
+          rows: ['d'],
+          cols: ['y'],
+        })}
+      />,
+    )
+    expect(html).toContain('data-drill="cell"')
+    expect(html).toContain('role="button"')
+    expect(html).toContain('cursor-pointer')
+    // 각 셀에 안정된 data-testid
+    expect(html).toContain('data-testid="pivot-cell-0-0-0"')
+    expect(html).toContain('data-testid="pivot-cell-1-0-0"')
+  })
+
+  it('drill-down — total cells 는 클릭 affordance 없음 (data-drill 미설정)', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockView
+        block={mk({
+          source: {
+            kind: 'inline',
+            rows: [
+              { d: 'A', y: '24', v: 5 },
+              { d: 'B', y: '24', v: 7 },
+            ],
+          },
+          rows: ['d'],
+          cols: ['y'],
+          totals: { row: true, col: true, grand: true },
+        })}
+      />,
+    )
+    // data-drill 마커는 데이터 셀에만 — total cell 수만큼 추가 매치가 없어야 함
+    const drillCount = (html.match(/data-drill="cell"/g) ?? []).length
+    // 2 rows × 1 col × 1 measure = 2 data cells (row totals 등은 미카운트)
+    expect(drillCount).toBe(2)
+  })
+
+  it('drill-down — closed state SSR 에 modal mount 안됨', () => {
+    const html = renderToStaticMarkup(
+      <PivotTableBlockView
+        block={mk({
+          source: { kind: 'inline', rows: [{ d: 'A', v: 5 }] },
+          rows: ['d'],
+        })}
+      />,
+    )
+    // 초기 state = null → modal 렌더 안됨
+    expect(html).not.toContain('data-testid="pivot-drill-modal"')
+  })
+
+  it('drill-down — modal open 시 raw rows table + field 컬럼 + title 노출', () => {
+    const block = mk({
+      source: {
+        kind: 'inline',
+        rows: [
+          { dept: 'Sales', year: '2024', v: 100 },
+          { dept: 'Sales', year: '2024', v: 20 },
+          { dept: 'R&D', year: '2024', v: 80 },
+        ],
+      },
+      rows: ['dept'],
+      cols: ['year'],
+    })
+    const html = renderToStaticMarkup(
+      <PivotDrillModal
+        block={block}
+        drill={{
+          rowTuple: ['Sales'],
+          colTuple: ['2024'],
+          rows: [
+            { dept: 'Sales', year: '2024', v: 100 },
+            { dept: 'Sales', year: '2024', v: 20 },
+          ],
+        }}
+        onClose={() => {}}
+      />,
+    )
+    expect(html).toContain('data-testid="pivot-drill-modal"')
+    // 필드 컬럼 헤더
+    expect(html).toContain('>dept<')
+    expect(html).toContain('>year<')
+    expect(html).toContain('>v<')
+    // raw 값들 — 두 row 모두
+    expect(html).toContain('>100<')
+    expect(html).toContain('>20<')
+    // title — Modal aria-label
+    expect(html).toContain('dept=Sales')
+    expect(html).toContain('year=2024')
+    // row count 안내
+    expect(html).toMatch(/2\s*rows?/)
+  })
+
+  it('drill-down — modal open with empty rows → "raw row 가 없습니다" 메시지', () => {
+    const html = renderToStaticMarkup(
+      <PivotDrillModal
+        block={mk({
+          source: { kind: 'inline', rows: [] },
+          rows: ['d'],
+          cols: ['y'],
+        })}
+        drill={{ rowTuple: ['X'], colTuple: ['99'], rows: [] }}
+        onClose={() => {}}
+      />,
+    )
+    expect(html).toContain('raw row')
+    expect(html).toContain('없습니다')
+    // 빈 결과는 데이터 table tbody 없음
+    expect(html).not.toContain('<tbody>')
   })
 })

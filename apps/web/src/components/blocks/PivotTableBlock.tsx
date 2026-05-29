@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { WidgetExportMenu } from './WidgetExportMenu'
-import { buildPivot } from './pivotEngine'
+import { buildPivot, drillRows } from './pivotEngine'
+import { Modal } from '@/components/ui/Modal'
 import type { PivotTableBlock } from '@/types/document'
 
 /**
@@ -13,6 +14,13 @@ import type { PivotTableBlock } from '@/types/document'
  * Widget export: CSV only (cycle 3 matrix — wraps with WidgetExportMenu).
  * Dark mode + horizontal scroll-fade (cycle 2 reuse).
  */
+/** Drill-down modal state — set when a data cell is clicked. */
+interface DrillState {
+  rowTuple: string[]
+  colTuple: string[]
+  rows: PivotTableBlock['source']['rows']
+}
+
 export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
   const result = useMemo(() => buildPivot(block), [block])
   const empty = block.options?.emptyCell ?? '-'
@@ -23,6 +31,12 @@ export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
   const showRowTotals = !!block.totals?.row && !!result.rowTotals
   const showColTotals = !!block.totals?.col && !!result.colTotals
   const showGrandTotal = !!block.totals?.grand && !!result.grandTotals
+  const [drill, setDrill] = useState<DrillState | null>(null)
+
+  const openDrill = (rowTuple: string[], colTuple: string[]) => {
+    const rows = drillRows(block, rowTuple, colTuple)
+    setDrill({ rowTuple, colTuple, rows })
+  }
 
   const isEmpty = result.rowHeaders.length === 0 || result.colHeaders.length === 0
 
@@ -155,20 +169,36 @@ export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
                     {part || ' '}
                   </th>
                 ))}
-                {/* data cells — flatten [col][measure] */}
+                {/* data cells — flatten [col][measure]; click → drill-down modal */}
                 {result.values[ri]?.flatMap((cell, ci) =>
-                  cell.map((v, mi) => (
-                    <td
-                      key={`cell-${ri}-${ci}-${mi}`}
-                      className="border-l border-gray-100 px-2 py-1.5 text-right tabular-nums text-gray-800 dark:border-gray-800 dark:text-gray-100"
-                    >
-                      {v === null ? (
-                        <span className="text-gray-400 dark:text-gray-500">{empty}</span>
-                      ) : (
-                        formatNumber(v, measures[mi])
-                      )}
-                    </td>
-                  )),
+                  cell.map((v, mi) => {
+                    const rowTuple = result.rowHeaders[ri] ?? []
+                    const colTuple = result.colHeaders[ci] ?? []
+                    return (
+                      <td
+                        key={`cell-${ri}-${ci}-${mi}`}
+                        data-testid={`pivot-cell-${ri}-${ci}-${mi}`}
+                        data-drill="cell"
+                        role="button"
+                        tabIndex={0}
+                        title="Click to view raw rows"
+                        onClick={() => openDrill(rowTuple, colTuple)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            openDrill(rowTuple, colTuple)
+                          }
+                        }}
+                        className="cursor-pointer border-l border-gray-100 px-2 py-1.5 text-right tabular-nums text-gray-800 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 dark:border-gray-800 dark:text-gray-100 dark:hover:bg-blue-900/20"
+                      >
+                        {v === null ? (
+                          <span className="text-gray-400 dark:text-gray-500">{empty}</span>
+                        ) : (
+                          formatNumber(v, measures[mi])
+                        )}
+                      </td>
+                    )
+                  }),
                 )}
                 {showRowTotals &&
                   result.rowTotals?.[ri]?.map((v, mi) => (
@@ -232,8 +262,130 @@ export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
           </tbody>
         </table>
       </div>
+      {drill && (
+        <PivotDrillModal
+          block={block}
+          drill={drill}
+          onClose={() => setDrill(null)}
+        />
+      )}
     </div>
   )
+}
+
+/**
+ * Drill-down modal — shows the raw rows that contributed to a single pivot
+ * cell. Columns are the union of fields used by row/col dims + measure
+ * sources + any other fields actually present in the rows (first-seen
+ * order). Uses the shared `Modal` (Esc closes, backdrop click closes,
+ * focus trap on first focusable child).
+ *
+ * Exported for testing — call sites use it through `PivotTableBlockView`
+ * via the cell click handler.
+ */
+export function PivotDrillModal({
+  block,
+  drill,
+  onClose,
+}: {
+  block: PivotTableBlock
+  drill: DrillState
+  onClose: () => void
+}) {
+  const fields = useMemo(() => collectDrillFields(block, drill.rows), [block, drill.rows])
+  const headerLabel = buildDrillTitle(block, drill)
+  return (
+    <Modal open onClose={onClose} title={headerLabel} size="xl">
+      <div data-testid="pivot-drill-modal" className="px-5 py-3">
+        <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+          {drill.rows.length === 0
+            ? '해당 셀에 속한 raw row 가 없습니다.'
+            : `${drill.rows.length} row${drill.rows.length === 1 ? '' : 's'}`}
+        </p>
+        {drill.rows.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                  {fields.map((f) => (
+                    <th
+                      key={`drill-h-${f}`}
+                      className="border-b border-gray-200 px-2 py-1.5 text-left font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200"
+                    >
+                      {f}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {drill.rows.map((r, ri) => (
+                  <tr
+                    key={`drill-r-${ri}`}
+                    className="border-b border-gray-100 dark:border-gray-800"
+                  >
+                    {fields.map((f) => {
+                      const v = r[f]
+                      return (
+                        <td
+                          key={`drill-c-${ri}-${f}`}
+                          className="px-2 py-1 text-gray-800 dark:text-gray-100"
+                        >
+                          {v == null ? (
+                            <span className="text-gray-400 dark:text-gray-500">-</span>
+                          ) : (
+                            String(v)
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function buildDrillTitle(block: PivotTableBlock, drill: DrillState): string {
+  const rowPart = block.rows
+    .map((f, i) => `${f}=${drill.rowTuple[i] ?? ''}`)
+    .join(' / ')
+  const colPart = block.cols
+    .map((f, i) => `${f}=${drill.colTuple[i] ?? ''}`)
+    .join(' / ')
+  const parts = [rowPart, colPart].filter(Boolean)
+  return parts.length > 0 ? `Drill-down · ${parts.join(' × ')}` : 'Drill-down'
+}
+
+/**
+ * Determine which fields to show as columns in the drill table. Order:
+ * row dims → col dims → measure sources (field only — `expr` skipped since
+ * it's derived) → any extra fields present on rows (first-seen).
+ */
+function collectDrillFields(
+  block: PivotTableBlock,
+  rows: PivotTableBlock['source']['rows'],
+): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  const push = (f: string) => {
+    if (!seen.has(f)) {
+      seen.add(f)
+      out.push(f)
+    }
+  }
+  for (const f of block.rows) push(f)
+  for (const f of block.cols) push(f)
+  for (const m of block.values) {
+    if (m.field) push(m.field)
+  }
+  for (const r of rows) {
+    for (const k of Object.keys(r)) push(k)
+  }
+  return out
 }
 
 type Measure = PivotTableBlock['values'][number]
