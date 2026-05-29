@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { OrgChartBlock, OrgChartNode } from '@/types/document'
+import { WidgetExportMenu } from './WidgetExportMenu'
 
 /** 2D position assigned to a node by `layoutTree`. */
 export interface PositionedNode {
@@ -132,7 +133,11 @@ export function OrgChartBlockView({ block }: Props) {
   }
 
   return (
-    <figure className="overflow-auto rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900">
+    <figure
+      className="group relative overflow-auto rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
+      data-export-root="org-chart"
+    >
+      <WidgetExportMenu formats={['png', 'svg']} filename="org-chart" />
       <svg width={svgW} height={svgH} role="img" aria-label="조직도">
         {/* edges */}
         {positioned.nodes.map((p) => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FlowBlock } from '@/types/document'
 import { useResolvedTheme, type ResolvedTheme } from '@/features/theme/useResolvedTheme'
+import { WidgetExportMenu } from './WidgetExportMenu'
 
 let mermaidPromise: Promise<typeof import('mermaid').default> | null = null
 
@@ -77,8 +78,11 @@ function MermaidFlow({ block }: { block: FlowBlock }) {
   }
   return (
     <div
-      className="overflow-x-auto rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
+      className="group relative overflow-x-auto rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
+      data-export-root="flow"
+    >
+      <WidgetExportMenu formats={['png', 'svg']} filename="flow" />
+      <div dangerouslySetInnerHTML={{ __html: svg }} />
+    </div>
   )
 }

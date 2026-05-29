@@ -27,6 +27,8 @@ import {
 import type { ChartBlock } from '@/types/document'
 import { EChartsView } from './EChartsView'
 import { useResolvedTheme } from '@/features/theme/useResolvedTheme'
+import { WidgetExportMenu } from './WidgetExportMenu'
+import { chartLabeledToCsv } from '@/lib/widgetExport'
 
 const PALETTE = [
   '#1428A0',
@@ -105,7 +107,17 @@ export function ChartBlockView({ block }: { block: ChartBlock }) {
   const tooltipItemStyle = { color: axisStroke }
   const data = rowData(block)
   return (
-    <figure className="rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+    <figure
+      className="group relative rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900"
+      data-export-root="chart"
+    >
+      <WidgetExportMenu
+        formats={['png', 'csv']}
+        getCsv={() =>
+          chartLabeledToCsv(block.data.xAxisLabel, block.data.labels, block.data.series)
+        }
+        filename={(block.title?.trim() || 'chart').replace(/\s+/g, '_')}
+      />
       {block.title && (
         <figcaption className="mb-2 text-sm font-semibold text-smsg-900 dark:text-gray-100">
           {block.title}

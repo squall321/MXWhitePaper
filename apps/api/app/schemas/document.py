@@ -420,6 +420,59 @@ class BorderStyle(Enum):
     all = 'all'
 
 
+class Column1(RootModel[int]):
+    root: int = Field(..., ge=0)
+    """
+    Column scope: header text (string) or 0-based index (integer); omit to match every column.
+    """
+
+
+class Operator(Enum):
+    gt = 'gt'
+    gte = 'gte'
+    lt = 'lt'
+    lte = 'lte'
+    eq = 'eq'
+    neq = 'neq'
+    between = 'between'
+    top_n = 'top_n'
+    bottom_n = 'bottom_n'
+    contains = 'contains'
+    not_contains = 'not_contains'
+
+
+class Value(RootModel[list[float]]):
+    root: list[float] = Field(..., max_length=2, min_length=2)
+    """
+    Numeric/string for comparison ops; [min, max] for between; N for top_n/bottom_n.
+    """
+
+
+class Style1(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    bg: str | None = Field(None, pattern='^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+    fg: str | None = Field(None, pattern='^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+    bold: bool | None = None
+
+
+class ConditionalFormattingItem(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    column: str | Column1 | None = None
+    """
+    Column scope: header text (string) or 0-based index (integer); omit to match every column.
+    """
+    operator: Operator
+    value: float | str | Value
+    """
+    Numeric/string for comparison ops; [min, max] for between; N for top_n/bottom_n.
+    """
+    style: Style1
+
+
 class Options1(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -451,6 +504,12 @@ class Options1(BaseModel):
     border_style: BorderStyle | None = Field(None, alias='borderStyle')
     """
     Cell border style. Default 'horizontal'.
+    """
+    conditional_formatting: list[ConditionalFormattingItem] | None = Field(
+        None, alias='conditionalFormatting'
+    )
+    """
+    FE-only conditional formatting rules (WIDGET-02 Phase 1). Each rule scopes to a column (by header name or 0-based index; omit for all columns), tests cellValue with an operator, and applies a style. Sparse `cells[].bg/color/bold` always override. Not yet round-tripped through docx export.
     """
 
 
@@ -1545,7 +1604,7 @@ class SpreadsheetBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
-class Style1(Enum):
+class Style2(Enum):
     """
     Citation style label (numeric / alphabetic / author-year). Currently informational — the FE renders ordered list either way.
     """
@@ -1601,7 +1660,7 @@ class BibliographyBlock(BaseModel):
     """
     Optional override for the block heading. Defaults to '참고문헌' in the FE renderer.
     """
-    style: Style1 | None = None
+    style: Style2 | None = None
     """
     Citation style label (numeric / alphabetic / author-year). Currently informational — the FE renders ordered list either way.
     """

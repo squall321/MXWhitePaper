@@ -44,6 +44,7 @@ Read 하는 패턴을 피한다.
 | [graph](graph.md) | 위키 링크 그래프, 의존성 그래프, 의미 triple (subject/predicate/object) | `app/routers/links_graph.py`, `app/routers/dep_graph.py`, `app/routers/triples.py`, `app/services/triple_extractor.py` |
 | [glossary](glossary.md) | 분야별 어휘 사전 (propose → admin approve), term 그래프, CSV bulk import | `app/routers/glossary.py`, `app/services/glossary_service.py`, `app/repos/glossary_repo.py` |
 | [charts](charts.md) | ChartBlock — xy-line/paste/toolbar/fit/derived/annotation/dual-y, EChartsView 렌더 | `src/components/blocks/EChartsView.tsx`, `src/features/editor/blocks/ChartBlockEditor.tsx`, `_fits.ts`, `_chartPaste.ts`, `_derived.ts`, `app/services/pptx_export.py#_b_chart` |
+| [widget-export](widget-export.md) | 위젯 hover toolbar PNG/SVG/CSV/TSV — chart/table/kpi/gantt/org/flow read-mode export, 외부 lib 0 | `src/lib/widgetExport.ts`, `src/components/blocks/WidgetExportMenu.tsx` |
 | [visual-regression](visual-regression.md) | Playwright screenshot diff 시각 회귀 PoC (light/dark) | `apps/web/tests/e2e/visual-darkmode.spec.ts` + `__snapshots__` baseline PNG |
 
 > 백엔드 외부 도구 — LLM 이 docx 룰을 따라 작성하도록 돕는 standalone toolkit

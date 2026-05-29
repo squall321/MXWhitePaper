@@ -18,6 +18,36 @@ import {
   rowAggregate,
   type ColumnSpec,
 } from './tableFormat'
+import {
+  applyConditionalFormatting,
+  mergeCondStyle,
+  type ConditionalRule,
+  type ConditionalStyle,
+} from './conditionalFormatting'
+
+/**
+ * Schema → helper bridge. The generated DocumentJSON type uses a tuple
+ * literal `[number, number]` for between/top_n ranges; the helper accepts
+ * the structural shape. Cast at the boundary to avoid leaking the typing
+ * detail through every call site.
+ */
+function toRules(
+  raw: NonNullable<TableBlock['options']>['conditionalFormatting'],
+): ConditionalRule[] | undefined {
+  if (!raw) return undefined
+  return raw as ConditionalRule[]
+}
+
+function condToStyle(
+  cs: ConditionalStyle | undefined,
+): React.CSSProperties | undefined {
+  if (!cs) return undefined
+  const out: React.CSSProperties = {}
+  if (cs.bg) out.backgroundColor = cs.bg
+  if (cs.fg) out.color = cs.fg
+  if (cs.bold) out.fontWeight = 600
+  return Object.keys(out).length ? out : undefined
+}
 
 type SparseCell = NonNullable<TableBlock['cells']>[number]
 
@@ -114,6 +144,9 @@ interface FlatViewProps {
   sortState: SortState
   onSort: (col: number) => void
   sortable: boolean
+  rules?: ConditionalRule[]
+  // Precomputed per-column raw values for top_n/bottom_n. Index = column.
+  columnValuesByCol: string[][]
 }
 
 /**
@@ -134,6 +167,8 @@ function FlatTableBody({
   sortState,
   onSort,
   sortable,
+  rules,
+  columnValuesByCol,
 }: FlatViewProps) {
   const headers = block.headers
   return (
@@ -204,10 +239,17 @@ function FlatTableBody({
               const col = columns[c]
               const formatted = formatCellByDtype(cell, col)
               const cls = cellClass(col, undefined, density, border, false)
+              const cond = applyConditionalFormatting(rules, cell, {
+                columnName: headers[c],
+                columnIndex: c,
+                columnValues: columnValuesByCol[c],
+              })
+              const condStyle = condToStyle(cond)
               return (
                 <td
                   key={c}
                   className={`${cls} align-top ${stickyFirstCol && c === 0 ? 'sticky left-0 z-content bg-inherit' : ''}`}
+                  style={condStyle}
                 >
                   {col?.dtype && col.dtype !== 'text' && col.dtype !== 'date' ? (
                     <span>{formatted}</span>
@@ -235,12 +277,18 @@ function SparseTableBody({
   density,
   border,
   stripe,
+  rules,
+  columnValuesByCol,
+  headerNames,
 }: {
   cells: SparseCell[]
   columns: ColumnSpec[]
   density: 'compact' | 'normal' | 'comfortable'
   border: 'none' | 'horizontal' | 'all'
   stripe: boolean
+  rules?: ConditionalRule[]
+  columnValuesByCol: string[][]
+  headerNames: string[]
 }) {
   const byRow = new Map<number, SparseCell[]>()
   for (const cell of cells) {
@@ -298,13 +346,30 @@ function SparseTableBody({
                 const col = columns[cell.c]
                 const formatted = formatCellByDtype(cell.text ?? '', col)
                 const cls = cellClass(col, cell, density, border, false)
+                // Mixed-content cells (cell.blocks) skip conditional
+                // formatting — there's no single scalar value to test.
+                const cond =
+                  cell.blocks || cell.header
+                    ? undefined
+                    : applyConditionalFormatting(rules, cell.text ?? '', {
+                        columnName: headerNames[cell.c],
+                        columnIndex: cell.c,
+                        columnValues: columnValuesByCol[cell.c],
+                      })
+                const merged = mergeCondStyle(cond, {
+                  bg: cell.bg,
+                  color: cell.color,
+                  bold: cell.bold,
+                })
+                const inline =
+                  condToStyle(merged) ?? cellStyle(cell.bg, cell.color)
                 return (
                   <td
                     key={i}
                     colSpan={cell.colSpan}
                     rowSpan={cell.rowSpan}
                     className={`${cls} align-top`}
-                    style={cellStyle(cell.bg, cell.color)}
+                    style={inline}
                   >
                     {cell.blocks ? (
                       renderCellContent(cell)
@@ -421,6 +486,42 @@ export function TableBlockView({ block }: { block: TableBlock }) {
     return arr
   }, [filteredRows, sortState, sortable, columns])
 
+  const rules = useMemo(
+    () => toRules(opts.conditionalFormatting),
+    [opts.conditionalFormatting],
+  )
+  const headerNames = useMemo<string[]>(() => {
+    // Sparse mode lifts the first header-row's cells into column names so
+    // string-scoped rules (e.g. column: '매출') work in both layouts.
+    if (!isSparse) return block.headers
+    const headerCells = (block.cells ?? []).filter((cell) => cell.header)
+    const out: string[] = []
+    for (const cell of headerCells) {
+      if (typeof cell.text === 'string') out[cell.c] = cell.text
+    }
+    return out
+  }, [block.headers, block.cells, isSparse])
+  const columnValuesByCol = useMemo<string[][]>(() => {
+    const out: string[][] = []
+    for (let c = 0; c < colCount; c++) out.push([])
+    if (isSparse) {
+      for (const cell of block.cells ?? []) {
+        if (cell.header) continue
+        if (cell.blocks) continue
+        const bucket = out[cell.c]
+        if (bucket) bucket.push(cell.text ?? '')
+      }
+    } else {
+      for (const row of block.rows) {
+        for (let c = 0; c < colCount; c++) {
+          const bucket = out[c]
+          if (bucket) bucket.push(row[c] ?? '')
+        }
+      }
+    }
+    return out
+  }, [block.cells, block.rows, colCount, isSparse])
+
   const onSort = (col: number) => {
     setSortState((prev) => {
       if (!prev || prev.col !== col) return { col, dir: 'asc' }
@@ -508,6 +609,9 @@ export function TableBlockView({ block }: { block: TableBlock }) {
               density={density}
               border={border}
               stripe={stripe}
+              rules={rules}
+              columnValuesByCol={columnValuesByCol}
+              headerNames={headerNames}
             />
           ) : (
             <FlatTableBody
@@ -522,6 +626,8 @@ export function TableBlockView({ block }: { block: TableBlock }) {
               sortState={sortState}
               onSort={onSort}
               sortable={sortable}
+              rules={rules}
+              columnValuesByCol={columnValuesByCol}
             />
           )}
           {footerRow && !isSparse && (

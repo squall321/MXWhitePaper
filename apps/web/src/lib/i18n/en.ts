@@ -843,4 +843,11 @@ export const en: Record<LocaleKey, string> = {
   'editor.bibliography.urlPlaceholder': 'URL (DOI, etc. — optional)',
   'editor.bibliography.addEntry': '+ Add entry',
   'editor.bibliography.remove': 'Remove entry {n}',
+
+  // Widget export menu (WIDGET-08)
+  'editor.export.menu': 'Export',
+  'editor.export.png': 'PNG image',
+  'editor.export.svg': 'SVG vector',
+  'editor.export.csv': 'CSV data',
+  'editor.export.tsv': 'TSV data',
 }

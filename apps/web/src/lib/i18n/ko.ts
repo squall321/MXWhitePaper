@@ -881,6 +881,13 @@ export const ko = {
   'editor.bibliography.urlPlaceholder': '링크 URL (DOI 등, 선택)',
   'editor.bibliography.addEntry': '+ 항목 추가',
   'editor.bibliography.remove': '항목 {n} 삭제',
+
+  // Widget export menu (WIDGET-08)
+  'editor.export.menu': '내보내기',
+  'editor.export.png': 'PNG 이미지',
+  'editor.export.svg': 'SVG 벡터',
+  'editor.export.csv': 'CSV 데이터',
+  'editor.export.tsv': 'TSV 데이터',
 } as const
 
 export type LocaleKey = keyof typeof ko

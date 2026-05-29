@@ -412,7 +412,54 @@
             "stickyFirstCol": { "type": "boolean", "description": "Pin the first column when the table scrolls horizontally." },
             "rowNumbers":     { "type": "boolean", "description": "Show 1-based row numbers in a leading column." },
             "stripe":         { "type": "boolean", "description": "Zebra-striped rows. Default true; set false to disable." },
-            "borderStyle":    { "enum": ["none", "horizontal", "all"], "description": "Cell border style. Default 'horizontal'." }
+            "borderStyle":    { "enum": ["none", "horizontal", "all"], "description": "Cell border style. Default 'horizontal'." },
+            "conditionalFormatting": {
+              "type": "array",
+              "description": "FE-only conditional formatting rules (WIDGET-02 Phase 1). Each rule scopes to a column (by header name or 0-based index; omit for all columns), tests cellValue with an operator, and applies a style. Sparse `cells[].bg/color/bold` always override. Not yet round-tripped through docx export.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["operator", "value", "style"],
+                "properties": {
+                  "column": {
+                    "description": "Column scope: header text (string) or 0-based index (integer); omit to match every column.",
+                    "oneOf": [
+                      { "type": "string" },
+                      { "type": "integer", "minimum": 0 }
+                    ]
+                  },
+                  "operator": {
+                    "enum": [
+                      "gt", "gte", "lt", "lte", "eq", "neq",
+                      "between", "top_n", "bottom_n",
+                      "contains", "not_contains"
+                    ]
+                  },
+                  "value": {
+                    "description": "Numeric/string for comparison ops; [min, max] for between; N for top_n/bottom_n.",
+                    "oneOf": [
+                      { "type": "number" },
+                      { "type": "string" },
+                      {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    ]
+                  },
+                  "style": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "bg":   { "type": "string", "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" },
+                      "fg":   { "type": "string", "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" },
+                      "bold": { "type": "boolean" }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "meta": { "$ref": "#/$defs/BlockMeta" }

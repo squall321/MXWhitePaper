@@ -482,6 +482,36 @@ export interface TableBlock {
      * Cell border style. Default 'horizontal'.
      */
     borderStyle?: 'none' | 'horizontal' | 'all'
+    /**
+     * FE-only conditional formatting rules (WIDGET-02 Phase 1). Each rule scopes to a column (by header name or 0-based index; omit for all columns), tests cellValue with an operator, and applies a style. Sparse `cells[].bg/color/bold` always override. Not yet round-tripped through docx export.
+     */
+    conditionalFormatting?: {
+      /**
+       * Column scope: header text (string) or 0-based index (integer); omit to match every column.
+       */
+      column?: string | number
+      operator:
+        | 'gt'
+        | 'gte'
+        | 'lt'
+        | 'lte'
+        | 'eq'
+        | 'neq'
+        | 'between'
+        | 'top_n'
+        | 'bottom_n'
+        | 'contains'
+        | 'not_contains'
+      /**
+       * Numeric/string for comparison ops; [min, max] for between; N for top_n/bottom_n.
+       */
+      value: number | string | [number, number]
+      style: {
+        bg?: string
+        fg?: string
+        bold?: boolean
+      }
+    }[]
   }
   meta?: BlockMeta
 }

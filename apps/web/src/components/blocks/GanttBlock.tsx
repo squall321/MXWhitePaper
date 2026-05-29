@@ -1,5 +1,7 @@
 import type { GanttBlock } from '@/types/document'
 import { axisTicks, type GanttAxisUnit } from './ganttAxis'
+import { WidgetExportMenu } from './WidgetExportMenu'
+import { ganttTasksToCsv } from '@/lib/widgetExport'
 
 /**
  * Minimal Gantt chart — single SVG with horizontal bars positioned by
@@ -51,7 +53,15 @@ export function GanttBlockView({
     : 0
 
   return (
-    <figure className="overflow-x-auto rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900">
+    <figure
+      className="group relative overflow-x-auto rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
+      data-export-root="gantt"
+    >
+      <WidgetExportMenu
+        formats={['png', 'svg', 'csv']}
+        getCsv={() => ganttTasksToCsv(block.tasks)}
+        filename="gantt"
+      />
       <svg
         width={totalW}
         height={totalH}
