@@ -222,7 +222,8 @@
         { "$ref": "#/$defs/SpreadsheetBlock" },
         { "$ref": "#/$defs/BibliographyBlock" },
         { "$ref": "#/$defs/SpacerBlock" },
-        { "$ref": "#/$defs/FigureIndexBlock" }
+        { "$ref": "#/$defs/FigureIndexBlock" },
+        { "$ref": "#/$defs/PivotTableBlock" }
       ]
     },
 
@@ -1064,6 +1065,83 @@
         "type": { "const": "spacer" },
         "id":   { "$ref": "#/$defs/Ulid" },
         "size": { "enum": ["sm", "md", "lg", "xl"], "default": "md" },
+        "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "PivotTableBlock": {
+      "type": "object",
+      "required": ["type", "id", "source", "rows", "cols", "values"],
+      "additionalProperties": false,
+      "description": "Pivot table widget — Excel pivot table 동등. raw rows 를 rows × cols × values 축으로 cross-tab 집계. Sprint 1 = inline source + 기본 집계 (sum/count/avg/min/max). Subtotal/grand total/sort/filter 는 Sprint 2, % of total + numberFormat 은 Sprint 3, calculated field 는 Sprint 4.",
+      "properties": {
+        "type": { "const": "pivot-table" },
+        "id":   { "$ref": "#/$defs/Ulid" },
+        "source": {
+          "type": "object",
+          "required": ["kind", "rows"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["inline", "csv"] },
+            "rows": {
+              "type": "array",
+              "description": "Raw rows — each is a flat object of field→value. csv kind 이면 CSV text 도 inline 으로 paste 시점에 parse 후 저장.",
+              "items": {
+                "type": "object",
+                "additionalProperties": { "oneOf": [{"type": "string"}, {"type": "number"}, {"type": "null"}] }
+              }
+            },
+            "schema": {
+              "type": "object",
+              "description": "Optional — fields 자동 추론 가능하면 생략. 명시 시 우선.",
+              "properties": {
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["name", "dtype"],
+                    "properties": {
+                      "name": { "type": "string" },
+                      "dtype": { "enum": ["number", "string", "date"] }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "rows": {
+          "type": "array",
+          "description": "Row 축 dimension field 이름 list (e.g., ['department', 'year'])",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "cols": {
+          "type": "array",
+          "description": "Col 축 dimension field 이름 list (e.g., ['quarter']). 빈 배열 = col 축 없음 (flat aggregation).",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "values": {
+          "type": "array",
+          "description": "Measure(s) — Sprint 1 은 1개 이상.",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["field", "agg"],
+            "additionalProperties": false,
+            "properties": {
+              "field": { "type": "string", "minLength": 1 },
+              "agg": { "enum": ["sum", "count", "avg", "min", "max", "median", "stdev", "var"] },
+              "label": { "type": "string", "description": "표시 이름; default = '{agg}({field})'" }
+            }
+          }
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "emptyCell": { "type": "string", "description": "default '-'", "default": "-" }
+          }
+        },
         "meta": { "$ref": "#/$defs/BlockMeta" }
       }
     },

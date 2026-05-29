@@ -48,6 +48,7 @@ export type Block =
   | BibliographyBlock
   | SpacerBlock
   | FigureIndexBlock
+  | PivotTableBlock
 /**
  * Block subset allowed inside a TableBlock cell's `blocks` array. Intentionally narrow to keep table cell rendering tractable — only paragraph/image/list.
  */
@@ -1189,6 +1190,69 @@ export interface FigureIndexBlock {
      * 그룹별 <ol> 안에서 항목 단위 zebra-striping (각 그룹 내 카운터 리셋).
      */
     stripe?: boolean
+  }
+  meta?: BlockMeta
+}
+/**
+ * Pivot table widget — Excel pivot table 동등. raw rows 를 rows × cols × values 축으로 cross-tab 집계. Sprint 1 = inline source + 기본 집계 (sum/count/avg/min/max). Subtotal/grand total/sort/filter 는 Sprint 2, % of total + numberFormat 은 Sprint 3, calculated field 는 Sprint 4.
+ */
+export interface PivotTableBlock {
+  type: 'pivot-table'
+  id: Ulid
+  source: {
+    kind: 'inline' | 'csv'
+    /**
+     * Raw rows — each is a flat object of field→value. csv kind 이면 CSV text 도 inline 으로 paste 시점에 parse 후 저장.
+     */
+    rows: {
+      [k: string]: (string | number | null) | undefined
+    }[]
+    /**
+     * Optional — fields 자동 추론 가능하면 생략. 명시 시 우선.
+     */
+    schema?: {
+      fields?: {
+        name: string
+        dtype: 'number' | 'string' | 'date'
+      }[]
+    }
+  }
+  /**
+   * Row 축 dimension field 이름 list (e.g., ['department', 'year'])
+   */
+  rows: string[]
+  /**
+   * Col 축 dimension field 이름 list (e.g., ['quarter']). 빈 배열 = col 축 없음 (flat aggregation).
+   */
+  cols: string[]
+  /**
+   * Measure(s) — Sprint 1 은 1개 이상.
+   *
+   * @minItems 1
+   */
+  values: [
+    {
+      field: string
+      agg: 'sum' | 'count' | 'avg' | 'min' | 'max' | 'median' | 'stdev' | 'var'
+      /**
+       * 표시 이름; default = '{agg}({field})'
+       */
+      label?: string
+    },
+    ...{
+      field: string
+      agg: 'sum' | 'count' | 'avg' | 'min' | 'max' | 'median' | 'stdev' | 'var'
+      /**
+       * 표시 이름; default = '{agg}({field})'
+       */
+      label?: string
+    }[]
+  ]
+  options?: {
+    /**
+     * default '-'
+     */
+    emptyCell?: string
   }
   meta?: BlockMeta
 }

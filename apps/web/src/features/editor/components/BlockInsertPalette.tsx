@@ -206,6 +206,23 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     preview: '▁▂▃▅▇',
   },
   {
+    kind: 'pivot-table',
+    label: '피벗 표',
+    labelKey: 'palette.pivot',
+    icon: '🔀',
+    build: () => ({
+      type: 'pivot-table',
+      id: ulid(),
+      source: { kind: 'inline', rows: [] },
+      rows: [],
+      cols: [],
+      values: [{ field: '', agg: 'sum' }],
+    }),
+    hint: 'raw rows 를 row × col cross-tab 집계 (Excel pivot table 동등).',
+    slash: '/피벗',
+    preview: ' Σ A | B | C',
+  },
+  {
     kind: 'image',
     label: '이미지',
     labelKey: 'palette.image',

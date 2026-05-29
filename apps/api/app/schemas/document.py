@@ -1227,6 +1227,113 @@ class SpacerBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
+class Kind2(Enum):
+    inline = 'inline'
+    csv = 'csv'
+
+
+class Dtype1(Enum):
+    number = 'number'
+    string = 'string'
+    date = 'date'
+
+
+class FieldModel(BaseModel):
+    name: str
+    dtype: Dtype1
+
+
+class Schema(BaseModel):
+    """
+    Optional — fields 자동 추론 가능하면 생략. 명시 시 우선.
+    """
+
+    fields: list[FieldModel] | None = None
+
+
+class Source(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Kind2
+    rows: list[dict[str, str | float | None]]
+    """
+    Raw rows — each is a flat object of field→value. csv kind 이면 CSV text 도 inline 으로 paste 시점에 parse 후 저장.
+    """
+    schema_: Schema | None = Field(None, alias='schema')
+    """
+    Optional — fields 자동 추론 가능하면 생략. 명시 시 우선.
+    """
+
+
+class Row(RootModel[str]):
+    root: str = Field(..., min_length=1)
+
+
+class Col(RootModel[str]):
+    root: str = Field(..., min_length=1)
+
+
+class Agg(Enum):
+    sum = 'sum'
+    count = 'count'
+    avg = 'avg'
+    min = 'min'
+    max = 'max'
+    median = 'median'
+    stdev = 'stdev'
+    var = 'var'
+
+
+class Value1(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    field: str = Field(..., min_length=1)
+    agg: Agg
+    label: str | None = None
+    """
+    표시 이름; default = '{agg}({field})'
+    """
+
+
+class Options5(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    empty_cell: str | None = Field('-', alias='emptyCell')
+    """
+    default '-'
+    """
+
+
+class PivotTableBlock(BaseModel):
+    """
+    Pivot table widget — Excel pivot table 동등. raw rows 를 rows × cols × values 축으로 cross-tab 집계. Sprint 1 = inline source + 기본 집계 (sum/count/avg/min/max). Subtotal/grand total/sort/filter 는 Sprint 2, % of total + numberFormat 은 Sprint 3, calculated field 는 Sprint 4.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['pivot-table']
+    id: Ulid
+    source: Source
+    rows: list[Row]
+    """
+    Row 축 dimension field 이름 list (e.g., ['department', 'year'])
+    """
+    cols: list[Col]
+    """
+    Col 축 dimension field 이름 list (e.g., ['quarter']). 빈 배열 = col 축 없음 (flat aggregation).
+    """
+    values: list[Value1] = Field(..., min_length=1)
+    """
+    Measure(s) — Sprint 1 은 1개 이상.
+    """
+    options: Options5 | None = None
+    meta: BlockMeta | None = None
+
+
 class Render(Enum):
     table = 'table'
     chart = 'chart'
@@ -1314,7 +1421,7 @@ class DashboardEmbedBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
-class Kind2(Enum):
+class Kind3(Enum):
     number = 'number'
     text = 'text'
     select = 'select'
@@ -1324,7 +1431,7 @@ class Input(BaseModel):
     name: str
     label: str
     default: str | float | bool | None = None
-    kind: Kind2 | None = Kind2.number
+    kind: Kind3 | None = Kind3.number
 
 
 class CalculatorBlock(BaseModel):
@@ -1407,7 +1514,7 @@ class WhiteboardElement(
     root: WhiteboardElement1 | WhiteboardElement2 | WhiteboardElement3
 
 
-class Kind3(Enum):
+class Kind4(Enum):
     text = 'text'
     long_text = 'long-text'
     email = 'email'
@@ -1424,7 +1531,7 @@ class FormQuestion(BaseModel):
         extra='forbid',
     )
     id: str
-    kind: Kind3
+    kind: Kind4
     label: str
     required: bool | None = False
     placeholder: str | None = None
@@ -1451,7 +1558,7 @@ class FormQuestion(BaseModel):
     """
 
 
-class Kind4(Enum):
+class Kind5(Enum):
     single_choice = 'single-choice'
     multi_choice = 'multi-choice'
     true_false = 'true-false'
@@ -1463,7 +1570,7 @@ class QuizQuestion(BaseModel):
         extra='forbid',
     )
     id: str
-    kind: Kind4
+    kind: Kind5
     label: str
     options: list[str] | None = None
     correct: str | list[str] | bool
@@ -1589,7 +1696,7 @@ class AnnotationElement(
     )
 
 
-class Options5(BaseModel):
+class Options6(BaseModel):
     """
     Visual rendering options. All fields optional with sensible defaults.
     """
@@ -1617,7 +1724,7 @@ class SpreadsheetBlock(BaseModel):
     """
     Sparse map of cell-ref → raw cell input (e.g. {'A1':'42', 'B2':'=SUM(A1:A10)'})
     """
-    options: Options5 | None = None
+    options: Options6 | None = None
     """
     Visual rendering options. All fields optional with sensible defaults.
     """
@@ -1652,7 +1759,7 @@ class Entry(BaseModel):
     """
 
 
-class Options6(BaseModel):
+class Options7(BaseModel):
     """
     표시 옵션. 모두 optional, default 동작은 ON.
     """
@@ -1685,7 +1792,7 @@ class BibliographyBlock(BaseModel):
     Citation style label (numeric / alphabetic / author-year). Currently informational — the FE renders ordered list either way.
     """
     entries: list[Entry] = Field(..., min_length=1)
-    options: Options6 | None = None
+    options: Options7 | None = None
     """
     표시 옵션. 모두 optional, default 동작은 ON.
     """
@@ -2026,6 +2133,7 @@ class Block(
         | BibliographyBlock
         | SpacerBlock
         | FigureIndexBlock
+        | PivotTableBlock
         ,
         Field(discriminator='type'),
     ]
@@ -2067,6 +2175,7 @@ class Block(
         | BibliographyBlock
         | SpacerBlock
         | FigureIndexBlock
+        | PivotTableBlock
     )
 
 

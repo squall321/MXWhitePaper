@@ -35,6 +35,7 @@ import { ImageAnnotationBlockView } from './ImageAnnotationBlock'
 import { SpreadsheetBlockView } from './SpreadsheetBlock'
 import { BibliographyBlockView } from './BibliographyBlock'
 import { FigureIndexBlockView } from './FigureIndexBlock'
+import { PivotTableBlockView } from './PivotTableBlock'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { InlineTextBlockEditor } from '@/features/editor/components/InlineTextBlockEditor'
 import { ListBlockEditor } from '@/features/editor/components/ListBlockEditor'
@@ -513,6 +514,8 @@ function BlockRendererInner({ block }: { block: Block }) {
       return <BibliographyBlockView block={block} />
     case 'figure-index':
       return <FigureIndexBlockView block={block as { title?: string; kinds?: ('image' | 'table' | 'chart')[]; options?: { stripe?: boolean } }} />
+    case 'pivot-table':
+      return <PivotTableBlockView block={block} />
     case 'spacer': {
       // Deliberate vertical breathing room. Defaults are tight in
       // SectionLayout (space-y-2 = 8px); spacer block adds 16/32/64px
