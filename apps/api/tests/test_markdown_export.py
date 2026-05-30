@@ -366,6 +366,48 @@ def test_renderer_bibliography_block_emits_numbered_list() -> None:
     assert "2. 익명 보고서, 2021." in out
 
 
+def test_renderer_spacer_emits_html_comment_separator() -> None:
+    """SpacerBlock — markdown 에는 명시적 spacer 가 없어 HTML 주석으로 크기를
+    보존하고 본문 흐름의 visible separator 역할만 한다."""
+    blocks = [
+        {"type": "paragraph", "id": "01P000000000000000000000A1", "text": "위"},
+        {"type": "spacer", "id": "01SPCR0000000000000000001", "size": "lg"},
+        {"type": "paragraph", "id": "01P000000000000000000000A2", "text": "아래"},
+    ]
+    out = render_markdown(_doc(blocks))
+    assert "위" in out
+    assert "아래" in out
+    assert "<!-- spacer:lg -->" in out
+
+
+def test_renderer_spreadsheet_emits_gfm_table_with_evaluated_value() -> None:
+    """SpreadsheetBlock — GFM 표로 변환하고 formula 셀의 ``value`` (cached)
+    가 우선되어 출력된다."""
+    blocks = [
+        {
+            "type": "spreadsheet",
+            "id": "01SPR00000000000000000001",
+            "title": "예산",
+            "cols": 2,
+            "rows": 2,
+            "headers": ["항목", "금액"],
+            "cells": {
+                "A1": "임차료",
+                "B1": "100",
+                "A2": "합계",
+                "B2": {"formula": "=SUM(B1)", "value": "100"},
+            },
+        }
+    ]
+    out = render_markdown(_doc(blocks))
+    assert "**⊞ 예산**" in out
+    assert "| 항목 | 금액 |" in out
+    assert "| --- | --- |" in out
+    assert "| 임차료 | 100 |" in out
+    assert "| 합계 | 100 |" in out
+    assert "=SUM(B1)" not in out
+
+
 def test_renderer_glossary_and_references_appear() -> None:
     doc = _doc()
     doc["glossary"] = [{"term": "RBAC", "definition": "Role-Based Access Control"}]

@@ -73,8 +73,15 @@ render_<fmt>(doc, *, options, requester_role=None)
 - doc-link-card, glossary-ref
 - **bibliography** — 4 export 모두 핸들러 존재 (widget-integrity-pass-1
   사이클에서 html/pptx/md 에 핸들러 추가; 이전엔 docx 만).
-- **spreadsheet** — docx 에서만 핸들러 존재 (`_b_spreadsheet()`). html_renderer
-  에는 spreadsheet 분기 없음 (out-of-scope; 사이트 자체 React 컴포넌트가 렌더).
+- **spacer** — 4 export 모두 핸들러 존재 (cycle-3 SPC-02 에서 html/md/pptx 추가;
+  이전엔 docx 만). docx=1/2/4 empty paragraphs (sm/md/lg) · html=`<div class="b-spacer"
+  style="height:{N}px">` (sm=16/md=32/lg=64/xl=128) · md=`<!-- spacer:{size} -->`
+  comment 마커 (round-trip 보존용) · pptx=1/2/3/4 empty paragraphs in body frame.
+- **spreadsheet** — 4 export 모두 핸들러 존재 (cycle-3 SPR-02 에서 html/md/pptx 추가;
+  이전엔 docx 만). 모든 렌더러가 sparse cell-ref map (`A1`, `B2`, …) 을 평탄화한
+  표 (`headers` + `rows`) 로 변환 후 native table 로 emit. dict shape (`{value,
+  formula}`) 셀이면 `value` 우선 — formula 결과 surface. 사이트 자체 React 컴포넌트와는
+  별개로, export 산출물은 *정적 스냅샷* (재계산 X).
 
 renderer 별 추가 책임:
 - **docx_export**: `_emit_table_flat()`, `_emit_table_cells()` 가 표 → Word 표

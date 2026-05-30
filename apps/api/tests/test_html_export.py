@@ -382,6 +382,54 @@ def test_renderer_table_stripe_class_reflects_options() -> None:
     assert "b-table no-stripe" in plain_out
 
 
+def test_renderer_spacer_emits_div_with_pixel_height() -> None:
+    """SpacerBlock — html 은 b-spacer div 로 emit 하고 size enum 을 px 로 반영."""
+    blocks = [
+        {"type": "spacer", "id": "01SPCR0000000000000000001", "size": "sm"},
+        {"type": "spacer", "id": "01SPCR0000000000000000002", "size": "md"},
+        {"type": "spacer", "id": "01SPCR0000000000000000003", "size": "lg"},
+        {"type": "spacer", "id": "01SPCR0000000000000000004", "size": "xl"},
+    ]
+    out = render_namuwiki_html(_doc(blocks))
+    assert 'class="b-spacer"' in out
+    assert "height: 16px" in out
+    assert "height: 32px" in out
+    assert "height: 64px" in out
+    assert "height: 128px" in out
+
+
+def test_renderer_spreadsheet_renders_as_table_with_evaluated_cells() -> None:
+    """SpreadsheetBlock — sparse cell map → HTML table. dict cell 의 ``value`` 가
+    우선되어 출력되어야 한다 (formula 결과 surface)."""
+    blocks = [
+        {
+            "type": "spreadsheet",
+            "id": "01SPR00000000000000000001",
+            "title": "예산",
+            "cols": 2,
+            "rows": 2,
+            "headers": ["항목", "금액"],
+            "cells": {
+                "A1": "임차료",
+                "B1": "100",
+                "A2": "합계",
+                "B2": {"formula": "=SUM(B1)", "value": "100"},
+            },
+            "options": {"stripe": False},
+        }
+    ]
+    out = render_namuwiki_html(_doc(blocks))
+    assert 'class="b-spreadsheet"' in out
+    assert "⊞ 예산" in out
+    assert "임차료" in out
+    assert "합계" in out
+    # 평가된 value 가 raw formula 대신 노출
+    assert ">100<" in out
+    assert "=SUM(B1)" not in out
+    # stripe=False → no-stripe class on inner table
+    assert "b-table no-stripe" in out
+
+
 def test_renderer_glossary_and_references_appear() -> None:
     doc = _doc()
     doc["glossary"] = [{"term": "RBAC", "definition": "Role-Based Access Control"}]

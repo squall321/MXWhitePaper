@@ -1358,6 +1358,83 @@ def _b_bibliography(
     return True
 
 
+def _b_spacer(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
+    """Spacer — append an empty paragraph in the body frame to introduce
+    deliberate breathing room. PPTX doesn't have a per-block pixel gap, so
+    the size hint maps to a relative number of empty paragraphs:
+    sm=1 / md=2 / lg=3 / xl=4.
+    """
+    size = _str(block.get("size")) or "md"
+    count = {"sm": 1, "md": 2, "lg": 3, "xl": 4}.get(size, 2)
+    for _ in range(count):
+        p = _next_paragraph(frame)
+        p.level = depth
+        run = p.add_run()
+        run.text = ""
+        run.font.size = Pt(8)
+    return True
+
+
+def _b_spreadsheet(slide: Any, _frame: Any, block: dict[str, Any], _ctx: _Ctx, _depth: int) -> bool:
+    """Spreadsheet — render the sparse cell-ref map as a native PPTX table
+    (the same shape ``_b_table`` produces). Formulas surface as the cached
+    ``value`` (legacy dict cell) else raw input."""
+    cells = block.get("cells") or {}
+    headers = list(block.get("headers") or [])
+    rows = int(block.get("rows") or 0)
+    cols = int(block.get("cols") or 0)
+    if not rows or not cols:
+        max_col = max_row = 0
+        for k in cells:
+            if isinstance(k, str) and len(k) >= 2 and k[0].isalpha():
+                c = ord(k[0].upper()) - ord("A") + 1
+                try:
+                    r = int(k[1:])
+                except ValueError:
+                    continue
+                max_col = max(max_col, c)
+                max_row = max(max_row, r)
+        rows, cols = rows or max_row, cols or max_col
+    if not rows or not cols:
+        return False
+    has_header = bool(headers)
+    n_rows = rows + (1 if has_header else 0)
+    n_cols = cols
+    left = _BODY_LEFT
+    top = _next_shape_top(slide)
+    width = _BODY_WIDTH
+    height = Inches(min(0.4 * n_rows + 0.4, 5.2))
+    shape = slide.shapes.add_table(n_rows, n_cols, left, top, width, height)
+    table = shape.table
+    _apply_table_stripe(table, block)
+    r0 = 0
+    if has_header:
+        for c, h in enumerate(headers[:cols]):
+            cell = table.cell(0, c)
+            cell.text = _str(h)
+            for para in cell.text_frame.paragraphs:
+                for run in para.runs:
+                    run.font.bold = True
+                    run.font.size = Pt(12)
+        r0 = 1
+    for r in range(rows):
+        for c in range(cols):
+            key = f"{chr(ord('A') + c)}{r + 1}"
+            v = cells.get(key)
+            if isinstance(v, dict):
+                text_val = _str(v.get("value", v.get("formula", "")))
+            elif v is None:
+                text_val = ""
+            else:
+                text_val = _str(v)
+            cell = table.cell(r + r0, c)
+            cell.text = text_val
+            for para in cell.text_frame.paragraphs:
+                for run in para.runs:
+                    run.font.size = Pt(11)
+    return True
+
+
 def _b_unknown(slide: Any, frame: Any, block: dict[str, Any], _ctx: _Ctx, depth: int) -> bool:
     btype = _str(block.get("type"))
     p = _next_paragraph(frame)
@@ -1400,6 +1477,8 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "whiteboard": _b_whiteboard,
     "image-annotation": _b_image_annotation,
     "bibliography": _b_bibliography,
+    "spacer": _b_spacer,
+    "spreadsheet": _b_spreadsheet,
 }
 
 

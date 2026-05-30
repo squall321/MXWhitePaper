@@ -461,6 +461,61 @@ def test_renderer_bibliography_block_emits_title_and_entries() -> None:
     assert "https://example.org/foo" in text
 
 
+def test_renderer_spacer_does_not_break_pptx() -> None:
+    """SpacerBlock — pptx 자체엔 픽셀 gap 이 없으므로 empty paragraph 추가만
+    한다. 출력은 valid pptx 이고 후속 paragraph 가 보존된다."""
+    blocks = [
+        {"type": "paragraph", "id": "01P000000000000000000000A1", "text": "위"},
+        {"type": "spacer", "id": "01SPCR0000000000000000001", "size": "md"},
+        {"type": "paragraph", "id": "01P000000000000000000000A2", "text": "아래"},
+    ]
+    out = render_pptx(_doc(blocks))
+    assert out[:4] == b"PK\x03\x04"
+    prs = Presentation(io.BytesIO(out))
+    text = _slides_text(prs)
+    assert "위" in text
+    assert "아래" in text
+
+
+def test_renderer_spreadsheet_emits_native_table_with_evaluated_value() -> None:
+    """SpreadsheetBlock — sparse cell map → pptx native table shape; dict
+    cell 의 ``value`` (cached formula 결과) 가 우선되어 채워진다."""
+    blocks = [
+        {
+            "type": "spreadsheet",
+            "id": "01SPR00000000000000000001",
+            "title": "예산",
+            "cols": 2,
+            "rows": 2,
+            "headers": ["항목", "금액"],
+            "cells": {
+                "A1": "임차료",
+                "B1": "100",
+                "A2": "합계",
+                "B2": {"formula": "=SUM(B1)", "value": "100"},
+            },
+        }
+    ]
+    out = render_pptx(_doc(blocks))
+    prs = Presentation(io.BytesIO(out))
+    # native pptx table 이 생성되었는지: any slide has a table with the cells.
+    found_table = False
+    cells_seen: list[str] = []
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if shape.has_table:
+                found_table = True
+                for row in shape.table.rows:  # type: ignore[attr-defined]
+                    for cell in row.cells:
+                        cells_seen.append(cell.text)
+    assert found_table, "spreadsheet 가 native table 로 emit 되어야 한다"
+    assert "임차료" in cells_seen
+    assert "합계" in cells_seen
+    # evaluated value 가 raw formula 대신 들어가야 한다
+    assert "100" in cells_seen
+    assert "=SUM(B1)" not in cells_seen
+
+
 # ── endpoint integration ─────────────────────────────────────────────
 
 

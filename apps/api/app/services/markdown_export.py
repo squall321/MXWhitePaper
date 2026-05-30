@@ -654,6 +654,63 @@ def _b_image_annotation(block: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _b_spacer(block: dict[str, Any]) -> str:
+    """Spacer — markdown has no explicit gap primitive. Emit a blank line
+    (rendered as a separator). Size hint is preserved as an HTML comment so
+    a future round-trip importer can recover it."""
+    size = _str(block.get("size")) or "md"
+    if size in ("sm", "md", "lg", "xl") and size != "md":
+        return f"<!-- spacer:{size} -->\n"
+    return "<!-- spacer -->\n"
+
+
+def _b_spreadsheet(block: dict[str, Any]) -> str:
+    """Spreadsheet — convert sparse cell-ref map to a GFM table. Formulas
+    surface as the cached ``value`` (when a dict cell is provided) else raw
+    cell input."""
+    cells = block.get("cells") or {}
+    headers = list(block.get("headers") or [])
+    rows = int(block.get("rows") or 0)
+    cols = int(block.get("cols") or 0)
+    if not rows or not cols:
+        max_col = max_row = 0
+        for k in cells:
+            if isinstance(k, str) and len(k) >= 2 and k[0].isalpha():
+                c = ord(k[0].upper()) - ord("A") + 1
+                try:
+                    r = int(k[1:])
+                except ValueError:
+                    continue
+                max_col = max(max_col, c)
+                max_row = max(max_row, r)
+        rows, cols = rows or max_row, cols or max_col
+    title = _str(block.get("title"))
+    title_line = f"**⊞ {title}**\n\n" if title else ""
+    if not rows or not cols:
+        return f"{title_line}*(빈 스프레드시트)*"
+    grid: list[list[str]] = []
+    for r in range(rows):
+        row_vals: list[str] = []
+        for c in range(cols):
+            key = f"{chr(ord('A') + c)}{r + 1}"
+            v = cells.get(key)
+            if isinstance(v, dict):
+                row_vals.append(_str(v.get("value", v.get("formula", ""))))
+            elif v is None:
+                row_vals.append("")
+            else:
+                row_vals.append(_str(v))
+        grid.append(row_vals)
+    head_cells = headers[:cols] if headers else [""] * cols
+    head_line = "| " + " | ".join(_escape_table_cell(_str(h)) for h in head_cells) + " |"
+    sep_line = "| " + " | ".join("---" for _ in range(cols)) + " |"
+    body_lines = [
+        "| " + " | ".join(_escape_table_cell(c) for c in row) + " |"
+        for row in grid
+    ]
+    return title_line + _table_stripe_comment(block) + "\n".join([head_line, sep_line, *body_lines])
+
+
 def _b_bibliography(block: dict[str, Any]) -> str:
     """Render a BibliographyBlock as `## 참고문헌` heading + numbered list.
 
@@ -710,6 +767,8 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "whiteboard": _b_whiteboard,
     "image-annotation": _b_image_annotation,
     "bibliography": _b_bibliography,
+    "spacer": _b_spacer,
+    "spreadsheet": _b_spreadsheet,
 }
 
 

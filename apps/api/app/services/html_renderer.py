@@ -945,6 +945,67 @@ def _b_image_annotation(block: dict[str, Any], _ctx: _Ctx) -> str:
     )
 
 
+_SPACER_PX = {"sm": 16, "md": 32, "lg": 64, "xl": 128}
+
+
+def _b_spacer(block: dict[str, Any], _ctx: _Ctx) -> str:
+    """Spacer — emit a fixed-height div. Default size=md (32 px)."""
+    size = _str(block.get("size")) or "md"
+    px = _SPACER_PX.get(size, 32)
+    return f'<div class="b-spacer" style="height: {px}px"></div>'
+
+
+def _b_spreadsheet(block: dict[str, Any], ctx: _Ctx) -> str:
+    """Spreadsheet — flatten the sparse cell-ref map into a table-shape
+    block (headers + rows) and delegate to ``_b_table``. Formula evaluation
+    happens in the FE; here we surface the raw input (or evaluated ``value``
+    if a legacy dict cell sneaks in)."""
+    cells = block.get("cells") or {}
+    headers = list(block.get("headers") or [])
+    rows = int(block.get("rows") or 0)
+    cols = int(block.get("cols") or 0)
+    if not rows or not cols:
+        max_col = max_row = 0
+        for k in cells:
+            if isinstance(k, str) and len(k) >= 2 and k[0].isalpha():
+                c = ord(k[0].upper()) - ord("A") + 1
+                try:
+                    r = int(k[1:])
+                except ValueError:
+                    continue
+                max_col = max(max_col, c)
+                max_row = max(max_row, r)
+        rows, cols = rows or max_row, cols or max_col
+    title = _str(block.get("title"))
+    title_html = (
+        f'<div class="spreadsheet-title">⊞ {html.escape(title)}</div>'
+        if title
+        else ""
+    )
+    if not rows or not cols:
+        return f'<div class="b-spreadsheet">{title_html}<p class="empty">(빈 스프레드시트)</p></div>'
+    grid_rows: list[list[str]] = []
+    for r in range(rows):
+        row_vals: list[str] = []
+        for c in range(cols):
+            key = f"{chr(ord('A') + c)}{r + 1}"
+            v = cells.get(key)
+            if isinstance(v, dict):
+                row_vals.append(_str(v.get("value", v.get("formula", ""))))
+            elif v is None:
+                row_vals.append("")
+            else:
+                row_vals.append(_str(v))
+        grid_rows.append(row_vals)
+    pseudo = {
+        "type": "table",
+        "headers": headers[:cols] if headers else [""] * cols,
+        "rows": grid_rows,
+        "options": block.get("options") or {},
+    }
+    return f'<div class="b-spreadsheet">{title_html}{_b_table(pseudo, ctx)}</div>'
+
+
 def _b_bibliography(block: dict[str, Any], _ctx: _Ctx) -> str:
     """Render a BibliographyBlock as `<h2>` heading + numbered `<ol>`.
 
@@ -1010,6 +1071,8 @@ _BLOCK_HANDLERS: dict[str, Any] = {
     "whiteboard": _b_whiteboard,
     "image-annotation": _b_image_annotation,
     "bibliography": _b_bibliography,
+    "spacer": _b_spacer,
+    "spreadsheet": _b_spreadsheet,
 }
 
 
