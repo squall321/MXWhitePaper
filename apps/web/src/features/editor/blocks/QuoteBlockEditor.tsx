@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { QuoteBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
+import { useT } from '@/lib/i18n'
 
 /**
  * QuoteBlockEditor — minimal editor for `quote` blocks.
@@ -19,6 +20,7 @@ interface Props {
 const PERSIST_MS = 600
 
 export function QuoteBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
@@ -52,7 +54,7 @@ export function QuoteBlockEditor({ slug, block }: Props) {
         block.id,
         patch,
         etag,
-        '인용 블록 편집',
+        t('editor.quote.changeLog'),
       )
       apply(result.document, result.etag)
       setError(null)
@@ -90,21 +92,21 @@ export function QuoteBlockEditor({ slug, block }: Props) {
       className="my-2 border-l-4 border-smsg-500 bg-smsg-100/50 p-3"
     >
       <textarea
-        aria-label="인용문 본문"
+        aria-label={t('editor.quote.ariaText')}
         data-quote-text
         value={text}
         onChange={(e) => onTextChange(e.target.value)}
-        placeholder="인용문…"
+        placeholder={t('editor.quote.textPlaceholder')}
         rows={2}
         className="w-full resize-y rounded border border-gray-300 bg-white px-2 py-1 text-[15px] italic text-smsg-900"
       />
       <input
-        aria-label="출처"
+        aria-label={t('editor.quote.ariaCite')}
         data-quote-cite
         type="text"
         value={cite}
         onChange={(e) => onCiteChange(e.target.value)}
-        placeholder="출처 (선택)"
+        placeholder={t('editor.quote.citePlaceholder')}
         className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-600"
       />
       {error && (

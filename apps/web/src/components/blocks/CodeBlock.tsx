@@ -1,20 +1,29 @@
 import { useState } from 'react'
 import type { CodeBlock } from '@/types/document'
+import { useT } from '@/lib/i18n'
 
 /**
  * Code block — dark surface with a copy button. Filename / language label
  * sits in the header strip; copy button is keyboard-accessible.
+ *
+ * COD-02 — clipboard 실패 시 silent 였던 catch 를 aria-live 알림으로 노출.
+ * 브라우저가 navigator.clipboard 비지원이거나 보안 컨텍스트가 아닐 때
+ * (http on intranet etc) 사용자가 복사 실패를 인지 못하던 갭 해소.
  */
 export function CodeBlockView({ block }: { block: CodeBlock }) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState<string | null>(null)
 
   const onCopy = async () => {
+    setCopyError(null)
     try {
       await navigator.clipboard.writeText(block.code)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1400)
     } catch {
-      /* clipboard not available — silent */
+      setCopyError(t('editor.code.copyFailed'))
+      window.setTimeout(() => setCopyError(null), 3000)
     }
   }
 
@@ -53,6 +62,16 @@ export function CodeBlockView({ block }: { block: CodeBlock }) {
           )}
         </button>
       </figcaption>
+      {copyError && (
+        <div
+          role="status"
+          aria-live="polite"
+          data-code-copy-error
+          className="border-b border-amber-700/50 bg-amber-900/40 px-3 py-1 text-[11px] text-amber-100"
+        >
+          {copyError}
+        </div>
+      )}
       <pre data-no-swipe className="overflow-x-auto p-3 text-[13px] leading-6 text-gray-100">
         <code className="font-mono">{block.code}</code>
       </pre>

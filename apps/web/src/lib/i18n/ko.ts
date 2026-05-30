@@ -274,6 +274,21 @@ export const ko = {
   'editor.callout.tip': '팁',
   'editor.callout.variantLabel': '{label} 콜아웃',
   'editor.callout.changeLog': '콜아웃 색상',
+  'editor.callout.cycleAria': '콜아웃 변형 변경 (현재: {label})',
+  // Editor — heading4 / quote / spacer (cycle 4 C4 — i18n 일관성)
+  'editor.heading4.changeLog': '제목 레벨 변경',
+  'editor.heading4.label': '레벨',
+  'editor.heading4.ariaLevel': '제목 레벨',
+  'editor.heading4.placeholder': '제목을 입력하세요…',
+  'editor.quote.changeLog': '인용 편집',
+  'editor.quote.ariaText': '인용문 본문',
+  'editor.quote.textPlaceholder': '인용문…',
+  'editor.quote.ariaCite': '출처',
+  'editor.quote.citePlaceholder': '출처 (선택)',
+  'editor.spacer.changeLog': '여백 블록 편집',
+  'editor.spacer.label': '여백 크기',
+  'editor.spacer.ariaSize': '여백 크기',
+  'editor.code.copyFailed': '복사 실패 — 직접 선택해 주세요',
 
   // Editor — video block
   'editor.video.urlPlaceholder': 'URL을 붙여 넣으세요 (YouTube / Vimeo / 사내 영상)',

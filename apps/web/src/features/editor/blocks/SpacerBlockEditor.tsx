@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { SpacerBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   slug: Slug
@@ -31,6 +32,7 @@ const SIZE_CLASS: Record<SpacerSize, string> = {
  * (16 / 32 / 64 / 128 px) — pass-3 N1 expansion.
  */
 export function SpacerBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
@@ -57,7 +59,7 @@ export function SpacerBlockEditor({ slug, block }: Props) {
         block.id,
         { size: next.size } as Partial<SpacerBlock>,
         etag,
-        '여백 블록 편집',
+        t('editor.spacer.changeLog'),
       )
       apply(result.document, result.etag)
       setError(null)
@@ -92,9 +94,9 @@ export function SpacerBlockEditor({ slug, block }: Props) {
     >
       <div className="mb-1 flex items-center gap-2">
         <label className="flex items-center gap-1 text-gray-600">
-          <span>여백 크기</span>
+          <span>{t('editor.spacer.label')}</span>
           <select
-            aria-label="여백 크기"
+            aria-label={t('editor.spacer.ariaSize')}
             value={size}
             onChange={(e) => onSizeChange(e.target.value as SpacerSize)}
             className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[11px]"

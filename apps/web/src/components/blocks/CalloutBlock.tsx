@@ -3,17 +3,15 @@ import type { CalloutBlock } from '@/types/document'
 import { Inline } from '../wiki/Inline'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { patchBlock, isPreconditionFailed } from '@/features/editor/api'
-import {
-  CALLOUT_LABEL,
-  nextCalloutVariant,
-} from '@/features/editor/calloutVariant'
+import { nextCalloutVariant } from '@/features/editor/calloutVariant'
+import { useT } from '@/lib/i18n'
 
 interface VariantSpec {
   border: string
   bg: string
   iconBg: string
   iconColor: string
-  label: string
+  labelKey: 'editor.callout.info' | 'editor.callout.warn' | 'editor.callout.danger' | 'editor.callout.tip'
   labelText: string
   icon: 'info' | 'warn' | 'danger' | 'tip'
 }
@@ -24,7 +22,7 @@ const VARIANT_STYLES: Record<CalloutBlock['variant'], VariantSpec> = {
     bg: 'bg-smsg-50 dark:bg-smsg-950/30',
     iconBg: 'bg-smsg-100 dark:bg-smsg-900/50',
     iconColor: 'text-smsg-700 dark:text-smsg-200',
-    label: '정보',
+    labelKey: 'editor.callout.info',
     labelText: 'text-smsg-700 dark:text-smsg-200',
     icon: 'info',
   },
@@ -33,7 +31,7 @@ const VARIANT_STYLES: Record<CalloutBlock['variant'], VariantSpec> = {
     bg: 'bg-amber-50 dark:bg-amber-950/30',
     iconBg: 'bg-amber-100 dark:bg-amber-900/50',
     iconColor: 'text-amber-700 dark:text-amber-200',
-    label: '주의',
+    labelKey: 'editor.callout.warn',
     labelText: 'text-amber-700 dark:text-amber-200',
     icon: 'warn',
   },
@@ -42,7 +40,7 @@ const VARIANT_STYLES: Record<CalloutBlock['variant'], VariantSpec> = {
     bg: 'bg-red-50 dark:bg-red-950/30',
     iconBg: 'bg-red-100 dark:bg-red-900/50',
     iconColor: 'text-red-700 dark:text-red-200',
-    label: '경고',
+    labelKey: 'editor.callout.danger',
     labelText: 'text-red-700 dark:text-red-200',
     icon: 'danger',
   },
@@ -51,14 +49,16 @@ const VARIANT_STYLES: Record<CalloutBlock['variant'], VariantSpec> = {
     bg: 'bg-emerald-50 dark:bg-emerald-950/30',
     iconBg: 'bg-emerald-100 dark:bg-emerald-900/50',
     iconColor: 'text-emerald-700 dark:text-emerald-200',
-    label: '팁',
+    labelKey: 'editor.callout.tip',
     labelText: 'text-emerald-700 dark:text-emerald-200',
     icon: 'tip',
   },
 }
 
 export function CalloutBlockView({ block }: { block: CalloutBlock }) {
+  const t = useT()
   const v = VARIANT_STYLES[block.variant]
+  const variantLabel = t(v.labelKey)
   const isFullEditing = useEditorStore(editorSelectors.isFullEditing)
   const slug = useEditorStore((s) => s.slug)
   const etag = useEditorStore((s) => s.etag)
@@ -76,7 +76,7 @@ export function CalloutBlockView({ block }: { block: CalloutBlock }) {
         block.id,
         { variant: next },
         etag,
-        '콜아웃 변형 변경',
+        t('editor.callout.changeLog'),
       )
       apply(result.document, result.etag)
     } catch (err) {
@@ -98,7 +98,7 @@ export function CalloutBlockView({ block }: { block: CalloutBlock }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className={`text-xs font-semibold uppercase tracking-wide ${v.labelText}`}>
-          {block.title ?? v.label}
+          {block.title ?? variantLabel}
         </p>
         <p className="mt-1 text-smsg-900 dark:text-gray-100">
           <Inline text={block.text} />
@@ -107,14 +107,14 @@ export function CalloutBlockView({ block }: { block: CalloutBlock }) {
       {isFullEditing && slug && (
         <button
           type="button"
-          aria-label={`콜아웃 변형 변경 (현재: ${CALLOUT_LABEL[block.variant]})`}
+          aria-label={t('editor.callout.cycleAria', { label: t(VARIANT_STYLES[block.variant].labelKey) })}
           data-callout-variant-chip
           data-variant={block.variant}
           onClick={() => void onCycle()}
           disabled={busy}
           className="absolute right-2 top-2 rounded-full border border-gray-300 bg-white/95 px-2 py-0.5 text-[11px] font-medium text-gray-700 opacity-0 shadow-sm transition-opacity hover:bg-gray-50 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800/95 dark:text-gray-300 dark:hover:bg-gray-700"
         >
-          {CALLOUT_LABEL[block.variant]} ↻
+          {variantLabel} ↻
         </button>
       )}
     </aside>

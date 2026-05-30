@@ -217,6 +217,21 @@ export function ListBlockEditor({ slug, block }: Props) {
           return next
         })
       }
+      return
+    }
+    // ArrowUp / ArrowDown — focus prev/next item. caret 보존은 브라우저
+    // 기본 동작에 맡기고, 이미 첫/끝 row 면 default (페이지 scroll) 허용.
+    if (e.key === 'ArrowUp' && idx > 0) {
+      e.preventDefault()
+      const target = itemRefs.current[idx - 1]
+      if (target) target.focus()
+      return
+    }
+    if (e.key === 'ArrowDown' && idx < items.length - 1) {
+      e.preventDefault()
+      const target = itemRefs.current[idx + 1]
+      if (target) target.focus()
+      return
     }
   }
 

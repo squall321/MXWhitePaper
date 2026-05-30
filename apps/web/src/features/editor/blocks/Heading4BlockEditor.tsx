@@ -3,6 +3,7 @@ import type { Heading4Block, Slug } from '@/types/document'
 import { InlineTextBlockEditor } from '@/features/editor/components/InlineTextBlockEditor'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
+import { useT } from '@/lib/i18n'
 
 /**
  * Heading4BlockEditor — pairs the shared InlineTextBlockEditor with a
@@ -36,6 +37,7 @@ export function Heading4BlockEditor({ slug, block }: Props) {
   const initialLevel: Heading4Level =
     ((block.level ?? legacy) as Heading4Level | undefined) ?? 4
 
+  const t = useT()
   const [level, setLevel] = useState<Heading4Level>(initialLevel)
   const [error, setError] = useState<string | null>(null)
   const debounceRef = useRef<number | null>(null)
@@ -59,7 +61,7 @@ export function Heading4BlockEditor({ slug, block }: Props) {
         block.id,
         { level: next } as Partial<Heading4Block>,
         etag,
-        '제목 레벨 변경',
+        t('editor.heading4.changeLog'),
       )
       apply(result.document, result.etag)
       setError(null)
@@ -87,9 +89,9 @@ export function Heading4BlockEditor({ slug, block }: Props) {
     <div data-heading4-editor data-block-id={block.id} className="group">
       <div className="mb-1 flex items-center gap-2 text-[11px] text-gray-500 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
         <label className="flex items-center gap-1">
-          <span>레벨</span>
+          <span>{t('editor.heading4.label')}</span>
           <select
-            aria-label="제목 레벨"
+            aria-label={t('editor.heading4.ariaLevel')}
             data-heading4-level
             value={level}
             onChange={(e) => onLevelChange(Number(e.target.value) as Heading4Level)}
@@ -113,7 +115,7 @@ export function Heading4BlockEditor({ slug, block }: Props) {
         level={level}
         initialText={block.title}
         className={`${cls} min-h-[1.5rem] py-1`}
-        placeholder="제목을 입력하세요…"
+        placeholder={t('editor.heading4.placeholder')}
       />
     </div>
   )

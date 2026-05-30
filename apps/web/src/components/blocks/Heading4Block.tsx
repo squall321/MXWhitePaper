@@ -8,21 +8,28 @@ import type { Heading4Block } from '@/types/document'
  * the same value at `block.meta.level` — we read both so legacy docs keep
  * their look while new inserts use the canonical top-level field. Defaults
  * to 4 (small) when neither is set.
+ *
+ * HD4-02 — outline safety: semantic element is *always* `<h4>` so the
+ * surrounding section's h1/h2/h3 outline is not interrupted. `block.level`
+ * still drives the *visual* size only (className). Prior to this fix, a
+ * level=2 inline heading would emit a real `<h2>`, polluting the document
+ * outline that screen readers walk.
  */
 export function Heading4BlockView({ block }: { block: Heading4Block }) {
   const legacy = (block.meta as { level?: number } | undefined)?.level
   const lvl = block.level ?? legacy ?? 4
-  if (lvl === 2) {
-    return (
-      <h2 className="mt-4 text-2xl font-semibold text-smsg-900">{block.title}</h2>
-    )
-  }
-  if (lvl === 3) {
-    return (
-      <h3 className="mt-4 text-xl font-semibold text-smsg-900">{block.title}</h3>
-    )
-  }
+  const sizeClass =
+    lvl === 2
+      ? 'text-2xl'
+      : lvl === 3
+        ? 'text-xl'
+        : 'text-base'
   return (
-    <h4 className="mt-4 text-base font-semibold text-smsg-900">{block.title}</h4>
+    <h4
+      data-heading4-visual-level={lvl}
+      className={`mt-4 font-semibold text-smsg-900 dark:text-gray-100 ${sizeClass}`}
+    >
+      {block.title}
+    </h4>
   )
 }
