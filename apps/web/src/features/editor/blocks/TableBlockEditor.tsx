@@ -327,15 +327,19 @@ export function TableBlockEditor({ slug, block }: Props) {
         <div className="overflow-x-auto rounded border border-smsg-100 bg-white shadow-sm">
           <table className="w-full min-w-[480px] border-collapse text-left text-sm">
             <tbody>
-              {rowKeys.map((r, rIdx) => {
+              {(() => {
+                let bodyCounter = 0
+                return rowKeys.map((r, rIdx) => {
                 const rowEntries = cellsByRow.get(r) ?? []
                 const Tag = isHeaderRow(r) ? 'th' : 'td'
-                // Match the previous CSS `:nth-child(odd|even)` behaviour:
-                // every `<tr>` (header or data) participated in the nth-child
-                // count, so we pass `rIdx` straight through. Header rows
-                // override with their own background below, so the zebra
-                // colour only ever shows on data rows.
-                const zebra = getZebraClass('table', local.options, rIdx)
+                // TBL-01 — viewer 의 SparseTableBody 는 bodyRows (header 제외)
+                // 에서만 idx 를 세서 zebra phase 를 정한다. 이전 구현은
+                // header 포함 rIdx 를 그대로 넘겨 header 행 수에 따라
+                // editor 와 viewer 의 zebra 가 한 칸씩 어긋났다. 별도
+                // bodyCounter 로 viewer 와 동일하게 indexing.
+                const zebra = isHeaderRow(r)
+                  ? ''
+                  : getZebraClass('table', local.options, bodyCounter++)
                 const rowCls = isHeaderRow(r)
                   ? 'bg-smsg-50 text-smsg-900'
                   : `bg-white ${zebra}`
@@ -394,7 +398,8 @@ export function TableBlockEditor({ slug, block }: Props) {
                     </tr>
                   </Fragment>
                 )
-              })}
+              })
+              })()}
             </tbody>
           </table>
         </div>

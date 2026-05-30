@@ -213,7 +213,7 @@ export function PdfBlockEditor({ slug, block }: Props) {
       {previewSrc ? (
         <iframe
           src={previewSrc}
-          title={local.title ?? 'PDF 미리보기'}
+          title={local.title ?? t('editor.pdf.previewTitle')}
           height={height}
           className="w-full rounded border border-gray-200 bg-gray-100"
         />

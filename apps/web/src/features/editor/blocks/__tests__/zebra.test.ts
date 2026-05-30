@@ -4,7 +4,7 @@ import { getZebraClass } from '../zebra'
 describe('getZebraClass', () => {
   it('table: stripe default ON, odd rows coloured', () => {
     expect(getZebraClass('table', undefined, 0)).toBe('')
-    expect(getZebraClass('table', undefined, 1)).toBe('bg-gray-50')
+    expect(getZebraClass('table', undefined, 1)).toBe('bg-gray-50 dark:bg-gray-800')
     expect(getZebraClass('table', undefined, 2)).toBe('')
   })
 
@@ -29,13 +29,13 @@ describe('getZebraClass', () => {
     const t = getZebraClass('table', undefined, 1)
     const s = getZebraClass('spreadsheet', undefined, 1)
     expect(t).not.toBe(s)
-    expect(t).toBe('bg-gray-50')
+    expect(t).toBe('bg-gray-50 dark:bg-gray-800')
     expect(s).toBe('bg-[var(--smsg-blue-050)]')
   })
 
   it('list: gray-50 on odd rows, default ON', () => {
     expect(getZebraClass('list', undefined, 0)).toBe('')
-    expect(getZebraClass('list', undefined, 1)).toBe('bg-gray-50')
+    expect(getZebraClass('list', undefined, 1)).toBe('bg-gray-50 dark:bg-gray-800')
     expect(getZebraClass('list', { stripe: false }, 1)).toBe('')
   })
 
@@ -49,13 +49,13 @@ describe('getZebraClass', () => {
 
   it('bibliography: gray-50 on odd entries, default ON', () => {
     expect(getZebraClass('bibliography', undefined, 0)).toBe('')
-    expect(getZebraClass('bibliography', undefined, 1)).toBe('bg-gray-50')
+    expect(getZebraClass('bibliography', undefined, 1)).toBe('bg-gray-50 dark:bg-gray-800')
     expect(getZebraClass('bibliography', { stripe: false }, 1)).toBe('')
   })
 
   it('figure-index: gray-50 on odd entries within each group', () => {
     expect(getZebraClass('figure-index', undefined, 0)).toBe('')
-    expect(getZebraClass('figure-index', undefined, 1)).toBe('bg-gray-50')
+    expect(getZebraClass('figure-index', undefined, 1)).toBe('bg-gray-50 dark:bg-gray-800')
     expect(getZebraClass('figure-index', { stripe: false }, 3)).toBe('')
   })
 

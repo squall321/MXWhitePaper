@@ -209,8 +209,8 @@ export function QuizBlockView({ block }: QuizBlockViewProps) {
   if (result) {
     const correctCount = result.breakdown.filter((b) => b.correct).length
     const tone = result.passed
-      ? 'border-emerald-200 bg-emerald-50'
-      : 'border-amber-200 bg-amber-50'
+      ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30'
+      : 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'
     return (
       <section
         data-quiz-block

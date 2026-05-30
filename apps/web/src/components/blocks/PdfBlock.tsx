@@ -35,7 +35,7 @@ export function PdfBlockView({ block }: { block: PdfBlock }) {
         <a
           href={baseUrl}
           download
-          className="rounded border border-smsg-300 px-2 py-0.5 text-[11px] text-smsg-700 hover:bg-smsg-100"
+          className="rounded border border-smsg-300 px-2 py-0.5 text-[11px] text-smsg-700 hover:bg-smsg-100 dark:border-smsg-500 dark:bg-gray-900 dark:text-smsg-300 dark:hover:bg-gray-800"
           aria-label={`${titleText} 다운로드`}
         >
           다운로드
@@ -45,7 +45,7 @@ export function PdfBlockView({ block }: { block: PdfBlock }) {
         src={src}
         title={titleText}
         height={height}
-        className="w-full rounded bg-gray-100"
+        className="w-full rounded bg-gray-100 dark:bg-gray-800"
       />
     </figure>
   )

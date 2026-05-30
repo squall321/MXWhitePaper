@@ -97,6 +97,7 @@ export function WhiteboardElementView({ el }: { el: WhiteboardElement }) {
         strokeWidth={el.strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
       />
     )
   }
@@ -127,6 +128,7 @@ export function WhiteboardElementView({ el }: { el: WhiteboardElement }) {
         stroke={el.stroke}
         strokeWidth={el.strokeWidth}
         fill={fill}
+        vectorEffect="non-scaling-stroke"
       />
     )
   }
@@ -141,6 +143,7 @@ export function WhiteboardElementView({ el }: { el: WhiteboardElement }) {
         stroke={el.stroke}
         strokeWidth={el.strokeWidth}
         fill={fill}
+        vectorEffect="non-scaling-stroke"
       />
     )
   }
@@ -154,6 +157,7 @@ export function WhiteboardElementView({ el }: { el: WhiteboardElement }) {
         y2={el.y + el.h}
         stroke={el.stroke}
         strokeWidth={el.strokeWidth}
+        vectorEffect="non-scaling-stroke"
       />
     )
   }
@@ -169,6 +173,7 @@ export function WhiteboardElementView({ el }: { el: WhiteboardElement }) {
       strokeWidth={el.strokeWidth}
       style={{ color: el.stroke }}
       markerEnd="url(#wb-arrow)"
+      vectorEffect="non-scaling-stroke"
     />
   )
 }

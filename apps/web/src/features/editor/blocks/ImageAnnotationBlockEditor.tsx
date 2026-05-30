@@ -817,7 +817,7 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
               data-callout-bg-group
               className="flex items-center gap-1"
               role="radiogroup"
-              aria-label="callout 라벨 배경"
+              aria-label={t('editor.ia.calloutBgGroup')}
             >
               <span className="text-[10px] text-gray-500">bg:</span>
               <CalloutBgSwatch
@@ -825,21 +825,21 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
                 current={calloutBgColor}
                 onClick={setCalloutBgColor}
                 swatchBg="#ffffff"
-                title="기본 (흰색)"
+                title={t('editor.ia.calloutBgDefault')}
               />
               <CalloutBgSwatch
                 value="#111827"
                 current={calloutBgColor}
                 onClick={setCalloutBgColor}
                 swatchBg="#111827"
-                title="다크"
+                title={t('editor.ia.calloutBgDark')}
               />
               <CalloutBgSwatch
                 value="#fef3c7"
                 current={calloutBgColor}
                 onClick={setCalloutBgColor}
                 swatchBg="#fef3c7"
-                title="노랑 (강조)"
+                title={t('editor.ia.calloutBgYellow')}
               />
             </div>
           </>

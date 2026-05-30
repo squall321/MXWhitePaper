@@ -382,6 +382,7 @@ export const en: Record<LocaleKey, string> = {
   'editor.flow.cheatSheet': 'Quick examples',
   'editor.flow.exampleFill': 'Insert example: {label}',
   'editor.flow.changeLog': 'Edit flow',
+  'editor.flow.excalidrawReadonly': 'This block uses the Excalidraw engine. The current editor can only edit Mermaid, so it is shown read-only.',
 
   'editor.orgChart.dragLabel': 'Drag {id}',
   'editor.orgChart.namePlaceholder': 'Name',
@@ -653,6 +654,13 @@ export const en: Record<LocaleKey, string> = {
   'editor.ia.textboxInput': 'Text box body',
   'editor.ia.textboxPlaceholder': 'Describe this region… (Ctrl+Enter to save, Esc to cancel)',
   'editor.ia.changeLog': 'Edit image annotation',
+  'editor.ia.calloutBgGroup': 'Callout label background',
+  'editor.ia.calloutBgDefault': 'Default (white)',
+  'editor.ia.calloutBgDark': 'Dark',
+  'editor.ia.calloutBgYellow': 'Yellow (accent)',
+  'editor.pdf.previewTitle': 'PDF preview',
+  'block.bibliography.defaultHeading': 'References',
+  'block.docLink.missing': 'Document not found',
 
   'page.recent.title': 'Recently viewed',
   'page.recent.subtitle': 'Tracks up to 20 recently opened white papers. Saved to this browser only.',

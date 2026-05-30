@@ -258,7 +258,7 @@ function SortableTile({ item, onCaption, onAlt, onRemove, disabled }: SortableTi
             const v = e.target.value
             if (v !== (item.alt ?? '')) onAlt(v)
           }}
-          placeholder="alt"
+          placeholder={t('editor.image.altPlaceholder')}
           aria-label={t('editor.image.altLabel')}
           className="w-full rounded border border-transparent px-1 py-0.5 text-gray-500 hover:border-gray-200 focus:border-smsg-500 focus:outline-none"
         />

@@ -401,6 +401,7 @@ export const ko = {
   'editor.flow.cheatSheet': '이렇게 쓰세요',
   'editor.flow.exampleFill': '예제 채우기: {label}',
   'editor.flow.changeLog': '플로우 편집',
+  'editor.flow.excalidrawReadonly': '이 블록은 Excalidraw 엔진을 사용합니다. 현재 에디터는 Mermaid 만 편집할 수 있어 읽기 전용으로 표시됩니다.',
 
   // Editor — org chart
   'editor.orgChart.dragLabel': '드래그 {id}',
@@ -684,6 +685,13 @@ export const ko = {
   'editor.ia.textboxInput': '텍스트 박스 본문',
   'editor.ia.textboxPlaceholder': '이 영역 설명… (Ctrl+Enter 저장, Esc 취소)',
   'editor.ia.changeLog': '이미지 주석 편집',
+  'editor.ia.calloutBgGroup': '콜아웃 라벨 배경',
+  'editor.ia.calloutBgDefault': '기본 (흰색)',
+  'editor.ia.calloutBgDark': '다크',
+  'editor.ia.calloutBgYellow': '노랑 (강조)',
+  'editor.pdf.previewTitle': 'PDF 미리보기',
+  'block.bibliography.defaultHeading': '참고문헌',
+  'block.docLink.missing': '존재하지 않는 문서',
 
   // Page — Recent
   'page.recent.title': '최근 본 문서',

@@ -175,7 +175,7 @@ function FlatTableBody({
   const headers = block.headers
   return (
     <>
-      <thead className="sticky top-0 z-content bg-smsg-50 text-smsg-900">
+      <thead className="sticky top-0 z-content bg-smsg-50 text-smsg-900 dark:bg-gray-800 dark:text-gray-100">
         <tr>
           {rowNumbers && (
             <th
@@ -200,7 +200,7 @@ function FlatTableBody({
               <th
                 key={i}
                 scope="col"
-                className={`${cls} ${stickyFirstCol && i === 0 ? 'sticky left-0 z-content bg-smsg-50' : ''} ${sortable ? 'cursor-pointer select-none hover:bg-smsg-100' : ''} whitespace-nowrap`}
+                className={`${cls} ${stickyFirstCol && i === 0 ? 'sticky left-0 z-content bg-smsg-50 dark:bg-gray-800' : ''} ${sortable ? 'cursor-pointer select-none hover:bg-smsg-100' : ''} whitespace-nowrap`}
                 style={col?.width ? { width: col.width } : undefined}
                 onClick={sortable ? () => onSort(i) : undefined}
                 aria-sort={
@@ -309,7 +309,7 @@ function SparseTableBody({
   return (
     <>
       {headerRows.length > 0 && (
-        <thead className="sticky top-0 z-content bg-smsg-50 text-smsg-900">
+        <thead className="sticky top-0 z-content bg-smsg-50 text-smsg-900 dark:bg-gray-800 dark:text-gray-100">
           {headerRows.map((r) => (
             <tr key={r}>
               {(byRow.get(r) ?? []).map((cell, i) => {
@@ -638,7 +638,7 @@ export function TableBlockView({ block }: { block: TableBlock }) {
             />
           )}
           {footerRow && !isSparse && (
-            <tfoot className="border-t-2 border-smsg-200 bg-smsg-50/60 text-smsg-900">
+            <tfoot className="border-t-2 border-smsg-200 bg-smsg-50/60 text-smsg-900 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-100">
               <tr>
                 {rowNumbers && (
                   <td
@@ -652,7 +652,7 @@ export function TableBlockView({ block }: { block: TableBlock }) {
                   return (
                     <td
                       key={c}
-                      className={`${cls} font-semibold ${stickyFirstCol && c === 0 ? 'sticky left-0 z-content bg-smsg-50' : ''}`}
+                      className={`${cls} font-semibold ${stickyFirstCol && c === 0 ? 'sticky left-0 z-content bg-smsg-50 dark:bg-gray-800' : ''}`}
                     >
                       {isLabelCell ? footer.label : (value ?? '')}
                     </td>

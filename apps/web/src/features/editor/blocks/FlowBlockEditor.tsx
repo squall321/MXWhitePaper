@@ -176,7 +176,39 @@ export function detectKind(source: string): string | null {
 const PERSIST_MS = 800
 const PREVIEW_MS = 300
 
+/**
+ * FLOW-02 — Excalidraw 엔진 read-only 게이트.
+ *
+ * 이전 구현의 persist() 는 무조건 engine='mermaid' 로 PATCH 해 Excalidraw
+ * 블록을 silent 하게 mermaid 로 재작성하는 데이터 손실 경로가 있었다.
+ * 사용자 데이터 보호를 위해 mermaid 가 아닌 엔진은 편집기를 마운트하지
+ * 않고 read-only notice 만 노출한다. Sprint-7 에서 본격 Excalidraw 편집기가
+ * 추가되면 여기서 분기.
+ */
+function FlowExcalidrawReadonly({ block }: { block: FlowBlock }) {
+  const t = useT()
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-flow-block-editor
+      data-block-id={block.id}
+      data-engine={block.engine}
+      className="my-2 rounded border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"
+    >
+      {t('editor.flow.excalidrawReadonly')}
+    </div>
+  )
+}
+
 export function FlowBlockEditor({ slug, block }: Props) {
+  if (block.engine !== 'mermaid') {
+    return <FlowExcalidrawReadonly block={block} />
+  }
+  return <FlowMermaidEditor slug={slug} block={block} />
+}
+
+function FlowMermaidEditor({ slug, block }: Props) {
   const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
@@ -214,7 +246,7 @@ export function FlowBlockEditor({ slug, block }: Props) {
       const result = await patchBlock(
         slug,
         block.id,
-        { ...block, engine: 'mermaid', source: next },
+        { ...block, source: next },
         etag,
         t('editor.flow.changeLog'),
       )

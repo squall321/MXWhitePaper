@@ -253,12 +253,17 @@
   `_validate_text_constraints`; `apps/web/src/components/blocks/FormBlock.tsx`
   `validateAnswers`). Editor exposes inputs conditionally by kind
   (FormBlockEditor `QuestionRow`).
-- `ChartBlock` — `chartType: "line"|"bar"|"stackedBar"|"groupedBar"|"area"|"pie"|
-  "doughnut"|"scatter"|"bubble"|"radar"|"heatmap"|"waterfall"|"funnel"|"sankey"|
-  "boxplot"`, `data` (series/labels), `options?` (legend, axes, fit-range, stats).
-  ★ `boxplot` 은 chart-boxplot 사이클 (cycle 2) 추가 — Q1/median/Q3/min/max + outlier
-  렌더, single-series numeric array 입력. helper:
+- `ChartBlock` — `chartType: "line"|"bar"|"area"|"pie"|"radar"|"scatter"|
+  "xy-line"|"boxplot"`, `data` (series/labels), `options?` (legend, axes,
+  fit-range, stats), `engine?: "recharts"|"echarts"` (default recharts; echarts
+  unlocks markPoint/markArea/brush/dataZoom).
+  ★ `boxplot` 은 chart-boxplot 사이클 (cycle 2) 추가 — Q1/median/Q3/min/max +
+  outlier 렌더, single-series numeric array 입력 (`block.options.boxplotMode`
+  로 raw / precomputed 선택). helper:
   [[apps/web/src/components/blocks/chartBoxplot.ts#computeQuartiles]].
+  ★ `xy-line` 은 시리즈마다 자유로운 `(x, y)` 쌍 — `data.labels` 무시,
+  `series[].points: [{x, y, err?, errLow?, errHigh?}]` 사용. stress-strain
+  처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교 + error bar.
 - `ColumnsBlock`, `TabsBlock`, `AccordionBlock`, `GalleryBlock`, …
 
 전체 enum 은 [[src/app/schemas/document.py]] 참고. 새 block type 추가 시:

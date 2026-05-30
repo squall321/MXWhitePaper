@@ -113,6 +113,7 @@ export function AnnotationElementView({ ann }: { ann: AnnotationElement }) {
           strokeWidth={0.005}
           strokeLinecap="round"
           markerEnd="url(#ia-arrow)"
+          vectorEffect="non-scaling-stroke"
         />
         {ann.label ? (
           <text
@@ -140,6 +141,7 @@ export function AnnotationElementView({ ann }: { ann: AnnotationElement }) {
           strokeWidth={0.005}
           fill={ann.color}
           fillOpacity={0.18}
+          vectorEffect="non-scaling-stroke"
         />
         {ann.label ? (
           <text
@@ -205,6 +207,7 @@ export function AnnotationElementView({ ann }: { ann: AnnotationElement }) {
           stroke={ann.color}
           strokeWidth={0.003}
           strokeDasharray="0.01 0.005"
+          vectorEffect="non-scaling-stroke"
         />
       ) : null}
       <rect
@@ -217,6 +220,7 @@ export function AnnotationElementView({ ann }: { ann: AnnotationElement }) {
         strokeWidth={0.003}
         fill={ann.bgColor ?? 'white'}
         fillOpacity={0.9}
+        vectorEffect="non-scaling-stroke"
       />
       <text
         x={ann.x + 0.01}

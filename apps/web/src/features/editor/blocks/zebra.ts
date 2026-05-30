@@ -28,12 +28,12 @@ export type ZebraBlockType =
   | 'gantt'
 
 const STRIPE_CLASSES: Record<ZebraBlockType, string> = {
-  table: 'bg-gray-50',
+  table: 'bg-gray-50 dark:bg-gray-800',
   spreadsheet: 'bg-[var(--smsg-blue-050)]',
-  list: 'bg-gray-50',
+  list: 'bg-gray-50 dark:bg-gray-800',
   'kpi-cards': 'bg-[var(--smsg-blue-050)]',
-  bibliography: 'bg-gray-50',
-  'figure-index': 'bg-gray-50',
+  bibliography: 'bg-gray-50 dark:bg-gray-800',
+  'figure-index': 'bg-gray-50 dark:bg-gray-800',
   // gantt is an SVG block — its rows are painted via inline `<rect
   // fill="var(--smsg-gray-050)">` (token reference so darkmode resolves
   // through `.dark`), not a className. The entry below exists so

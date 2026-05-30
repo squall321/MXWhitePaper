@@ -132,11 +132,11 @@ const WIDTH_OPTIONS: { value: NonNullable<ImageBlock['width']>; label: string }[
   { value: 'full', label: 'Full' },
 ]
 
-const ALIGN_OPTIONS: { value: 'left' | 'center' | 'right' | 'full'; label: string }[] = [
-  { value: 'left', label: '좌' },
-  { value: 'center', label: '중앙' },
-  { value: 'right', label: '우' },
-  { value: 'full', label: 'Full' },
+const ALIGN_OPTIONS: { value: 'left' | 'center' | 'right' | 'full'; labelKey: 'editor.image.alignLeft' | 'editor.image.alignCenter' | 'editor.image.alignRight' | 'editor.image.alignFull' }[] = [
+  { value: 'left', labelKey: 'editor.image.alignLeft' },
+  { value: 'center', labelKey: 'editor.image.alignCenter' },
+  { value: 'right', labelKey: 'editor.image.alignRight' },
+  { value: 'full', labelKey: 'editor.image.alignFull' },
 ]
 
 const WIDTH_CLASS: Record<NonNullable<ImageBlock['width']>, string> = {
@@ -369,7 +369,7 @@ export function ImageBlockEditor({
           >
             {ALIGN_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
-                {o.label}
+                {t(o.labelKey)}
               </option>
             ))}
           </select>

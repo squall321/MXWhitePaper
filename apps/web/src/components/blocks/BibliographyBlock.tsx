@@ -1,6 +1,7 @@
 import type { BibliographyBlock } from '@/types/document'
 import { Inline } from '../wiki/Inline'
 import { getZebraClass } from '@/features/editor/blocks/zebra'
+import { useT } from '@/lib/i18n'
 
 /**
  * Read-mode renderer for a `bibliography` block — a numbered list of
@@ -14,15 +15,16 @@ import { getZebraClass } from '@/features/editor/blocks/zebra'
  * pipeline rather than the FE.
  */
 export function BibliographyBlockView({ block }: { block: BibliographyBlock }) {
-  const heading = block.title ?? '참고문헌'
+  const t = useT()
+  const heading = block.title ?? t('block.bibliography.defaultHeading')
   return (
     <section
       data-bibliography-block
       data-block-id={block.id}
-      className="my-4 border-t border-smsg-100 pt-3 text-sm text-smsg-900"
+      className="my-4 border-t border-smsg-100 pt-3 text-sm text-smsg-900 dark:border-gray-700 dark:text-gray-100"
       aria-label={heading}
     >
-      <h3 className="mb-2 text-base font-semibold text-smsg-900">{heading}</h3>
+      <h3 className="mb-2 text-base font-semibold text-smsg-900 dark:text-gray-100">{heading}</h3>
       <ol className="list-none space-y-1 pl-0">
         {block.entries.map((entry, idx) => {
           const zebra = getZebraClass('bibliography', block.options, idx)
@@ -32,7 +34,7 @@ export function BibliographyBlockView({ block }: { block: BibliographyBlock }) {
             id={entry.key ? `cite-${entry.key}` : undefined}
             className={`leading-6${zebra ? ` ${zebra}` : ''}`}
           >
-            <span className="mr-2 font-mono text-xs text-gray-500">
+            <span className="mr-2 font-mono text-xs text-gray-500 dark:text-gray-400">
               [{idx + 1}]
             </span>
             <Inline text={entry.text} />
