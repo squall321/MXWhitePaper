@@ -50,9 +50,27 @@ export function ImageAnnotationBlockView({ block }: { block: ImageAnnotationBloc
           ))}
         </svg>
       </div>
-      {block.caption && (
+      {(block.caption || block.annotations.length > 0) && (
         <figcaption className="mt-1 text-center text-xs text-gray-500">
           {block.caption}
+          {block.annotations.length > 0 && (
+            // SVG overlay 는 aria-hidden 이라 SR 사용자는 라벨에 닿지 못한다.
+            // visually-hidden 리스트로 annotation 라벨/텍스트를 노출한다.
+            <ul className="sr-only" data-annotation-sr-list>
+              {block.annotations.map((ann) => {
+                const text =
+                  ann.kind === 'textbox'
+                    ? ann.text
+                    : ann.kind === 'callout'
+                      ? (ann.label ??
+                          (ann as unknown as { text?: string }).text ??
+                          '')
+                      : (ann.label ?? '')
+                if (!text) return null
+                return <li key={ann.id}>{text}</li>
+              })}
+            </ul>
+          )}
         </figcaption>
       )}
     </figure>

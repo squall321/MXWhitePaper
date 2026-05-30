@@ -250,6 +250,52 @@ if not (ok1 and ok2):
         file=sys.stderr,
     )
 
+# ── Post-process: add fileId/file_id alias to PdfBlock (PDF-02 from
+# block-audit cycle 2). JSON schema uses snake_case `file_id`, but FE /
+# docx round-trip pass camelCase `fileId`. Accept both on input; when
+# both keys are present `file_id` wins (no silent override).
+_pdf_block_re = re.compile(
+    r"class PdfBlock\(BaseModel\):\n"
+    r"    model_config = ConfigDict\(\n"
+    r"        extra='forbid',\n"
+    r"    \)\n"
+    r"    type: Literal\['pdf'\]\n"
+    r"    id: Ulid\n"
+    r"    file_id: str\n"
+)
+_pdf_block_patched = (
+    "class PdfBlock(BaseModel):\n"
+    "    # PDF-02 (block-audit c2): accept both `file_id` (snake; codegen\n"
+    "    # default) and `fileId` (camel; FE / docx round-trip) on input.\n"
+    "    model_config = ConfigDict(\n"
+    "        extra='forbid',\n"
+    "        populate_by_name=True,\n"
+    "    )\n"
+    "    type: Literal['pdf']\n"
+    "    id: Ulid\n"
+    "    file_id: str = Field(..., alias='fileId')\n"
+)
+src, pdf_n = _pdf_block_re.subn(_pdf_block_patched, src, count=1)
+if pdf_n != 1:
+    print("WARN: PdfBlock alias patch did not apply (PDF-02)", file=sys.stderr)
+else:
+    # Append the before-validator at the end of the class body.
+    _pdf_validator = (
+        "\n"
+        "    @model_validator(mode='before')\n"
+        "    @classmethod\n"
+        "    def _accept_either_file_id(cls, values: Any) -> Any:\n"
+        "        # Accept both `file_id` (snake) and `fileId` (camel) on\n"
+        "        # input. When both are present, `file_id` wins.\n"
+        "        if isinstance(values, dict):\n"
+        "            if 'file_id' not in values and 'fileId' in values:\n"
+        "                values['file_id'] = values['fileId']\n"
+        "        return values\n"
+    )
+    src, ok_pdf = _inject_after_meta(src, "PdfBlock", _pdf_validator)
+    if not ok_pdf:
+        print("WARN: PdfBlock before-validator not injected", file=sys.stderr)
+
 # Force LF on every platform — Path.write_text uses os.linesep otherwise,
 # which on Windows would yield CRLF and make the codegen-drift gate fire.
 # Write-if-different: only touch OUT when the post-processed content actually

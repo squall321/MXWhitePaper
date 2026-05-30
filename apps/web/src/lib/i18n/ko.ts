@@ -285,6 +285,9 @@ export const ko = {
   'editor.video.previewTitle': '영상 미리보기',
   'editor.video.urlHint': 'URL을 입력하면 미리보기가 나타납니다.',
   'editor.video.changeLog': '영상 편집',
+  'editor.video.autoplay': '자동 재생',
+  'editor.video.controls': '재생 컨트롤',
+  'editor.video.loop': '반복 재생',
 
   // Editor — iframe block
   'editor.iframe.urlPlaceholder': '임베드 URL (사내 화이트리스트만 표시됩니다)',
@@ -622,6 +625,9 @@ export const ko = {
   'editor.gallery.removeItem': '이미지 삭제',
   'editor.gallery.captionPlaceholder': '캡션 입력...',
   'editor.gallery.changeLog': '갤러리 편집',
+  'editor.gallery.layout': '레이아웃',
+  'editor.gallery.layoutGrid': '그리드',
+  'editor.gallery.layoutCarousel': '캐러셀',
 
   // Editor — whiteboard
   'editor.wb.tool.pen': '펜',

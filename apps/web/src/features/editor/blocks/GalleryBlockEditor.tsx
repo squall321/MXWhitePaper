@@ -47,7 +47,10 @@ export function GalleryBlockEditor({ slug, block }: GalleryBlockEditorProps) {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
-  const persist = async (items: GalleryItem[]) => {
+  const persist = async (
+    items: GalleryItem[],
+    layout?: GalleryBlock['layout'],
+  ) => {
     if (!etag) return
     if (items.length < 1) return // schema says minItems = 1
     setBusy(true)
@@ -56,7 +59,10 @@ export function GalleryBlockEditor({ slug, block }: GalleryBlockEditorProps) {
       const result = await patchBlock(
         slug,
         block.id,
-        { items: items as GalleryBlock['items'] },
+        {
+          items: items as GalleryBlock['items'],
+          layout: layout ?? block.layout,
+        },
         etag,
         t('editor.gallery.changeLog'),
       )
@@ -71,6 +77,10 @@ export function GalleryBlockEditor({ slug, block }: GalleryBlockEditorProps) {
     } finally {
       setBusy(false)
     }
+  }
+
+  const onLayout = (layout: GalleryBlock['layout']) => {
+    void persist(block.items as GalleryItem[], layout)
   }
 
   const onDragEnd = (e: DragEndEvent) => {
@@ -106,6 +116,22 @@ export function GalleryBlockEditor({ slug, block }: GalleryBlockEditorProps) {
 
   return (
     <div data-gallery-block-editor data-block-id={block.id} className="my-4">
+      <div className="mb-2 flex items-center gap-2 text-xs text-gray-700">
+        <label htmlFor={`gallery-layout-${block.id}`}>
+          {t('editor.gallery.layout')}
+        </label>
+        <select
+          id={`gallery-layout-${block.id}`}
+          data-gallery-layout
+          value={block.layout}
+          onChange={(e) => onLayout(e.target.value as GalleryBlock['layout'])}
+          disabled={busy}
+          className="rounded border border-gray-300 bg-white px-2 py-0.5 text-xs"
+        >
+          <option value="grid">{t('editor.gallery.layoutGrid')}</option>
+          <option value="carousel">{t('editor.gallery.layoutCarousel')}</option>
+        </select>
+      </div>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

@@ -71,7 +71,14 @@ export function VideoBlockEditor({ slug, block }: Props) {
       const result = await patchBlock(
         slug,
         block.id,
-        { url: next.url, title: next.title, provider: next.provider },
+        {
+          url: next.url,
+          title: next.title,
+          provider: next.provider,
+          autoplay: next.autoplay,
+          controls: next.controls,
+          loop: next.loop,
+        },
         etag,
         t('editor.video.changeLog'),
       )
@@ -131,6 +138,39 @@ export function VideoBlockEditor({ slug, block }: Props) {
         aria-label={t('editor.video.titleLabel')}
         className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none"
       />
+
+      <fieldset className="flex flex-wrap gap-3 text-xs text-gray-700">
+        <label className="inline-flex items-center gap-1">
+          <input
+            type="checkbox"
+            data-video-autoplay
+            checked={local.autoplay ?? false}
+            onChange={(e) => schedule({ ...local, autoplay: e.target.checked })}
+            className="h-3.5 w-3.5"
+          />
+          <span>{t('editor.video.autoplay')}</span>
+        </label>
+        <label className="inline-flex items-center gap-1">
+          <input
+            type="checkbox"
+            data-video-controls
+            checked={local.controls ?? true}
+            onChange={(e) => schedule({ ...local, controls: e.target.checked })}
+            className="h-3.5 w-3.5"
+          />
+          <span>{t('editor.video.controls')}</span>
+        </label>
+        <label className="inline-flex items-center gap-1">
+          <input
+            type="checkbox"
+            data-video-loop
+            checked={local.loop ?? false}
+            onChange={(e) => schedule({ ...local, loop: e.target.checked })}
+            className="h-3.5 w-3.5"
+          />
+          <span>{t('editor.video.loop')}</span>
+        </label>
+      </fieldset>
 
       {local.url ? (
         <div className="aspect-video w-full overflow-hidden rounded border border-gray-200 bg-black">

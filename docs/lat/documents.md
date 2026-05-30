@@ -475,7 +475,14 @@ materialized view refresh 도 스킵 가능.
 9. **SpreadsheetBlock 은 docx import 가 만들지 않는다** — 사이트 에디터에서
    직접 추가. LLM 이 docx 로 작성할 땐 일반 TableBlock 으로 두고 사람이
    사이트에서 변환. (참고: [[../llm-input-rules.md#2-9-spreadsheet-편집-가능한-표]])
-10. **zebra `options.stripe` 기본은 `true`** — table/spreadsheet/list/kpi-cards/
+10. **`PdfBlock.file_id` 는 snake_case + `fileId` alias 양방향** — JSON schema
+    는 `file_id` (snake), FE / docx round-trip 은 `fileId` (camel) 를 보낸다.
+    [[src/app/schemas/document.py#PdfBlock]] 가 `Field(..., alias='fileId')` +
+    `populate_by_name=True` + `model_validator(mode='before')` 로 둘 다 받음 —
+    동시 입력이면 `file_id` 우선. `FileBlock.fileId` (camel-only) 와 명시적으로
+    다른 컨벤션. 외부 LLM 이 input docx 를 만들 땐 어느 쪽이든 OK.
+
+11. **zebra `options.stripe` 기본은 `true`** — table/spreadsheet/list/kpi-cards/
     bibliography/figure-index/gantt **7 종** 모두 동일 contract: `options` 객체
     없으면 zebra 적용. 명시적으로 끄려면 `{stripe:false}` 저장 필요. 단일 진실은
     [[src/features/editor/blocks/zebra.ts#getZebraClass]] + 공통 UI 는

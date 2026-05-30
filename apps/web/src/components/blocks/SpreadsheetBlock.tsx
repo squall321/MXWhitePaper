@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { SpreadsheetBlock } from '@/types/document'
 import { evaluateAll, refOf } from '@/features/editor/blocks/spreadsheet/formulaEngine'
+import { getZebraClass } from '@/features/editor/blocks/zebra'
 
 /**
  * Read-mode renderer for the spreadsheet block. Computes every populated
@@ -57,36 +58,46 @@ export function SpreadsheetBlockView({ block }: SpreadsheetBlockViewProps) {
           </tr>
         </thead>
         <tbody>
-          {Array.from({ length: rows }).map((_, r) => (
-            <tr key={r}>
-              <th
-                scope="row"
-                className="sticky left-0 z-10 border border-gray-200 bg-gray-50 px-2 py-1 text-center font-medium text-gray-500 dark:border-gray-700 dark:bg-gray-800"
-              >
-                {r + 1}
-              </th>
-              {Array.from({ length: cols }).map((_, c) => {
-                const ref = refOf(c, r)
-                const result = computed[ref]
-                let display: string
-                let cls = 'border border-gray-100 bg-white px-2 py-1 align-top text-gray-800 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200'
-                if (result?.error) {
-                  display = result.error
-                  cls += ' text-red-600 font-mono'
-                } else if (result == null || result.value === '') {
-                  display = ''
-                } else {
-                  display = String(result.value)
-                  if (typeof result.value === 'number') cls += ' text-right tabular-nums'
-                }
-                return (
-                  <td key={c} data-cell-ref={ref} className={cls}>
-                    {display}
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
+          {Array.from({ length: rows }).map((_, r) => {
+            // Zebra is applied at the row level so every cell in the same
+            // row stays consistent — mirrors editor SpreadsheetBlockEditor.
+            const zebra = getZebraClass('spreadsheet', block.options, r)
+            return (
+              <tr key={r} className={zebra}>
+                <th
+                  scope="row"
+                  className="sticky left-0 z-10 border border-gray-200 bg-gray-50 px-2 py-1 text-center font-medium text-gray-500 dark:border-gray-700 dark:bg-gray-800"
+                >
+                  {r + 1}
+                </th>
+                {Array.from({ length: cols }).map((_, c) => {
+                  const ref = refOf(c, r)
+                  const result = computed[ref]
+                  let display: string
+                  // zebra가 켜진 행에서는 bg 를 row 가 칠하므로 cell 의
+                  // bg-white 가 그것을 덮지 않게 분기.
+                  const base = zebra
+                    ? 'border border-gray-100 px-2 py-1 align-top text-gray-800 dark:border-gray-800 dark:text-gray-200'
+                    : 'border border-gray-100 bg-white px-2 py-1 align-top text-gray-800 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                  let cls = base
+                  if (result?.error) {
+                    display = result.error
+                    cls += ' text-red-600 font-mono'
+                  } else if (result == null || result.value === '') {
+                    display = ''
+                  } else {
+                    display = String(result.value)
+                    if (typeof result.value === 'number') cls += ' text-right tabular-nums'
+                  }
+                  return (
+                    <td key={c} data-cell-ref={ref} className={cls}>
+                      {display}
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>

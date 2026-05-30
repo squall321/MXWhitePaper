@@ -272,6 +272,9 @@ export const en: Record<LocaleKey, string> = {
   'editor.video.previewTitle': 'Video preview',
   'editor.video.urlHint': 'Enter a URL to see a preview.',
   'editor.video.changeLog': 'Edit video',
+  'editor.video.autoplay': 'Autoplay',
+  'editor.video.controls': 'Controls',
+  'editor.video.loop': 'Loop',
 
   'editor.iframe.urlPlaceholder': 'Embed URL (only whitelisted domains render)',
   'editor.iframe.urlLabel': 'Embed URL',
@@ -593,6 +596,9 @@ export const en: Record<LocaleKey, string> = {
   'editor.gallery.removeItem': 'Remove image',
   'editor.gallery.captionPlaceholder': 'Enter caption…',
   'editor.gallery.changeLog': 'Edit gallery',
+  'editor.gallery.layout': 'Layout',
+  'editor.gallery.layoutGrid': 'Grid',
+  'editor.gallery.layoutCarousel': 'Carousel',
 
   'editor.wb.tool.pen': 'Pen',
   'editor.wb.tool.eraser': 'Eraser',

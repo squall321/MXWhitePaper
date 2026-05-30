@@ -103,7 +103,7 @@ export function ListBlockView({ block }: { block: ListBlock }) {
 
   if (block.style === 'number') {
     return (
-      <ul className="space-y-1 text-[15px] leading-7 text-smsg-900">
+      <ol className="space-y-1 text-[15px] leading-7 text-smsg-900 list-none">
         {enriched.map(({ visible, depth, indexAtDepth, depth0Idx }, i) => {
           const zebra = zebraFor(depth, depth0Idx)
           return (
@@ -122,7 +122,7 @@ export function ListBlockView({ block }: { block: ListBlock }) {
             </li>
           )
         })}
-      </ul>
+      </ol>
     )
   }
   if (block.style === 'check') {

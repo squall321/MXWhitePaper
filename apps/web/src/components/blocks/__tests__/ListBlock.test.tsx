@@ -86,6 +86,29 @@ describe('<ListBlockView /> nesting', () => {
   })
 })
 
+describe('<ListBlockView /> semantic element', () => {
+  it('style="number" renders a <ol>', () => {
+    const html = renderToStaticMarkup(
+      <ListBlockView block={mkBlock('number', ['a', 'b'])} />,
+    )
+    expect(html).toMatch(/^<ol[\s>]/)
+  })
+
+  it('style="bullet" renders a <ul>', () => {
+    const html = renderToStaticMarkup(
+      <ListBlockView block={mkBlock('bullet', ['a'])} />,
+    )
+    expect(html).toMatch(/^<ul[\s>]/)
+  })
+
+  it('style="check" renders a <ul>', () => {
+    const html = renderToStaticMarkup(
+      <ListBlockView block={mkBlock('check', ['[ ] a'])} />,
+    )
+    expect(html).toMatch(/^<ul[\s>]/)
+  })
+})
+
 describe('<ListBlockView /> zebra-striping', () => {
   it('default ON — every other depth-0 row gets bg-gray-50', () => {
     const html = renderToStaticMarkup(

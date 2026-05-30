@@ -20,39 +20,39 @@ interface VariantSpec {
 
 const VARIANT_STYLES: Record<CalloutBlock['variant'], VariantSpec> = {
   info: {
-    border: 'border-smsg-500',
-    bg: 'bg-smsg-50',
-    iconBg: 'bg-smsg-100',
-    iconColor: 'text-smsg-700',
+    border: 'border-smsg-500 dark:border-smsg-400',
+    bg: 'bg-smsg-50 dark:bg-smsg-950/30',
+    iconBg: 'bg-smsg-100 dark:bg-smsg-900/50',
+    iconColor: 'text-smsg-700 dark:text-smsg-200',
     label: '정보',
-    labelText: 'text-smsg-700',
+    labelText: 'text-smsg-700 dark:text-smsg-200',
     icon: 'info',
   },
   warn: {
-    border: 'border-amber-400',
-    bg: 'bg-amber-50',
-    iconBg: 'bg-amber-100',
-    iconColor: 'text-amber-700',
+    border: 'border-amber-400 dark:border-amber-500',
+    bg: 'bg-amber-50 dark:bg-amber-950/30',
+    iconBg: 'bg-amber-100 dark:bg-amber-900/50',
+    iconColor: 'text-amber-700 dark:text-amber-200',
     label: '주의',
-    labelText: 'text-amber-700',
+    labelText: 'text-amber-700 dark:text-amber-200',
     icon: 'warn',
   },
   danger: {
-    border: 'border-red-400',
-    bg: 'bg-red-50',
-    iconBg: 'bg-red-100',
-    iconColor: 'text-red-700',
+    border: 'border-red-400 dark:border-red-500',
+    bg: 'bg-red-50 dark:bg-red-950/30',
+    iconBg: 'bg-red-100 dark:bg-red-900/50',
+    iconColor: 'text-red-700 dark:text-red-200',
     label: '경고',
-    labelText: 'text-red-700',
+    labelText: 'text-red-700 dark:text-red-200',
     icon: 'danger',
   },
   tip: {
-    border: 'border-emerald-400',
-    bg: 'bg-emerald-50',
-    iconBg: 'bg-emerald-100',
-    iconColor: 'text-emerald-700',
+    border: 'border-emerald-400 dark:border-emerald-500',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/30',
+    iconBg: 'bg-emerald-100 dark:bg-emerald-900/50',
+    iconColor: 'text-emerald-700 dark:text-emerald-200',
     label: '팁',
-    labelText: 'text-emerald-700',
+    labelText: 'text-emerald-700 dark:text-emerald-200',
     icon: 'tip',
   },
 }
@@ -100,7 +100,7 @@ export function CalloutBlockView({ block }: { block: CalloutBlock }) {
         <p className={`text-xs font-semibold uppercase tracking-wide ${v.labelText}`}>
           {block.title ?? v.label}
         </p>
-        <p className="mt-1 text-smsg-900">
+        <p className="mt-1 text-smsg-900 dark:text-gray-100">
           <Inline text={block.text} />
         </p>
       </div>

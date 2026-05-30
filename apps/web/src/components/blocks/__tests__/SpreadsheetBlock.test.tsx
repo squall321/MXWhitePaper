@@ -112,6 +112,31 @@ describe('<SpreadsheetBlockView />', () => {
     expect(html).toContain('>1<')
   })
 
+  it('zebra-stripes odd data rows by default (stripe=true)', () => {
+    const html = render({
+      type: 'spreadsheet',
+      id: ID,
+      cols: 2,
+      rows: 4,
+      cells: {},
+    })
+    // The smsg-blue-050 token bg is applied to <tr> at odd indices (1, 3).
+    const matches = html.match(/bg-\[var\(--smsg-blue-050\)\]/g) ?? []
+    expect(matches.length).toBe(2)
+  })
+
+  it('options.stripe=false disables zebra entirely', () => {
+    const html = render({
+      type: 'spreadsheet',
+      id: ID,
+      cols: 2,
+      rows: 4,
+      cells: {},
+      options: { stripe: false },
+    })
+    expect(html).not.toContain('bg-[var(--smsg-blue-050)]')
+  })
+
   it('exposes data-cell-ref attributes for downstream tooling', () => {
     const html = render({
       type: 'spreadsheet',

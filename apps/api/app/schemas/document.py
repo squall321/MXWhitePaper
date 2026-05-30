@@ -1132,12 +1132,15 @@ class FileBlock(BaseModel):
 
 
 class PdfBlock(BaseModel):
+    # PDF-02 (block-audit c2): accept both `file_id` (snake; codegen
+    # default) and `fileId` (camel; FE / docx round-trip) on input.
     model_config = ConfigDict(
         extra='forbid',
+        populate_by_name=True,
     )
     type: Literal['pdf']
     id: Ulid
-    file_id: str
+    file_id: str = Field(..., alias='fileId')
     """
     FK to files table (mxwp-files); served via /api/v1/files/:file_id/download
     """
@@ -1145,6 +1148,16 @@ class PdfBlock(BaseModel):
     page: int | None = Field(1, ge=1)
     height_px: int | None = Field(600, ge=200, le=4000)
     meta: BlockMeta | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def _accept_either_file_id(cls, values: Any) -> Any:
+        # Accept both `file_id` (snake) and `fileId` (camel) on
+        # input. When both are present, `file_id` wins.
+        if isinstance(values, dict):
+            if 'file_id' not in values and 'fileId' in values:
+                values['file_id'] = values['fileId']
+        return values
 
 
 class DocLinkCardBlock(BaseModel):

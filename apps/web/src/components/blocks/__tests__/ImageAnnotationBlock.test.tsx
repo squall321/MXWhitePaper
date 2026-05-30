@@ -135,6 +135,26 @@ describe('<ImageAnnotationBlockView />', () => {
     expect(html).toContain('fill="white"')
   })
 
+  it('exposes annotation labels in a sr-only <ul> for assistive tech', () => {
+    const html = renderToStaticMarkup(harness(<ImageAnnotationBlockView block={block} />))
+    // SR list 자체 + 각 라벨/텍스트 노출
+    expect(html).toContain('data-annotation-sr-list')
+    expect(html).toContain('sr-only')
+    expect(html).toContain('메인 카메라')
+    expect(html).toContain('지문센서')
+    expect(html).toContain('여기 마감 확인')
+    // textbox content
+    expect(html).toContain('첫 줄')
+    // SVG layer 는 aria-hidden 유지
+    expect(html).toMatch(/<svg[^>]*aria-hidden="true"/)
+  })
+
+  it('omits the sr-only list when there are no annotations', () => {
+    const empty: ImageAnnotationBlock = { ...block, annotations: [], caption: undefined }
+    const html = renderToStaticMarkup(harness(<ImageAnnotationBlockView block={empty} />))
+    expect(html).not.toContain('data-annotation-sr-list')
+  })
+
   it('callout label respects user-provided bgColor override', () => {
     const withBg: ImageAnnotationBlock = {
       ...block,
