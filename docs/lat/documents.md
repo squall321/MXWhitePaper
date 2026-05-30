@@ -85,7 +85,7 @@
   ([[src/features/editor/blocks/QuoteBlockEditor.tsx]]) 가 widget-integrity-pass-2 M9
   사이클에서 추가됨 — text textarea + cite input, 600 ms debounced patchBlock.
   빈 cite 는 `undefined` 로 정규화 (read 측의 `block.cite` truthy 체크와 일관).
-- `CalloutBlock` — `variant: "info"|"warn"|"danger"|"success"`, `title?`, `text`
+- `CalloutBlock` — `variant: "info"|"warn"|"danger"|"tip"`, `title?`, `text`
 - `CodeBlock` — `language`, `code`
 - `MathBlock` — LaTeX `expression`, `display: "block"|"inline"`
 - `TableBlock` — `headers[]`, `rows[][]`, `caption?`, `options{}` (sortable,
@@ -184,7 +184,7 @@
   로 본문 변화 캐치 후 collect() 재실행. 편집 모드에서는
   [[src/features/editor/blocks/FigureIndexBlockEditor.tsx]] 가 title + zebra 토글만
   노출 (entries 는 런타임 DOM 스캔, kinds 편집은 yagni 로 out-of-scope).
-- `CalloutBlock` — `variant: "info"|"warn"|"danger"|"success"|"tip"`, `title?`, `text`.
+- `CalloutBlock` — `variant: "info"|"warn"|"danger"|"tip"`, `title?`, `text`.
   docx export 시 `Widget: callout (variant)` hidden marker emit (검증:
   `test_renderer_callout_emits_hidden_marker_run`).
 - `KpiCardsBlock` — `items[]` (label, value, trend, **`sparkline?` `{values:number[],

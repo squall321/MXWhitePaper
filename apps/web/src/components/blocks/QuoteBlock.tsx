@@ -12,7 +12,8 @@ export function QuoteBlockView({ block }: { block: QuoteBlock }) {
       </p>
       {block.cite && (
         <footer className="mt-1 text-xs not-italic text-gray-600">
-          — {block.cite}
+          <span className="sr-only">attribution: </span>
+          — <cite>{block.cite}</cite>
         </footer>
       )}
     </blockquote>

@@ -33,5 +33,5 @@ export function MathBlockView({ block }: { block: MathBlock }) {
       </div>
     )
   }
-  return <span ref={ref} aria-label="수식" />
+  return <span ref={ref} aria-label="수식" className="inline-block max-w-full overflow-x-auto" />
 }

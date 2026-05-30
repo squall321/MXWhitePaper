@@ -685,10 +685,17 @@ def _b_video(block: dict[str, Any], _ctx: _Ctx) -> str:
             f'{html.escape(title or url)}</a>'
             f"</div>"
         )
+    # Optional schema flags (widget-integrity-pass-2 M4). Defaults match the
+    # schema: controls=True, autoplay=False, loop=False. Browser autoplay
+    # policy requires `muted` when autoplay is enabled.
+    controls = block.get("controls")
+    controls_attr = " controls" if controls is None or controls else ""
+    autoplay_attr = " autoplay muted" if block.get("autoplay") else ""
+    loop_attr = " loop" if block.get("loop") else ""
     return (
         f"{marker_html}"
         f'<div class="b-video b-video-intra">'
-        f'<video controls preload="metadata" src="{html.escape(url)}"></video>'
+        f'<video{controls_attr}{autoplay_attr}{loop_attr} preload="metadata" src="{html.escape(url)}"></video>'
         f'<div class="video-caption">{html.escape(title)}</div>'
         f"</div>"
     )

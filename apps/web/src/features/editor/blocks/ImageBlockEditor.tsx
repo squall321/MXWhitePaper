@@ -140,9 +140,9 @@ const ALIGN_OPTIONS: { value: 'left' | 'center' | 'right' | 'full'; label: strin
 ]
 
 const WIDTH_CLASS: Record<NonNullable<ImageBlock['width']>, string> = {
-  sm: 'w-1/4',
-  md: 'w-1/2',
-  lg: 'w-3/4',
+  sm: 'w-full sm:w-1/3',
+  md: 'w-full sm:w-2/3',
+  lg: 'w-full sm:w-3/4',
   full: 'w-full',
 }
 

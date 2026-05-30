@@ -23,7 +23,7 @@ export function FileBlockView({ block }: { block: FileBlock }) {
     >
       <span className="flex items-center gap-2">
         <span aria-hidden className="text-lg">📎</span>
-        <span className="font-medium text-smsg-900">{block.name}</span>
+        <span className="font-medium text-smsg-900 dark:text-gray-100">{block.name}</span>
       </span>
       <span className="text-xs text-gray-500">
         {block.mime ? `${block.mime} · ` : ''}

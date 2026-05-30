@@ -60,7 +60,7 @@ export function ParagraphBlockView({ block }: { block: ParagraphBlock }) {
     return (
       <div
         data-page-break
-        className="my-3 flex items-center gap-2 text-[10px] uppercase tracking-wider text-gray-400 select-none"
+        className="my-3 flex items-center gap-2 text-[10px] uppercase tracking-wider text-gray-400 select-none dark:text-gray-500"
         aria-label="페이지 나누기"
       >
         <span className="h-px flex-1 border-t border-dashed border-gray-300 dark:border-gray-600" />
@@ -81,7 +81,7 @@ export function ParagraphBlockView({ block }: { block: ParagraphBlock }) {
 
   const paragraphs = block.text.split(/\n{2,}/)
   return (
-    <div className="space-y-3 text-[15px] leading-7 text-smsg-900">
+    <div className="space-y-3 text-[15px] leading-7 text-smsg-900 break-words">
       {paragraphs.map((p, i) => (
         <p key={i}>
           <Inline text={p} />

@@ -28,7 +28,7 @@ export function PdfBlockView({ block }: { block: PdfBlock }) {
       className="my-3 rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
     >
       <figcaption className="mb-1 flex items-center justify-between gap-2 px-1 text-xs text-gray-600">
-        <span className="flex items-center gap-1.5 font-medium text-smsg-900">
+        <span className="flex items-center gap-1.5 font-medium text-smsg-900 dark:text-gray-100">
           <span aria-hidden className="text-base leading-none">📕</span>
           <span>{titleText}</span>
         </span>

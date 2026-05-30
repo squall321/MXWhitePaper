@@ -33,7 +33,7 @@ export function CodeBlockView({ block }: { block: CodeBlock }) {
           type="button"
           onClick={() => void onCopy()}
           aria-label="코드 복사"
-          className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-gray-300 opacity-0 transition-all duration-fast hover:bg-white/10 hover:text-white focus-visible:opacity-100 group-hover:opacity-100"
+          className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-gray-300 transition-all duration-fast hover:bg-white/10 hover:text-white focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
         >
           {copied ? (
             <>
