@@ -31,16 +31,34 @@ function compilePattern(pattern: string | undefined): RegExp | null {
 }
 
 /**
+ * Validation error returned by `validateAnswers`. Locale-free so the
+ * pure function stays decoupled from the i18n layer; the view consumes
+ * this via `formatFormError(t, err)`.
+ */
+export type FormError =
+  | { code: 'required' }
+  | { code: 'invalidEmail' }
+  | { code: 'numberOnly' }
+  | { code: 'numberMin'; min: number }
+  | { code: 'numberMax'; max: number }
+  | { code: 'rating1to5' }
+  | { code: 'dateFormat' }
+  | { code: 'minLength'; minLength: number }
+  | { code: 'maxLength'; maxLength: number }
+  | { code: 'patternMismatch' }
+
+/**
  * Pure helper: client-side validate `answers` against `questions`. Returns
- * a map of `{questionId: errorMessage}` for any failure (empty when ok).
+ * a map of `{questionId: FormError}` for any failure (empty when ok).
  *
  * Mirrors the BE rules so the UX surfaces the same error before round-trip.
+ * Locale-free: callers translate the error code via `formatFormError`.
  */
 export function validateAnswers(
   questions: readonly FormQuestion[],
   answers: Record<string, AnswerValue>,
-): Record<string, string> {
-  const errs: Record<string, string> = {}
+): Record<string, FormError> {
+  const errs: Record<string, FormError> = {}
   for (const q of questions) {
     const v = answers[q.id]
     const isEmpty =
@@ -48,30 +66,30 @@ export function validateAnswers(
       (typeof v === 'string' && v.trim() === '') ||
       (Array.isArray(v) && v.length === 0)
     if (isEmpty) {
-      if (q.required) errs[q.id] = '필수 항목입니다.'
+      if (q.required) errs[q.id] = { code: 'required' }
       continue
     }
     if (q.kind === 'email' && typeof v === 'string' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) {
-      errs[q.id] = '이메일 형식이 올바르지 않습니다.'
+      errs[q.id] = { code: 'invalidEmail' }
     }
     if (q.kind === 'number') {
       const n = typeof v === 'number' ? v : Number(v)
       if (!Number.isFinite(n)) {
-        errs[q.id] = '숫자만 입력하세요.'
+        errs[q.id] = { code: 'numberOnly' }
       } else {
         if (typeof q.min === 'number' && n < q.min) {
-          errs[q.id] = `값이 너무 작습니다 — 최소 ${q.min}`
+          errs[q.id] = { code: 'numberMin', min: q.min }
         } else if (typeof q.max === 'number' && n > q.max) {
-          errs[q.id] = `값이 너무 큽니다 — 최대 ${q.max}`
+          errs[q.id] = { code: 'numberMax', max: q.max }
         }
       }
     }
     if (q.kind === 'rating-5') {
       const n = typeof v === 'number' ? v : Number(v)
-      if (!Number.isFinite(n) || n < 1 || n > 5) errs[q.id] = '1~5 사이 값을 선택하세요.'
+      if (!Number.isFinite(n) || n < 1 || n > 5) errs[q.id] = { code: 'rating1to5' }
     }
     if (q.kind === 'date' && typeof v === 'string' && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
-      errs[q.id] = 'YYYY-MM-DD 형식이어야 합니다.'
+      errs[q.id] = { code: 'dateFormat' }
     }
     if (
       (q.kind === 'text' || q.kind === 'long-text' || q.kind === 'email') &&
@@ -79,18 +97,50 @@ export function validateAnswers(
       !errs[q.id]
     ) {
       if (typeof q.minLength === 'number' && v.length < q.minLength) {
-        errs[q.id] = `글자 수가 너무 적습니다 — 최소 ${q.minLength}자`
+        errs[q.id] = { code: 'minLength', minLength: q.minLength }
       } else if (typeof q.maxLength === 'number' && v.length > q.maxLength) {
-        errs[q.id] = `글자 수가 너무 많습니다 — 최대 ${q.maxLength}자`
+        errs[q.id] = { code: 'maxLength', maxLength: q.maxLength }
       } else if (q.pattern) {
         const re = compilePattern(q.pattern)
         if (re !== null && !re.test(v)) {
-          errs[q.id] = '형식이 올바르지 않습니다.'
+          errs[q.id] = { code: 'patternMismatch' }
         }
       }
     }
   }
   return errs
+}
+
+/**
+ * Render a `FormError` into a localized string. Lives next to the pure
+ * validator so the error union and its presentation stay in sync.
+ */
+export function formatFormError(
+  t: (key: 'block.form.error.required' | 'block.form.error.invalidEmail' | 'block.form.error.numberOnly' | 'block.form.error.numberMin' | 'block.form.error.numberMax' | 'block.form.error.rating1to5' | 'block.form.error.dateFormat' | 'block.form.error.minLength' | 'block.form.error.maxLength' | 'block.form.error.patternMismatch', vars?: Record<string, string | number>) => string,
+  err: FormError,
+): string {
+  switch (err.code) {
+    case 'required':
+      return t('block.form.error.required')
+    case 'invalidEmail':
+      return t('block.form.error.invalidEmail')
+    case 'numberOnly':
+      return t('block.form.error.numberOnly')
+    case 'numberMin':
+      return t('block.form.error.numberMin', { min: err.min })
+    case 'numberMax':
+      return t('block.form.error.numberMax', { max: err.max })
+    case 'rating1to5':
+      return t('block.form.error.rating1to5')
+    case 'dateFormat':
+      return t('block.form.error.dateFormat')
+    case 'minLength':
+      return t('block.form.error.minLength', { minLength: err.minLength })
+    case 'maxLength':
+      return t('block.form.error.maxLength', { maxLength: err.maxLength })
+    case 'patternMismatch':
+      return t('block.form.error.patternMismatch')
+  }
 }
 
 export function FormBlockView({ block }: FormBlockViewProps) {
@@ -101,7 +151,7 @@ export function FormBlockView({ block }: FormBlockViewProps) {
     for (const q of block.questions) o[q.id] = initialAnswer(q)
     return o
   })
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [errors, setErrors] = useState<Record<string, FormError>>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -113,7 +163,12 @@ export function FormBlockView({ block }: FormBlockViewProps) {
 
   const update = (id: string, val: AnswerValue) => {
     setAnswers((a) => ({ ...a, [id]: val }))
-    setErrors((e) => ({ ...e, [id]: '' }))
+    setErrors((e) => {
+      if (!(id in e)) return e
+      const next = { ...e }
+      delete next[id]
+      return next
+    })
   }
 
   const onSubmit = async (e: FormEvent) => {
@@ -125,7 +180,7 @@ export function FormBlockView({ block }: FormBlockViewProps) {
       return
     }
     if (!slug) {
-      setSubmitError('현재 문서를 식별할 수 없습니다.')
+      setSubmitError(t('block.form.error.docUnidentified'))
       return
     }
     setSubmitting(true)
@@ -147,7 +202,7 @@ export function FormBlockView({ block }: FormBlockViewProps) {
     } catch (err) {
       const e2 = err as { response?: { data?: { error?: { message?: string } } }; message?: string }
       setSubmitError(
-        e2?.response?.data?.error?.message ?? e2?.message ?? '제출에 실패했습니다.',
+        e2?.response?.data?.error?.message ?? e2?.message ?? t('block.form.error.submitFailed'),
       )
     } finally {
       setSubmitting(false)
@@ -174,7 +229,7 @@ export function FormBlockView({ block }: FormBlockViewProps) {
               setSubmitted(false)
             }}
           >
-            다시 응답하기
+            {t('block.form.button.respondAgain')}
           </Button>
         )}
       </section>
@@ -196,7 +251,7 @@ export function FormBlockView({ block }: FormBlockViewProps) {
         <Field
           key={q.id}
           label={`${q.label}${q.required ? ' *' : ''}`}
-          error={errors[q.id] || undefined}
+          error={errors[q.id] ? formatFormError(t, errors[q.id]!) : undefined}
         >
           <QuestionInput
             question={q}

@@ -28,6 +28,7 @@ import { Button, Field, Input, Modal, Select } from '@/components/ui'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { ulid } from '../ulid'
+import { useT } from '@/lib/i18n'
 import { loadBlockDefaults, rememberBlockDefaults } from '../utils/blockDefaults'
 import { apiClient } from '@/lib/api/client'
 
@@ -36,11 +37,11 @@ interface Props {
   block: QuizBlock
 }
 
-const KIND_LABELS: Record<QuizQuestion['kind'], string> = {
-  'single-choice': '단일 선택',
-  'multi-choice': '복수 선택',
-  'true-false': 'O/X',
-  'short-text': '주관식',
+const KIND_LABEL_KEYS: Record<QuizQuestion['kind'], 'editor.quiz.kind.singleChoice' | 'editor.quiz.kind.multiChoice' | 'editor.quiz.kind.trueFalse' | 'editor.quiz.kind.shortText'> = {
+  'single-choice': 'editor.quiz.kind.singleChoice',
+  'multi-choice': 'editor.quiz.kind.multiChoice',
+  'true-false': 'editor.quiz.kind.trueFalse',
+  'short-text': 'editor.quiz.kind.shortText',
 }
 
 /**
@@ -73,6 +74,7 @@ export function makeQuizQuestion(kind?: QuizQuestion['kind']): QuizQuestion {
 }
 
 export function QuizBlockEditor({ slug, block }: Props) {
+  const t = useT()
   const etag = useEditorStore((s) => s.etag)
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
@@ -108,14 +110,14 @@ export function QuizBlockEditor({ slug, block }: Props) {
           show_answers_after: next.show_answers_after,
         } as Partial<QuizBlock>,
         etag,
-        '퀴즈 편집',
+        t('editor.quiz.changeLog'),
       )
       apply(result.document, result.etag)
       setError(null)
     } catch (err) {
       if (isPreconditionFailed(err)) {
         setConflict(null)
-        setError('충돌 — 새로고침 필요')
+        setError(t('editor.quiz.conflictError'))
       } else {
         setError((err as Error).message)
       }
@@ -178,16 +180,16 @@ export function QuizBlockEditor({ slug, block }: Props) {
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
         <Input
           value={local.title ?? ''}
-          placeholder="퀴즈 제목"
+          placeholder={t('editor.quiz.titlePlaceholder')}
           onChange={(e) => schedule({ ...local, title: e.target.value || undefined })}
         />
         <Button variant="secondary" size="sm" onClick={() => setShowAttempts(true)}>
-          응시 기록 보기
+          {t('editor.quiz.viewAttempts')}
         </Button>
       </div>
       <textarea
         value={local.description ?? ''}
-        placeholder="설명 (선택)"
+        placeholder={t('editor.quiz.descriptionPlaceholder')}
         onChange={(e) => schedule({ ...local, description: e.target.value || undefined })}
         className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none"
         rows={2}
@@ -214,12 +216,12 @@ export function QuizBlockEditor({ slug, block }: Props) {
 
       <div>
         <Button variant="secondary" size="sm" onClick={addQuestion}>
-          + 문제 추가
+          {t('editor.quiz.addQuestion')}
         </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <Field label="통과 점수">
+        <Field label={t('editor.quiz.passingScoreLabel')}>
           <Input
             type="number"
             min={0}
@@ -231,7 +233,7 @@ export function QuizBlockEditor({ slug, block }: Props) {
             }}
           />
         </Field>
-        <Field label="최대 시도 횟수 (0 = 무제한)">
+        <Field label={t('editor.quiz.maxAttemptsLabel')}>
           <Input
             type="number"
             min={0}
@@ -250,7 +252,7 @@ export function QuizBlockEditor({ slug, block }: Props) {
             checked={!!local.shuffle}
             onChange={(e) => schedule({ ...local, shuffle: e.target.checked })}
           />
-          셔플 출제
+          {t('editor.quiz.shuffleLabel')}
         </label>
         <label className="flex items-center gap-2 text-xs text-gray-700">
           <input
@@ -260,7 +262,7 @@ export function QuizBlockEditor({ slug, block }: Props) {
               schedule({ ...local, show_answers_after: e.target.checked })
             }
           />
-          정답 공개
+          {t('editor.quiz.showAnswersLabel')}
         </label>
       </div>
 
@@ -288,6 +290,7 @@ function QuestionRow({
   onRemove: () => void
   canRemove: boolean
 }) {
+  const t = useT()
   const sortable = useSortable({ id: question.id })
   const style = {
     transform: CSS.Transform.toString(sortable.transform),
@@ -326,7 +329,7 @@ function QuestionRow({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          aria-label="드래그하여 순서 변경"
+          aria-label={t('editor.quiz.row.dragAria')}
           {...sortable.attributes}
           {...sortable.listeners}
           className="cursor-grab text-gray-400 hover:text-gray-700"
@@ -335,7 +338,7 @@ function QuestionRow({
         </button>
         <Input
           value={question.label}
-          placeholder="문제"
+          placeholder={t('editor.quiz.row.questionPlaceholder')}
           onChange={(e) => onChange({ label: e.target.value })}
           className="flex-1"
         />
@@ -343,9 +346,9 @@ function QuestionRow({
           value={question.kind}
           onChange={(e) => onKindChange(e.target.value as QuizQuestion['kind'])}
         >
-          {(Object.keys(KIND_LABELS) as Array<QuizQuestion['kind']>).map((k) => (
+          {(Object.keys(KIND_LABEL_KEYS) as Array<QuizQuestion['kind']>).map((k) => (
             <option key={k} value={k}>
-              {KIND_LABELS[k]}
+              {t(KIND_LABEL_KEYS[k])}
             </option>
           ))}
         </Select>
@@ -355,10 +358,10 @@ function QuestionRow({
           value={question.points ?? 1}
           onChange={(e) => onChange({ points: Math.max(0, Number(e.target.value) || 0) })}
           className="w-16"
-          aria-label="배점"
+          aria-label={t('editor.quiz.row.pointsAria')}
         />
         <Button variant="ghost" size="sm" onClick={onRemove} disabled={!canRemove}>
-          삭제
+          {t('editor.quiz.row.delete')}
         </Button>
       </div>
 
@@ -366,7 +369,7 @@ function QuestionRow({
         <div className="mt-2">
           <Input
             value={(question.options ?? []).join(', ')}
-            placeholder="옵션을 쉼표로 구분 (예: A, B, C, D)"
+            placeholder={t('editor.quiz.row.optionsPlaceholder')}
             onChange={(e) => {
               const opts = e.target.value
                 .split(',')
@@ -379,10 +382,10 @@ function QuestionRow({
       )}
 
       <div className="mt-2 grid grid-cols-1 gap-2">
-        <Field label="정답">
+        <Field label={t('editor.quiz.row.correctLabel')}>
           <CorrectInput question={question} onChange={onChange} />
         </Field>
-        <Field label="해설 (선택)">
+        <Field label={t('editor.quiz.row.explanationLabel')}>
           <textarea
             value={question.explanation ?? ''}
             onChange={(e) => onChange({ explanation: e.target.value || undefined })}
@@ -402,12 +405,13 @@ function CorrectInput({
   question: QuizQuestion
   onChange: (p: Partial<QuizQuestion>) => void
 }) {
+  const t = useT()
   if (q.kind === 'short-text') {
     const v = typeof q.correct === 'string' ? q.correct : ''
     return (
       <Input
         value={v}
-        placeholder="정답 텍스트"
+        placeholder={t('editor.quiz.correctInput.shortPlaceholder')}
         onChange={(e) => onChange({ correct: e.target.value })}
       />
     )
@@ -422,7 +426,7 @@ function CorrectInput({
             checked={v}
             onChange={() => onChange({ correct: true })}
           />
-          예 (true)
+          {t('editor.quiz.correctInput.tfYes')}
         </label>
         <label className="flex items-center gap-1 text-xs">
           <input
@@ -430,7 +434,7 @@ function CorrectInput({
             checked={!v}
             onChange={() => onChange({ correct: false })}
           />
-          아니오 (false)
+          {t('editor.quiz.correctInput.tfNo')}
         </label>
       </div>
     )
@@ -439,7 +443,7 @@ function CorrectInput({
     const v = typeof q.correct === 'string' ? q.correct : ''
     return (
       <Select value={v} onChange={(e) => onChange({ correct: e.target.value })}>
-        <option value="">선택…</option>
+        <option value="">{t('editor.quiz.correctInput.singlePick')}</option>
         {(q.options ?? []).map((o) => (
           <option key={o} value={o}>
             {o}
@@ -497,6 +501,7 @@ function AttemptsModal({
   block: QuizBlock
   onClose: () => void
 }) {
+  const t = useT()
   const [items, setItems] = useState<AttemptRow[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -576,17 +581,17 @@ function AttemptsModal({
   }, [items, block.questions])
 
   return (
-    <Modal open onClose={onClose} title="응시 기록" size="lg">
-      {loading && <p className="text-sm text-gray-500">불러오는 중…</p>}
+    <Modal open onClose={onClose} title={t('editor.quiz.attempts.modalTitle')} size="lg">
+      {loading && <p className="text-sm text-gray-500">{t('editor.quiz.attempts.loading')}</p>}
       {err && <p className="text-sm text-red-600">{err}</p>}
       {!loading && !err && (
         <div className="space-y-4">
           <section>
             <h4 className="mb-2 text-sm font-semibold text-smsg-900">
-              점수 분포 (히스토그램)
+              {t('editor.quiz.attempts.histogramHeading')}
             </h4>
             {items.length === 0 ? (
-              <p className="text-xs text-gray-500">아직 응시 기록이 없습니다.</p>
+              <p className="text-xs text-gray-500">{t('editor.quiz.attempts.emptyHistogram')}</p>
             ) : (
               <div className="h-32">
                 <ResponsiveContainer width="100%" height="100%">
@@ -604,10 +609,10 @@ function AttemptsModal({
 
           <section>
             <h4 className="mb-2 text-sm font-semibold text-smsg-900">
-              문제별 정답률
+              {t('editor.quiz.attempts.accuracyHeading')}
             </h4>
             {items.length === 0 ? (
-              <p className="text-xs text-gray-500">데이터가 없습니다.</p>
+              <p className="text-xs text-gray-500">{t('editor.quiz.attempts.emptyAccuracy')}</p>
             ) : (
               <ul className="space-y-1">
                 {accuracy.map((a) => (
@@ -629,25 +634,25 @@ function AttemptsModal({
           </section>
 
           <section>
-            <h4 className="mb-2 text-sm font-semibold text-smsg-900">목록</h4>
+            <h4 className="mb-2 text-sm font-semibold text-smsg-900">{t('editor.quiz.attempts.listHeading')}</h4>
             {items.length === 0 ? (
-              <p className="text-xs text-gray-500">응시 기록이 없습니다.</p>
+              <p className="text-xs text-gray-500">{t('editor.quiz.attempts.emptyList')}</p>
             ) : (
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 text-left text-gray-600">
                   <tr>
-                    <th className="px-2 py-1">응시자</th>
-                    <th className="px-2 py-1">점수</th>
-                    <th className="px-2 py-1">통과</th>
-                    <th className="px-2 py-1">소요</th>
-                    <th className="px-2 py-1">시각</th>
+                    <th className="px-2 py-1">{t('editor.quiz.attempts.col.submitter')}</th>
+                    <th className="px-2 py-1">{t('editor.quiz.attempts.col.score')}</th>
+                    <th className="px-2 py-1">{t('editor.quiz.attempts.col.passed')}</th>
+                    <th className="px-2 py-1">{t('editor.quiz.attempts.col.duration')}</th>
+                    <th className="px-2 py-1">{t('editor.quiz.attempts.col.time')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((r) => (
                     <tr key={r.id} className="border-t border-gray-100">
                       <td className="px-2 py-1">
-                        {r.submitter_name ?? r.submitter_email ?? '익명'}
+                        {r.submitter_name ?? r.submitter_email ?? t('editor.quiz.attempts.anonymous')}
                       </td>
                       <td className="px-2 py-1">{r.score}</td>
                       <td className="px-2 py-1">{r.passed ? '✅' : '—'}</td>

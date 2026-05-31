@@ -49,12 +49,12 @@ describe('validateAnswers — WIDGET-03 validation extensions', () => {
   it('flags number below min', () => {
     const qs: FormQuestion[] = [{ id: 'n', kind: 'number', label: '나이', min: 18, max: 99 }]
     const errs = validateAnswers(qs, { n: 10 })
-    expect(errs.n).toMatch(/최소/)
+    expect(errs.n).toEqual({ code: 'numberMin', min: 18 })
   })
   it('flags number above max', () => {
     const qs: FormQuestion[] = [{ id: 'n', kind: 'number', label: '나이', min: 18, max: 99 }]
     const errs = validateAnswers(qs, { n: 200 })
-    expect(errs.n).toMatch(/최대/)
+    expect(errs.n).toEqual({ code: 'numberMax', max: 99 })
   })
   it('passes number within range', () => {
     const qs: FormQuestion[] = [{ id: 'n', kind: 'number', label: '나이', min: 18, max: 99 }]
@@ -66,12 +66,12 @@ describe('validateAnswers — WIDGET-03 validation extensions', () => {
   it('flags text below minLength', () => {
     const qs: FormQuestion[] = [{ id: 't', kind: 'text', label: '이름', minLength: 3 }]
     const errs = validateAnswers(qs, { t: 'Hi' })
-    expect(errs.t).toMatch(/너무 적습니다/)
+    expect(errs.t).toEqual({ code: 'minLength', minLength: 3 })
   })
   it('flags text above maxLength', () => {
     const qs: FormQuestion[] = [{ id: 't', kind: 'text', label: '이름', maxLength: 5 }]
     const errs = validateAnswers(qs, { t: 'TooLongValue' })
-    expect(errs.t).toMatch(/너무 많습니다/)
+    expect(errs.t).toEqual({ code: 'maxLength', maxLength: 5 })
   })
   it('passes text within length range', () => {
     const qs: FormQuestion[] = [
@@ -94,7 +94,7 @@ describe('validateAnswers — WIDGET-03 validation extensions', () => {
       { id: 'p', kind: 'text', label: '전화', pattern: '^010-\\d{4}-\\d{4}$' },
     ]
     const errs = validateAnswers(qs, { p: 'abc' })
-    expect(errs.p).toMatch(/형식/)
+    expect(errs.p).toEqual({ code: 'patternMismatch' })
   })
   it('silently skips invalid pattern (compile error)', () => {
     const qs: FormQuestion[] = [
@@ -110,14 +110,14 @@ describe('validateAnswers — WIDGET-03 validation extensions', () => {
       { id: 'b', kind: 'long-text', label: '바이오', maxLength: 4 },
     ]
     const errs = validateAnswers(qs, { b: '너무너무너무 길어요' })
-    expect(errs.b).toMatch(/너무 많습니다/)
+    expect(errs.b).toEqual({ code: 'maxLength', maxLength: 4 })
   })
   it('applies minLength to email', () => {
     const qs: FormQuestion[] = [
       { id: 'e', kind: 'email', label: '이메일', minLength: 20 },
     ]
     const errs = validateAnswers(qs, { e: 'a@b.co' })
-    expect(errs.e).toMatch(/너무 적습니다/)
+    expect(errs.e).toEqual({ code: 'minLength', minLength: 20 })
   })
 })
 
