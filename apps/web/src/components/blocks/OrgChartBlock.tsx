@@ -164,11 +164,30 @@ export function OrgChartBlockView({ block }: Props) {
         {positioned.nodes.map((p) => {
           const c = center.get(p.node.id)!
           const active = highlight?.has(p.node.id)
+          // ORG-01 — keyboard-accessible interactive node. focus mirrors
+          // hover so screen-reader / keyboard users get the same
+          // descendant-highlight affordance as a mouse user. Esc clears
+          // the highlight (matches blur).
+          const ariaLabel = p.node.role
+            ? `${p.node.label} — ${p.node.role}`
+            : p.node.label
           return (
             <g
               key={p.node.id}
+              tabIndex={0}
+              role="button"
+              aria-label={ariaLabel}
               onMouseEnter={() => setHoverId(p.node.id)}
               onMouseLeave={() => setHoverId(null)}
+              onFocus={() => setHoverId(p.node.id)}
+              onBlur={() => setHoverId(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setHoverId(null)
+                  ;(e.currentTarget as SVGGElement).blur()
+                }
+              }}
+              style={{ cursor: 'default' }}
             >
               <rect
                 x={c.cx - NODE_W / 2}
