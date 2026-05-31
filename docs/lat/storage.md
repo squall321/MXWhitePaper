@@ -11,9 +11,9 @@
 
 | Method | Path | 인증 | 역할 |
 |---|---|---|---|
-| POST | `/api/v1/uploads/images/init` | editor+ | presigned PUT URL 발급 |
-| POST | `/api/v1/uploads/images/finalize` | editor+ | upload 완료 → 이미지로 등록 |
-| GET | `/api/v1/uploads/images/{id}` | reader+ | 이미지 메타 + URL 3개 |
+| POST | `/api/v1/uploads/image/init` | editor+ | presigned PUT URL 발급 (단수 `image`) |
+| POST | `/api/v1/uploads/image/finalize` | editor+ | upload 완료 → 이미지로 등록 |
+| GET | `/api/v1/images/{identifier}` | reader+ | 이미지 메타 + URL 3개 (uploads 가 아니라 별도 `images` 라우터) |
 | POST | `/api/v1/files/presign-put` | editor+ | 일반 파일 업로드용 presigned PUT |
 | POST | `/api/v1/files/finalize` | editor+ | 일반 파일 완료 |
 | GET | `/api/v1/files/{file_id}/download` | reader+ | 파일 다운로드 (서명 URL 리다이렉트) |
@@ -31,9 +31,9 @@
 | `minio_bucket_exports` | (빈값 = files 재사용) | export artifacts |
 
 MinIO 클라이언트는 [[src/app/storage/minio_adapter.py]] 에서 `internal_client()` /
-`presign_client()` 분리. internal 은 컨테이너 간 직접 호출 (`http://mxwp_minio:9000`),
-presign 은 외부 도메인 (`https://files.example.com`) — URL 이 사용자 브라우저에
-가야 하므로.
+`public_client()` 분리. internal 은 컨테이너 간 직접 호출 (`http://mxwp_minio:9000`),
+public 은 외부 도메인 (`https://files.example.com`) — presigned URL 이 사용자
+브라우저에 가야 하므로 public_client 가 서명.
 
 ## 이미지 업로드 2-step 흐름 ★
 
@@ -100,7 +100,8 @@ FE                              API                              MinIO
 
 | 컬럼 | 비고 |
 |---|---|
-| `ulid` | PK (str ULID) |
+| `id` | UUID PK (`gen_random_uuid()` default) |
+| `ulid` | UNIQUE TEXT — Crockford ULID, DocumentJSON `ImageBlock.imageId` 가 참조 |
 | `sha256` | unique — dedup 키 |
 | `original_name` | 클라이언트가 보낸 파일명 (200자 컷) |
 | `mime_type` | `image/png` 등 |
@@ -146,7 +147,7 @@ PUT 한 뒤 finalize. 일반적 패턴.
 [[src/app/routers/files.py]] 는 이미지가 아닌 첨부 (PDF, ZIP 등) 용. 차이점:
 - WebP 변환 안 함, 원본 그대로 저장
 - 사용자별 rate-limit 적용 (`_check_rate_limit`)
-- `files` 테이블 별도 (스키마는 [[src/migrations]] 참고)
+- `files` 테이블 별도 (스키마는 [[apps/api/alembic/versions]] 참고)
 - 다운로드는 `/files/{id}/download` → 서명된 GET URL 로 302 리다이렉트
 
 ## Gotchas
@@ -165,22 +166,27 @@ PUT 한 뒤 finalize. 일반적 패턴.
    둘째는 unique violation. 현재는 둘째 caller 가 첫 row 를 재조회해 반환하는
    방어 코드 없음 — 매우 드물지만 race 가능. 필요 시 `ON CONFLICT DO NOTHING
    RETURNING` 으로 강화.
-6. **internal_client() vs presign_client()** — 둘이 다른 호스트네임이라
+6. **internal_client() vs public_client()** — 둘이 다른 호스트네임이라
    internal 로 발급한 presigned URL 을 외부에서 못 씀. 헷갈리면 디버그 어려움.
-7. **`uploaded_by`** 가 외래키지만 hard FK 아닌 케이스 — 사용자 삭제 후
-   고아 row 가 남을 수 있음.
+7. **`uploaded_by` 는 hard FK** (`NOT NULL REFERENCES users(id)`) — 사용자
+   삭제 시 ON DELETE 정책이 없어 row 가 남는 게 아니라 *사용자 삭제 자체가
+   실패한다.* 사용자 정리 전에 images.uploaded_by 를 다른 사용자로 reassign
+   해야 함.
 
 ## Settings
 
 | 키 | 기본 | 의미 |
 |---|---|---|
-| `minio_endpoint_internal` | — | 컨테이너 간 (e.g. http://mxwp_minio:9000) |
-| `minio_endpoint_public` | — | presigned URL 의 호스트 |
-| `minio_region` | `us-east-1` | placeholder, AWS SDK 요구 |
+| `minio_endpoint` | — | 컨테이너 간 (e.g. `http://mxwp_minio:9000`) |
+| `minio_public_endpoint` | — | presigned URL 의 호스트 (외부 도메인) |
 | `minio_access_key`, `minio_secret_key` | — | 자격증명 |
 | `minio_bucket_images` | `mxwp-images` | |
-| `upload_image_max_bytes` | — | 단일 이미지 사이즈 캡 |
-| `upload_presign_ttl_seconds` | 900 | init PUT URL 유효시간 |
+| `image_max_bytes` | — | 단일 이미지 사이즈 캡 |
+
+> presign TTL (`_PRESIGN_TTL_SECONDS = 600`, 10 분) 과 region
+> (`"us-east-1"`, AWS SDK 요구로 하드코딩) 은 환경변수가 아니라
+> [[src/app/storage/minio_adapter.py]] 의 module-level 상수다. 변경하려면
+> 코드 수정 필요.
 
 ## 테스트 지도
 

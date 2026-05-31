@@ -52,7 +52,7 @@
 
 ## docx_import 의 내부 단계
 
-[[src/app/services/docx_import.py]] 는 1837 줄짜리 단일 파일이지만 흐름은
+[[src/app/services/docx_import.py]] 는 2k+ 줄짜리 단일 파일이지만 흐름은
 선형이다:
 
 ```text
@@ -132,7 +132,7 @@ False positive 회피: 신호 없는 1×1 표 / 5+행 KPI 표 / chart-style 헤�
 자동 인식된 블록의 audit trail 은 `summary.warnings` 에 `"auto-detected <type> from ..."` 형태로 기록.
 `BlockMeta` schema 가 `additionalProperties: false` 라 `meta.auto_detected` 필드 사용 불가 — warnings 만이 audit 채널.
 
-테스트: [[src/tests/test_widget_autodetect.py]] — 43 케이스 (4 블록-레벨 인식기 + section-column 7 케이스 + 가드 + DOCX 통합).
+테스트: [[src/tests/test_widget_autodetect.py]] — 4 블록-레벨 인식기 + section-column + 가드 + DOCX 통합 (carry-on 사이클들로 카운트는 변동).
 
 † 마커 이름과 스키마 타입이 다름: `doc-link` → DocLinkCardBlock (`doc-link-card`),
 `glossary` → GlossaryRefBlock (`glossary-ref`). 마커 텍스트는 사용자 친화적
@@ -306,8 +306,8 @@ slug 중복은 `skipped` 로 카운트 (에러 아님).
 
 | 키 | 기본 | 의미 |
 |---|---|---|
-| `docx_import_max_bytes` | 30 MB | docx/pptx 사이즈 캡 |
-| `pptx_import_max_bytes` | 30 MB | |
+| `docx_import_max_bytes` | 30 MB | docx 업로드 사이즈 캡 |
+| `pptx_import_max_bytes` | 50 MB | pptx 업로드 사이즈 캡 (pptx 가 docx 대비 2-3× 크기 → 별도 캡) |
 | `csv_import_max_bytes` | 5 MB | |
 | `csv_import_max_rows` | 500 | |
 | `import_rate_limit_per_minute` | 5 | rate-limit 한도 |

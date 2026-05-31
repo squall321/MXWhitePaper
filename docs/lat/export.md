@@ -16,11 +16,14 @@
 | POST | `/pdf` | `application/pdf` | 인쇄/배포. WeasyPrint 가용 시만. |
 | POST | `/pptx` | `application/vnd.openxmlformats-officedocument.presentationml.presentation` | 발표 슬라이드 |
 | POST | `/docx` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | 외부 검토/편집 |
-| GET | `/artifacts` | JSON | 비동기 export 결과 다운로드용 (큰 문서) |
-| GET | `/artifacts/{id}` | 원본 | 위 결과의 실제 바이트 |
+| GET | `/{slug}/artifacts` | JSON | 해당 문서의 영구 보관된 export 목록 (`?fmt=docx\|pptx\|pdf\|html\|markdown` 필터) |
+| GET | `/artifacts/{id}` | 원본 | 위 목록 항목의 실제 바이트 |
 
-대용량 문서는 `_persist_export()` 가 결과를 임시 객체 저장에 올리고 artifact ID
-만 반환. 작은 문서는 즉시 응답.
+docx/pptx 응답은 항상 동기 — body 에 바이트를 실어 보내면서 동시에
+`_persist_export()` 가 MinIO 에 저장하고 `X-Export-Artifact-Id` /
+`X-Export-Download-Url` 헤더로 직링크를 노출. 사용자가 같은 산출물을
+재다운로드 하거나 외부 시스템이 직링크가 필요할 때 위 헤더의 url 을 따라간다.
+**polling 없음.**
 
 ## Renderers
 
@@ -30,10 +33,11 @@
 | [[src/app/services/pptx_export.py]] | `render_pptx()` | `python-pptx` |
 | [[src/app/services/html_renderer.py]] | `render_namuwiki_html()` | jinja-less 직조 HTML |
 | [[src/app/services/markdown_export.py]] | `render_markdown()` | 순수 문자열 조합 |
+| [[src/app/services/pdf_export.py]] | `render_pdf()` | WeasyPrint (`pdf_export.py` 는 thin 어댑터 — html_renderer 결과를 WeasyPrint 로 변환) |
 
-PDF 는 별도 모듈이 아니라 `html_renderer.py` 의 HTML → **WeasyPrint** 가
-변환. `_detect_weasyprint()` 가 import 가능 여부 검사 → 미설치 환경에선
-`_PdfExportUnavailable` (503) 반환.
+PDF 는 `pdf_export.py` 의 얇은 어댑터를 거치고 실제 변환은
+`html_renderer.py` 의 HTML → **WeasyPrint** 파이프라인. `_detect_weasyprint()`
+가 import 가능 여부 검사 → 미설치 환경에선 `_PdfExportUnavailable` (501) 반환.
 
 ## 공통 디스패치 구조 ★
 
@@ -103,16 +107,17 @@ renderer 별 추가 책임:
 | `theme` / `css_inline` 등 | html | 사용자 정의 스타일 |
 
 `image_resolver` 의 두 가지 구현:
-1. **운영** — [[src/app/routers/exports.py]] 의 `_fetch_image_bytes()` 가 MinIO 에서
-   가져옴 → resolver 로 감싸 전달.
+1. **운영** — [[src/app/routers/documents.py#_fetch_image_bytes]] 가 MinIO 에서
+   가져옴 → resolver 로 감싸 전달 (exports.py 가 아니라 documents.py 에 위치).
 2. **Round-trip** — [[src/app/services/docx_roundtrip.py#_make_image_resolver]] 가
    `captured_images` (메모리) 에서 가져옴.
 
 ## Headings / numbering
 
-본문 섹션은 `level: 1..6`. docx_export 는 Word 의 `Heading 1..6` 스타일에 매핑.
-`heading-4` block 은 inline heading 으로 본문 안에 박혀 있지만 export 시
-별도 줄로 굵게 표시 — pptx 에선 별도 슬라이드를 만드는 트리거이기도 함.
+본문 섹션은 `level: 1..6` 이지만 docx_export `_render_section` 이
+`max(1, min(level, 3))` 으로 clamp — Word 의 `Heading 1/2/3` 스타일로만 매핑.
+4 이상은 `heading-4` block (inline heading) 으로 표현되며 export 시 별도
+줄로 굵게 표시되고 pptx 에선 별도 슬라이드 트리거.
 
 섹션 번호 (1, 1.1, 1.1.1) 는 [[documents]] 에서 이미 부여된 상태로 들어옴 —
 export 단계에서 재계산 X.
@@ -233,11 +238,15 @@ _IMAGE_WIDTH_PX = {"sm": 200, "md": 400, "lg": 600, "full": None}
 
 ## Persistence (artifact mode)
 
-큰 문서는 동기 응답 대신:
-1. `_persist_export(s, …)` 가 결과를 임시 객체 저장 (MinIO) 에 올림
-2. `export_artifacts` 테이블에 ID + 만료 시각 INSERT
-3. 응답에 `{artifact_id}` 만
-4. FE 는 `GET /exports/artifacts/{id}` 로 폴링 → 완료되면 다운로드
+docx/pptx/pdf 응답은 **동기 + persist 병행**:
+
+1. body 에 바이트 즉시 전송 (FastAPI Response). 작은 문서 / 큰 문서 구분 없음.
+2. 동시에 `_persist_export(s, …)` 가 결과를 MinIO 객체 저장에 올리고
+   `export_artifacts` 테이블에 ID + 만료 시각 INSERT.
+3. 응답 헤더에 `X-Export-Artifact-Id` / `X-Export-Download-Url` 추가 — 사용자가
+   같은 산출물을 재다운로드 하거나 외부 시스템이 직링크가 필요할 때 따라간다.
+4. 후속 조회는 `GET /{slug}/artifacts` (목록) 와 `GET /artifacts/{id}` (바이트).
+   **FE polling 경로 없음 — 1차 응답이 곧 결과.**
 
 만료된 artifact 는 [[src/app/services/retention.py]] 류 cron 이 정리 (확인 필요).
 

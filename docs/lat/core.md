@@ -41,9 +41,13 @@ chain 의 최상위. 우선순위:
    사용자 + scopes 반환. 스코프가 verb 와 안 맞으면 `ScopeInsufficient` (403).
 2. **JWT** (`Authorization: Bearer <jwt>`) → `security.decode_jwt()` → user id →
    `_fetch_user_by_id()`.
-3. **X-MXWP-User 헤더** (편의 우회) — 일부 import/배치 흐름에서 ID 대신 이메일.
-4. **개발 환경 폴백** — 미인증이면 `_fetch_admin()` 으로 첫 admin 반환 — 운영
+3. **개발 환경 폴백** — 미인증이면 `_fetch_admin()` 으로 첫 admin 반환 — 운영
    환경 (`app_env=production`) 에선 비활성.
+
+> `X-MXWP-User` 헤더는 `get_current_user` 의 우선순위에는 포함되지 않는다.
+> 일부 라우터 (예: bulk import) 가 author override 용으로 *직접* 읽어
+> request.headers 에서 사용자를 바꿔치는 별도 helper — 인증이 아니라 작성자
+> 표기다.
 
 dict 형태: `{id, email, role, ...}`.
 
@@ -51,7 +55,8 @@ dict 형태: `{id, email, role, ...}`.
 
 `api_tokens` 테이블에 `token_hash` (argon2), `scopes` (JSON), `expires_at`.
 평문 토큰은 발급 시점에만 노출. 검증:
-1. `token_prefix` (앞 12자) 로 후보 row 선별
+
+1. `token_prefix` (앞 8자, `_API_TOKEN_PREFIX_LEN = 8`) 로 후보 row 선별
 2. argon2.verify(평문, hash) 로 매치 확인
 3. `last_used_at = NOW()` 업데이트 (비동기)
 4. scopes 배열 caller 에 반환
@@ -125,7 +130,7 @@ return envelope(data={...}, meta={"page": 1})
 | JWT | `jwt_secret` | dev placeholder |
 | | `jwt_access_ttl_seconds` | 3600 |
 | | `jwt_refresh_ttl_seconds` | 604800 |
-| CORS | `cors_origins` | `localhost:5173,localhost:80` |
+| CORS | `cors_origins` | `http://localhost:5173,http://localhost:80` |
 | Limits | `image_max_bytes` | 20 MB |
 | | `gallery_max_bytes` | 100 MB |
 | | `file_max_bytes` | 25 MB |
@@ -170,13 +175,14 @@ MAX = get_settings().docx_import_max_bytes
 ## 5. Security — JWT + 패스워드
 
 [[src/app/core/security.py]]:
-- `hash_password(plain)` / `verify_password(plain, hash)` — argon2
-- `create_access_token(user_id, role, …)` — JWT
-- `create_refresh_token(...)` — 별도 TTL
-- `decode_jwt(token)` — 검증 + payload 반환, 실패 시 raise
 
-JWT payload: `{sub: user_id, role: …, exp, iat}`. 변경 시 FE 미들웨어
-([[src/apps/web/src/lib/auth.ts]]) 의 디코드도 같이 확인.
+- `hash_password(plain)` / `verify_password(plain, hash)` — argon2
+- `make_access_token(sub, extra=None)` — JWT (`sub` = user id 문자열)
+- `make_refresh_token(sub)` — 별도 TTL
+- `decode_token(token)` — 검증 + payload 반환, 실패 시 raise
+
+JWT payload: `{sub: user_id, role: …, exp, iat}`. 변경 시 FE 인증 코드
+([[apps/web/src/features/auth]]) 의 디코드도 같이 확인.
 
 ## 6. Signup — 자가 가입 + 조직 등록
 
@@ -264,8 +270,10 @@ collision 을 일찍 거부 (alternative 정책) 함으로써 SSO 머지 시점�
    클라이언트가 헷갈림. 라우터에서 둘 다 set 하는 패턴 보이면 버그.
 5. **`http_status` 키는 응답 envelope 안의 메타 정보** — 실제 HTTP status code
    는 별도. 핸들러가 동기화하지만 직접 envelope 만들 땐 일치시킬 것.
-6. **CORS 는 컴마 분리 문자열** — `Settings.cors_origins` 의 split 은
-   [[src/app/main.py]] 가 담당.
+6. **CORS 는 컴마 분리 문자열** — split 은 `Settings.cors_origin_list`
+   property ([[src/app/core/config.py]]) 가 담당하고 main.py 는 그 property
+   를 그대로 받아 `CORSMiddleware.allow_origins` 에 꽂는다. 기본값은
+   `http://` prefix 가 포함된 `localhost:5173/80` URL 두 개.
 7. **JWT 알고리즘은 HS256 (대칭키)** — `jwt_secret` 만 갖고 있으면 누구나
    발급 가능. 운영에서 RS256 으로 전환 검토 시 발급/검증 양쪽 모두 코드 수정.
 
@@ -295,5 +303,5 @@ switch 에 case 추가. payload 키 컨벤션: `actor_name`, `doc_title`, `slug`
 | [[src/tests/test_auth_flows.py]] | 로그인/리프레시 흐름 |
 | [[src/tests/test_api_tokens.py]] | API token 발급/검증 |
 | [[src/tests/test_api_token_scopes.py]] | scope vs verb |
-| [[src/tests/test_two_factor.py]] | 2FA |
+| [[src/tests/test_totp.py]] | 2FA (TOTP) |
 | [[src/tests/test_sso.py]] | SSO |

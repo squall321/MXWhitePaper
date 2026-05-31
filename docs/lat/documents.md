@@ -14,10 +14,10 @@
 |---|---|---|---|
 | GET | `/` | reader+ | 목록 (필터/페이지네이션) |
 | GET | `/{slug}` | reader+ | 단일 조회 (role 별 block redaction 적용) |
-| GET | `/{slug}/html` | reader+ | 서버 사이드 HTML 렌더 (PDF 용) |
+| GET | `/{slug}/export.html` | reader+ | 서버 사이드 HTML 렌더 (PDF/외부 임베드 용. `?style=namuwiki&inline_images=1&katex=cdn&mermaid=cdn` 쿼리 지원) |
 | POST | `/` | editor+ | 신규 생성 |
 | PUT | `/{slug}` | editor+ | 전체 교체 — 버전 INSERT |
-| DELETE | `/{slug}` | admin | soft-delete |
+| DELETE | `/{slug}` | editor+ | soft-delete (archive) |
 | GET | `/{slug}/backlinks` | reader+ | 다른 문서가 인용한 링크 |
 | GET | `/{slug}/versions` | reader+ | 버전 목록 |
 | GET | `/{slug}/versions/{n}` | reader+ | 특정 버전 |
@@ -25,14 +25,14 @@
 | PATCH | `/{slug}/title` | editor+ | 제목/요약 인라인 수정 |
 | PATCH | `/{slug}/infobox` | editor+ | 우측 사이드 정보 박스 |
 | PATCH | `/{slug}/variables` | editor+ | 본문 템플릿 변수 |
-| PATCH | `/{slug}/custom-css` | editor+ | 문서별 CSS |
+| PATCH | `/{slug}/custom-css` | admin | 문서별 CSS (관리자 전용 — UI/스타일 변조 방지) |
 | PATCH | `/{slug}/sections/{section_id}` | editor+ | 섹션 부분 수정 |
 | PATCH | `/{slug}/blocks/{block_id}` | editor+ | 블록 부분 수정 |
 | POST | `/{slug}/blocks` | editor+ | 블록 추가 |
 | DELETE | `/{slug}/blocks/{block_id}` | editor+ | 블록 삭제 |
 | POST | `/{slug}/blocks/{block_id}/move` | editor+ | 블록 이동 (섹션 간/내) |
 | POST | `/{slug}/sections/reorder` | editor+ | 섹션 트리 재배열 |
-| POST | `/{slug}/ping` | reader+ | 조회수 카운트 |
+| POST | `/{slug}/view` | reader+ | 조회수 카운트 (analytics 용 ping. 핸들러명은 `ping_view`) |
 
 모든 mutation 엔드포인트는 **ETag + If-Match** 로 낙관적 잠금. 형식:
 `W/"<doc_id>-<version>"`. 클라이언트가 stale ETag 를 보내면 409.
@@ -80,7 +80,7 @@
   ([[src/features/editor/blocks/Heading4BlockEditor.tsx]]) 가 호버/포커스 시
   **H2 / H3 / H4 dropdown** 노출 — 인라인 헤딩의 level 변경 가능 (widget-integrity-pass-2 M8).
   legacy `meta.level` 도 읽음.
-- `ListBlock` — `style: "bullet"|"ordered"`, `items[]`
+- `ListBlock` — `style: "bullet"|"number"|"check"`, `items[]`
 - `QuoteBlock` — `text`, `cite?`. ★ FE editor
   ([[src/features/editor/blocks/QuoteBlockEditor.tsx]]) 가 widget-integrity-pass-2 M9
   사이클에서 추가됨 — text textarea + cite input, 600 ms debounced patchBlock.
@@ -544,4 +544,5 @@ materialized view refresh 도 스킵 가능.
 | [[src/tests/test_block_patch.py]] | patch_block / patch_section |
 | [[src/tests/test_block_permissions.py]] | role-based redaction |
 | [[src/tests/test_bulk_docs.py]] | 대량 생성 |
-| [[src/tests/test_versions.py]] | 버전 INSERT / restore |
+| [[src/tests/test_version_restore.py]] | 버전 복원 (= 새 버전 INSERT) |
+| [[src/tests/test_version_tags.py]] | 버전 태깅 |

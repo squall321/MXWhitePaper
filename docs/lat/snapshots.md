@@ -96,24 +96,23 @@ mxwp-snapshot-YYYYMMDD-HHMMSSZ/
 
 ## manifest.json 스키마
 
+manifest.json 의 실제 shape 는 `snapshot.sh` 가 빌드한다 — 아래는 그
+스크립트 출력에 맞춰진 키. (DB 인디케이터/host/components 같은 풍부한 정보는
+없음 — pg_dump / mc mirror 결과의 sha256 + 크기 + tool 버전만 기록.)
+
 ```json
 {
-  "id": "mxwp-snapshot-20260513-143027Z",
-  "created_at": "2026-05-13T14:30:27Z",
-  "note": "before v2 migration",
-  "host": {
-    "hostname": "...",
-    "platform": "linux",
-    "apptainer_version": "..."
-  },
+  "snapshot_id": "mxwp-snapshot-20260513-143027Z",
+  "created_at":  "2026-05-13T14:30:27Z",
+  "created_at_epoch": 1747139427,
+  "note":        "before v2 migration",
+  "tool_version": "...",
   "components": {
-    "postgres": { "size_bytes": 12345, "sha256": "..." },
-    "buckets": {
-      "mxwp-images": { "object_count": 1234, "size_bytes": ..., "sha256_index": "..." },
-      "mxwp-files":  { ... }
-    }
-  },
-  "tool_version": "1.0"
+    "postgres": { "filename": "postgres.sql.gz", "sha256": "..." },
+    "buckets": [
+      { "name": "mxwp-images", "filename": "mxwp-images.tar", "sha256": "..." }
+    ]
+  }
 }
 ```
 
@@ -160,8 +159,11 @@ fallback 사용 패턴 유지.
 
 1. **시간대**: 파일명/manifest 의 `created_at` 은 **UTC + Z 접미사**.
    복원 시 사용자 표시는 로컬 변환.
-2. **두 스냅샷이 같은 초에 생성**되면 파일명이 충돌 — 스크립트는 충돌 시
-   nanosecond 접미사를 붙임 (`-143027.123Z.tar.gz`).
+2. **두 스냅샷이 같은 초에 생성**되면 파일명이 충돌 — 현재 스크립트는
+   tie-break 로직이 없어 그냥 **두 번째가 첫 번째를 덮어쓴다** (`.tar.gz`
+   + `.sha256` 사이드카 모두). 자동화에서 sub-second 빈도로 돌리지 말 것 —
+   필요하면 호출 측에서 `--note` 와 함께 SNAPSHOT_DIR 을 분리하거나
+   1 초 이상 텀.
 3. **PostgreSQL 버전 차이** — `pg_dump` 메이저 버전이 복원 대상보다 높아야 함.
    복원 환경에 16+ pg 가 있는지 확인.
 4. **MinIO bucket 정책** — `mc mirror --remove` 가 dest 에 있는 객체를 지움.
@@ -172,12 +174,17 @@ fallback 사용 패턴 유지.
 6. **manifest 의 sha256** 는 **검증용** — 변조 탐지. 강력한 보안은 아니지만
    디스크 손상 / 부분 다운로드 잡아냄.
 
-## Settings (`app.core.config`)
+## Settings / 환경변수
 
-| 키 | 기본 | 의미 |
-|---|---|---|
-| `snapshot_dir` | `infra/backups/snapshots` | API 가 조회/다운로드 대상 디렉토리 |
-| `snapshot_filename_prefix` | `mxwp-snapshot-` | 파일명 prefix |
+`app.core.config` 에는 snapshot 관련 키가 *없다.* 다음 두 가지로 동작:
+
+- **API 의 디렉토리 결정** — [[src/app/services/snapshots.py#snapshots_dir]] 가
+  `SNAPSHOT_DIR` 환경변수 (기본 `infra/backups/snapshots`) 를 읽는다.
+  Settings 가 아니라 직접 `os.environ.get(...)` 사용.
+- **파일명 prefix** — `snapshot.sh` 가 하드코딩 (`mxwp-snapshot-`). 변경하려면
+  스크립트 수정.
+
+설정값을 Settings 로 옮기고 싶으면 두 곳 모두 같이 갱신해야 한다.
 
 ## 테스트 지도
 
