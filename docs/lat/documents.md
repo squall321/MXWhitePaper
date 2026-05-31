@@ -233,10 +233,16 @@
   hover 시 descendant 하이라이트. 다크 모드 자동 (SVG fill/stroke `var(--smsg-...)`
   + figure/empty `dark:` 변형 — chart-darkmode 사이클과 별개로 gantt-darkmode
   패턴 그대로 적용).
-- `FlowBlock` — mermaid DSL → SVG (lazy load). 다크 모드: `useResolvedTheme()` →
-  mermaid `initialize({theme: 'dark'\|'default'})` 재실행 + `idRef.current` 재생성
-  (mermaid singleton 캐시 회피) + `render()` 재실행. theme 변경 useEffect deps에
-  포함 (chart-libs-darkmode 사이클).
+- `FlowBlock` — 두 engine 모두 정적 SVG 로 렌더 (둘 다 lazy chunk).
+  `engine: 'mermaid'` → mermaid DSL 컴파일. 다크 모드 변경 시
+  `initialize({theme: 'dark'\|'default'})` 재실행 + `idRef.current` 재생성
+  (singleton 캐시 회피) + `render()` 재실행.
+  `engine: 'excalidraw'` → block.source 는 Excalidraw scene JSON
+  (`{elements, appState?, files?}`). `@excalidraw/excalidraw` 의
+  헤드리스 `exportToSvg` 로 SVG 생성 후 width/height 제거 + max-width 100% 로
+  컨테이너 폭 추종. 다크 모드는 `appState.theme = 'dark'` 와
+  `exportWithDarkMode: true` 로 토글. 편집은 미지원 — FlowBlockEditor 가
+  `engine !== 'mermaid'` 면 read-only notice 노출 (FLOW-02).
 - `WhiteboardBlock` — 사용자가 그린 SVG 요소 모음 (`el.color`, `el.stroke` 직접
   지정). **다크 모드 의도**: 캔버스 `bg-white` 영구 유지 + 사용자 색 자동 변환 X.
   Figma/Excalidraw 관례 — painter 도구는 사용자 색 책임. svg-block-audit 사이클에서

@@ -383,6 +383,10 @@ export const en: Record<LocaleKey, string> = {
   'editor.flow.exampleFill': 'Insert example: {label}',
   'editor.flow.changeLog': 'Edit flow',
   'editor.flow.excalidrawReadonly': 'This block uses the Excalidraw engine. The current editor can only edit Mermaid, so it is shown read-only.',
+  'block.flow.mermaidError': 'Mermaid render failed: {err}',
+  'block.flow.excalidrawError': 'Excalidraw render failed: {err}',
+  'block.flow.excalidrawShape': 'Invalid Excalidraw scene — an `elements` array is required.',
+  'block.flow.rendering': 'rendering flow…',
 
   'editor.orgChart.dragLabel': 'Drag {id}',
   'editor.orgChart.namePlaceholder': 'Name',

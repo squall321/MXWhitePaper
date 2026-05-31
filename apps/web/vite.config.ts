@@ -87,6 +87,11 @@ export default defineConfig({
           if (!id.includes('node_modules')) return undefined
           if (id.includes('@blocknote') || id.includes('@mantine')) return 'editor'
           if (id.includes('mermaid')) return 'mermaid'
+          // Excalidraw ships its own giant runtime (~4 MB) for the headless
+          // exportToSvg path used by FlowBlock. Isolate so the main
+          // bundle / vendor chunk doesn't carry it for docs that never
+          // touch an excalidraw flow.
+          if (id.includes('@excalidraw/excalidraw') || id.includes('roughjs')) return 'excalidraw'
           // Cytoscape + cose-bilkent are heavy; isolate them so /dep-graph's
           // dynamic import can fetch them on demand without polluting the
           // editor critical path.

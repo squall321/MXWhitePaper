@@ -402,6 +402,10 @@ export const ko = {
   'editor.flow.exampleFill': '예제 채우기: {label}',
   'editor.flow.changeLog': '플로우 편집',
   'editor.flow.excalidrawReadonly': '이 블록은 Excalidraw 엔진을 사용합니다. 현재 에디터는 Mermaid 만 편집할 수 있어 읽기 전용으로 표시됩니다.',
+  'block.flow.mermaidError': 'Mermaid 렌더 실패: {err}',
+  'block.flow.excalidrawError': 'Excalidraw 렌더 실패: {err}',
+  'block.flow.excalidrawShape': '잘못된 Excalidraw scene — `elements` 배열이 필요합니다.',
+  'block.flow.rendering': 'flow 렌더링 중…',
 
   // Editor — org chart
   'editor.orgChart.dragLabel': '드래그 {id}',
