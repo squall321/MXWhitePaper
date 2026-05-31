@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { useNotificationsStore } from '../store'
 import { NotificationDrawer } from './NotificationDrawer'
+import { useT } from '@/lib/i18n'
 
 /**
  * Bell icon for the TopBar. Shows an unread badge that disappears once
  * `markAllRead()` runs (via the drawer button or per-row click).
  */
 export function NotificationBell() {
+  const t = useT()
   const unread = useNotificationsStore((s) => s.unread)
   const [open, setOpen] = useState(false)
-  const label = unread > 0 ? `알림 ${unread}건` : '알림'
+  const label = unread > 0 ? t('notifications.bell.unread', { count: unread }) : t('notifications.bell.label')
 
   return (
     <>

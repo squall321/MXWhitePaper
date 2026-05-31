@@ -887,6 +887,28 @@ export const en: Record<LocaleKey, string> = {
   'editor.export.csv': 'CSV data',
   'editor.export.tsv': 'TSV data',
 
+  // D6 — notifications drawer
+  'notifications.bell.unread': '{count} notifications',
+  'notifications.bell.label': 'Notifications',
+  'notifications.drawer.ariaLabel': 'Notification center',
+  'notifications.drawer.title': 'Notifications',
+  'notifications.drawer.close': 'Close',
+  'notifications.filter.all': 'All',
+  'notifications.filter.system': 'System',
+  'notifications.filter.activity': 'Activity',
+  'notifications.filter.comment': 'Comments',
+  'notifications.action.markAllRead': 'Mark all read',
+  'notifications.action.clearAll': 'Clear all',
+  'notifications.action.markOneRead': 'Mark read',
+  'notifications.empty.title': 'No notifications',
+  'notifications.empty.description': 'Saved documents and new comments show up here.',
+  'notifications.row.unreadDot': 'Unread',
+  'notifications.time.justNow': 'just now',
+  'notifications.time.minutesAgo': '{m}m ago',
+  'notifications.time.hoursAgo': '{h}h ago',
+  'notifications.time.yesterday': 'yesterday',
+  'notifications.time.daysAgo': '{d}d ago',
+
   // D4 — editor.quiz.* (QuizBlockEditor)
   'editor.quiz.changeLog': 'Edit quiz',
   'editor.quiz.conflictError': 'Conflict — please refresh',

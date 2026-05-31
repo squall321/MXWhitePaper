@@ -925,6 +925,28 @@ export const ko = {
   'editor.export.csv': 'CSV 데이터',
   'editor.export.tsv': 'TSV 데이터',
 
+  // D6 — notifications drawer
+  'notifications.bell.unread': '알림 {count}건',
+  'notifications.bell.label': '알림',
+  'notifications.drawer.ariaLabel': '알림 센터',
+  'notifications.drawer.title': '알림',
+  'notifications.drawer.close': '닫기',
+  'notifications.filter.all': '전체',
+  'notifications.filter.system': '시스템',
+  'notifications.filter.activity': '활동',
+  'notifications.filter.comment': '댓글',
+  'notifications.action.markAllRead': '전체 읽음 처리',
+  'notifications.action.clearAll': '전체 지우기',
+  'notifications.action.markOneRead': '읽음으로 표시',
+  'notifications.empty.title': '알림이 없어요',
+  'notifications.empty.description': '문서를 저장하거나 댓글이 달리면 여기에 표시돼요.',
+  'notifications.row.unreadDot': '읽지 않음',
+  'notifications.time.justNow': '방금 전',
+  'notifications.time.minutesAgo': '{m}분 전',
+  'notifications.time.hoursAgo': '{h}시간 전',
+  'notifications.time.yesterday': '어제',
+  'notifications.time.daysAgo': '{d}일 전',
+
   // D4 — editor.quiz.* (QuizBlockEditor)
   'editor.quiz.changeLog': '퀴즈 편집',
   'editor.quiz.conflictError': '충돌 — 새로고침 필요',

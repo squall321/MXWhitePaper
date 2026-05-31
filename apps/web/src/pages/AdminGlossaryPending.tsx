@@ -167,6 +167,17 @@ export function AdminGlossaryPendingPage() {
   const onBulkApprove = useCallback(async () => {
     const ids = Array.from(selected)
     if (ids.length === 0) return
+    // D6 polish — bulk approve was firing without any confirmation,
+    // making accidental "approve N pending terms" a single misclick
+    // away. Reject already gates through RejectReasonModal; mirror that
+    // with a lightweight window.confirm gate so the destructive side of
+    // the toolbar gets the same friction.
+    if (ids.length >= 3) {
+      const ok =
+        typeof window === 'undefined' ||
+        window.confirm(`${ids.length}건을 일괄 승인할까요?`)
+      if (!ok) return
+    }
     setBulkBusy(true)
     setProgress({ done: 0, total: ids.length, failed: 0, mode: 'approve' })
     const results = await Promise.allSettled(
@@ -249,16 +260,41 @@ export function AdminGlossaryPendingPage() {
           선택 {selected.size}건 거부
         </Button>
         {progress && (
-          <span
-            className="text-xs text-gray-500"
+          <div
+            className="flex items-center gap-2"
             role="status"
             aria-live="polite"
             data-testid="admin-glossary-pending-progress"
           >
-            {progress.mode === 'approve' ? '승인' : '거부'} 진행:{' '}
-            {progress.done}/{progress.total}
-            {progress.failed > 0 && ` (실패 ${progress.failed})`}
-          </span>
+            <span className="text-xs text-gray-500">
+              {progress.mode === 'approve' ? '승인' : '거부'} 진행:{' '}
+              {progress.done}/{progress.total}
+              {progress.failed > 0 && ` (실패 ${progress.failed})`}
+            </span>
+            {/* D6 polish — accompany the textual count with a visible
+             * progressbar. Width-percent drives the fill so the bar shows
+             * partial completion while the Promise.allSettled batch is
+             * still resolving. */}
+            <div
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={progress.total}
+              aria-valuenow={progress.done}
+              data-testid="admin-glossary-pending-progress-bar"
+              className="h-1.5 w-32 overflow-hidden rounded bg-gray-200"
+            >
+              <div
+                className={
+                  progress.failed > 0
+                    ? 'h-full bg-amber-500 transition-all'
+                    : 'h-full bg-smsg-500 transition-all'
+                }
+                style={{
+                  width: `${Math.min(100, Math.round((progress.done / Math.max(1, progress.total)) * 100))}%`,
+                }}
+              />
+            </div>
+          </div>
         )}
       </div>
 
@@ -301,17 +337,33 @@ export function AdminGlossaryPendingPage() {
                 <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                   <tr>
                     <th className="px-3 py-2 w-10">
-                      <input
-                        type="checkbox"
-                        checked={allOnPageSelected}
-                        ref={(el) => {
-                          if (el)
-                            el.indeterminate = !allOnPageSelected && someOnPageSelected
-                        }}
-                        onChange={toggleAllOnPage}
-                        aria-label="이 페이지 전체 선택"
-                        data-testid="admin-glossary-pending-select-all"
-                      />
+                      {/* D6 polish — wrap the indeterminate checkbox so
+                       * a partial selection gets a visible bracket on
+                       * Chrome/Firefox (native indeterminate is a flat
+                       * grey line, easy to miss). aria-checked='mixed'
+                       * sells the same story to screen readers. */}
+                      <span
+                        className={
+                          !allOnPageSelected && someOnPageSelected
+                            ? 'inline-flex h-5 w-5 items-center justify-center rounded ring-2 ring-smsg-400 ring-offset-1 ring-offset-white'
+                            : 'inline-flex h-5 w-5 items-center justify-center'
+                        }
+                        data-testid="admin-glossary-pending-select-all-wrap"
+                        data-indeterminate={!allOnPageSelected && someOnPageSelected ? 'true' : undefined}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={allOnPageSelected}
+                          ref={(el) => {
+                            if (el)
+                              el.indeterminate = !allOnPageSelected && someOnPageSelected
+                          }}
+                          onChange={toggleAllOnPage}
+                          aria-label="이 페이지 전체 선택"
+                          aria-checked={!allOnPageSelected && someOnPageSelected ? 'mixed' : allOnPageSelected}
+                          data-testid="admin-glossary-pending-select-all"
+                        />
+                      </span>
                     </th>
                     <th className="px-3 py-2">용어</th>
                     <th className="px-3 py-2">분야</th>
