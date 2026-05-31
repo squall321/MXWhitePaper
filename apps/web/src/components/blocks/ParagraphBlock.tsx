@@ -1,5 +1,6 @@
 import type { ParagraphBlock } from '@/types/document'
 import { Inline } from '../wiki/Inline'
+import { useT } from '@/lib/i18n'
 
 /**
  * Footnote definition pattern. A paragraph whose text starts with `[^TAG]: `
@@ -53,6 +54,7 @@ export function isSpeakerNoteParagraph(meta?: { note?: string } | undefined): bo
  * Edit-mode surfaces still see the raw text untouched.
  */
 export function ParagraphBlockView({ block }: { block: ParagraphBlock }) {
+  const t = useT()
   if (isSpeakerNoteParagraph(block.meta)) {
     return null
   }
@@ -61,10 +63,10 @@ export function ParagraphBlockView({ block }: { block: ParagraphBlock }) {
       <div
         data-page-break
         className="my-3 flex items-center gap-2 text-[10px] uppercase tracking-wider text-gray-400 select-none dark:text-gray-500"
-        aria-label="페이지 나누기"
+        aria-label={t('block.paragraph.pageBreakAria')}
       >
         <span className="h-px flex-1 border-t border-dashed border-gray-300 dark:border-gray-600" />
-        <span>페이지 나누기</span>
+        <span>{t('block.paragraph.pageBreakAria')}</span>
         <span className="h-px flex-1 border-t border-dashed border-gray-300 dark:border-gray-600" />
       </div>
     )

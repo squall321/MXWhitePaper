@@ -2,6 +2,7 @@ import type { GanttBlock } from '@/types/document'
 import { axisTicks, type GanttAxisUnit } from './ganttAxis'
 import { WidgetExportMenu } from './WidgetExportMenu'
 import { ganttTasksToCsv } from '@/lib/widgetExport'
+import { useT } from '@/lib/i18n'
 
 /**
  * Minimal Gantt chart — single SVG with horizontal bars positioned by
@@ -20,8 +21,10 @@ export function GanttBlockView({
   block: GanttBlock
   today?: string
 }) {
+  // shadow-safe alias — task callbacks below bind a parameter named `t`.
+  const tr = useT()
   if (block.tasks.length === 0) {
-    return <p className="text-xs text-gray-500">작업 없음</p>
+    return <p className="text-xs text-gray-500">{tr('block.gantt.noTasks')}</p>
   }
 
   const tasks = block.tasks.map((t) => ({
@@ -67,7 +70,7 @@ export function GanttBlockView({
         height={totalH}
         viewBox={`0 0 ${totalW} ${totalH}`}
         role="img"
-        aria-label="Gantt 차트"
+        aria-label={tr('block.gantt.ariaLabel')}
       >
         {/* zebra rows — paint first so they sit behind axis line and bars. */}
         {stripeOn &&
@@ -146,9 +149,9 @@ export function GanttBlockView({
             stroke="#dc2626"
             strokeWidth={1.5}
             strokeDasharray="4 3"
-            aria-label="오늘"
+            aria-label={tr('block.gantt.todayMarker')}
           >
-            <title>오늘</title>
+            <title>{tr('block.gantt.todayMarker')}</title>
           </line>
         )}
       </svg>

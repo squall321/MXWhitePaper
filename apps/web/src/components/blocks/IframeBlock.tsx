@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IframeBlock } from '@/types/document'
+import { useT } from '@/lib/i18n'
 
 /**
  * Iframe block — supports two modes:
@@ -29,6 +30,7 @@ import type { IframeBlock } from '@/types/document'
 const LOAD_TIMEOUT_MS = 4000
 
 export function IframeBlockView({ block }: { block: IframeBlock }) {
+  const t = useT()
   const height = block.height ?? 360
   const title = block.title ?? 'embedded content'
 
@@ -57,7 +59,7 @@ export function IframeBlockView({ block }: { block: IframeBlock }) {
       className="flex min-h-[120px] items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 p-3 text-xs text-gray-500 dark:border-gray-600 dark:bg-gray-800"
       data-empty-iframe-block
     >
-      비어있는 임베드 — URL 또는 HTML을 입력하세요
+      {t('block.iframe.emptyHint')}
     </figure>
   )
 }
@@ -73,6 +75,7 @@ function SrcIframeWithFallback({
   height: number
   caption?: string
 }) {
+  const t = useT()
   const [status, setStatus] = useState<'loading' | 'loaded' | 'blocked'>('loading')
   const timerRef = useRef<number | null>(null)
   useEffect(() => {
@@ -121,7 +124,7 @@ function SrcIframeWithFallback({
             className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 rounded bg-gray-50/95 px-4 text-center text-sm text-gray-600 dark:bg-gray-800/95 dark:text-gray-300"
           >
             <span className="font-medium">
-              {status === 'loading' ? '임베드 불러오는 중…' : '임베드를 표시할 수 없습니다'}
+              {status === 'loading' ? t('block.iframe.loading') : t('block.iframe.blocked')}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">{hostname}</span>
             {status === 'blocked' && (
@@ -131,7 +134,7 @@ function SrcIframeWithFallback({
                 rel="noopener noreferrer"
                 className="pointer-events-auto rounded border border-smsg-300 bg-white px-3 py-1 text-xs text-smsg-700 hover:bg-smsg-50 dark:border-smsg-500 dark:bg-gray-900 dark:text-smsg-300 dark:hover:bg-gray-800"
               >
-                새 탭에서 열기 ↗
+                {t('block.iframe.openInNewTab')}
               </a>
             )}
           </div>

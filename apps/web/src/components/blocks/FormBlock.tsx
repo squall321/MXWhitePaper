@@ -3,6 +3,7 @@ import type { FormBlock, FormQuestion } from '@/types/document'
 import { Field, Input, Select, Button } from '@/components/ui'
 import { apiClient } from '@/lib/api/client'
 import { useEditorStore } from '@/features/editor/state'
+import { useT } from '@/lib/i18n'
 
 export type AnswerValue = string | number | boolean | string[] | null
 
@@ -93,6 +94,7 @@ export function validateAnswers(
 }
 
 export function FormBlockView({ block }: FormBlockViewProps) {
+  const t = useT()
   const slug = useEditorStore((s) => s.slug)
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>(() => {
     const o: Record<string, AnswerValue> = {}
@@ -104,8 +106,8 @@ export function FormBlockView({ block }: FormBlockViewProps) {
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const submitLabel = block.submit_label ?? '제출'
-  const thanksMessage = block.thanks_message ?? '응답해 주셔서 감사합니다.'
+  const submitLabel = block.submit_label ?? t('block.form.button.submit')
+  const thanksMessage = block.thanks_message ?? t('block.form.message.thanks')
   const allowAgain = !!block.allow_multiple_responses
   const questions = useMemo(() => block.questions, [block.questions])
 

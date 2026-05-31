@@ -41,7 +41,7 @@ export function CodeBlockView({ block }: { block: CodeBlock }) {
         <button
           type="button"
           onClick={() => void onCopy()}
-          aria-label="코드 복사"
+          aria-label={t('block.code.copyAria')}
           className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-gray-300 transition-all duration-fast hover:bg-white/10 hover:text-white focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
         >
           {copied ? (
@@ -49,7 +49,7 @@ export function CodeBlockView({ block }: { block: CodeBlock }) {
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M3 8l3.5 3.5L13 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              복사됨
+              {t('block.code.copied')}
             </>
           ) : (
             <>
@@ -57,7 +57,7 @@ export function CodeBlockView({ block }: { block: CodeBlock }) {
                 <rect x="3" y="3" width="8" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
                 <rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
               </svg>
-              복사
+              {t('block.code.copy')}
             </>
           )}
         </button>

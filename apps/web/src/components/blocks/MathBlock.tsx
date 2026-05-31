@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import type { MathBlock } from '@/types/document'
+import { useT } from '@/lib/i18n'
 
 /**
  * Render a `math` block via KaTeX. `display: 'block'` (default) renders as
@@ -9,6 +10,7 @@ import type { MathBlock } from '@/types/document'
  * are caught and the raw expression is shown so the article doesn't blank.
  */
 export function MathBlockView({ block }: { block: MathBlock }) {
+  const t = useT()
   const ref = useRef<HTMLSpanElement>(null)
   const displayMode = (block.display ?? 'block') === 'block'
 
@@ -29,9 +31,9 @@ export function MathBlockView({ block }: { block: MathBlock }) {
   if (displayMode) {
     return (
       <div className="my-3 overflow-x-auto text-center">
-        <span ref={ref} aria-label="수식" />
+        <span ref={ref} aria-label={t('block.math.aria')} />
       </div>
     )
   }
-  return <span ref={ref} aria-label="수식" className="inline-block max-w-full overflow-x-auto" />
+  return <span ref={ref} aria-label={t('block.math.aria')} className="inline-block max-w-full overflow-x-auto" />
 }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ImageBlock } from '@/types/document'
 import { useImage } from '@/features/upload/hooks/useImage'
 import { Lightbox } from '@/components/Lightbox'
+import { useT } from '@/lib/i18n'
 
 const WIDTH_CLASS: Record<NonNullable<ImageBlock['width']>, string> = {
   sm: 'w-full sm:w-1/3',
@@ -24,6 +25,7 @@ const WIDTH_CLASS: Record<NonNullable<ImageBlock['width']>, string> = {
  * and prepends "그림 N:" to the figcaption. No DOM coupling needed.
  */
 export function ImageBlockView({ block }: { block: ImageBlock }) {
+  const t = useT()
   const widthCls = WIDTH_CLASS[block.width ?? 'md']
   const { data: image } = useImage(block.imageId || undefined)
   const [open, setOpen] = useState(false)
@@ -47,7 +49,7 @@ export function ImageBlockView({ block }: { block: ImageBlock }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="이미지 확대"
+        aria-label={t('block.image.zoomAria')}
         className="block w-full overflow-hidden rounded border border-gray-200 dark:border-gray-700"
         style={{ backgroundColor: bg }}
       >
@@ -69,7 +71,7 @@ export function ImageBlockView({ block }: { block: ImageBlock }) {
               rel={link?.startsWith('http') ? 'noopener noreferrer' : undefined}
               className="ml-2 text-blue-600 underline hover:text-blue-700"
             >
-              ↗ 링크 열기
+              {t('block.image.openLink')}
             </a>
           )}
         </figcaption>

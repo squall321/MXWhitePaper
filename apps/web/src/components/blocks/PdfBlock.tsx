@@ -1,4 +1,5 @@
 import type { PdfBlock } from '@/types/document'
+import { useT } from '@/lib/i18n'
 
 /**
  * PdfBlockView — inline PDF preview using the browser-native viewer.
@@ -13,13 +14,14 @@ import type { PdfBlock } from '@/types/document'
  * embedded viewer is disabled (rare CSP setups, mobile Safari quirks).
  */
 export function PdfBlockView({ block }: { block: PdfBlock }) {
+  const t = useT()
   const height = block.height_px ?? 600
   const page = block.page ?? 1
   const baseUrl = `/api/v1/files/${encodeURIComponent(block.file_id)}/download`
   // `#page=N` is the standard PDF Open Parameters hint — viewer reads the
   // fragment locally without re-fetching, so jumping pages is free.
   const src = page > 1 ? `${baseUrl}#page=${page}` : baseUrl
-  const titleText = block.title || 'PDF 문서'
+  const titleText = block.title || t('block.pdf.defaultTitle')
 
   return (
     <figure
@@ -36,9 +38,9 @@ export function PdfBlockView({ block }: { block: PdfBlock }) {
           href={baseUrl}
           download
           className="rounded border border-smsg-300 px-2 py-0.5 text-[11px] text-smsg-700 hover:bg-smsg-100 dark:border-smsg-500 dark:bg-gray-900 dark:text-smsg-300 dark:hover:bg-gray-800"
-          aria-label={`${titleText} 다운로드`}
+          aria-label={t('block.pdf.downloadAria', { title: titleText })}
         >
-          다운로드
+          {t('block.pdf.download')}
         </a>
       </figcaption>
       <iframe

@@ -7,6 +7,7 @@ import { ChartBlockEditor } from '@/features/editor/blocks/ChartBlockEditor'
 import { buildChartFromTable } from '@/features/editor/tableToChart'
 import { insertBlock, isPreconditionFailed } from '@/features/editor/api'
 import { findParentSection } from '@/features/editor/findSection'
+import { useT } from '@/lib/i18n'
 import {
   alignClass,
   borderClass,
@@ -405,6 +406,7 @@ function SparseTableBody({
  * prefilled with the table's data converted to chart series.
  */
 export function TableBlockView({ block }: { block: TableBlock }) {
+  const t = useT()
   const isFullEditing = useEditorStore(editorSelectors.isFullEditing)
   const slug = useEditorStore((s) => s.slug)
   const etag = useEditorStore((s) => s.etag)
@@ -570,7 +572,7 @@ export function TableBlockView({ block }: { block: TableBlock }) {
     } catch (err) {
       if (isPreconditionFailed(err)) {
         setConflict(null)
-        setError('충돌 — 새로고침 필요')
+        setError(t('block.table.conflictError'))
       } else {
         setError((err as Error).message)
       }
@@ -592,13 +594,13 @@ export function TableBlockView({ block }: { block: TableBlock }) {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="표 안에서 검색…"
-            aria-label="표 행 검색"
+            placeholder={t('block.table.searchPlaceholder')}
+            aria-label={t('block.table.searchAriaLabel')}
             className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-smsg-500 focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
           />
           {query && (
             <span className="whitespace-nowrap text-gray-500">
-              {sortedRows.length}/{indexedRows.length}건
+              {sortedRows.length}/{indexedRows.length}{t('block.table.searchCountSuffix')}
             </span>
           )}
         </div>
@@ -667,13 +669,13 @@ export function TableBlockView({ block }: { block: TableBlock }) {
       {isFullEditing && slug && (
         <button
           type="button"
-          aria-label="표를 차트로 변환"
+          aria-label={t('block.table.convertToChartAriaLabel')}
           data-table-to-chart
           onClick={openModal}
           className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-smsg-200 bg-white/95 px-2 py-1 text-[11px] font-medium text-smsg-700 opacity-0 shadow-sm transition-opacity duration-base hover:bg-smsg-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-gray-800/95"
         >
           <span aria-hidden>📊</span>
-          <span>차트로</span>
+          <span>{t('block.table.convertToChartButton')}</span>
         </button>
       )}
 
@@ -681,7 +683,7 @@ export function TableBlockView({ block }: { block: TableBlock }) {
         <Modal
           open={modalOpen}
           onClose={() => setModalOpen(false)}
-          title="표 → 차트"
+          title={t('block.table.convertModalTitle')}
           size="full"
           footer={
             <div className="flex items-center justify-end gap-2">
@@ -696,7 +698,7 @@ export function TableBlockView({ block }: { block: TableBlock }) {
                 disabled={busy}
                 className="rounded border border-gray-300 px-3 py-1.5 text-xs hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
               >
-                취소
+                {t('block.table.cancel')}
               </button>
               <button
                 type="button"
@@ -705,7 +707,7 @@ export function TableBlockView({ block }: { block: TableBlock }) {
                 data-action="insert-chart"
                 className="rounded bg-smsg-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-smsg-900 disabled:opacity-60"
               >
-                {busy ? '추가 중…' : '차트 삽입'}
+                {busy ? t('block.table.insertChartBusy') : t('block.table.insertChart')}
               </button>
             </div>
           }

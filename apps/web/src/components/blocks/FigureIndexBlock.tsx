@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getZebraClass } from '@/features/editor/blocks/zebra'
 import type { ZebraOpts } from '@/features/editor/blocks/zebra'
+import { useT } from '@/lib/i18n'
 
 /**
  * Renders a self-updating table of figures.
@@ -22,6 +23,7 @@ export function FigureIndexBlockView({
     options?: ZebraOpts
   }
 }) {
+  const t = useT()
   const kinds = block.kinds && block.kinds.length ? block.kinds : (['image', 'table', 'chart'] as const)
   const [entries, setEntries] = useState<
     { kind: 'image' | 'table' | 'chart'; n: number; caption: string }[]
@@ -67,15 +69,15 @@ export function FigureIndexBlockView({
       className="my-3 rounded-md border border-gray-200 bg-gray-50/60 p-3 text-sm dark:border-gray-700 dark:bg-gray-800/60"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="font-semibold text-gray-800">{block.title ?? '그림 목차'}</div>
+        <div className="font-semibold text-gray-800">{block.title ?? t('block.figureIndex.defaultTitle')}</div>
         <button
           type="button"
           onClick={collect}
-          aria-label="그림 목차 갱신"
+          aria-label={t('block.figureIndex.refreshAria')}
           data-action="figure-index-refresh"
           className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-700"
         >
-          🔄 갱신
+          {t('block.figureIndex.refresh')}
         </button>
       </div>
       {grouped.map((g) =>

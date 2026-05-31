@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
- 
+
 import { create, all } from 'mathjs'
 import type { CalculatorBlock } from '@/types/document'
 import { Field, Input, Select } from '@/components/ui'
+import { useT } from '@/lib/i18n'
 
 /**
  * mathjs is heavy; we only need the safe scalar evaluator. `create(all)`
@@ -69,6 +70,7 @@ interface Props {
  * the live evaluation of `formula`.
  */
 export function CalculatorBlockView({ block }: Props) {
+  const t = useT()
   const [values, setValues] = useState<Record<string, unknown>>(() => defaultValues(block.inputs))
 
   const result = useMemo(
@@ -104,7 +106,7 @@ export function CalculatorBlockView({ block }: Props) {
       </div>
       <div className="rounded border border-smsg-200 bg-smsg-50 px-3 py-2">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-smsg-700">
-          {block.label || '결과'}
+          {block.label || t('block.calculator.result.label')}
         </p>
         <p
           className="mt-0.5 text-lg font-semibold text-smsg-900"

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GalleryBlock } from '@/types/document'
 import { useImage } from '@/features/upload/hooks/useImage'
 import { Lightbox, type LightboxItem } from '@/components/Lightbox'
+import { useT } from '@/lib/i18n'
 
 /**
  * Read-mode gallery — grid (or horizontal carousel) of thumbnails. Each cell
@@ -77,6 +78,7 @@ function GalleryItem({
   onOpen: (i: number) => void
   onResolved: (i: number, src: string) => void
 }) {
+  const t = useT()
   const { data: image } = useImage(item.imageId || undefined)
   const thumb = image?.urls.thumb ?? `/api/v1/images/${encodeURIComponent(item.imageId)}`
   const bg = image?.dominant_color ?? '#f3f4f6'
@@ -100,7 +102,7 @@ function GalleryItem({
       <button
         type="button"
         onClick={() => onOpen(index)}
-        aria-label={`갤러리 ${index + 1}번 이미지 확대`}
+        aria-label={t('block.gallery.zoomItemAria', { index: index + 1 })}
         className="block w-full"
       >
         <img

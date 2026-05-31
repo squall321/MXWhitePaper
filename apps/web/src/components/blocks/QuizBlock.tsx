@@ -3,6 +3,7 @@ import type { QuizBlock, QuizQuestion } from '@/types/document'
 import { Field, Input, Button } from '@/components/ui'
 import { apiClient } from '@/lib/api/client'
 import { useEditorStore } from '@/features/editor/state'
+import { useT } from '@/lib/i18n'
 
 export type QuizAnswerValue = string | string[] | boolean | null
 
@@ -92,6 +93,7 @@ export function findMissingAnswers(
 }
 
 export function QuizBlockView({ block }: QuizBlockViewProps) {
+  const t = useT()
   const slug = useEditorStore((s) => s.slug)
   const [answers, setAnswers] = useState<Record<string, QuizAnswerValue>>(() => {
     const o: Record<string, QuizAnswerValue> = {}
@@ -164,7 +166,7 @@ export function QuizBlockView({ block }: QuizBlockViewProps) {
     e.preventDefault()
     setSubmitError(null)
     if (!slug) {
-      setSubmitError('현재 문서를 식별할 수 없습니다.')
+      setSubmitError(t('block.quiz.error.docUnidentified'))
       return
     }
     setSubmitting(true)
@@ -199,7 +201,7 @@ export function QuizBlockView({ block }: QuizBlockViewProps) {
         message?: string
       }
       setSubmitError(
-        e2?.response?.data?.error?.message ?? e2?.message ?? '제출에 실패했습니다.',
+        e2?.response?.data?.error?.message ?? e2?.message ?? t('block.quiz.error.submitFailed'),
       )
     } finally {
       setSubmitting(false)
@@ -219,14 +221,18 @@ export function QuizBlockView({ block }: QuizBlockViewProps) {
       >
         <div>
           <p className="text-base font-semibold">
-            점수 {result.score}점{' '}
+            {t('block.quiz.result.scoreLine', { score: result.score })}{' '}
             <span className={result.passed ? 'text-emerald-700' : 'text-amber-700'}>
-              ({result.passed ? '통과' : '미통과'})
+              ({result.passed ? t('block.quiz.result.passed') : t('block.quiz.result.failed')})
             </span>
           </p>
           <p className="text-xs text-gray-600">
-            {correctCount} / {result.breakdown.length} 정답 ·{' '}
-            {result.earned_points} / {result.total_points} 점
+            {t('block.quiz.result.correctSummary', {
+              correct: correctCount,
+              total: result.breakdown.length,
+              earned: result.earned_points,
+              totalPoints: result.total_points,
+            })}
           </p>
         </div>
         {showAnswers && (
@@ -247,10 +253,10 @@ export function QuizBlockView({ block }: QuizBlockViewProps) {
                       b?.correct ? 'text-emerald-700 text-xs' : 'text-red-600 text-xs'
                     }
                   >
-                    {b?.correct ? '정답' : '오답'} ({b?.points ?? 0}점)
+                    {b?.correct ? t('block.quiz.result.correct') : t('block.quiz.result.incorrect')} ({b?.points ?? 0}{t('block.quiz.result.pointsSuffix')})
                   </p>
                   {explanation && (
-                    <p className="mt-1 text-xs text-gray-600">해설: {explanation}</p>
+                    <p className="mt-1 text-xs text-gray-600">{t('block.quiz.result.explanation', { text: explanation })}</p>
                   )}
                 </li>
               )
@@ -260,12 +266,12 @@ export function QuizBlockView({ block }: QuizBlockViewProps) {
         <div className="flex items-center gap-2">
           {canRetry && (
             <Button variant="secondary" size="sm" onClick={reset}>
-              다시 시도
+              {t('block.quiz.button.retry')}
             </Button>
           )}
           {maxAttempts > 0 && remaining != null && (
             <span className="text-xs text-gray-500">
-              남은 시도 {remaining} / {maxAttempts}
+              {t('block.quiz.result.remaining', { remaining, max: maxAttempts })}
             </span>
           )}
         </div>
@@ -297,15 +303,15 @@ export function QuizBlockView({ block }: QuizBlockViewProps) {
       ))}
       {submitError && <p className="text-xs text-red-600">{submitError}</p>}
       {noAttemptsLeft && (
-        <p className="text-xs text-amber-700">최대 시도 횟수에 도달했습니다.</p>
+        <p className="text-xs text-amber-700">{t('block.quiz.error.maxAttemptsReached')}</p>
       )}
       <div className="flex items-center gap-2">
         <Button type="submit" variant="primary" disabled={submitting || noAttemptsLeft}>
-          {submitting ? '채점 중…' : '제출'}
+          {submitting ? t('block.quiz.button.grading') : t('block.quiz.button.submit')}
         </Button>
         {maxAttempts > 0 && remaining != null && (
           <span className="text-xs text-gray-500">
-            남은 시도 {remaining} / {maxAttempts}
+            {t('block.quiz.result.remaining', { remaining, max: maxAttempts })}
           </span>
         )}
       </div>

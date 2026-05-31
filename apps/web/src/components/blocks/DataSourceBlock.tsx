@@ -14,6 +14,7 @@ import { KpiCardsBlockView } from './KpiCardsBlock'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { Badge } from '@/components/ui/Badge'
+import { useT } from '@/lib/i18n'
 
 /**
  * The shape of a data-source response is intentionally narrow: the BE
@@ -138,6 +139,7 @@ interface Props {
  * via the matching read-mode component. Auto-refresh interval = `refreshInterval`.
  */
 export function DataSourceBlockView({ block }: Props) {
+  const t = useT()
   const paramsKey = STABLE_PARAMS_KEY(block?.params)
   const enabled = Boolean(block?.endpoint)
   const { refetchInterval, staleTime } = derivePollingConfig(
@@ -165,7 +167,7 @@ export function DataSourceBlockView({ block }: Props) {
   if (!enabled) {
     return (
       <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-3 text-xs text-gray-500 dark:border-gray-600 dark:bg-gray-800">
-        데이터 소스 endpoint가 설정되지 않았습니다.
+        {t('block.dataSource.endpointMissing')}
       </div>
     )
   }
@@ -178,7 +180,7 @@ export function DataSourceBlockView({ block }: Props) {
     )
   }
   if (error) {
-    return <ErrorState title="데이터를 불러올 수 없습니다" description={(error as Error).message} />
+    return <ErrorState title={t('block.dataSource.errorLoad')} description={(error as Error).message} />
   }
 
   const blockId = block?.id ?? ''
@@ -191,8 +193,8 @@ export function DataSourceBlockView({ block }: Props) {
   } catch (err) {
     body = (
       <ErrorState
-        title="데이터를 표시할 수 없습니다"
-        description={(err as Error)?.message ?? '알 수 없는 오류'}
+        title={t('block.dataSource.errorRender')}
+        description={(err as Error)?.message ?? t('block.dataSource.unknownError')}
       />
     )
   }

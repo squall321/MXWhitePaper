@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { OrgChartBlock, OrgChartNode } from '@/types/document'
 import { WidgetExportMenu } from './WidgetExportMenu'
+import { useT } from '@/lib/i18n'
 
 /** 2D position assigned to a node by `layoutTree`. */
 export interface PositionedNode {
@@ -103,6 +104,7 @@ interface Props {
  * node + its descendants.
  */
 export function OrgChartBlockView({ block }: Props) {
+  const t = useT()
   const layout = block?.layout ?? 'tree'
   const positioned = useMemo(() => layoutTree(block?.root, layout), [block?.root, layout])
   const [hoverId, setHoverId] = useState<string | null>(null)
@@ -138,7 +140,7 @@ export function OrgChartBlockView({ block }: Props) {
       data-export-root="org-chart"
     >
       <WidgetExportMenu formats={['png', 'svg']} filename="org-chart" />
-      <svg width={svgW} height={svgH} role="img" aria-label="조직도">
+      <svg width={svgW} height={svgH} role="img" aria-label={t('block.orgChart.ariaLabel')}>
         {/* edges */}
         {positioned.nodes.map((p) => {
           if (!p.parentId) return null

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { DashboardEmbedBlock } from '@/types/document'
 import { Badge } from '@/components/ui/Badge'
+import { useT } from '@/lib/i18n'
 
 /**
  * Build-time provider base URLs. Source of truth is the `VITE_DASHBOARD_*_BASE`
@@ -65,6 +66,7 @@ function buildUrl(provider: DashboardEmbedBlock['provider'], panelId: string, pa
  * unknown providers fall through to an empty src and a warning state.
  */
 export function DashboardEmbedBlockView({ block }: { block: DashboardEmbedBlock }) {
+  const t = useT()
   const provider = block?.provider
   const panelId = block?.panelId ?? ''
   const params = block?.params
@@ -76,27 +78,27 @@ export function DashboardEmbedBlockView({ block }: { block: DashboardEmbedBlock 
 
   const isKnownProvider = Boolean(provider && PROVIDER_LABEL[provider])
   const isProviderConfigured = Boolean(provider && PROVIDER_BASE[provider])
-  const providerLabel = isKnownProvider ? PROVIDER_LABEL[provider] : '알 수 없는 제공자'
+  const providerLabel = isKnownProvider ? PROVIDER_LABEL[provider] : t('block.dashboardEmbed.unknownProvider')
 
   return (
     <figure className="space-y-2 rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900">
       <header className="flex items-center justify-between gap-2 text-xs text-gray-500">
         <div className="flex items-center gap-2">
           <Badge tone="brand" size="sm">{providerLabel}</Badge>
-          <code className="text-[11px] text-gray-600">{panelId || '(panel id 없음)'}</code>
+          <code className="text-[11px] text-gray-600">{panelId || t('block.dashboardEmbed.panelIdMissing')}</code>
         </div>
-        <span>요청 {stamp}</span>
+        <span>{t('block.dashboardEmbed.requestedAt', { stamp })}</span>
       </header>
       {!isKnownProvider ? (
         <div className="grid h-48 place-items-center rounded border border-dashed border-amber-300 bg-amber-50 text-xs text-amber-800">
-          지원하지 않는 대시보드 제공자입니다.
+          {t('block.dashboardEmbed.unsupportedProvider')}
         </div>
       ) : !isProviderConfigured ? (
         <div
           data-dashboard-no-base
           className="grid h-48 place-items-center rounded border border-dashed border-gray-300 bg-gray-50 text-xs text-gray-500 dark:border-gray-600 dark:bg-gray-800"
         >
-          URL 미설정 — 환경 변수 VITE_DASHBOARD_{provider.toUpperCase()}_BASE 를 설정하세요.
+          {t('block.dashboardEmbed.urlNotConfigured', { provider: provider.toUpperCase() })}
         </div>
       ) : src ? (
         <iframe
