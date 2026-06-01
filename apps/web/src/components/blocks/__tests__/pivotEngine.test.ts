@@ -2,13 +2,22 @@
  * Sprint 1 — pivotEngine cross-tab + 8 aggregator 단위 검증.
  */
 import { describe, expect, it } from 'vitest'
-import { buildPivot, parseExpr, evalExprForRow, drillRows } from '../pivotEngine'
+import {
+  buildPivot,
+  parseExpr,
+  evalExprForRow,
+  drillRows,
+  bucketDate,
+  dimField,
+  dimLabel,
+  type DimSpec,
+} from '../pivotEngine'
 import type { PivotTableBlock } from '@/types/document'
 
 function mk(
   overrides: Partial<PivotTableBlock> & {
-    rows?: string[]
-    cols?: string[]
+    rows?: PivotTableBlock['rows']
+    cols?: PivotTableBlock['cols']
     values?: PivotTableBlock['values']
     sourceRows?: PivotTableBlock['source']['rows']
   },
@@ -25,6 +34,7 @@ function mk(
   if (overrides.sort) block.sort = overrides.sort
   if (overrides.filters) block.filters = overrides.filters
   if (overrides.options) block.options = overrides.options
+  if (overrides.calculatedItems) block.calculatedItems = overrides.calculatedItems
   return block
 }
 
@@ -1016,3 +1026,178 @@ describe('drillRows (cell → raw rows)', () => {
   })
 })
 
+
+// ── Sprint 5 — date grouping ──────────────────────────────────────────────
+describe('pivotEngine — Sprint 5 bucketDate', () => {
+  it('year — ISO string', () => {
+    expect(bucketDate('2024-03-15', 'year')).toBe('2024')
+  })
+  it('quarter — boundary', () => {
+    expect(bucketDate('2024-03-31', 'quarter')).toBe('2024-Q1')
+    expect(bucketDate('2024-04-01', 'quarter')).toBe('2024-Q2')
+    expect(bucketDate('2024-12-31', 'quarter')).toBe('2024-Q4')
+  })
+  it('month — zero-padded', () => {
+    expect(bucketDate('2024-03-15', 'month')).toBe('2024-03')
+    expect(bucketDate('2024-12-01', 'month')).toBe('2024-12')
+  })
+  it('day — zero-padded', () => {
+    expect(bucketDate('2024-03-15', 'day')).toBe('2024-03-15')
+  })
+  it('week — ISO week (year boundary)', () => {
+    // 2024-12-30 is Monday of ISO week 1, 2025.
+    expect(bucketDate('2024-12-30', 'week')).toBe('2025-W01')
+    // 2024-01-01 (Mon) is ISO week 1.
+    expect(bucketDate('2024-01-01', 'week')).toBe('2024-W01')
+  })
+  it('epoch ms', () => {
+    expect(bucketDate(Date.UTC(2024, 5, 15), 'month')).toBe('2024-06')
+  })
+  it('Date object', () => {
+    expect(bucketDate(new Date('2024-07-04T00:00:00Z'), 'day')).toBe('2024-07-04')
+  })
+  it('unparseable → empty', () => {
+    expect(bucketDate('not-a-date', 'month')).toBe('')
+    expect(bucketDate(null, 'month')).toBe('')
+    expect(bucketDate(undefined, 'month')).toBe('')
+    expect(bucketDate('', 'month')).toBe('')
+  })
+})
+
+describe('pivotEngine — Sprint 5 dim helpers', () => {
+  it('string dim — field+label match', () => {
+    expect(dimField('dept')).toBe('dept')
+    expect(dimLabel('dept')).toBe('dept')
+  })
+  it('object dim without group — same field+label', () => {
+    expect(dimField({ field: 'dept' })).toBe('dept')
+    expect(dimLabel({ field: 'dept' })).toBe('dept')
+  })
+  it('object dim with group — label is field_group', () => {
+    expect(dimField({ field: 'date', group: 'month' })).toBe('date')
+    expect(dimLabel({ field: 'date', group: 'month' })).toBe('date_month')
+  })
+})
+
+describe('pivotEngine — Sprint 5 date-grouped pivot', () => {
+  it('rows={field:"date", group:"month"} buckets raw dates', () => {
+    const r = buildPivot(
+      mk({
+        sourceRows: [
+          { date: '2024-01-15', v: 10 },
+          { date: '2024-01-28', v: 20 },
+          { date: '2024-02-05', v: 5 },
+          { date: '2024-03-10', v: 7 },
+        ],
+        rows: [{ field: 'date', group: 'month' } as DimSpec],
+        values: [{ field: 'v', agg: 'sum' }],
+      }),
+    )
+    expect(r.rowHeaders.map((t) => t[0])).toEqual(['2024-01', '2024-02', '2024-03'])
+    expect(r.values[0]?.[0]?.[0]).toBe(30) // Jan sum
+    expect(r.values[1]?.[0]?.[0]).toBe(5) // Feb
+    expect(r.values[2]?.[0]?.[0]).toBe(7) // Mar
+  })
+
+  it('quarter group works in cols axis', () => {
+    const r = buildPivot(
+      mk({
+        sourceRows: [
+          { region: 'KR', date: '2024-02-01', v: 1 },
+          { region: 'KR', date: '2024-05-01', v: 2 },
+          { region: 'US', date: '2024-02-01', v: 10 },
+        ],
+        rows: ['region'],
+        cols: [{ field: 'date', group: 'quarter' } as DimSpec],
+        values: [{ field: 'v', agg: 'sum' }],
+      }),
+    )
+    expect(r.colHeaders.map((t) => t[0]).sort()).toEqual(['2024-Q1', '2024-Q2'])
+  })
+})
+
+// ── Sprint 5 — calculated items ───────────────────────────────────────────
+describe('pivotEngine — Sprint 5 calculatedItems', () => {
+  const base = () =>
+    mk({
+      sourceRows: [
+        { month: 'Jan', v: 10 },
+        { month: 'Feb', v: 20 },
+        { month: 'Mar', v: 30 },
+        { month: 'Apr', v: 40 },
+      ],
+      rows: ['month'],
+      values: [{ field: 'v', agg: 'sum' }],
+    })
+
+  it('axis=row, sum formula appended after base rows', () => {
+    const r = buildPivot({
+      ...base(),
+      calculatedItems: [{ axis: 'row', name: 'Q1', formula: '`Jan` + `Feb` + `Mar`' }],
+    })
+    // 4 base + 1 calculated.
+    expect(r.rowHeaders).toHaveLength(5)
+    expect(r.rowHeaders[4]?.[0]).toBe('Q1')
+    expect(r.values[4]?.[0]?.[0]).toBe(60) // 10+20+30
+  })
+
+  it('division by zero → null', () => {
+    const r = buildPivot({
+      ...base(),
+      calculatedItems: [{ axis: 'row', name: 'bad', formula: '`Jan` / (`Jan` - `Jan`)' }],
+    })
+    expect(r.values[4]?.[0]?.[0]).toBeNull()
+  })
+
+  it('unknown reference → null', () => {
+    const r = buildPivot({
+      ...base(),
+      calculatedItems: [{ axis: 'row', name: 'X', formula: '`Jan` + `NotThere`' }],
+    })
+    expect(r.values[4]?.[0]?.[0]).toBeNull()
+  })
+
+  it('axis=col adds a virtual column to each row', () => {
+    const r = buildPivot(
+      mk({
+        sourceRows: [
+          { region: 'KR', month: 'Jan', v: 1 },
+          { region: 'KR', month: 'Feb', v: 2 },
+          { region: 'US', month: 'Jan', v: 10 },
+          { region: 'US', month: 'Feb', v: 20 },
+        ],
+        rows: ['region'],
+        cols: ['month'],
+        values: [{ field: 'v', agg: 'sum' }],
+        calculatedItems: [{ axis: 'col', name: 'JanFeb', formula: '`Jan` + `Feb`' }],
+      }),
+    )
+    expect(r.colHeaders).toHaveLength(3)
+    expect(r.colHeaders[2]?.[0]).toBe('JanFeb')
+    // KR row: Jan=1, Feb=2 → JanFeb=3
+    expect(r.values[0]?.[2]?.[0]).toBe(3)
+    // US row: Jan=10, Feb=20 → JanFeb=30
+    expect(r.values[1]?.[2]?.[0]).toBe(30)
+  })
+
+  it('later item can reference earlier calculated item', () => {
+    const r = buildPivot({
+      ...base(),
+      calculatedItems: [
+        { axis: 'row', name: 'Q1', formula: '`Jan` + `Feb` + `Mar`' },
+        { axis: 'row', name: 'Q1x2', formula: '`Q1` * 2' },
+      ],
+    })
+    expect(r.rowHeaders).toHaveLength(6)
+    expect(r.values[5]?.[0]?.[0]).toBe(120) // 60 * 2
+  })
+
+  it('malformed formula → item skipped (no throw)', () => {
+    const r = buildPivot({
+      ...base(),
+      calculatedItems: [{ axis: 'row', name: 'bad', formula: '+++' }],
+    })
+    // No virtual row appended.
+    expect(r.rowHeaders).toHaveLength(4)
+  })
+})

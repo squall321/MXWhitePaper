@@ -127,23 +127,34 @@
   호환. CSV 는 RFC 4180, TSV 는 탭/CR/LF 를 공백으로 강제 escape. UTF-8 BOM
   포함해 Excel mojibake 회피.
 - `PivotTableBlock` — ★ 36번째 블록 (pivot-table-sprint1 47번 archive +
-  pivot-table-sprint2-4 48번 archive). 키: `type`, `source` (`{kind:"inline"|"csv",
-  rows[], schema?}`), `rows[]` (행 차원), `cols[]` (열 차원), `values[]`
+  pivot-table-sprint2-4 48번 archive + Sprint 5: date 그룹 + calculatedItems).
+  키: `type`, `source` (`{kind:"inline"|"csv", rows[], schema?}`), `rows[]`
+  (행 차원 — 단순 field 문자열 *또는* `{field, group?}` object: group ∈
+  year/quarter/month/week/day 로 시간 자동 bucket), `cols[]` (열 차원, rows
+  와 동일 union), `calculatedItems?[]` (행/열 가상 항목, `{axis, name,
+  formula}`. formula 는 같은-축 항목 라벨을 식별자로 참조하는 산술식 — 백틱
+  literal `` `Q1` `` 로 공백/한글/`-` 라벨 처리. 예: `` `Jan` + `Feb` + `Mar`
+  ``. 후속 item 이 선행 item 참조 가능 — `` `H1` = `Q1` + `Q2` ``), `values[]`
   (`{field|expr, agg, label?, showAs?, numberFormat?}` — agg 8 종: sum/avg/count/
   countDistinct/min/max/median/stdev; showAs: `pct_row|pct_col|pct_grand|running`;
   numberFormat: `"#,##0.00"|"0.0%"` 등 sister grammar), `totals?` (row/col/grand
   토글), `sort?` (차원/측정값 기준), `filters?` (raw row 필터), `options?`.
-  파이프라인: **filter → group → aggregate → sort → totals** (raw row 재집계로
-  총합 정확성 보장). helper:
+  파이프라인: **filter → group → aggregate → sort → totals → calculatedItems**
+  (raw row 재집계로 총합 정확성 보장. calculatedItems 는 base 결과 위에
+  axis 별로 합성, totals 에는 미포함). helper:
   [[apps/web/src/components/blocks/pivotEngine.ts#buildPivot]] (순수 함수,
-  expr eval 은 SpreadsheetBlock sister grammar 재사용). viewer:
+  expr eval 은 SpreadsheetBlock sister grammar 재사용). Sprint 5 helper:
+  `dimField`/`dimLabel` (union narrowing), `bucketDate(v, group)` (ISO date
+  / epoch ms / Date → year/quarter/month/week(ISO)/day 라벨), `parseExpr`
+  tokenizer 가 백틱 식별자 지원 (`` `Q1` `` → ident). viewer:
   [[apps/web/src/components/blocks/PivotTableBlock.tsx]] — cross-tab + row/col/
   grand total amber 하이라이트 + showAs (pct_*/running) 변환 + numberFormat 적용.
   editor: [[apps/web/src/features/editor/blocks/PivotTableBlockEditor.tsx]] —
   source paste (CSV/JSON) + **Available Fields drag panel + Rows/Cols/Values 드롭존**
   (`@dnd-kit/core` augment, 기존 dropdown 은 keyboard fallback 으로 유지) +
-  DimPicker + ValuesPicker (field/expr 2 모드) +
-  TotalsPicker + SortPicker + FiltersPicker. 순수 reducer
+  DimPicker (chip 옆 시간 그룹 dropdown — Sprint 5) + ValuesPicker (field/expr
+  2 모드) + TotalsPicker + SortPicker + FiltersPicker + CalculatedItemsPicker
+  (Sprint 5 — axis/name/formula row). 순수 reducer
   [[apps/web/src/features/editor/blocks/PivotTableBlockEditor.tsx#applyPivotDragEnd]] —
   dnd-kit DragEndEvent id 두 개 → 다음 pivot block (no-op 시 같은 reference 반환).
   widgetExport CSV 매트릭스 직렬화

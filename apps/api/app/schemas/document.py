@@ -1287,12 +1287,51 @@ class Source(BaseModel):
     """
 
 
-class Row(RootModel[str]):
+class Rows(RootModel[str]):
     root: str = Field(..., min_length=1)
 
 
-class Col(RootModel[str]):
+class Group(Enum):
+    """
+    raw row 의 date 를 bucket 할 단위. year=YYYY, quarter=YYYY-Q1..4, month=YYYY-MM, week=YYYY-Www(ISO), day=YYYY-MM-DD. row[field] 가 ISO date string / epoch ms / Date 로 파싱 가능한 값이어야 함.
+    """
+
+    year = 'year'
+    quarter = 'quarter'
+    month = 'month'
+    week = 'week'
+    day = 'day'
+
+
+class Rows1(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    field: str = Field(..., min_length=1)
+    group: Group | None = None
+    """
+    raw row 의 date 를 bucket 할 단위. year=YYYY, quarter=YYYY-Q1..4, month=YYYY-MM, week=YYYY-Www(ISO), day=YYYY-MM-DD. row[field] 가 ISO date string / epoch ms / Date 로 파싱 가능한 값이어야 함.
+    """
+
+
+class Cols(RootModel[str]):
     root: str = Field(..., min_length=1)
+
+
+class Group1(Enum):
+    year = 'year'
+    quarter = 'quarter'
+    month = 'month'
+    week = 'week'
+    day = 'day'
+
+
+class Cols1(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    field: str = Field(..., min_length=1)
+    group: Group1 | None = None
 
 
 class Agg(Enum):
@@ -1379,6 +1418,33 @@ class Totals(BaseModel):
 
 
 class Axis(Enum):
+    """
+    어느 축에 추가할지
+    """
+
+    row = 'row'
+    col = 'col'
+
+
+class CalculatedItem(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    axis: Axis
+    """
+    어느 축에 추가할지
+    """
+    name: str = Field(..., min_length=1)
+    """
+    축 위 표시 라벨
+    """
+    formula: str = Field(..., min_length=1)
+    """
+    산술식. 같은 축 항목 라벨을 식별자로. 공백/한글 라벨은 백틱으로 감싸기: '`Jan` + `Feb` + `Mar`'.
+    """
+
+
+class Axis1(Enum):
     row = 'row'
     col = 'col'
 
@@ -1392,7 +1458,7 @@ class Sort(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    axis: Axis
+    axis: Axis1
     by: str
     """
     dimension 이름 또는 measure label
@@ -1429,13 +1495,13 @@ class PivotTableBlock(BaseModel):
     type: Literal['pivot-table']
     id: Ulid
     source: Source
-    rows: list[Row]
+    rows: list[Rows | Rows1]
     """
-    Row 축 dimension field 이름 list (e.g., ['department', 'year'])
+    Row 축 dimension field 이름 list (e.g., ['department', 'year']). Sprint 5 — 각 항목은 단순 field 이름 (문자열) 이거나 시간 자동 그룹을 위해 {field, group} object. group 은 'year'|'quarter'|'month'|'week'|'day' 중 하나로 raw row 의 date 를 bucket. 미명시 field 는 raw value 사용.
     """
-    cols: list[Col]
+    cols: list[Cols | Cols1]
     """
-    Col 축 dimension field 이름 list (e.g., ['quarter']). 빈 배열 = col 축 없음 (flat aggregation).
+    Col 축 dimension field 이름 list. 빈 배열 = col 축 없음 (flat aggregation). rows 와 동일하게 시간 그룹 object 형식 허용.
     """
     values: list[Value1] = Field(..., min_length=1)
     """
@@ -1445,6 +1511,10 @@ class PivotTableBlock(BaseModel):
     totals: Totals | None = None
     """
     Sprint 2 — subtotal/grand total 토글
+    """
+    calculated_items: list[CalculatedItem] | None = Field(None, alias='calculatedItems')
+    """
+    Sprint 5 — 행/열 축 안 가상 항목 (e.g. 'Q1 = Jan + Feb + Mar'). 각 item 은 base aggregation 이 끝난 후 합성. formula 는 다른 같은-축 항목 라벨을 식별자로 참조하는 산술식 (+ - * / 와 괄호). 평가는 각 measure × (반대 축의 각 위치) 마다 한 번. base 항목과 라벨 충돌 시 calculated item 가 추가 (덮어쓰기 X).
     """
     sort: Sort | None = None
     filters: list[Filter] | None = None

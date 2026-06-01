@@ -78,9 +78,11 @@ export interface PivotResult {
   colHeaders: string[][]
   /** values[rowIdx][colIdx][measureIdx] — null = empty bucket. */
   values: (number | null)[][][]
-  /** Echoed from the block — handy for renderers. */
-  rowDims: string[]
-  colDims: string[]
+  /** Echoed from the block — handy for renderers. Sprint 5 union: each entry
+   *  is either `'field'` or `{field, group?}`. Use `dimField` / `dimLabel`
+   *  helpers when consuming. */
+  rowDims: DimSpec[]
+  colDims: DimSpec[]
   measures: PivotTableBlock['values']
   /** Sprint 2 — only present when `totals.row` is true. rowTotals[i][k]. */
   rowTotals?: (number | null)[][]
@@ -93,6 +95,29 @@ export interface PivotResult {
 type RawRow = PivotTableBlock['source']['rows'][number]
 type Measure = PivotTableBlock['values'][number]
 type FilterSpec = NonNullable<PivotTableBlock['filters']>[number]
+
+/**
+ * Sprint 5 — rows/cols are `(string | {field, group?})`. Normalised spec the
+ * engine actually consumes. `group` triggers date-bucket coercion via
+ * `bucketDate`; otherwise `dimValue` reads the raw field.
+ */
+export type DimSpec = NonNullable<PivotTableBlock['rows']>[number]
+export type DateGroup = 'year' | 'quarter' | 'month' | 'week' | 'day'
+
+/** Field name a `DimSpec` reads from a raw row. */
+export function dimField(d: DimSpec): string {
+  return typeof d === 'string' ? d : d.field
+}
+
+/** Header / picker label for a `DimSpec` — `field` plain, `field_group` when grouped. */
+export function dimLabel(d: DimSpec): string {
+  if (typeof d === 'string') return d
+  return d.group ? `${d.field}_${d.group}` : d.field
+}
+
+function dimGroup(d: DimSpec): DateGroup | undefined {
+  return typeof d === 'string' ? undefined : (d.group as DateGroup | undefined)
+}
 
 /** Tuple-as-string key for the bucket map; `\x1f` (US) is never a field value. */
 const SEP = '\x1f'
@@ -109,6 +134,53 @@ function dimValue(row: RawRow, field: string): string {
   const v = row[field]
   if (v == null) return ''
   return String(v)
+}
+
+/**
+ * Sprint 5 — read a dim spec's bucket label from `row`. When the spec is
+ * `{field, group}`, the raw value is parsed as a date and bucketed at the
+ * requested granularity. Unparseable / missing → '' (same convention as
+ * `dimValue`) so the row simply lands in the empty bucket instead of
+ * throwing — keeps the engine robust against ragged source data.
+ */
+function dimBucket(row: RawRow, spec: DimSpec): string {
+  const field = dimField(spec)
+  const group = dimGroup(spec)
+  if (!group) return dimValue(row, field)
+  return bucketDate(row[field], group)
+}
+
+/**
+ * Coerce `v` to a Date and emit the bucket label at the requested
+ * granularity. ISO date string ('2024-03-15'), epoch ms (number), Date
+ * object — all supported. Unparseable → ''. Week uses ISO week (Mon-start,
+ * year boundary follows ISO 8601 so e.g. 2024-12-30 is `2025-W01`).
+ *
+ * Exported for unit testing; engine uses it internally via dimBucket.
+ */
+export function bucketDate(v: unknown, group: DateGroup): string {
+  if (v == null || v === '') return ''
+  const d = v instanceof Date ? v : new Date(typeof v === 'number' ? v : String(v))
+  if (Number.isNaN(d.getTime())) return ''
+  const y = d.getUTCFullYear()
+  const m = d.getUTCMonth() + 1
+  const day = d.getUTCDate()
+  const pad = (n: number, w = 2) => String(n).padStart(w, '0')
+  switch (group) {
+    case 'year':    return String(y)
+    case 'quarter': return `${y}-Q${Math.floor((m - 1) / 3) + 1}`
+    case 'month':   return `${y}-${pad(m)}`
+    case 'day':     return `${y}-${pad(m)}-${pad(day)}`
+    case 'week': {
+      // ISO 8601 week — Thursday-of-the-week defines the week's year.
+      const t = new Date(Date.UTC(y, d.getUTCMonth(), day))
+      const dow = t.getUTCDay() || 7
+      t.setUTCDate(t.getUTCDate() + 4 - dow)
+      const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1))
+      const week = Math.ceil(((t.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+      return `${t.getUTCFullYear()}-W${pad(week)}`
+    }
+  }
 }
 
 /** Coerce a raw field value to a finite number, or null. */
@@ -308,6 +380,17 @@ function tokenizeExpr(input: string): ExprToken[] {
       i = j
       continue
     }
+    // Sprint 5 — backtick-quoted identifier for calc-item labels that
+    // contain spaces, Korean, or `-` (e.g. `\`Q1\`` or `\`January 2024\``).
+    // The closing backtick is required; an unterminated literal raises
+    // alongside other unexpected-char errors.
+    if (ch === '`') {
+      const end = input.indexOf('`', i + 1)
+      if (end < 0) throw new Error('expr: unterminated backtick identifier')
+      out.push({ kind: 'ident', value: input.slice(i + 1, end) })
+      i = end + 1
+      continue
+    }
     if (ch === '(') {
       out.push({ kind: 'lp', value: ch })
       i++
@@ -460,20 +543,20 @@ export function drillRows(
   rowKey: string[],
   colKey: string[],
 ): RawRow[] {
-  const rowDims = block.rows
-  const colDims = block.cols
+  const rowDims = block.rows as DimSpec[]
+  const colDims = block.cols as DimSpec[]
   const rawRows: RawRow[] = block.source?.rows ?? []
   const filtered = applyFilters(rawRows, block.filters)
   return filtered.filter((r) => {
     for (let i = 0; i < rowDims.length; i++) {
-      const field = rowDims[i] as string
+      const spec = rowDims[i] as DimSpec
       const want = rowKey[i] ?? ''
-      if (dimValue(r, field) !== want) return false
+      if (dimBucket(r, spec) !== want) return false
     }
     for (let i = 0; i < colDims.length; i++) {
-      const field = colDims[i] as string
+      const spec = colDims[i] as DimSpec
       const want = colKey[i] ?? ''
-      if (dimValue(r, field) !== want) return false
+      if (dimBucket(r, spec) !== want) return false
     }
     return true
   })
@@ -550,8 +633,8 @@ function applyFilters(rows: RawRow[], filters: FilterSpec[] | undefined): RawRow
 }
 
 export function buildPivot(block: PivotTableBlock): PivotResult {
-  const rowDims = block.rows
-  const colDims = block.cols
+  const rowDims = block.rows as DimSpec[]
+  const colDims = block.cols as DimSpec[]
   const measures = block.values
   const rawRows: RawRow[] = block.source?.rows ?? []
 
@@ -576,7 +659,7 @@ export function buildPivot(block: PivotTableBlock): PivotResult {
   const NO_COL = ''
 
   for (const r of rows) {
-    const rowTuple = rowDims.map((f) => dimValue(r, f))
+    const rowTuple = rowDims.map((spec) => dimBucket(r, spec))
     const rKey = tupleKey(rowTuple)
     if (!rowSeen.has(rKey)) {
       rowSeen.add(rKey)
@@ -593,7 +676,7 @@ export function buildPivot(block: PivotTableBlock): PivotResult {
         colTuples.set(cKey, [])
       }
     } else {
-      const colTuple = colDims.map((f) => dimValue(r, f))
+      const colTuple = colDims.map((spec) => dimBucket(r, spec))
       cKey = tupleKey(colTuple)
       if (!colSeen.has(cKey)) {
         colSeen.add(cKey)
@@ -654,7 +737,7 @@ export function buildPivot(block: PivotTableBlock): PivotResult {
     const sign = order === 'desc' ? -1 : 1
 
     if (axis === 'row') {
-      const dimIdx = rowDims.indexOf(by)
+      const dimIdx = rowDims.findIndex((d) => dimLabel(d) === by)
       const measureIdx = measures.findIndex((m) => measureLabel(m) === by)
 
       // Build (idx → sort key) — string for dim, number|null for measure-sum.
@@ -698,7 +781,7 @@ export function buildPivot(block: PivotTableBlock): PivotResult {
       rowOrder.push(...newRowOrder)
     } else {
       // axis === 'col'
-      const dimIdx = colDims.indexOf(by)
+      const dimIdx = colDims.findIndex((d) => dimLabel(d) === by)
       const measureIdx = measures.findIndex((m) => measureLabel(m) === by)
 
       const indices = colOrder.map((_, j) => j)
@@ -780,6 +863,13 @@ export function buildPivot(block: PivotTableBlock): PivotResult {
   // Sprint 3 — apply showAs per measure. Mutates result.values (and the
   // matching totals slots if present) in place.
   applyShowAs(result)
+
+  // Sprint 5 — synthesize calculated items (virtual rows / cols whose
+  // values are arithmetic over other items on the same axis). Applied
+  // AFTER showAs so percent / running displays for base items aren't
+  // disturbed; the calculated item itself receives raw values that the
+  // user can post-process by adding another calculated item if needed.
+  applyCalculatedItems(result, block.calculatedItems ?? [])
 
   return result
 }
@@ -893,6 +983,108 @@ function applyShowAs(result: PivotResult): void {
       let s = 0
       for (let i = 0; i < nRows; i++) s += sumCells(values[i] ?? [], k)
       grandTotals[k] = s === 0 ? null : s
+    }
+  }
+}
+
+// ── Sprint 5 — calculated items ───────────────────────────────────────────
+type CalcItem = NonNullable<PivotTableBlock['calculatedItems']>[number]
+
+/**
+ * Synthesize calculated items as virtual rows/cols. Each item's `formula`
+ * references *other items on the same axis* by label; the engine evaluates
+ * the arithmetic per (measure × opposite-axis-position) cell.
+ *
+ *   axis: 'row'  → new entries appended to `rowHeaders` + `values`.
+ *   axis: 'col'  → new entries appended to each `values[i]` + `colHeaders`.
+ *
+ * Reference resolution uses the first dim of each tuple as the label, which
+ * matches what the viewer renders at the outermost tier. Backtick-quoted
+ * identifiers (``Q1``) handle labels with spaces / Korean / `-`. Unknown /
+ * missing labels → null cell.
+ *
+ * Calculated items are appended in source order so a later item can
+ * reference an earlier one (e.g. `H1 = Q1 + Q2`).
+ */
+function applyCalculatedItems(result: PivotResult, items: readonly CalcItem[]): void {
+  if (items.length === 0) return
+  const measureCount = result.measures.length
+  const rowLabels: string[] = result.rowHeaders.map((t) => t[0] ?? '')
+  const colLabels: string[] = result.colHeaders.map((t) => t[0] ?? '')
+
+  for (const item of items) {
+    let ast: ExprNode
+    try {
+      ast = parseExpr(item.formula)
+    } catch {
+      continue
+    }
+
+    if (item.axis === 'row') {
+      const newRow: (number | null)[][] = result.colHeaders.map((_, j) => {
+        const cell: (number | null)[] = []
+        for (let k = 0; k < measureCount; k++) {
+          const ctx = new Map<string, number>()
+          for (let i = 0; i < rowLabels.length; i++) {
+            const v = result.values[i]?.[j]?.[k]
+            if (v != null) ctx.set(rowLabels[i] ?? '', v)
+          }
+          cell.push(evalCalcExpr(ast, ctx))
+        }
+        return cell
+      })
+      result.rowHeaders.push([item.name])
+      result.values.push(newRow)
+      rowLabels.push(item.name)
+    } else {
+      for (let i = 0; i < result.values.length; i++) {
+        const row = result.values[i]
+        if (!row) continue
+        const cell: (number | null)[] = []
+        for (let k = 0; k < measureCount; k++) {
+          const ctx = new Map<string, number>()
+          for (let j = 0; j < colLabels.length; j++) {
+            const v = row[j]?.[k]
+            if (v != null) ctx.set(colLabels[j] ?? '', v)
+          }
+          cell.push(evalCalcExpr(ast, ctx))
+        }
+        row.push(cell)
+      }
+      result.colHeaders.push([item.name])
+      colLabels.push(item.name)
+    }
+  }
+}
+
+/**
+ * Evaluate a calc-item AST against a label→number context. Unknown
+ * identifier or any null propagation → null (cell stays blank instead of
+ * throwing). Division by zero → null.
+ */
+function evalCalcExpr(node: ExprNode, ctx: Map<string, number>): number | null {
+  switch (node.type) {
+    case 'num':
+      return Number.isFinite(node.value) ? node.value : null
+    case 'ref': {
+      const v = ctx.get(node.name)
+      return v == null || !Number.isFinite(v) ? null : v
+    }
+    case 'unary': {
+      const a = evalCalcExpr(node.arg, ctx)
+      if (a === null) return null
+      return node.op === '-' ? -a : a
+    }
+    case 'bin': {
+      const a = evalCalcExpr(node.left, ctx)
+      const b = evalCalcExpr(node.right, ctx)
+      if (a === null || b === null) return null
+      switch (node.op) {
+        case '+': return a + b
+        case '-': return a - b
+        case '*': return a * b
+        case '/': return b === 0 ? null : a / b
+      }
     }
   }
 }

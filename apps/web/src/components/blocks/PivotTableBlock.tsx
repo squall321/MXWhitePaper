@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { WidgetExportMenu } from './WidgetExportMenu'
-import { buildPivot, drillRows } from './pivotEngine'
+import { buildPivot, drillRows, dimField, dimLabel } from './pivotEngine'
 import { Modal } from '@/components/ui/Modal'
 import type { PivotTableBlock } from '@/types/document'
 
@@ -377,8 +377,8 @@ function collectDrillFields(
       out.push(f)
     }
   }
-  for (const f of block.rows) push(f)
-  for (const f of block.cols) push(f)
+  for (const d of block.rows) push(dimField(d))
+  for (const d of block.cols) push(dimField(d))
   for (const m of block.values) {
     if (m.field) push(m.field)
   }
@@ -450,7 +450,7 @@ function buildCsv(
   empty: string,
 ): string {
   const lines: string[] = []
-  const headers: string[] = [...result.rowDims]
+  const headers: string[] = result.rowDims.map(dimLabel)
   for (const colTuple of result.colHeaders) {
     const colLabel = colTuple.join('/') || '_'
     for (const m of measures) {

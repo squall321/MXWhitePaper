@@ -28,6 +28,9 @@ import {
 } from '@dnd-kit/core'
 import type { PivotTableBlock } from '@/types/document'
 import { PivotTableBlockView } from '@/components/blocks/PivotTableBlock'
+import { dimField, dimLabel, type DimSpec, type DateGroup } from '@/components/blocks/pivotEngine'
+
+const DATE_GROUPS: DateGroup[] = ['year', 'quarter', 'month', 'week', 'day']
 
 type Agg = PivotTableBlock['values'][number]['agg']
 const AGGS: Agg[] = ['sum', 'count', 'avg', 'min', 'max', 'median', 'stdev', 'var']
@@ -207,6 +210,9 @@ export function PivotTableBlockEditor({ block, onChange }: PivotTableBlockEditor
       <SortPicker block={block} onChange={onChange} />
       <FiltersPicker block={block} fields={fields} onChange={onChange} />
 
+      {/* Calculated items (Sprint 5) */}
+      <CalculatedItemsPicker block={block} onChange={onChange} />
+
       {/* Preview */}
       <section className="border-t border-gray-200 pt-2 dark:border-gray-700">
         <h5 className="mb-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
@@ -343,11 +349,16 @@ function DimPicker({
 }: {
   label: string
   zone: PivotZone
-  dims: string[]
+  dims: DimSpec[]
   fields: string[]
-  onChange: (next: string[]) => void
+  onChange: (next: DimSpec[]) => void
   testid: string
 }) {
+  // Sprint 5 — each chip now exposes a "그룹" dropdown (year/quarter/…)
+  // when the user wants to bucket a date-typed field. The list of
+  // already-picked fields uses `dimField` so re-adding the same field
+  // with a different group is allowed (e.g. row=year(date), col=month(date)).
+  const usedFields = new Set(dims.map(dimField))
   return (
     <DroppableZone zone={zone} className="p-1">
       <div data-testid={testid}>
@@ -358,15 +369,36 @@ function DimPicker({
               필드 드래그
             </span>
           )}
-          {dims.map((d, i) => (
-            <DraggableDimChip
-              key={`${d}-${i}`}
-              name={d}
-              zone={zone}
-              index={i}
-              onRemove={() => onChange(dims.filter((_, j) => j !== i))}
-            />
-          ))}
+          {dims.map((d, i) => {
+            const field = dimField(d)
+            const group = typeof d === 'string' ? '' : (d.group ?? '')
+            return (
+              <span key={`${dimLabel(d)}-${i}`} className="inline-flex items-center gap-1">
+                <DraggableDimChip
+                  name={dimLabel(d)}
+                  zone={zone}
+                  index={i}
+                  onRemove={() => onChange(dims.filter((_, j) => j !== i))}
+                />
+                <select
+                  value={group}
+                  onChange={(e) => {
+                    const next = e.target.value as '' | DateGroup
+                    const replacement: DimSpec = next ? { field, group: next } : field
+                    onChange(dims.map((x, j) => (j === i ? replacement : x)))
+                  }}
+                  aria-label={`${dimLabel(d)} 시간 그룹`}
+                  data-testid={`pivot-dim-group-${field}`}
+                  className="rounded border border-gray-300 bg-white px-1 text-[10px] dark:border-gray-600 dark:bg-gray-800"
+                >
+                  <option value="">raw</option>
+                  {DATE_GROUPS.map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </span>
+            )
+          })}
         </div>
         <select
           value=""
@@ -378,7 +410,7 @@ function DimPicker({
         >
           <option value="">+ 필드 추가</option>
           {fields
-            .filter((f) => !dims.includes(f))
+            .filter((f) => !usedFields.has(f))
             .map((f) => (
               <option key={f} value={f}>
                 {f}
@@ -636,10 +668,11 @@ function SortPicker({
 }) {
   const sort = block.sort
   const axis: SortAxis = sort?.axis ?? 'row'
-  const byOptions =
+  // Sprint 5 — rows/cols are DimSpec[]; sort.by compares against dimLabel.
+  const byOptions: string[] =
     axis === 'row'
-      ? [...block.rows, ...block.values.map(measureLabel)]
-      : [...block.cols, ...block.values.map(measureLabel)]
+      ? [...block.rows.map(dimLabel), ...block.values.map(measureLabel)]
+      : [...block.cols.map(dimLabel), ...block.values.map(measureLabel)]
   const update = (next: PivotTableBlock['sort'] | undefined) => {
     const out = { ...block }
     if (next && next.by) out.sort = next
@@ -1044,4 +1077,102 @@ function splitCsvLine(line: string, sep: string): string[] {
   }
   out.push(buf)
   return out
+}
+
+// ── Sprint 5 — calculated items picker ──────────────────────────────────
+type CalcItem = NonNullable<PivotTableBlock['calculatedItems']>[number]
+
+function CalculatedItemsPicker({
+  block,
+  onChange,
+}: {
+  block: PivotTableBlock
+  onChange: (next: PivotTableBlock) => void
+}) {
+  const items: CalcItem[] = block.calculatedItems ?? []
+  const update = (next: CalcItem[]) => {
+    const out = { ...block }
+    if (next.length === 0) delete out.calculatedItems
+    else out.calculatedItems = next as PivotTableBlock['calculatedItems']
+    onChange(out)
+  }
+  return (
+    <section
+      data-testid="pivot-calc-items"
+      className="mt-2 rounded border border-dashed border-gray-300 p-2 dark:border-gray-700"
+    >
+      <p className="mb-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+        Calculated items
+        <span className="ml-1 font-normal text-gray-500 dark:text-gray-400">
+          (e.g. <code>`Jan` + `Feb` + `Mar`</code>)
+        </span>
+      </p>
+      {items.length > 0 && (
+        <ul className="space-y-1">
+          {items.map((it, i) => (
+            <li key={i} className="flex flex-wrap items-center gap-1 text-[11px]">
+              <select
+                value={it.axis}
+                onChange={(e) =>
+                  update(
+                    items.map((x, j) =>
+                      j === i ? { ...x, axis: e.target.value as 'row' | 'col' } : x,
+                    ),
+                  )
+                }
+                data-testid={`pivot-calc-item-${i}-axis`}
+                aria-label="axis"
+                className="rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+              >
+                <option value="row">row</option>
+                <option value="col">col</option>
+              </select>
+              <input
+                type="text"
+                value={it.name}
+                onChange={(e) =>
+                  update(items.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))
+                }
+                placeholder="name (e.g. Q1)"
+                aria-label="name"
+                data-testid={`pivot-calc-item-${i}-name`}
+                className="w-24 rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+              />
+              <span>=</span>
+              <input
+                type="text"
+                value={it.formula}
+                onChange={(e) =>
+                  update(items.map((x, j) => (j === i ? { ...x, formula: e.target.value } : x)))
+                }
+                placeholder="`Jan` + `Feb` + `Mar`"
+                aria-label="formula"
+                data-testid={`pivot-calc-item-${i}-formula`}
+                className="min-w-0 flex-1 rounded border border-gray-300 bg-white p-0.5 font-mono dark:border-gray-600 dark:bg-gray-800"
+              />
+              <button
+                type="button"
+                onClick={() => update(items.filter((_, j) => j !== i))}
+                aria-label="remove calculated item"
+                data-testid={`pivot-calc-item-${i}-remove`}
+                className="rounded border border-gray-300 px-1 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        onClick={() =>
+          update([...items, { axis: 'row', name: '', formula: '' }])
+        }
+        data-testid="pivot-calc-item-add"
+        className="mt-1 rounded border border-gray-300 px-1.5 py-0.5 text-[11px] hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800"
+      >
+        + add
+      </button>
+    </section>
+  )
 }

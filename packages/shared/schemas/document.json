@@ -1121,13 +1121,39 @@
         },
         "rows": {
           "type": "array",
-          "description": "Row 축 dimension field 이름 list (e.g., ['department', 'year'])",
-          "items": { "type": "string", "minLength": 1 }
+          "description": "Row 축 dimension field 이름 list (e.g., ['department', 'year']). Sprint 5 — 각 항목은 단순 field 이름 (문자열) 이거나 시간 자동 그룹을 위해 {field, group} object. group 은 'year'|'quarter'|'month'|'week'|'day' 중 하나로 raw row 의 date 를 bucket. 미명시 field 는 raw value 사용.",
+          "items": {
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              {
+                "type": "object",
+                "required": ["field"],
+                "additionalProperties": false,
+                "properties": {
+                  "field": { "type": "string", "minLength": 1 },
+                  "group": { "enum": ["year", "quarter", "month", "week", "day"], "description": "raw row 의 date 를 bucket 할 단위. year=YYYY, quarter=YYYY-Q1..4, month=YYYY-MM, week=YYYY-Www(ISO), day=YYYY-MM-DD. row[field] 가 ISO date string / epoch ms / Date 로 파싱 가능한 값이어야 함." }
+                }
+              }
+            ]
+          }
         },
         "cols": {
           "type": "array",
-          "description": "Col 축 dimension field 이름 list (e.g., ['quarter']). 빈 배열 = col 축 없음 (flat aggregation).",
-          "items": { "type": "string", "minLength": 1 }
+          "description": "Col 축 dimension field 이름 list. 빈 배열 = col 축 없음 (flat aggregation). rows 와 동일하게 시간 그룹 object 형식 허용.",
+          "items": {
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              {
+                "type": "object",
+                "required": ["field"],
+                "additionalProperties": false,
+                "properties": {
+                  "field": { "type": "string", "minLength": 1 },
+                  "group": { "enum": ["year", "quarter", "month", "week", "day"] }
+                }
+              }
+            ]
+          }
         },
         "values": {
           "type": "array",
@@ -1174,6 +1200,20 @@
             "grand": { "type": "boolean", "description": "row+col 교차 grand total cell" },
             "row":   { "type": "boolean", "description": "각 row 마지막 col 에 row total" },
             "col":   { "type": "boolean", "description": "각 col 마지막 row 에 col total" }
+          }
+        },
+        "calculatedItems": {
+          "type": "array",
+          "description": "Sprint 5 — 행/열 축 안 가상 항목 (e.g. 'Q1 = Jan + Feb + Mar'). 각 item 은 base aggregation 이 끝난 후 합성. formula 는 다른 같은-축 항목 라벨을 식별자로 참조하는 산술식 (+ - * / 와 괄호). 평가는 각 measure × (반대 축의 각 위치) 마다 한 번. base 항목과 라벨 충돌 시 calculated item 가 추가 (덮어쓰기 X).",
+          "items": {
+            "type": "object",
+            "required": ["axis", "name", "formula"],
+            "additionalProperties": false,
+            "properties": {
+              "axis":    { "enum": ["row", "col"], "description": "어느 축에 추가할지" },
+              "name":    { "type": "string", "minLength": 1, "description": "축 위 표시 라벨" },
+              "formula": { "type": "string", "minLength": 1, "description": "산술식. 같은 축 항목 라벨을 식별자로. 공백/한글 라벨은 백틱으로 감싸기: '`Jan` + `Feb` + `Mar`'." }
+            }
           }
         },
         "sort": {
