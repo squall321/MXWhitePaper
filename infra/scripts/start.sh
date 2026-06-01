@@ -101,6 +101,48 @@ for i in $(seq 1 40); do
   sleep 1
 done
 
+# Idempotent shared_memory patch — deployment-playbook §6.하 (apptainer
+# rootless + postgres /dev/shm flaky). Default `dynamic_shared_memory_type
+# = posix` makes /dev/shm POSIX segments that go stale on host reboot or
+# cross-user shm cleanup, surfacing as `asyncpg.exceptions.UndefinedFileError:
+# could not open shared memory segment "/PostgreSQL.<rand>"`. Flipping to
+# mmap moves segments into PGDATA/pg_dynshmem/ (no /dev/shm dependency).
+# This used to be a manual two-line edit + restart on every fresh install;
+# now start.sh applies it on first boot and is a no-op thereafter.
+PGCONF="$DATA_DIR/postgres/pgdata/postgresql.conf"
+if [ -f "$PGCONF" ] && ! grep -qE '^[[:space:]]*dynamic_shared_memory_type[[:space:]]*=[[:space:]]*mmap' "$PGCONF"; then
+  echo "→ patching postgresql.conf: shared_memory_type → mmap (playbook §6.하)"
+  # Match both commented-out (`#shared_memory_type = …`) and any active
+  # non-mmap line; idempotent re-runs because the grep guard above skips
+  # an already-mmap conf.
+  sed -i -E 's/^[[:space:]]*#?[[:space:]]*shared_memory_type[[:space:]]*=.*/shared_memory_type = mmap/' "$PGCONF"
+  sed -i -E 's/^[[:space:]]*#?[[:space:]]*dynamic_shared_memory_type[[:space:]]*=.*/dynamic_shared_memory_type = mmap/' "$PGCONF"
+  # Ensure both directives exist (append if absent — handles the edge
+  # case where the stock conf had neither key at all, which the sed
+  # above would have left untouched).
+  grep -q '^shared_memory_type = mmap' "$PGCONF" || echo 'shared_memory_type = mmap' >> "$PGCONF"
+  grep -q '^dynamic_shared_memory_type = mmap' "$PGCONF" || echo 'dynamic_shared_memory_type = mmap' >> "$PGCONF"
+  echo "  → restarting $INST_POSTGRES to pick up new shared_memory config"
+  "$APPTAINER" instance stop "$INST_POSTGRES" 2>/dev/null || true
+  start_instance "$INST_POSTGRES" "$POSTGRES_SIF" \
+    --bind "$DATA_DIR/postgres:/var/lib/postgresql/data" \
+    --bind "$DATA_DIR/postgres-run:/var/run/postgresql" \
+    --env "POSTGRES_USER=${POSTGRES_USER}" \
+    --env "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" \
+    --env "POSTGRES_DB=${POSTGRES_DB}" \
+    --env "PGPORT=${POSTGRES_PORT}" \
+    --env "PGDATA=/var/lib/postgresql/data/pgdata" \
+    --env "LANG=C.UTF-8" \
+    --env "LC_ALL=C.UTF-8"
+  for i in $(seq 1 40); do
+    if "$APPTAINER" exec instance://"$INST_POSTGRES" pg_isready -h 127.0.0.1 -p "$POSTGRES_PORT" -U "$POSTGRES_USER" >/dev/null 2>&1; then
+      echo "✓ postgres ready (after mmap patch)"
+      break
+    fi
+    sleep 1
+  done
+fi
+
 minio_ready=0
 for i in $(seq 1 60); do
   if curl -fsS "http://127.0.0.1:${MINIO_API_PORT}/minio/health/live" >/dev/null 2>&1; then

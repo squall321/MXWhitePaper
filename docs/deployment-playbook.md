@@ -224,7 +224,9 @@ sed -i "s/HOST_IP/$HOST_IP/g" .env
 
 - 증상: 갑자기 `asyncpg.exceptions.UndefinedFileError: could not open shared memory segment "/PostgreSQL.<rand>"`. login 500, endpoint test 수십 개 random fail. `pg_isready` 는 accepting이라고 표시되지만 백엔드 워커는 죽음.
 - 원인: postgres 기본 `dynamic_shared_memory_type = posix` 가 `/dev/shm` 위에 POSIX shared memory segment 를 만드는데, apptainer rootless + 호스트 `/dev/shm` 공유 + user namespace uid 매핑 (`nobody:nogroup`) 조합이 불안정. 호스트 OS reboot 또는 다른 사용자의 shm 정리 시 stale.
-- 해결: `infra/data/postgres/pgdata/postgresql.conf` 두 줄 수정 (2026-05-18 적용 완료)
+- 해결: `infra/data/postgres/pgdata/postgresql.conf` 두 줄 수정. **2026-06-01 부터 `infra/scripts/start.sh` 가 자동 적용** — pg_isready 직후 conf 검사, 두 라인이 mmap 아니면 sed 갱신 + 부재 시 append + postgres 인스턴스 재시작. 새 머신에서 첫 부팅 한 번이면 끝. 멱등 (이미 mmap 이면 no-op).
+
+  자동 패치가 만드는 결과 (참고):
 
   ```conf
   shared_memory_type = mmap          # 주석 해제
@@ -232,7 +234,7 @@ sed -i "s/HOST_IP/$HOST_IP/g" .env
   ```
 
   파일 백엔드로 전환 → PGDATA 안의 `pg_dynshmem/mmap.<id>` 에 생성. `/dev/shm` 의존 0. 성능 영향 < 5% (문서/분석 워크로드는 무시 가능).
-- 적용 후: postgres + api 인스턴스 stop/start. 확인은 `psql -c 'SHOW dynamic_shared_memory_type'` 가 `mmap` 인지.
+- 자동화 적용 머신은 `start.sh` 로그에 `→ patching postgresql.conf: shared_memory_type → mmap (playbook §6.하)` 한 번 출력. 수동 확인: `psql -c 'SHOW dynamic_shared_memory_type'` 가 `mmap` 인지.
 - 같은 호스트 다른 프로젝트(`aidh_postgres`, `koodtx-postgres`, `sf_postgres`)도 같은 패턴이면 동일 패치 권고. mxwp 인스턴스는 *별개 PGDATA + 별개 conf* 라 격리됨.
 
 ### 거. apptainer 1.5.x 와 우리 스택 호환성 — 사용자 영역 1.3.6 병행 설치

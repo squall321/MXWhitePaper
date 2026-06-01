@@ -129,6 +129,66 @@ else
     apt_install uidmap
   fi
 fi
+
+# apptainer 1.5.x rootless 가 cgroup v2 + systemd user manager + dbus 의존.
+# 빠지면 'failed to connect to dbus ... could not detect the OwnerUID' 로
+# instance start 실패 (playbook §6.거). 1.3.6 vendored 도 dbus-user-session
+# 이 있으면 더 안정.
+if [ "$PKG" = "apt" ]; then
+  if dpkg -s dbus-user-session >/dev/null 2>&1; then
+    ok "dbus-user-session: installed"
+  else
+    miss "dbus-user-session 미설치 (apptainer rootless dbus 의존성)"
+    [ "$CHECK_ONLY" -eq 0 ] && apt_install dbus-user-session
+  fi
+fi
+
+# squashfuse — apptainer 가 .sif (squashfs 이미지) 를 rootless 로 마운트할 때
+# 사용. fakeroot 시나리오 외에도 'mxwp_*' 컨테이너 사용 가능성 있어 함께
+# 설치. squashfs-tools 는 mksquashfs (build.sh 가 사용).
+if [ "$PKG" = "apt" ]; then
+  for pkg in squashfuse squashfs-tools; do
+    if dpkg -s "$pkg" >/dev/null 2>&1; then
+      ok "$pkg: installed"
+    else
+      miss "$pkg 미설치"
+      [ "$CHECK_ONLY" -eq 0 ] && apt_install "$pkg"
+    fi
+  done
+fi
+
+# /etc/subuid 빈 사용자 → rootless instance 가 'newuidmap: write to uid_map
+# failed: Invalid argument' 로 실패. install-host-deps 는 root 로 도는데
+# 실제 사용자는 SUDO_USER 라 그 사용자 기준으로 추가.
+TARGET_USER="${SUDO_USER:-$USER}"
+if [ -n "$TARGET_USER" ] && [ "$TARGET_USER" != "root" ]; then
+  if grep -q "^${TARGET_USER}:" /etc/subuid 2>/dev/null \
+     && grep -q "^${TARGET_USER}:" /etc/subgid 2>/dev/null; then
+    ok "/etc/subuid + /etc/subgid: $TARGET_USER 매핑 존재"
+  else
+    miss "/etc/subuid 또는 /etc/subgid 에 $TARGET_USER 매핑 없음"
+    if [ "$CHECK_ONLY" -eq 0 ]; then
+      if command -v usermod >/dev/null 2>&1; then
+        usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$TARGET_USER" \
+          && ok "subuid/subgid 100000-165535 추가 → $TARGET_USER"
+      else
+        warn "usermod 없음 — 수동: sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 $TARGET_USER"
+      fi
+    fi
+  fi
+
+  # systemd-logind linger — user systemd 가 로그아웃 후에도 살아있어야
+  # cgroup v2 rootless 가 안정. apptainer 1.5.x 가 강하게 의존.
+  if command -v loginctl >/dev/null 2>&1; then
+    if loginctl show-user "$TARGET_USER" 2>/dev/null | grep -q '^Linger=yes'; then
+      ok "linger 활성: $TARGET_USER"
+    else
+      miss "linger 비활성: $TARGET_USER (logout 시 user systemd 죽음)"
+      [ "$CHECK_ONLY" -eq 0 ] && loginctl enable-linger "$TARGET_USER" \
+        && ok "enable-linger 적용 → $TARGET_USER"
+    fi
+  fi
+fi
 # ca-certificates 는 library 라 command 가 없음 → dpkg 로 확인
 if [ "$PKG" = "apt" ]; then
   if dpkg -s ca-certificates >/dev/null 2>&1; then

@@ -132,6 +132,23 @@ if run_step 0; then
   command -v python3 >/dev/null 2>&1 \
     && ok "python: $(python3 --version)" \
     || fail "python3 ≥3.12 required"
+
+  # ── 0d) rootless 환경 사전점검 (uidmap / dbus / subuid / linger / userns) ──
+  # install-host-deps.sh --check-only 를 호출해 *부족한 것만* 골라낸다.
+  # quickstart 자체는 root 가 아니라 자동 설치를 못 함 — 부족한 게 있으면
+  # 사용자에게 명령 한 줄로 sudo 안내 후 abort. 한 번 sudo 통과하면 다음 부터
+  # 멱등으로 skip.
+  if [ -x infra/scripts/install-host-deps.sh ]; then
+    HOSTDEPS_OUT="$(bash infra/scripts/install-host-deps.sh --check-only 2>&1 || true)"
+    if echo "$HOSTDEPS_OUT" | grep -qE '^\s*✗' ; then
+      warn "rootless 환경에 빠진 의존성/설정 감지 (install-host-deps --check-only):"
+      echo "$HOSTDEPS_OUT" | grep -E '^\s*✗' | sed 's/^/    /'
+      fail "다음 한 줄로 자동 설치 후 quickstart 재실행:
+    sudo -E ./infra/scripts/install-host-deps.sh"
+    else
+      ok "rootless 환경 점검 통과 (uidmap / dbus / subuid / linger)"
+    fi
+  fi
 fi
 
 # ── Step 1: .env ────────────────────────────────────────────────────
