@@ -352,6 +352,11 @@ graph TD
   B --> C
 ```
 
+**docx 로 그릴 때는 mermaid 가 표준.** 외부 도구에서 받은 Excalidraw scene 을
+그대로 보존하려면 `engine: "excalidraw"` + `source` 에 scene JSON 문자열을
+넣어 *API 로 직접 전송* (docx 본문 안에서는 흉내 못 냄). viewer/editor 모두
+정상 — 자세한 키는 [llm-widgets-via-api §3.12](./llm-widgets-via-api.md#312-flow-플로우다이어그램).
+
 ### 3.6 org-chart (조직도)
 
 두 가지:
@@ -442,6 +447,28 @@ in-place 로 `label` 로 rename. API 로 새로 만들 땐 *반드시* `label` �
 ### 3.12 whiteboard
 
 docx 가 strokes 를 표현 못 함 — *MX 안에서만 작성 가능*. docx 에 만들지 마라.
+
+### 3.13 pivot-table (피벗 표) ★
+
+**docx 로는 만들 수 없다 — API 전용**. 보고서에 Excel pivot 동등이 필요하면
+`POST /documents` 의 body 안에서 직접 작성. raw row 한 줄 한 줄을 채워
+넣으면 viewer 가 cross-tab 으로 집계해 표시.
+
+핵심 패턴 (LLM 산출 시 가장 자주 쓰일 형태):
+
+- **시간 분석** — `rows: [{field: "date", group: "month"}]` 로 raw date 를
+  자동 월별 bucket. group ∈ year/quarter/month/week/day. **년/분기 컬럼을
+  사전 가공해 raw 에 추가할 필요 없음.**
+- **분기 합산** — `calculatedItems: [{axis: "row", name: "Q1",
+  formula: "`` `Jan` + `Feb` + `Mar` ``"}]`. 백틱 라벨 필수 (공백/한글/`-`).
+- **비율 표시** — measure 에 `showAs: "pct_row"` + `numberFormat: "0.0%"`.
+- **TOP N** — `filters: [{field: "v", op: "top_n", value: 10}]`.
+- **계산 필드** — `values: [{expr: "revenue - cost", agg: "sum",
+  label: "이익"}]`.
+
+전체 키 / 8 aggregator / 산술 식 syntax 는
+[llm-widgets-via-api §3.22](./llm-widgets-via-api.md#322-pivot-table-피벗-표-)
+참조.
 
 ---
 

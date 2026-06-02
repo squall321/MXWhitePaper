@@ -22,12 +22,15 @@
 
 ---
 
-## 2. 35 Block 한 줄 요약 (LLM 으로 만들 수 있는 29 + 사람 전용 6)
+## 2. 36 Block 한 줄 요약 (LLM 으로 만들 수 있는 29 + 사람 전용 6 + API 전용 1)
 
-스키마는 총 35 종 블록 정의. 그 중 6 종 (`spreadsheet` / `form` / `quiz` /
+스키마는 총 36 종 블록 정의. 그 중 6 종 (`spreadsheet` / `form` / `quiz` /
 `calculator` / `data-source` / `dashboard-embed`) 은 사용자 입력 / 라이브 데이터 /
 외부 시스템 의존이라 **docx 본문으로 표현 불가** — 본문에 placeholder 단락만
 두고 사람이 사이트 에디터에서 추가. 자세히는 `llm-input-rules.md` §2.17.
+`pivot-table` 은 docx 가 cross-tab 의미를 못 담아 docx 비표현 — **API 직접
+전송으로만 가능** (`llm-widgets-via-api.md` §3.22). 외부 LLM 이 보고서를
+JSON 으로 직접 생성하는 경로에서 핵심 위젯.
 
 | 블록 | 형태 | 필수 신호 / 비고 |
 |---|---|---|
@@ -46,7 +49,8 @@
 | kpi-cards         | 표, 헤더 = `label`,`value`(+`delta`,`trend`)      | 행 1~4개 |
 | chart             | 라벨축+시리즈 N 개 헤더 표 + marker               | `Widget: chart (bar)` 필수 |
 | gantt             | 표, 헤더 = `name`,`start`,`end`(+`progress`)      | 세 컬럼 |
-| flow              | code block 안 mermaid DSL                        | `graph TD` 등 |
+| flow              | code block 안 mermaid DSL                        | `graph TD` 등. Excalidraw 보존은 API 직접 |
+| pivot-table       | docx 표현 불가 — API 직접 전송                    | rows×cols×values cross-tab. 시간 그룹 + calc items |
 | org-chart         | 들여쓰기 리스트 OR `name`/`parent` 헤더 표        | — |
 | gallery           | 연속 inline 이미지                                | **3개 이상** |
 | columns           | Word "단" 기능 (Layout > Columns > 2/3/4)        | `<w:cols num=N>` |
@@ -111,6 +115,49 @@ Widget: chart (bar)
   Widget: iframe
   https://example.com/widget
   ```
+
+**pivot-table** (docx 가 아니라 *API 직접 전송* 으로만 가능):
+
+```json
+{
+  "type": "pivot-table",
+  "id": "<ULID>",
+  "source": {"kind": "inline", "rows": [
+    {"dept":"Sales","date":"2024-01-15","v":100},
+    {"dept":"Sales","date":"2024-04-10","v":150},
+    {"dept":"R&D",  "date":"2024-02-20","v":80}
+  ]},
+  "rows":  ["dept"],
+  "cols":  [{"field": "date", "group": "quarter"}],
+  "values": [{"field": "v", "agg": "sum"}],
+  "calculatedItems": [
+    {"axis": "col", "name": "H1", "formula": "`2024-Q1` + `2024-Q2`"}
+  ]
+}
+```
+
+핵심:
+
+- `rows` / `cols` 항목은 단순 field 이름 *또는* `{field, group?}` (group ∈
+  year/quarter/month/week/day) — raw date 를 자동 bucket. **년/분기 컬럼을
+  사전 가공해 raw 에 추가할 필요 없음**.
+- `calculatedItems.formula` 의 라벨은 백틱으로 (`` `Q1` ``). 공백/한글/`-` 포함
+  라벨 필수.
+- 측정값 `values[i].showAs` ∈ `value|pct_row|pct_col|pct_total|running`,
+  `numberFormat` 패턴 (`#,##0`, `0.0%`).
+- `expr` 계산 필드: `{"expr": "revenue - cost", "agg": "sum", "label": "이익"}`.
+
+자세히는 `llm-widgets-via-api.md` §3.22.
+
+**flow excalidraw** — mermaid 가 표준. *외부에서 받은 Excalidraw scene* 만
+보존할 때:
+
+```json
+{"type":"flow","id":"<ULID>","engine":"excalidraw",
+ "source":"{\"elements\":[…],\"appState\":{…},\"files\":{…}}"}
+```
+
+`source` 는 scene JSON 의 문자열화. `elements` 만 필수.
 
 ---
 

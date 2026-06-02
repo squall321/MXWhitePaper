@@ -284,6 +284,23 @@ markArea/dataZoom/brush 등 추가 `options` 필드로 ECharts 옵션 직접 전
 
 `engine`: `"mermaid"` (DSL) | `"excalidraw"` (JSON).
 
+**Excalidraw 변형** — `source` 는 Excalidraw scene JSON 의 문자열화. 최소 형식:
+
+```json
+{
+  "type": "flow",
+  "id": "<ULID>",
+  "engine": "excalidraw",
+  "source": "{\"type\":\"excalidraw\",\"version\":2,\"source\":\"mxwp-editor\",\"elements\":[{\"id\":\"r1\",\"type\":\"rectangle\",\"x\":0,\"y\":0,\"width\":120,\"height\":80,\"strokeColor\":\"#000\",\"backgroundColor\":\"transparent\",\"strokeWidth\":2}],\"appState\":{\"viewBackgroundColor\":\"#ffffff\"},\"files\":{}}"
+}
+```
+
+규칙:
+
+- 최소 키: `{ "elements": [...] }` — 나머지는 모두 선택. parse 실패 / `elements` 미배열 → viewer 가 recovery banner 노출
+- viewer 는 `@excalidraw/excalidraw` 의 헤드리스 `exportToSvg` 로 정적 SVG 렌더. editor 는 같은 lib 의 캔버스 컴포넌트 lazy mount (Sprint-7)
+- LLM 이 생성하는 경우 mermaid 가 훨씬 간결 → excalidraw 는 *외부에서 받은 scene 보존* 용도로 권장. 새로 그릴 때는 mermaid 가 우선
+
 ### 3.13 org-chart (조직도)
 
 ```json
@@ -434,7 +451,123 @@ YouTube/Vimeo 등 oembed 지원 호스트는 자동 변환됨.
 }
 ```
 
-### 3.22 doc-link-card / glossary-ref / bibliography / spreadsheet / 기타
+### 3.22 pivot-table (피벗 표) ★
+
+Excel 의 pivot table 동등. raw rows 를 `rows × cols × values` 축으로
+cross-tab 집계. 외부 LLM 이 "월별 매출 + 작년 동월 대비" 같은 보고서를
+한 위젯으로 표현하기에 가장 강력.
+
+**최소 (Sprint 1)** — inline rows + 단일 측정값:
+
+```json
+{
+  "type": "pivot-table",
+  "id": "<ULID>",
+  "source": {
+    "kind": "inline",
+    "rows": [
+      {"dept": "Sales", "year": "2024", "v": 100},
+      {"dept": "Sales", "year": "2025", "v": 150},
+      {"dept": "R&D",   "year": "2024", "v": 80}
+    ]
+  },
+  "rows": ["dept"],
+  "cols": ["year"],
+  "values": [{"field": "v", "agg": "sum"}]
+}
+```
+
+`agg` ∈ `sum|count|avg|min|max|median|stdev|var`. measure 다중 가능.
+
+**Sprint 2** — `totals` / `sort` / `filters`:
+
+```json
+{
+  "totals": { "row": true, "col": true, "grand": true },
+  "sort":   { "axis": "row", "by": "sum(v)", "order": "desc" },
+  "filters": [
+    { "field": "year", "op": "in", "value": ["2024", "2025"] },
+    { "field": "v",    "op": "top_n", "value": 10 }
+  ]
+}
+```
+
+`filter.op` ∈ `in|not_in|gt|lt|top_n|bottom_n`. totals 는 raw row 재집계
+(avg-of-avg 회피).
+
+**Sprint 3** — `showAs` 비율/누적 + `numberFormat`:
+
+```json
+{
+  "values": [
+    { "field": "v", "agg": "sum", "showAs": "pct_row",  "numberFormat": "0.0%" },
+    { "field": "v", "agg": "sum", "showAs": "running",  "numberFormat": "#,##0" }
+  ]
+}
+```
+
+`showAs` ∈ `value|pct_row|pct_col|pct_total|running`.
+
+**Sprint 4** — `expr` 계산 필드 (산술식 평가 후 집계):
+
+```json
+{ "field": null, "expr": "revenue - cost", "agg": "sum", "label": "이익" }
+```
+
+`expr` 에 row 의 다른 필드 이름이 식별자. `+ - * / ( )` 와 백틱 라벨 지원.
+
+**Sprint 5** — 시간 자동 그룹 + Calculated items (2026-06-01 신설):
+
+```json
+{
+  "rows": [{ "field": "date", "group": "month" }],
+  "cols": [{ "field": "region", "group": null }],
+  "calculatedItems": [
+    { "axis": "row", "name": "Q1", "formula": "`Jan` + `Feb` + `Mar`" },
+    { "axis": "row", "name": "H1", "formula": "`Q1` + `Q2`" }
+  ]
+}
+```
+
+`rows` / `cols` 의 각 항목은 **단순 문자열 (raw field 사용)** 또는 **`{field, group}` object** 중 하나.
+
+- `group` ∈ `year|quarter|month|week|day` — raw row 의 date 필드 (ISO 문자열 / epoch ms / Date) 를 자동 bucket
+- `week` 는 ISO 8601 (Mon 시작, 연도 boundary 도 ISO 규정)
+- 같은 field 를 다른 group 으로 중복 사용 가능 (`year(date)` + `month(date)`)
+
+`calculatedItems` — base 결과 위에 axis 별 가상 항목 합성:
+
+- `formula` 는 같은-축 항목 라벨을 식별자로 참조하는 산술식
+- 공백/한글/`-` 라벨은 **백틱** 으로 (`` `Jan` ``, `` `Q1` ``)
+- 후속 item 이 선행 item 참조 가능 (예: `` H1 = `Q1` + `Q2` ``)
+- 잘못된 formula / 0 나누기 / unknown 라벨 → 그 셀만 null. 에러 throw 없음
+
+LLM 산출 보고서 예시 — "2024년 분기별 부서 매출, Q1+Q2 합계":
+
+```json
+{
+  "type": "pivot-table",
+  "id": "01PIVOTREPORT2024Q4REVENUE",
+  "source": {
+    "kind": "inline",
+    "rows": [
+      {"dept": "Sales", "date": "2024-01-15", "v": 100},
+      {"dept": "Sales", "date": "2024-04-10", "v": 150},
+      {"dept": "Sales", "date": "2024-07-05", "v": 200},
+      {"dept": "R&D",   "date": "2024-02-20", "v": 80}
+    ]
+  },
+  "rows":  ["dept"],
+  "cols":  [{ "field": "date", "group": "quarter" }],
+  "values": [{ "field": "v", "agg": "sum", "numberFormat": "#,##0" }],
+  "totals": { "row": true },
+  "calculatedItems": [
+    { "axis": "col", "name": "H1", "formula": "`2024-Q1` + `2024-Q2`" }
+  ]
+}
+```
+
+### 3.23 doc-link-card / glossary-ref / bibliography / spreadsheet / 기타
 
 위 외에도 `doc-link-card`, `glossary-ref`, `bibliography`, `spreadsheet`,
 `whiteboard`, `image-annotation`, `pdf`, `data-source`, `dashboard-embed`,
