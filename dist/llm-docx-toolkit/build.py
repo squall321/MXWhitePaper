@@ -294,6 +294,33 @@ def _preflight() -> None:
     import PyInstaller  # type: ignore[import-not-found]
     print(f"[build] PyInstaller : {PyInstaller.__version__}")
 
+    # Runtime-import preflight — PyInstaller's `hiddenimports=['ulid']`
+    # silently *skips* a module that isn't installed on the build host
+    # (no error, no warning), producing a binary that segfaults at
+    # `--version` with `ModuleNotFoundError: No module named 'ulid'`.
+    # Catch that upfront so the operator sees a clear `pip install`
+    # hint instead of debugging the dead binary.
+    required = {
+        "ulid":          "pip install --user 'ulid-py>=1.1'",
+        "mcp":           "pip install --user 'mcp>=1.0'",
+        "docx":          "pip install --user 'python-docx>=1.1'",
+        "jsonschema":    "pip install --user 'jsonschema>=4'",
+    }
+    missing = []
+    for mod, hint in required.items():
+        try:
+            __import__(mod)
+        except ImportError:
+            missing.append((mod, hint))
+    if missing:
+        print("[build] ✗ missing python runtime imports — PyInstaller would")
+        print("[build]   silently skip these and the binary would fail at")
+        print("[build]   `--version` with ModuleNotFoundError. Install:")
+        for mod, hint in missing:
+            print(f"[build]     {mod:12s} → {hint}")
+        raise RuntimeError(f"missing runtime imports: {[m for m, _ in missing]}")
+    print(f"[build] runtime imp : {', '.join(required.keys())} OK")
+
 
 def _stage_validator(work_dir: Path) -> Path:
     """Stage validator source (with import patches) into a flat folder."""

@@ -308,7 +308,7 @@ native PowerPoint 차트는 텍스트 데이터로 평탄화. 일부 단순 차�
 
 ## 2.99 docx/pptx 로 표현 *불가능*한 위젯들 ★
 
-DocumentJSON 에는 34 개 block 타입이 있는데, docx/pptx 가 자연스럽게
+DocumentJSON 에는 36 개 block 타입이 있는데, docx/pptx 가 자연스럽게
 표현하는 건 일부 (paragraph / heading / list / table / image / math / caption)
 뿐이다. 아래 위젯들은 **docx/pptx import 시 인식되지 않는다** — 텍스트만
 평탄화되거나 사라진다.
@@ -342,6 +342,7 @@ DocumentJSON 에는 34 개 block 타입이 있는데, docx/pptx 가 자연스럽
 | `image-annotation` | 이미지 주석 | 이미지만 |
 | `form` | 인터랙티브 폼 | 사라짐 |
 | `quiz` | 퀴즈 | 사라짐 |
+| `pivot-table` ★ | 피벗 표 (cross-tab + 시간 그룹 + calculated items) | docx 가 cross-tab 의미를 못 담음 — **API 전용** |
 
 ### 이 위젯들을 문서에 넣는 정상 경로 3 가지
 
@@ -351,6 +352,11 @@ DocumentJSON 에는 34 개 block 타입이 있는데, docx/pptx 가 자연스럽
 
 → **LLM 이 위 위젯을 자동 생성하려면 docx/pptx 가 아니라 DocumentJSON
 block API 를 직접 호출하는 게 정답.** 가이드: `docs/llm-widgets-via-api.md`.
+
+특히 `pivot-table` 은 docx 의 정적 표 한 개로 cross-tab 의 의미 (rows ×
+cols × measure × calculated items × showAs) 를 담지 못한다. 외부 LLM 이
+보고서를 docx 가 아니라 *직접 JSON 으로* 생성할 때만 의미 있는 위젯 —
+가이드 `llm-widgets-via-api.md §3.22` 의 Sprint 1-5 통합 예시 참조.
 
 ### 향후 패턴 인식 (Future Work)
 
