@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { WidgetExportMenu } from './WidgetExportMenu'
 import { buildPivot, drillRows, dimField, dimLabel, sourceRows } from './pivotEngine'
 import { fetchDataSource } from './DataSourceBlock'
+import { collectTimelineFilters } from './TimelineBlock'
 import { Modal } from '@/components/ui/Modal'
 import { useEditorStore } from '@/features/editor/state'
 import { useSlicerStore } from '@/features/slicer/store'
@@ -619,14 +620,16 @@ export function payloadToRows(
  * non-empty active set. Empty active set ("All") contributes nothing —
  * matches the slicer UI's no-chip-pressed semantics.
  *
- * Exported for unit tests; the hook above wraps it in useMemo.
+ * G4 — accepts an opaque `boundSlicers` list (not a Pivot block) so the
+ * same helper feeds Table and any future widget that opts in. Exported
+ * for unit tests; the hook above wraps it in useMemo.
  */
 export function collectSlicerFilters(
-  block: PivotTableBlock,
+  boundSlicers: ReadonlyArray<string> | undefined,
   sections: ReadonlyArray<{ blocks?: Array<Block> }>,
   active: Record<string, string[]>,
 ): Array<{ field: string; op: 'in'; value: string[] }> {
-  const ids = block.boundSlicers ?? []
+  const ids = boundSlicers ?? []
   if (ids.length === 0) return []
   // id → slicer block, one pass.
   const byId = new Map<string, SlicerBlockType>()
@@ -677,16 +680,22 @@ function useHydratedPivotBlock(block: PivotTableBlock): HydrationResult {
   // entries. Walks the draft once to resolve slicer ids → field name so
   // the engine doesn't need to know about slicers.
   const slicerFilters = useMemo(
-    () => collectSlicerFilters(block, draft?.sections ?? [], slicerActive),
-    [block, draft, slicerActive],
+    () => collectSlicerFilters(block.boundSlicers, draft?.sections ?? [], slicerActive),
+    [block.boundSlicers, draft, slicerActive],
+  )
+  // G4 — same boundSlicers list also drives Timeline blocks; the resolver
+  // ignores ids that aren't timelines so the two collectors compose cleanly.
+  const timelineFilters = useMemo(
+    () => collectTimelineFilters(block.boundSlicers, draft?.sections ?? [], slicerActive),
+    [block.boundSlicers, draft, slicerActive],
   )
   const withSlicers = useMemo<PivotTableBlock>(() => {
-    if (slicerFilters.length === 0) return block
+    if (slicerFilters.length === 0 && timelineFilters.length === 0) return block
     return {
       ...block,
-      filters: [...(block.filters ?? []), ...slicerFilters],
+      filters: [...(block.filters ?? []), ...slicerFilters, ...timelineFilters],
     }
-  }, [block, slicerFilters])
+  }, [block, slicerFilters, timelineFilters])
 
   if (inline) return { block: withSlicers, status: 'inline' }
   if (!dataSourceBlock) {

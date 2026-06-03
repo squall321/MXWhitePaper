@@ -446,6 +446,55 @@ def _chunks_from_system_prompt(repo_root: Path, *, verbose: bool = False) -> lis
     return out
 
 
+# ── 4b. llm-viewer-guide.md ───────────────────────────────────────────
+
+
+def _chunks_from_viewer_guide(repo_root: Path) -> list[Chunk]:
+    """H2-walk over the viewer guide. Mirrors `_chunks_from_system_prompt`
+    intentionally — the guide is short, hand-written, and benefits from
+    one-chunk-per-chapter retrieval. Numbered headings (`## 0. ...`) keep
+    their number in the chunk id so retrieval ordering is stable."""
+    path = repo_root / "docs" / "llm-viewer-guide.md"
+    if not path.exists():
+        return []
+    src = path.read_text(encoding="utf-8")
+    lines = src.splitlines()
+    sections: list[tuple[str, list[str]]] = []
+    cur: tuple[str, list[str]] | None = None
+    for ln in lines:
+        m = _H2_RE.match(ln)
+        if m:
+            if cur is not None:
+                sections.append(cur)
+            cur = (m.group(1).strip(), [])
+        else:
+            if cur is not None:
+                cur[1].append(ln)
+    if cur is not None:
+        sections.append(cur)
+
+    out: list[Chunk] = []
+    for heading, body in sections:
+        body_text = "\n".join(body).strip()
+        if not body_text:
+            continue
+        nm = _NUM_PREFIX_RE.match(_normalize_text(heading))
+        if nm:
+            base = f"viewer#{nm.group(1)}-{_slugify(nm.group(2))}"
+        else:
+            base = f"viewer#{_slugify(heading)}"
+        for piece_idx, piece in enumerate(_split_long(body_text)):
+            cid = base + (f"-cont{piece_idx}" if piece_idx else "")
+            out.append(Chunk(
+                id=cid,
+                source="llm-viewer-guide.md",
+                heading=heading,
+                text=piece,
+                metadata={"section": "viewer"},
+            ))
+    return out
+
+
 # ── 5. examples (build_examples.py fixtures) ──────────────────────────
 
 # We intentionally don't import build_examples.py — it touches the real
@@ -795,6 +844,7 @@ def build_chunks(repo_root: Path) -> list[Chunk]:
     chunks.extend(_chunks_from_widget_markers(repo_root))
     chunks.extend(_chunks_from_schema(repo_root))
     chunks.extend(_chunks_from_system_prompt(repo_root))
+    chunks.extend(_chunks_from_viewer_guide(repo_root))
     chunks.extend(_chunks_from_examples(repo_root))
     chunks.extend(_chunks_from_glossary())
     chunks.sort(key=lambda c: c.id)
@@ -903,6 +953,7 @@ def main(argv: list[str] | None = None) -> int:
     widgets_n = by_source.get("widget_markers.py", 0)
     schema_n = by_source.get("document.json", 0)
     prompt_n = by_source.get("llm-system-prompt.md", 0)
+    viewer_n = by_source.get("llm-viewer-guide.md", 0)
     glossary_n = by_source.get("glossary", 0)
     examples_n = sum(v for k, v in by_source.items() if k.startswith("example:"))
 
@@ -924,6 +975,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  widget_markers.py: {widgets_n}")
     print(f"  document.json: {schema_n}")
     print(f"  llm-system-prompt.md: {prompt_label}")
+    print(f"  llm-viewer-guide.md: {viewer_n}")
     print(f"  glossary (DB): {glossary_label}")
     print(f"  examples: {examples_n}")
     print(f"sha256: {sha}")

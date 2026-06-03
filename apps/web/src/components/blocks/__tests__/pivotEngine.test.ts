@@ -319,6 +319,59 @@ describe('pivotEngine — Sprint 2 filter', () => {
     expect(r.values).toEqual([[[15]], [[20]]])
   })
 
+  it('filter: between — numeric inclusive', () => {
+    const r = buildPivot(
+      mk({
+        sourceRows: [
+          { d: 'A', v: 5 },
+          { d: 'B', v: 10 },
+          { d: 'C', v: 15 },
+          { d: 'D', v: 20 },
+        ],
+        rows: ['d'],
+        values: [{ field: 'v', agg: 'sum' }],
+        filters: [{ field: 'v', op: 'between', value: [10, 15] }],
+      }),
+    )
+    expect(r.rowHeaders).toEqual([['B'], ['C']])
+    expect(r.values).toEqual([[[10]], [[15]]])
+  })
+
+  it('filter: between — ISO-date string (Timeline 용도)', () => {
+    const r = buildPivot(
+      mk({
+        sourceRows: [
+          { date: '2026-01-15', v: 1 },
+          { date: '2026-02-15', v: 2 },
+          { date: '2026-03-15', v: 3 },
+          { date: '2026-04-15', v: 4 },
+        ],
+        rows: ['date'],
+        values: [{ field: 'v', agg: 'sum' }],
+        filters: [
+          { field: 'date', op: 'between', value: ['2026-02-01', '2026-03-31'] },
+        ],
+      }),
+    )
+    expect(r.rowHeaders).toEqual([['2026-02-15'], ['2026-03-15']])
+    expect(r.values).toEqual([[[2]], [[3]]])
+  })
+
+  it('filter: between — value shape 가 [lo, hi] 가 아니면 no-op', () => {
+    const r = buildPivot(
+      mk({
+        sourceRows: [
+          { d: 'A', v: 5 },
+          { d: 'B', v: 10 },
+        ],
+        rows: ['d'],
+        values: [{ field: 'v', agg: 'sum' }],
+        filters: [{ field: 'v', op: 'between', value: [10] as unknown as [number, number] }],
+      }),
+    )
+    expect(r.rowHeaders).toEqual([['A'], ['B']])
+  })
+
   it('filter: top_n — 상위 N (sort + slice)', () => {
     const r = buildPivot(
       mk({

@@ -626,6 +626,29 @@ function applyFilters(rows: RawRow[], filters: FilterSpec[] | undefined): RawRow
         })
         break
       }
+      // G4 — `between` is inclusive on both ends and works for both
+      // numeric and string fields (string compare for ISO-date timelines).
+      // value MUST be [lo, hi]; out-of-shape inputs no-op.
+      case 'between': {
+        const v = f.value as unknown
+        if (!Array.isArray(v) || v.length !== 2) break
+        const lo = v[0] as string | number | null
+        const hi = v[1] as string | number | null
+        const loN = toNum(lo)
+        const hiN = toNum(hi)
+        const numeric = loN !== null && hiN !== null
+        out = out.filter((r) => {
+          const raw = r[f.field]
+          if (raw == null) return false
+          if (numeric) {
+            const n = toNum(raw)
+            return n !== null && n >= (loN as number) && n <= (hiN as number)
+          }
+          const s = String(raw)
+          return s >= String(lo) && s <= String(hi)
+        })
+        break
+      }
       case 'top_n':
       case 'bottom_n': {
         const n = Math.max(0, Number(f.value) | 0)

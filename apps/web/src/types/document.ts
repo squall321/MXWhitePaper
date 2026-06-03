@@ -50,6 +50,7 @@ export type Block =
   | FigureIndexBlock
   | PivotTableBlock
   | SlicerBlock
+  | TimelineBlock
 /**
  * Block subset allowed inside a TableBlock cell's `blocks` array. Intentionally narrow to keep table cell rendering tractable — only paragraph/image/list.
  */
@@ -515,6 +516,10 @@ export interface TableBlock {
       }
     }[]
   }
+  /**
+   * ULIDs of SlicerBlocks whose active value sets should filter this table. Each slicer's `field` must match one of the table's `headers` (1:1 column-by-header mapping); columns whose header doesn't match any active slicer pass through unchanged. Empty/missing → no slicer-driven filter, equivalent to slicer 'All' state. Sparse `cells` layout: filter is skipped (merged-cell semantics make row-by-row filtering ambiguous).
+   */
+  boundSlicers?: Ulid[]
   meta?: BlockMeta
 }
 export interface ImageBlock {
@@ -1354,7 +1359,7 @@ export interface PivotTableBlock {
   }
   filters?: {
     field: string
-    op: 'in' | 'not_in' | 'gt' | 'lt' | 'top_n' | 'bottom_n'
+    op: 'in' | 'not_in' | 'gt' | 'lt' | 'between' | 'top_n' | 'bottom_n'
     value: any
   }[]
   /**
@@ -1396,6 +1401,48 @@ export interface SlicerBlock {
    * 최초 활성 값. 미명시 시 빈 set (모든 값 통과)
    */
   default?: string[]
+  meta?: BlockMeta
+}
+/**
+ * Timeline widget — date-range cross-widget filter (G4). 사용자가 from/to 두 슬라이더로 [min, max] 부분구간을 선택하면 zustand store (`slicerStore`) 의 active set 에 `[isoFrom, isoTo]` 2-원소 배열로 기록되고, boundSlicers 로 이 timeline 을 listen 하는 모든 widget 이 filter (`{field, op:'between', value: [isoFrom, isoTo]}`) 로 받는다. SlicerBlock 과 같은 store / 같은 boundSlicers 메커니즘을 공유하므로 viewer 의 한 픽커로 둘 다 binding 가능. min/max 는 inline rows 의 `block.field` distinct 값 또는 schema 의 explicit `min`/`max` 로 결정 (둘 다 ISO 날짜 문자열).
+ */
+export interface TimelineBlock {
+  type: 'timeline'
+  id: Ulid
+  /**
+   * 슬라이더 위 라벨 (e.g. '기간')
+   */
+  label?: string
+  /**
+   * 필터링할 날짜 field 이름 (e.g. 'date'). 값은 ISO-8601 (YYYY-MM-DD) 가정.
+   */
+  field: string
+  source?:
+    | {
+        kind: 'inline'
+        rows: {
+          [k: string]: (string | number | null) | undefined
+        }[]
+      }
+    | {
+        kind: 'data-source'
+        dataSourceId: Ulid
+      }
+  /**
+   * 도메인 최소값 (ISO date). 명시하지 않으면 rows[field] 의 min.
+   */
+  min?: string
+  /**
+   * 도메인 최대값 (ISO date). 명시하지 않으면 rows[field] 의 max.
+   */
+  max?: string
+  /**
+   * [isoFrom, isoTo] — 최초 활성 구간. 미명시 시 빈 set (전체 통과)
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  default?: [string, string]
   meta?: BlockMeta
 }
 export interface RelatedDoc {

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import type { CellBlock, TableBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
+import { BoundSlicersPicker } from './PivotTableBlockEditor'
 import { useT } from '@/lib/i18n'
 import {
   cellsToFlat,
@@ -457,6 +458,11 @@ export function TableBlockEditor({ slug, block }: Props) {
           })()}
           onChange={(patch) => schedule({ ...local, ...patch })}
         />
+        <BoundSlicersPicker
+          block={local}
+          onChange={(next) => schedule(next)}
+          testIdPrefix="table-bound-slicer"
+        />
       </div>
     )
   }
@@ -648,6 +654,11 @@ export function TableBlockEditor({ slug, block }: Props) {
         block={local}
         headerNames={local.headers}
         onChange={(patch) => schedule({ ...local, ...patch })}
+      />
+      <BoundSlicersPicker
+        block={local}
+        onChange={(next) => schedule(next)}
+        testIdPrefix="table-bound-slicer"
       />
     </div>
   )

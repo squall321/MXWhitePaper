@@ -224,7 +224,8 @@
         { "$ref": "#/$defs/SpacerBlock" },
         { "$ref": "#/$defs/FigureIndexBlock" },
         { "$ref": "#/$defs/PivotTableBlock" },
-        { "$ref": "#/$defs/SlicerBlock" }
+        { "$ref": "#/$defs/SlicerBlock" },
+        { "$ref": "#/$defs/TimelineBlock" }
       ]
     },
 
@@ -463,6 +464,11 @@
               }
             }
           }
+        },
+        "boundSlicers": {
+          "description": "ULIDs of SlicerBlocks whose active value sets should filter this table. Each slicer's `field` must match one of the table's `headers` (1:1 column-by-header mapping); columns whose header doesn't match any active slicer pass through unchanged. Empty/missing → no slicer-driven filter, equivalent to slicer 'All' state. Sparse `cells` layout: filter is skipped (merged-cell semantics make row-by-row filtering ambiguous).",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Ulid" }
         },
         "meta": { "$ref": "#/$defs/BlockMeta" }
       }
@@ -1250,7 +1256,7 @@
             "additionalProperties": false,
             "properties": {
               "field": { "type": "string" },
-              "op":    { "enum": ["in", "not_in", "gt", "lt", "top_n", "bottom_n"] },
+              "op":    { "enum": ["in", "not_in", "gt", "lt", "between", "top_n", "bottom_n"] },
               "value": {}
             }
           }
@@ -1307,6 +1313,59 @@
         "multiSelect": { "type": "boolean", "default": false, "description": "true 면 다중 chip 활성 가능 (Ctrl+클릭). false 면 한 번에 하나" },
         "default":     { "type": "array", "items": { "type": "string" }, "description": "최초 활성 값. 미명시 시 빈 set (모든 값 통과)" },
         "meta":        { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "TimelineBlock": {
+      "type": "object",
+      "required": ["type", "id", "field"],
+      "additionalProperties": false,
+      "description": "Timeline widget — date-range cross-widget filter (G4). 사용자가 from/to 두 슬라이더로 [min, max] 부분구간을 선택하면 zustand store (`slicerStore`) 의 active set 에 `[isoFrom, isoTo]` 2-원소 배열로 기록되고, boundSlicers 로 이 timeline 을 listen 하는 모든 widget 이 filter (`{field, op:'between', value: [isoFrom, isoTo]}`) 로 받는다. SlicerBlock 과 같은 store / 같은 boundSlicers 메커니즘을 공유하므로 viewer 의 한 픽커로 둘 다 binding 가능. min/max 는 inline rows 의 `block.field` distinct 값 또는 schema 의 explicit `min`/`max` 로 결정 (둘 다 ISO 날짜 문자열).",
+      "properties": {
+        "type":  { "const": "timeline" },
+        "id":    { "$ref": "#/$defs/Ulid" },
+        "label": { "type": "string", "description": "슬라이더 위 라벨 (e.g. '기간')" },
+        "field": { "type": "string", "minLength": 1, "description": "필터링할 날짜 field 이름 (e.g. 'date'). 값은 ISO-8601 (YYYY-MM-DD) 가정." },
+        "source": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["kind", "rows"],
+              "additionalProperties": false,
+              "description": "Inline source — 날짜 도메인을 rows 의 `field` 값에서 추론. SlicerBlock 과 동일 shape.",
+              "properties": {
+                "kind": { "const": "inline" },
+                "rows": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": { "oneOf": [{"type": "string"}, {"type": "number"}, {"type": "null"}] }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": ["kind", "dataSourceId"],
+              "additionalProperties": false,
+              "description": "Same DataSourceBlock 의 rows 를 timeline 데이터로 사용.",
+              "properties": {
+                "kind":         { "const": "data-source" },
+                "dataSourceId": { "$ref": "#/$defs/Ulid" }
+              }
+            }
+          ]
+        },
+        "min":     { "type": "string", "description": "도메인 최소값 (ISO date). 명시하지 않으면 rows[field] 의 min." },
+        "max":     { "type": "string", "description": "도메인 최대값 (ISO date). 명시하지 않으면 rows[field] 의 max." },
+        "default": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[isoFrom, isoTo] — 최초 활성 구간. 미명시 시 빈 set (전체 통과)"
+        },
+        "meta":    { "$ref": "#/$defs/BlockMeta" }
       }
     },
 

@@ -271,12 +271,20 @@
 - `SlicerBlock` — ★ Sprint 6 (G2) 신규. chip 그룹으로 한 field 의 distinct
   values 노출 → 사용자 클릭이 [[apps/web/src/features/slicer/store.ts]] 의
   `useSlicerStore` 에 active set 으로 기록. `PivotTableBlock.boundSlicers?[]`
-  로 listen 하는 widget 은 hydration 단계에서
+  / `TableBlock.boundSlicers?[]` (G4 추가) 로 listen 하는 widget 은
+  hydration 단계에서
   [[apps/web/src/components/blocks/PivotTableBlock.tsx#collectSlicerFilters]]
   가 active values 를 `{field, op:'in', value}` filter 로 변환해 기존 filters
   에 concat. multiSelect=false (default) 면 단일 / true 면 toggle. empty set
   = no filter (Excel 'All' 의미). source 는 inline rows 또는 같은
   DataSourceBlock 의 id 참조.
+- `TimelineBlock` — ★ G4 신규. SlicerBlock 의 date-range 변형. 두 range
+  슬라이더로 `[isoFrom, isoTo]` 부분구간 선택 → 같은 `useSlicerStore` 에
+  2-원소 배열로 기록 (slicer 와 store 공유, picker 도 공유). bound widget
+  은 [[apps/web/src/components/blocks/TimelineBlock.tsx#collectTimelineFilters]]
+  로 `{field, op:'between', value:[lo, hi]}` filter 를 받아 PivotEngine
+  의 between op (G4 신규) 가 처리. 도메인: explicit min/max 또는 rows[field]
+  의 min/max 자동 추론. 빈 active set = no filter.
 - `WhiteboardBlock` — 사용자가 그린 SVG 요소 모음 (`el.color`, `el.stroke` 직접
   지정). **다크 모드 의도**: 캔버스 `bg-white` 영구 유지 + 사용자 색 자동 변환 X.
   Figma/Excalidraw 관례 — painter 도구는 사용자 색 책임. svg-block-audit 사이클에서

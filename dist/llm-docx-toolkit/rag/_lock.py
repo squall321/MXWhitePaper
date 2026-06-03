@@ -40,6 +40,7 @@ TRACKED_SOURCES = (
     "apps/api/app/services/widget_markers.py",
     "apps/api/app/services/docx_import.py",
     "docs/llm-input-rules.md",
+    "docs/llm-viewer-guide.md",
     "dist/llm-docx-toolkit/llm-system-prompt.md",
 )
 

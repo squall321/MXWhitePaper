@@ -1490,6 +1490,7 @@ class Op(Enum):
     not_in = 'not_in'
     gt = 'gt'
     lt = 'lt'
+    between = 'between'
     top_n = 'top_n'
     bottom_n = 'bottom_n'
 
@@ -1594,6 +1595,64 @@ class SlicerBlock(BaseModel):
     default: list[str] | None = None
     """
     최초 활성 값. 미명시 시 빈 set (모든 값 통과)
+    """
+    meta: BlockMeta | None = None
+
+
+class Source4(BaseModel):
+    """
+    Inline source — 날짜 도메인을 rows 의 `field` 값에서 추론. SlicerBlock 과 동일 shape.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['inline']
+    rows: list[dict[str, str | float | None]]
+
+
+class Source5(BaseModel):
+    """
+    Same DataSourceBlock 의 rows 를 timeline 데이터로 사용.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['data-source']
+    data_source_id: Ulid = Field(..., alias='dataSourceId')
+
+
+class TimelineBlock(BaseModel):
+    """
+    Timeline widget — date-range cross-widget filter (G4). 사용자가 from/to 두 슬라이더로 [min, max] 부분구간을 선택하면 zustand store (`slicerStore`) 의 active set 에 `[isoFrom, isoTo]` 2-원소 배열로 기록되고, boundSlicers 로 이 timeline 을 listen 하는 모든 widget 이 filter (`{field, op:'between', value: [isoFrom, isoTo]}`) 로 받는다. SlicerBlock 과 같은 store / 같은 boundSlicers 메커니즘을 공유하므로 viewer 의 한 픽커로 둘 다 binding 가능. min/max 는 inline rows 의 `block.field` distinct 값 또는 schema 의 explicit `min`/`max` 로 결정 (둘 다 ISO 날짜 문자열).
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['timeline']
+    id: Ulid
+    label: str | None = None
+    """
+    슬라이더 위 라벨 (e.g. '기간')
+    """
+    field: str = Field(..., min_length=1)
+    """
+    필터링할 날짜 field 이름 (e.g. 'date'). 값은 ISO-8601 (YYYY-MM-DD) 가정.
+    """
+    source: Source4 | Source5 | None = None
+    min: str | None = None
+    """
+    도메인 최소값 (ISO date). 명시하지 않으면 rows[field] 의 min.
+    """
+    max: str | None = None
+    """
+    도메인 최대값 (ISO date). 명시하지 않으면 rows[field] 의 max.
+    """
+    default: list[str] | None = Field(None, max_length=2, min_length=2)
+    """
+    [isoFrom, isoTo] — 최초 활성 구간. 미명시 시 빈 set (전체 통과)
     """
     meta: BlockMeta | None = None
 
@@ -2172,6 +2231,10 @@ class TableBlock(BaseModel):
     Optional footer row showing per-column aggregates. Computed at render time from `rows` (flat mode) — sparse mode is skipped because merged-cell semantics make column-wise sums ambiguous.
     """
     options: Options1 | None = None
+    bound_slicers: list[Ulid] | None = Field(None, alias='boundSlicers')
+    """
+    ULIDs of SlicerBlocks whose active value sets should filter this table. Each slicer's `field` must match one of the table's `headers` (1:1 column-by-header mapping); columns whose header doesn't match any active slicer pass through unchanged. Empty/missing → no slicer-driven filter, equivalent to slicer 'All' state. Sparse `cells` layout: filter is skipped (merged-cell semantics make row-by-row filtering ambiguous).
+    """
     meta: BlockMeta | None = None
 
 
@@ -2399,6 +2462,7 @@ class Block(
         | FigureIndexBlock
         | PivotTableBlock
         | SlicerBlock
+        | TimelineBlock
         ,
         Field(discriminator='type'),
     ]
@@ -2442,6 +2506,7 @@ class Block(
         | FigureIndexBlock
         | PivotTableBlock
         | SlicerBlock
+        | TimelineBlock
     )
 
 

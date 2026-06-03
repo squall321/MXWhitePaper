@@ -238,6 +238,21 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     preview: '● A ○ B ○ C',
   },
   {
+    kind: 'timeline',
+    label: '타임라인',
+    labelKey: 'palette.timeline',
+    icon: '📅',
+    build: () => ({
+      type: 'timeline',
+      id: ulid(),
+      field: '',
+      source: { kind: 'inline', rows: [] },
+    }),
+    hint: '날짜 range 슬라이더로 같은 문서의 Pivot/Table 등에 between filter.',
+    slash: '/타임라인',
+    preview: '|—◯—◯—|',
+  },
+  {
     kind: 'image',
     label: '이미지',
     labelKey: 'palette.image',

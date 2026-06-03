@@ -1268,12 +1268,18 @@ function SourceKindPicker({
 }
 
 // ── Sprint 6 (G2) — boundSlicers picker ─────────────────────────────────
-function BoundSlicersPicker({
+// G4 — generic over the host block type; Table editor reuses it. The
+// host owns boundSlicers as `string[] | undefined` so we widen accordingly.
+export function BoundSlicersPicker<
+  B extends { boundSlicers?: ReadonlyArray<string> },
+>({
   block,
   onChange,
+  testIdPrefix = 'pivot-bound-slicer',
 }: {
-  block: PivotTableBlock
-  onChange: (next: PivotTableBlock) => void
+  block: B
+  onChange: (next: B) => void
+  testIdPrefix?: string
 }) {
   const draft = useEditorStore((s) => s.draft)
   const slicers = useMemo(() => {
@@ -1291,20 +1297,20 @@ function BoundSlicersPicker({
   const bound = block.boundSlicers ?? []
   const toggle = (id: string) => {
     const next = bound.includes(id) ? bound.filter((x) => x !== id) : [...bound, id]
-    const out = { ...block }
-    if (next.length === 0) delete out.boundSlicers
-    else out.boundSlicers = next as PivotTableBlock['boundSlicers']
+    const out = { ...block } as B
+    if (next.length === 0) delete (out as { boundSlicers?: unknown }).boundSlicers
+    else (out as { boundSlicers?: ReadonlyArray<string> }).boundSlicers = next
     onChange(out)
   }
   return (
     <section
       className="mt-2 rounded border border-dashed border-gray-300 p-2 dark:border-gray-700"
-      data-testid="pivot-bound-slicers"
+      data-testid={`${testIdPrefix}s`}
     >
       <p className="mb-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
         Bound slicers
         <span className="ml-1 font-normal text-gray-500 dark:text-gray-400">
-          (sibling slicer chips drive this pivot's filters)
+          (sibling slicer chips drive this widget's filters)
         </span>
       </p>
       {slicers.length === 0 ? (
@@ -1319,7 +1325,7 @@ function BoundSlicersPicker({
                 type="checkbox"
                 checked={bound.includes(s.id)}
                 onChange={() => toggle(s.id)}
-                data-testid={`pivot-bound-slicer-${s.id.slice(0, 8)}`}
+                data-testid={`${testIdPrefix}-${s.id.slice(0, 8)}`}
               />
               <span className="text-gray-700 dark:text-gray-200">
                 {s.label || '(no label)'} · field=<code>{s.field}</code> ·

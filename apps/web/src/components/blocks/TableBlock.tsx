@@ -27,6 +27,9 @@ import {
 } from './conditionalFormatting'
 import { WidgetExportMenu } from './WidgetExportMenu'
 import { flatTableToCsv } from '@/lib/widgetExport'
+import { collectSlicerFilters } from './PivotTableBlock'
+import { collectTimelineFilters } from './TimelineBlock'
+import { useSlicerStore } from '@/features/slicer/store'
 
 /**
  * Schema → helper bridge. The generated DocumentJSON type uses a tuple
@@ -451,19 +454,50 @@ export function TableBlockView({ block }: { block: TableBlock }) {
     return out
   }, [block.columns, colCount])
 
-  // Search + sort apply only to flat mode (sparse rows have merge spans
-  // that filtering would break visually).
+  // Search + sort + slicer-filter apply only to flat mode (sparse rows
+  // have merge spans that row-level filtering would break visually).
   const indexedRows = useMemo(
     () => block.rows.map((row, origIndex) => ({ row, origIndex })),
     [block.rows],
   )
+  // G4 — slicer-driven cross-widget filter. Resolves boundSlicers→field
+  // via the same helper PivotTable uses, then drops rows whose header-
+  // matched cell is not in any active slicer's value set. Sparse layout
+  // (block.cells) skips this entirely.
+  const slicerActive = useSlicerStore((s) => s.active)
+  const slicerFilters = useMemo(
+    () => collectSlicerFilters(block.boundSlicers, draft?.sections ?? [], slicerActive),
+    [block.boundSlicers, draft, slicerActive],
+  )
+  const timelineFilters = useMemo(
+    () => collectTimelineFilters(block.boundSlicers, draft?.sections ?? [], slicerActive),
+    [block.boundSlicers, draft, slicerActive],
+  )
+  const slicerFilteredRows = useMemo(() => {
+    if (isSparse || (slicerFilters.length === 0 && timelineFilters.length === 0))
+      return indexedRows
+    return indexedRows.filter(({ row }) => {
+      for (const f of slicerFilters) {
+        const colIdx = block.headers.indexOf(f.field)
+        if (colIdx < 0) continue
+        if (!f.value.includes(row[colIdx] ?? '')) return false
+      }
+      for (const f of timelineFilters) {
+        const colIdx = block.headers.indexOf(f.field)
+        if (colIdx < 0) continue
+        const cell = row[colIdx] ?? ''
+        if (cell < f.value[0] || cell > f.value[1]) return false
+      }
+      return true
+    })
+  }, [indexedRows, slicerFilters, timelineFilters, block.headers, isSparse])
   const filteredRows = useMemo(() => {
-    if (!searchable || !query.trim()) return indexedRows
+    if (!searchable || !query.trim()) return slicerFilteredRows
     const needle = query.trim().toLowerCase()
-    return indexedRows.filter(({ row }) =>
+    return slicerFilteredRows.filter(({ row }) =>
       row.some((cell) => cell.toLowerCase().includes(needle)),
     )
-  }, [indexedRows, query, searchable])
+  }, [slicerFilteredRows, query, searchable])
   const sortedRows = useMemo(() => {
     if (!sortable || !sortState) return filteredRows
     const { col, dir } = sortState
