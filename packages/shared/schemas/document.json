@@ -223,7 +223,8 @@
         { "$ref": "#/$defs/BibliographyBlock" },
         { "$ref": "#/$defs/SpacerBlock" },
         { "$ref": "#/$defs/FigureIndexBlock" },
-        { "$ref": "#/$defs/PivotTableBlock" }
+        { "$ref": "#/$defs/PivotTableBlock" },
+        { "$ref": "#/$defs/SlicerBlock" }
       ]
     },
 
@@ -1254,7 +1255,58 @@
             }
           }
         },
+        "boundSlicers": {
+          "type": "array",
+          "description": "Sprint 6 (G2) — listen 할 SlicerBlock id 목록. viewer 가 hydration 단계에서 각 slicer 의 active values 를 filter (`{field, op:'in', value: [...]}`) 로 변환해 기존 filters 에 concat. slicer 가 같은 dataSourceId (또는 inline rows) 를 가리켜야 의미 있음.",
+          "items": { "$ref": "#/$defs/Ulid" }
+        },
         "meta": { "$ref": "#/$defs/BlockMeta" }
+      }
+    },
+
+    "SlicerBlock": {
+      "type": "object",
+      "required": ["type", "id", "field"],
+      "additionalProperties": false,
+      "description": "Slicer widget — cross-widget visual filter. 같은 source 의 한 field 의 distinct values 를 chip group 으로 노출. 사용자가 chip 을 토글하면 zustand store (`slicerStore`) 의 active set 이 변경되고, boundSlicers 로 이 slicer 를 listen 하는 모든 widget (현 구현: Pivot) 이 filter 를 재적용해 다시 렌더. multiSelect=false (default) 면 한 번에 하나만, true 면 다중 선택.",
+      "properties": {
+        "type":  { "const": "slicer" },
+        "id":    { "$ref": "#/$defs/Ulid" },
+        "label": { "type": "string", "description": "chip group 위 라벨 (e.g. '부서')" },
+        "field": { "type": "string", "minLength": 1, "description": "어느 field 를 slice 할지 (e.g. 'dept')" },
+        "source": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["kind", "rows"],
+              "additionalProperties": false,
+              "description": "Inline source — distinct values 직접 명시. 작은 enum 에 유용.",
+              "properties": {
+                "kind": { "const": "inline" },
+                "rows": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": { "oneOf": [{"type": "string"}, {"type": "number"}, {"type": "null"}] }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": ["kind", "dataSourceId"],
+              "additionalProperties": false,
+              "description": "Same DataSourceBlock 의 rows 를 slicer 데이터로 사용. 보통 같은 Pivot 이 가리키는 DataSourceBlock 과 같은 id 를 적는다.",
+              "properties": {
+                "kind":         { "const": "data-source" },
+                "dataSourceId": { "$ref": "#/$defs/Ulid" }
+              }
+            }
+          ]
+        },
+        "multiSelect": { "type": "boolean", "default": false, "description": "true 면 다중 chip 활성 가능 (Ctrl+클릭). false 면 한 번에 하나" },
+        "default":     { "type": "array", "items": { "type": "string" }, "description": "최초 활성 값. 미명시 시 빈 set (모든 값 통과)" },
+        "meta":        { "$ref": "#/$defs/BlockMeta" }
       }
     },
 

@@ -164,7 +164,8 @@
   SourceKindPicker (Sprint 6 — inline/csv/data-source 라디오 + 같은 문서 안
   DataSourceBlock id select) + DimPicker (chip 옆 시간 그룹 dropdown —
   Sprint 5) + ValuesPicker (field/expr 2 모드) + TotalsPicker + SortPicker +
-  FiltersPicker + CalculatedItemsPicker (Sprint 5 — axis/name/formula row). 순수 reducer
+  FiltersPicker + CalculatedItemsPicker (Sprint 5 — axis/name/formula row) +
+  BoundSlicersPicker (Sprint 6 G2 — 같은 문서 SlicerBlock 체크박스 multi). 순수 reducer
   [[apps/web/src/features/editor/blocks/PivotTableBlockEditor.tsx#applyPivotDragEnd]] —
   dnd-kit DragEndEvent id 두 개 → 다음 pivot block (no-op 시 같은 reference 반환).
   widgetExport CSV 매트릭스 직렬화
@@ -267,6 +268,15 @@
   import), onChange 800 ms debounce 후 `patchBlock({engine:'excalidraw',
   source: serialiseScene(scene)})`. parse 실패 시 빈 캔버스로 시작 +
   recovery banner. theme prop 으로 light/dark 자동 동기화.
+- `SlicerBlock` — ★ Sprint 6 (G2) 신규. chip 그룹으로 한 field 의 distinct
+  values 노출 → 사용자 클릭이 [[apps/web/src/features/slicer/store.ts]] 의
+  `useSlicerStore` 에 active set 으로 기록. `PivotTableBlock.boundSlicers?[]`
+  로 listen 하는 widget 은 hydration 단계에서
+  [[apps/web/src/components/blocks/PivotTableBlock.tsx#collectSlicerFilters]]
+  가 active values 를 `{field, op:'in', value}` filter 로 변환해 기존 filters
+  에 concat. multiSelect=false (default) 면 단일 / true 면 toggle. empty set
+  = no filter (Excel 'All' 의미). source 는 inline rows 또는 같은
+  DataSourceBlock 의 id 참조.
 - `WhiteboardBlock` — 사용자가 그린 SVG 요소 모음 (`el.color`, `el.stroke` 직접
   지정). **다크 모드 의도**: 캔버스 `bg-white` 영구 유지 + 사용자 색 자동 변환 X.
   Figma/Excalidraw 관례 — painter 도구는 사용자 색 책임. svg-block-audit 사이클에서

@@ -5,10 +5,12 @@ import { buildPivot, drillRows, dimField, dimLabel, sourceRows } from './pivotEn
 import { fetchDataSource } from './DataSourceBlock'
 import { Modal } from '@/components/ui/Modal'
 import { useEditorStore } from '@/features/editor/state'
+import { useSlicerStore } from '@/features/slicer/store'
 import type {
   Block,
   DataSourceBlock as DataSourceBlockType,
   PivotTableBlock,
+  SlicerBlock as SlicerBlockType,
 } from '@/types/document'
 
 /**
@@ -610,8 +612,46 @@ export function payloadToRows(
   return []
 }
 
+/**
+ * Sprint 6 (G2) — walk the draft to resolve each id in `boundSlicers` to
+ * its `field`, look up the active values in the slicer store, and emit
+ * one engine-shaped `{field, op:'in', value}` filter per slicer with a
+ * non-empty active set. Empty active set ("All") contributes nothing —
+ * matches the slicer UI's no-chip-pressed semantics.
+ *
+ * Exported for unit tests; the hook above wraps it in useMemo.
+ */
+export function collectSlicerFilters(
+  block: PivotTableBlock,
+  sections: ReadonlyArray<{ blocks?: Array<Block> }>,
+  active: Record<string, string[]>,
+): Array<{ field: string; op: 'in'; value: string[] }> {
+  const ids = block.boundSlicers ?? []
+  if (ids.length === 0) return []
+  // id → slicer block, one pass.
+  const byId = new Map<string, SlicerBlockType>()
+  for (const section of sections) {
+    for (const b of (section.blocks ?? []) as Block[]) {
+      if (b.type === 'slicer') byId.set(b.id, b as SlicerBlockType)
+    }
+  }
+  const out: Array<{ field: string; op: 'in'; value: string[] }> = []
+  for (const id of ids) {
+    const slicer = byId.get(id)
+    if (!slicer) continue
+    const values = active[id] ?? []
+    if (values.length === 0) continue
+    out.push({ field: slicer.field, op: 'in', value: values })
+  }
+  return out
+}
+
 function useHydratedPivotBlock(block: PivotTableBlock): HydrationResult {
   const draft = useEditorStore((s) => s.draft)
+  // Sprint 6 (G2) — slicer store subscription. Subscribing to the whole
+  // active map is fine here because we already need to walk it; zustand
+  // shallow-compares so this re-renders only when a bound slicer fires.
+  const slicerActive = useSlicerStore((s) => s.active)
   const inline = block.source?.kind !== 'data-source'
 
   const dataSourceBlock = useMemo(() => {
@@ -633,18 +673,33 @@ function useHydratedPivotBlock(block: PivotTableBlock): HydrationResult {
     retry: false,
   })
 
-  if (inline) return { block, status: 'inline' }
+  // Sprint 6 (G2) — translate `boundSlicers` into engine-shaped filter
+  // entries. Walks the draft once to resolve slicer ids → field name so
+  // the engine doesn't need to know about slicers.
+  const slicerFilters = useMemo(
+    () => collectSlicerFilters(block, draft?.sections ?? [], slicerActive),
+    [block, draft, slicerActive],
+  )
+  const withSlicers = useMemo<PivotTableBlock>(() => {
+    if (slicerFilters.length === 0) return block
+    return {
+      ...block,
+      filters: [...(block.filters ?? []), ...slicerFilters],
+    }
+  }, [block, slicerFilters])
+
+  if (inline) return { block: withSlicers, status: 'inline' }
   if (!dataSourceBlock) {
-    return { block, status: 'error', error: 'dataSourceId not found in document' }
+    return { block: withSlicers, status: 'error', error: 'dataSourceId not found in document' }
   }
-  if (isLoading) return { block, status: 'loading' }
+  if (isLoading) return { block: withSlicers, status: 'loading' }
   if (error) {
-    return { block, status: 'error', error: (error as Error).message }
+    return { block: withSlicers, status: 'error', error: (error as Error).message }
   }
 
   const rows = payloadToRows(data?.data ?? null)
   const hydrated: PivotTableBlock = {
-    ...block,
+    ...withSlicers,
     source: { kind: 'inline', rows },
   }
   return { block: hydrated, status: 'ready' }

@@ -36,6 +36,7 @@ import { SpreadsheetBlockView } from './SpreadsheetBlock'
 import { BibliographyBlockView } from './BibliographyBlock'
 import { FigureIndexBlockView } from './FigureIndexBlock'
 import { PivotTableBlockView } from './PivotTableBlock'
+import { SlicerBlockView } from './SlicerBlock'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { InlineTextBlockEditor } from '@/features/editor/components/InlineTextBlockEditor'
 import { ListBlockEditor } from '@/features/editor/components/ListBlockEditor'
@@ -120,6 +121,9 @@ const FormBlockEditor = lazy(() =>
 )
 const FlowBlockEditor = lazy(() =>
   import('@/features/editor/blocks/FlowBlockEditor').then((m) => ({ default: m.FlowBlockEditor })),
+)
+const SlicerBlockEditor = lazy(() =>
+  import('@/features/editor/blocks/SlicerBlockEditor').then((m) => ({ default: m.SlicerBlockEditor })),
 )
 const GanttBlockEditor = lazy(() =>
   import('@/features/editor/blocks/GanttBlockEditor').then((m) => ({ default: m.GanttBlockEditor })),
@@ -367,6 +371,9 @@ function BlockRendererInner({ block }: { block: Block }) {
     if (block.type === 'flow') {
       return lazyEditor(<FlowBlockEditor slug={editorSlug} block={block} />)
     }
+    if (block.type === 'slicer') {
+      return lazyEditor(<SlicerBlockEditor slug={editorSlug} block={block} />)
+    }
     if (block.type === 'gantt') {
       return lazyEditor(<GanttBlockEditor slug={editorSlug} block={block} />)
     }
@@ -516,6 +523,8 @@ function BlockRendererInner({ block }: { block: Block }) {
       return <FigureIndexBlockView block={block as { title?: string; kinds?: ('image' | 'table' | 'chart')[]; options?: { stripe?: boolean } }} />
     case 'pivot-table':
       return <PivotTableBlockView block={block} />
+    case 'slicer':
+      return <SlicerBlockView block={block} />
     case 'spacer': {
       // Deliberate vertical breathing room. Defaults are tight in
       // SectionLayout (space-y-2 = 8px); spacer block adds 16/32/64/128px

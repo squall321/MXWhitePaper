@@ -219,6 +219,9 @@ export function PivotTableBlockEditor({ block, onChange }: PivotTableBlockEditor
       {/* Calculated items (Sprint 5) */}
       <CalculatedItemsPicker block={block} onChange={onChange} />
 
+      {/* Sprint 6 (G2) — bind to slicers in the same document */}
+      <BoundSlicersPicker block={block} onChange={onChange} />
+
       {/* Preview */}
       <section className="border-t border-gray-200 pt-2 dark:border-gray-700">
         <h5 className="mb-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
@@ -1259,6 +1262,72 @@ function SourceKindPicker({
             </option>
           ))}
         </select>
+      )}
+    </section>
+  )
+}
+
+// ── Sprint 6 (G2) — boundSlicers picker ─────────────────────────────────
+function BoundSlicersPicker({
+  block,
+  onChange,
+}: {
+  block: PivotTableBlock
+  onChange: (next: PivotTableBlock) => void
+}) {
+  const draft = useEditorStore((s) => s.draft)
+  const slicers = useMemo(() => {
+    const out: Array<{ id: string; label: string; field: string }> = []
+    for (const section of draft?.sections ?? []) {
+      for (const b of section.blocks ?? []) {
+        if (b.type === 'slicer') {
+          const sb = b as { id: string; label?: string; field: string }
+          out.push({ id: sb.id, label: sb.label ?? '', field: sb.field })
+        }
+      }
+    }
+    return out
+  }, [draft])
+  const bound = block.boundSlicers ?? []
+  const toggle = (id: string) => {
+    const next = bound.includes(id) ? bound.filter((x) => x !== id) : [...bound, id]
+    const out = { ...block }
+    if (next.length === 0) delete out.boundSlicers
+    else out.boundSlicers = next as PivotTableBlock['boundSlicers']
+    onChange(out)
+  }
+  return (
+    <section
+      className="mt-2 rounded border border-dashed border-gray-300 p-2 dark:border-gray-700"
+      data-testid="pivot-bound-slicers"
+    >
+      <p className="mb-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+        Bound slicers
+        <span className="ml-1 font-normal text-gray-500 dark:text-gray-400">
+          (sibling slicer chips drive this pivot's filters)
+        </span>
+      </p>
+      {slicers.length === 0 ? (
+        <p className="text-[10px] italic text-gray-400 dark:text-gray-500">
+          이 문서에 SlicerBlock 이 없습니다.
+        </p>
+      ) : (
+        <ul className="space-y-0.5">
+          {slicers.map((s) => (
+            <li key={s.id} className="flex items-center gap-1 text-[11px]">
+              <input
+                type="checkbox"
+                checked={bound.includes(s.id)}
+                onChange={() => toggle(s.id)}
+                data-testid={`pivot-bound-slicer-${s.id.slice(0, 8)}`}
+              />
+              <span className="text-gray-700 dark:text-gray-200">
+                {s.label || '(no label)'} · field=<code>{s.field}</code> ·
+                <span className="ml-1 text-gray-400">{s.id.slice(0, 8)}…</span>
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   )

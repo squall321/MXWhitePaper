@@ -223,6 +223,21 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     preview: ' Σ A | B | C',
   },
   {
+    kind: 'slicer',
+    label: '슬라이서',
+    labelKey: 'palette.slicer',
+    icon: '🔘',
+    build: () => ({
+      type: 'slicer',
+      id: ulid(),
+      field: '',
+      source: { kind: 'inline', rows: [] },
+    }),
+    hint: '값 chip 그룹으로 같은 문서의 Pivot 등에 cross-widget filter.',
+    slash: '/슬라이서',
+    preview: '● A ○ B ○ C',
+  },
+  {
     kind: 'image',
     label: '이미지',
     labelKey: 'palette.image',

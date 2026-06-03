@@ -527,3 +527,59 @@ describe('PivotTableBlockView — Sprint 6 data-source hydration', () => {
     expect(html).toContain('dataSourceId not found')
   })
 })
+
+// ── Sprint 6 G2 — collectSlicerFilters (cross-widget filter resolution) ──
+import { collectSlicerFilters } from '../PivotTableBlock'
+
+describe('collectSlicerFilters', () => {
+  const mkSlicer = (id: string, field: string) => ({
+    type: 'slicer' as const,
+    id,
+    field,
+    source: { kind: 'inline' as const, rows: [] },
+  })
+
+  it('boundSlicers 가 비어있으면 []', () => {
+    const block = mk({ boundSlicers: [] as PivotTableBlock['boundSlicers'] })
+    expect(collectSlicerFilters(block, [], {})).toEqual([])
+  })
+
+  it('boundSlicers 에 있는 slicer 의 active values 만 in 필터로', () => {
+    const sections = [
+      {
+        blocks: [
+          mkSlicer('SLICERREGION00000000000000', 'region'),
+          mkSlicer('SLICERDEPT0000000000000000', 'dept'),
+        ],
+      },
+    ]
+    const block = mk({
+      boundSlicers: [
+        'SLICERREGION00000000000000',
+        'SLICERDEPT0000000000000000',
+      ] as PivotTableBlock['boundSlicers'],
+    })
+    const filters = collectSlicerFilters(block, sections, {
+      SLICERREGION00000000000000: ['KR', 'US'],
+      // dept slicer empty → no filter for it
+    })
+    expect(filters).toEqual([
+      { field: 'region', op: 'in', value: ['KR', 'US'] },
+    ])
+  })
+
+  it('boundSlicer 가 draft 에 없으면 skip (no throw)', () => {
+    const block = mk({
+      boundSlicers: ['MISSING000000000000000000U'] as PivotTableBlock['boundSlicers'],
+    })
+    expect(collectSlicerFilters(block, [], { MISSING000000000000000000U: ['v'] })).toEqual([])
+  })
+
+  it('active 가 빈 배열이면 그 slicer 는 필터 미생성 (All semantic)', () => {
+    const sections = [
+      { blocks: [mkSlicer('SLICERDEPT0000000000000000', 'dept')] },
+    ]
+    const block = mk({ boundSlicers: ['SLICERDEPT0000000000000000'] as PivotTableBlock['boundSlicers'] })
+    expect(collectSlicerFilters(block, sections, { SLICERDEPT0000000000000000: [] })).toEqual([])
+  })
+})

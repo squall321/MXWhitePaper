@@ -1537,6 +1537,64 @@ class PivotTableBlock(BaseModel):
     """
     sort: Sort | None = None
     filters: list[Filter] | None = None
+    bound_slicers: list[Ulid] | None = Field(None, alias='boundSlicers')
+    """
+    Sprint 6 (G2) — listen 할 SlicerBlock id 목록. viewer 가 hydration 단계에서 각 slicer 의 active values 를 filter (`{field, op:'in', value: [...]}`) 로 변환해 기존 filters 에 concat. slicer 가 같은 dataSourceId (또는 inline rows) 를 가리켜야 의미 있음.
+    """
+    meta: BlockMeta | None = None
+
+
+class Source2(BaseModel):
+    """
+    Inline source — distinct values 직접 명시. 작은 enum 에 유용.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['inline']
+    rows: list[dict[str, str | float | None]]
+
+
+class Source3(BaseModel):
+    """
+    Same DataSourceBlock 의 rows 를 slicer 데이터로 사용. 보통 같은 Pivot 이 가리키는 DataSourceBlock 과 같은 id 를 적는다.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['data-source']
+    data_source_id: Ulid = Field(..., alias='dataSourceId')
+
+
+class SlicerBlock(BaseModel):
+    """
+    Slicer widget — cross-widget visual filter. 같은 source 의 한 field 의 distinct values 를 chip group 으로 노출. 사용자가 chip 을 토글하면 zustand store (`slicerStore`) 의 active set 이 변경되고, boundSlicers 로 이 slicer 를 listen 하는 모든 widget (현 구현: Pivot) 이 filter 를 재적용해 다시 렌더. multiSelect=false (default) 면 한 번에 하나만, true 면 다중 선택.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    type: Literal['slicer']
+    id: Ulid
+    label: str | None = None
+    """
+    chip group 위 라벨 (e.g. '부서')
+    """
+    field: str = Field(..., min_length=1)
+    """
+    어느 field 를 slice 할지 (e.g. 'dept')
+    """
+    source: Source2 | Source3 | None = None
+    multi_select: bool | None = Field(False, alias='multiSelect')
+    """
+    true 면 다중 chip 활성 가능 (Ctrl+클릭). false 면 한 번에 하나
+    """
+    default: list[str] | None = None
+    """
+    최초 활성 값. 미명시 시 빈 set (모든 값 통과)
+    """
     meta: BlockMeta | None = None
 
 
@@ -2340,6 +2398,7 @@ class Block(
         | SpacerBlock
         | FigureIndexBlock
         | PivotTableBlock
+        | SlicerBlock
         ,
         Field(discriminator='type'),
     ]
@@ -2382,6 +2441,7 @@ class Block(
         | SpacerBlock
         | FigureIndexBlock
         | PivotTableBlock
+        | SlicerBlock
     )
 
 

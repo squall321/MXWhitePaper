@@ -49,6 +49,7 @@ export type Block =
   | SpacerBlock
   | FigureIndexBlock
   | PivotTableBlock
+  | SlicerBlock
 /**
  * Block subset allowed inside a TableBlock cell's `blocks` array. Intentionally narrow to keep table cell rendering tractable — only paragraph/image/list.
  */
@@ -1356,6 +1357,45 @@ export interface PivotTableBlock {
     op: 'in' | 'not_in' | 'gt' | 'lt' | 'top_n' | 'bottom_n'
     value: any
   }[]
+  /**
+   * Sprint 6 (G2) — listen 할 SlicerBlock id 목록. viewer 가 hydration 단계에서 각 slicer 의 active values 를 filter (`{field, op:'in', value: [...]}`) 로 변환해 기존 filters 에 concat. slicer 가 같은 dataSourceId (또는 inline rows) 를 가리켜야 의미 있음.
+   */
+  boundSlicers?: Ulid[]
+  meta?: BlockMeta
+}
+/**
+ * Slicer widget — cross-widget visual filter. 같은 source 의 한 field 의 distinct values 를 chip group 으로 노출. 사용자가 chip 을 토글하면 zustand store (`slicerStore`) 의 active set 이 변경되고, boundSlicers 로 이 slicer 를 listen 하는 모든 widget (현 구현: Pivot) 이 filter 를 재적용해 다시 렌더. multiSelect=false (default) 면 한 번에 하나만, true 면 다중 선택.
+ */
+export interface SlicerBlock {
+  type: 'slicer'
+  id: Ulid
+  /**
+   * chip group 위 라벨 (e.g. '부서')
+   */
+  label?: string
+  /**
+   * 어느 field 를 slice 할지 (e.g. 'dept')
+   */
+  field: string
+  source?:
+    | {
+        kind: 'inline'
+        rows: {
+          [k: string]: (string | number | null) | undefined
+        }[]
+      }
+    | {
+        kind: 'data-source'
+        dataSourceId: Ulid
+      }
+  /**
+   * true 면 다중 chip 활성 가능 (Ctrl+클릭). false 면 한 번에 하나
+   */
+  multiSelect?: boolean
+  /**
+   * 최초 활성 값. 미명시 시 빈 set (모든 값 통과)
+   */
+  default?: string[]
   meta?: BlockMeta
 }
 export interface RelatedDoc {
