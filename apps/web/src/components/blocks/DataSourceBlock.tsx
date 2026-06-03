@@ -63,7 +63,7 @@ export function derivePollingConfig(
   }
 }
 
-async function fetchDataSource(endpoint: string, params: unknown) {
+export async function fetchDataSource(endpoint: string, params: unknown) {
   // The endpoint may be absolute (`/widgets/kpi/finance-daily`) or relative.
   // The api client baseURL already includes `/api/v1`, so strip a leading
   // `/api/v1` if the author copy-pasted the full path.

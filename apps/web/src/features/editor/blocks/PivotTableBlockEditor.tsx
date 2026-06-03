@@ -28,7 +28,8 @@ import {
 } from '@dnd-kit/core'
 import type { PivotTableBlock } from '@/types/document'
 import { PivotTableBlockView } from '@/components/blocks/PivotTableBlock'
-import { dimField, dimLabel, type DimSpec, type DateGroup } from '@/components/blocks/pivotEngine'
+import { dimField, dimLabel, sourceRows, type DimSpec, type DateGroup } from '@/components/blocks/pivotEngine'
+import { useEditorStore } from '@/features/editor/state'
 
 const DATE_GROUPS: DateGroup[] = ['year', 'quarter', 'month', 'week', 'day']
 
@@ -58,7 +59,7 @@ export function PivotTableBlockEditor({ block, onChange }: PivotTableBlockEditor
   const [pasteError, setPasteError] = useState<string | null>(null)
   const [dragLabel, setDragLabel] = useState<string | null>(null)
 
-  const fields = useMemo(() => detectFields(block.source.rows), [block.source.rows])
+  const fields = useMemo(() => detectFields(sourceRows(block.source)), [block.source])
 
   // ── DnD wiring — small distance constraint so chip-internal clicks (× remove
   //    button, etc.) keep working when the pointer barely moves.
@@ -86,7 +87,7 @@ export function PivotTableBlockEditor({ block, onChange }: PivotTableBlockEditor
       const rows =
         pasteKind === 'csv'
           ? parseCsv(pasteText)
-          : (JSON.parse(pasteText) as PivotTableBlock['source']['rows'])
+          : (JSON.parse(pasteText) as ReturnType<typeof sourceRows>)
       if (!Array.isArray(rows)) throw new Error('rows is not an array')
       onChange({
         ...block,
@@ -108,11 +109,15 @@ export function PivotTableBlockEditor({ block, onChange }: PivotTableBlockEditor
           🔀 Pivot Table
         </h4>
         <span className="text-[11px] text-gray-500 dark:text-gray-400">
-          source rows: {block.source.rows.length}
+          source rows: {sourceRows(block.source).length}{block.source.kind === 'data-source' ? ' (live)' : ''}
         </span>
       </header>
 
-      {/* Source paste */}
+      {/* Sprint 6 — source kind switcher (inline paste vs data-source ref) */}
+      <SourceKindPicker block={block} onChange={onChange} />
+
+      {/* Source paste — only visible for inline/csv */}
+      {block.source.kind !== 'data-source' && (
       <section className="mb-3 rounded border border-dashed border-gray-300 p-2 dark:border-gray-700">
         <div className="mb-1 flex items-center gap-3 text-[11px]">
           <label className="flex items-center gap-1">
@@ -161,6 +166,7 @@ export function PivotTableBlockEditor({ block, onChange }: PivotTableBlockEditor
           )}
         </div>
       </section>
+      )}
 
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         {/* Available Fields panel — drag source for Excel-pivot UX. The
@@ -1012,7 +1018,7 @@ export function applyPivotDragEnd(
 
 // ── helpers (exported for testing) ─────────────────────────────────────
 
-export function detectFields(rows: PivotTableBlock['source']['rows']): string[] {
+export function detectFields(rows: ReturnType<typeof sourceRows>): string[] {
   const set = new Set<string>()
   for (const r of rows) for (const k of Object.keys(r)) set.add(k)
   return [...set]
@@ -1023,14 +1029,17 @@ export function detectFields(rows: PivotTableBlock['source']['rows']): string[] 
  * auto-detected from header line. First line = field names. Subsequent
  * lines = data rows. Numeric-looking values coerced; otherwise string.
  */
-export function parseCsv(text: string): PivotTableBlock['source']['rows'] {
+export function parseCsv(text: string): ReturnType<typeof sourceRows> {
   const trimmed = text.replace(/\r\n/g, '\n').replace(/^﻿/, '').trim()
   if (!trimmed) return []
   const lines = trimmed.split('\n').filter((l) => l.length > 0)
   if (lines.length === 0) return []
   const sep = (lines[0] as string).includes('\t') ? '\t' : ','
   const headers = splitCsvLine(lines[0] as string, sep)
-  const out: PivotTableBlock['source']['rows'] = []
+  // parseCsv emits a fresh mutable array — caller copies it into the block.
+  // ReturnType is readonly[] so we declare an intermediate mutable shape
+  // and cast on return.
+  const out: Record<string, string | number | null>[] = []
   for (let i = 1; i < lines.length; i++) {
     const cells = splitCsvLine(lines[i] as string, sep)
     const row: Record<string, string | number | null> = {}
@@ -1046,7 +1055,7 @@ export function parseCsv(text: string): PivotTableBlock['source']['rows'] {
     }
     out.push(row)
   }
-  return out
+  return out as ReturnType<typeof sourceRows>
 }
 
 function splitCsvLine(line: string, sep: string): string[] {
@@ -1173,6 +1182,84 @@ function CalculatedItemsPicker({
       >
         + add
       </button>
+    </section>
+  )
+}
+
+// ── Sprint 6 — source kind switcher ──────────────────────────────────────
+function SourceKindPicker({
+  block,
+  onChange,
+}: {
+  block: PivotTableBlock
+  onChange: (next: PivotTableBlock) => void
+}) {
+  const draft = useEditorStore((s) => s.draft)
+  const kind = block.source.kind
+  const dataSources = useMemo(() => {
+    const out: Array<{ id: string; endpoint: string }> = []
+    for (const section of draft?.sections ?? []) {
+      for (const b of section.blocks ?? []) {
+        if (b.type === 'data-source') {
+          out.push({ id: b.id, endpoint: (b as { endpoint?: string }).endpoint ?? '' })
+        }
+      }
+    }
+    return out
+  }, [draft])
+  const setKind = (next: 'inline' | 'csv' | 'data-source') => {
+    if (next === kind) return
+    if (next === 'data-source') {
+      onChange({
+        ...block,
+        source: { kind: 'data-source', dataSourceId: dataSources[0]?.id ?? '' } as PivotTableBlock['source'],
+      })
+    } else {
+      onChange({
+        ...block,
+        source: { kind: next, rows: [] } as PivotTableBlock['source'],
+      })
+    }
+  }
+  return (
+    <section
+      className="mb-2 flex flex-wrap items-center gap-2 rounded border border-gray-200 p-2 text-[11px] dark:border-gray-700"
+      data-testid="pivot-source-kind-picker"
+    >
+      <span className="font-semibold text-gray-700 dark:text-gray-200">Source:</span>
+      {(['inline', 'csv', 'data-source'] as const).map((k) => (
+        <label key={k} className="flex items-center gap-1">
+          <input
+            type="radio"
+            name={`pivot-source-kind-${block.id}`}
+            checked={kind === k}
+            onChange={() => setKind(k)}
+            data-testid={`pivot-source-kind-${k}`}
+          />
+          {k}
+        </label>
+      ))}
+      {kind === 'data-source' && (
+        <select
+          value={(block.source as { dataSourceId?: string }).dataSourceId ?? ''}
+          onChange={(e) =>
+            onChange({
+              ...block,
+              source: { kind: 'data-source', dataSourceId: e.target.value } as PivotTableBlock['source'],
+            })
+          }
+          aria-label="DataSource id"
+          data-testid="pivot-data-source-id"
+          className="rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+        >
+          {dataSources.length === 0 && <option value="">(no DataSourceBlock found)</option>}
+          {dataSources.map((ds) => (
+            <option key={ds.id} value={ds.id}>
+              {ds.id.slice(0, 8)}… · {ds.endpoint || '(no endpoint)'}
+            </option>
+          ))}
+        </select>
+      )}
     </section>
   )
 }

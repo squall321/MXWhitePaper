@@ -3,8 +3,25 @@
  */
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { PivotTableBlockView, PivotDrillModal } from '../PivotTableBlock'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
+import { PivotTableBlockView, PivotDrillModal, payloadToRows } from '../PivotTableBlock'
 import type { PivotTableBlock } from '@/types/document'
+
+// Sprint 6 — the viewer now mounts a useQuery for the data-source
+// hydration path even when the block is inline (the hook just sits in
+// `enabled:false`). renderToStaticMarkup still needs the provider in scope
+// or React throws "No QueryClient set".
+function harness(node: ReactNode) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
+  })
+  return <QueryClientProvider client={client}>{node}</QueryClientProvider>
+}
+
+function ssr(node: ReactNode) {
+  return renderToStaticMarkup(harness(node))
+}
 
 function mk(over: Partial<PivotTableBlock> = {}): PivotTableBlock {
   return {
@@ -20,13 +37,13 @@ function mk(over: Partial<PivotTableBlock> = {}): PivotTableBlock {
 
 describe('PivotTableBlockView', () => {
   it('빈 source 또는 축 → 안내 메시지 ("표가 없습니다")', () => {
-    const html = renderToStaticMarkup(<PivotTableBlockView block={mk()} />)
+    const html = ssr(<PivotTableBlockView block={mk()} />)
     expect(html).toContain('표가 없습니다')
     expect(html).toContain('data-block-type="pivot-table"')
   })
 
   it('rows + cols + sum → 교차 표 + 헤더 + 데이터 셀 렌더', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: {
@@ -51,7 +68,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('빈 셀 (null) 은 emptyCell (default "-") 표시', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: {
@@ -72,7 +89,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('options.emptyCell override — "N/A" 가 빈 셀에 표시', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: {
@@ -93,7 +110,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('다중 measure → measure label row 노출 + 각 셀 측정값', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: { kind: 'inline', rows: [{ d: 'A', v: 10, w: 1 }] },
@@ -114,7 +131,7 @@ describe('PivotTableBlockView', () => {
   // ── Sprint 2 — totals row/col/grand 렌더 ────────────────────────────
 
   it('Sprint 2 — totals.row → 각 row 끝에 row-total td (highlight bg) 노출', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: {
@@ -144,7 +161,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('Sprint 2 — totals.col → 하단에 col-total row (highlight) 노출', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: {
@@ -170,7 +187,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('Sprint 2 — totals.grand → row total × col total 교차 cell (더 강한 highlight)', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: {
@@ -195,7 +212,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('Sprint 2 — totals 없을 때 (default) row/col total cell 없음', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: { kind: 'inline', rows: [{ d: 'A', y: '24', v: 5 }] },
@@ -211,7 +228,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('Sprint 2 — totals.row + 빈 cell 인 row 의 row-total 도 정확히 합산 (empty cell 영향 X)', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: {
@@ -238,7 +255,7 @@ describe('PivotTableBlockView', () => {
   // ── Sprint 3 — numberFormat + showAs 렌더 ───────────────────────────
 
   it('Sprint 3 — numberFormat "0.0%" 적용: percent 1dp', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: {
@@ -260,7 +277,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('Sprint 3 — numberFormat "#,##0.00" 적용: thousands + 2dp', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: {
@@ -277,7 +294,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('Sprint 3 — numberFormat 없으면 기존 default formatter 동작', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: { kind: 'inline', rows: [{ d: 'A', q: 'Q1', v: 1234 }] },
@@ -293,7 +310,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('Sprint 3 — showAs=running 렌더 누적 표시', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: {
@@ -317,7 +334,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('export menu (CSV) — WidgetExportMenu mount + data-export-root', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: { kind: 'inline', rows: [{ d: 'A', v: 5 }] },
@@ -334,7 +351,7 @@ describe('PivotTableBlockView', () => {
   // ── Drill-down — data cell click affordance ────────────────────────
 
   it('drill-down — data cell 은 role=button + cursor-pointer + data-drill="cell"', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: {
@@ -358,7 +375,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('drill-down — total cells 는 클릭 affordance 없음 (data-drill 미설정)', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: {
@@ -381,7 +398,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('drill-down — closed state SSR 에 modal mount 안됨', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockView
         block={mk({
           source: { kind: 'inline', rows: [{ d: 'A', v: 5 }] },
@@ -406,7 +423,7 @@ describe('PivotTableBlockView', () => {
       rows: ['dept'],
       cols: ['year'],
     })
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotDrillModal
         block={block}
         drill={{
@@ -436,7 +453,7 @@ describe('PivotTableBlockView', () => {
   })
 
   it('drill-down — modal open with empty rows → "raw row 가 없습니다" 메시지', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotDrillModal
         block={mk({
           source: { kind: 'inline', rows: [] },
@@ -451,5 +468,62 @@ describe('PivotTableBlockView', () => {
     expect(html).toContain('없습니다')
     // 빈 결과는 데이터 table tbody 없음
     expect(html).not.toContain('<tbody>')
+  })
+})
+
+// ── Sprint 6 — data-source hydration ──────────────────────────────────────
+describe('PivotTableBlockView — Sprint 6 data-source hydration', () => {
+  it('payloadToRows: 빈 / non-object → []', () => {
+    expect(payloadToRows(null)).toEqual([])
+    expect(payloadToRows(undefined)).toEqual([])
+    expect(payloadToRows('string')).toEqual([])
+    expect(payloadToRows(42)).toEqual([])
+  })
+
+  it('payloadToRows: rows 가 이미 flat object 배열 → 그대로 통과', () => {
+    const rows = [
+      { dept: 'Sales', v: 100 },
+      { dept: 'R&D', v: 80 },
+    ]
+    expect(payloadToRows({ rows })).toEqual(rows)
+  })
+
+  it('payloadToRows: tabular {headers, rows:[[…]]} → zip 하여 object[] 로', () => {
+    const out = payloadToRows({
+      headers: ['dept', 'year', 'v'],
+      rows: [
+        ['Sales', '2024', 100],
+        ['R&D', '2024', 80],
+      ],
+    })
+    expect(out).toEqual([
+      { dept: 'Sales', year: '2024', v: 100 },
+      { dept: 'R&D', year: '2024', v: 80 },
+    ])
+  })
+
+  it('payloadToRows: tabular 의 cell 이 객체면 String 강제 변환', () => {
+    const out = payloadToRows({
+      headers: ['a'],
+      rows: [[{ nested: 1 }]],
+    })
+    expect(typeof out[0]?.a).toBe('string')
+  })
+
+  it('source.kind=data-source 인데 dataSourceId 가 draft 에 없으면 error banner', () => {
+    const html = ssr(
+      <PivotTableBlockView
+        block={mk({
+          source: {
+            kind: 'data-source',
+            dataSourceId: '01MISSING000000000000000VU',
+          } as PivotTableBlock['source'],
+          rows: ['dept'],
+          values: [{ field: 'v', agg: 'sum' }],
+        })}
+      />,
+    )
+    expect(html).toContain('data-pivot-source-state="error"')
+    expect(html).toContain('dataSourceId not found')
   })
 })

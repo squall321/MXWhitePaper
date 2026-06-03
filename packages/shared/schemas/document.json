@@ -1087,37 +1087,52 @@
         "type": { "const": "pivot-table" },
         "id":   { "$ref": "#/$defs/Ulid" },
         "source": {
-          "type": "object",
-          "required": ["kind", "rows"],
-          "additionalProperties": false,
-          "properties": {
-            "kind": { "enum": ["inline", "csv"] },
-            "rows": {
-              "type": "array",
-              "description": "Raw rows — each is a flat object of field→value. csv kind 이면 CSV text 도 inline 으로 paste 시점에 parse 후 저장.",
-              "items": {
-                "type": "object",
-                "additionalProperties": { "oneOf": [{"type": "string"}, {"type": "number"}, {"type": "null"}] }
-              }
-            },
-            "schema": {
+          "oneOf": [
+            {
               "type": "object",
-              "description": "Optional — fields 자동 추론 가능하면 생략. 명시 시 우선.",
+              "required": ["kind", "rows"],
+              "additionalProperties": false,
+              "description": "Inline / CSV source — rows[] 는 paste 시점에 저장.",
               "properties": {
-                "fields": {
+                "kind": { "enum": ["inline", "csv"] },
+                "rows": {
                   "type": "array",
+                  "description": "Raw rows — each is a flat object of field→value. csv kind 이면 CSV text 도 inline 으로 paste 시점에 parse 후 저장.",
                   "items": {
                     "type": "object",
-                    "required": ["name", "dtype"],
-                    "properties": {
-                      "name": { "type": "string" },
-                      "dtype": { "enum": ["number", "string", "date"] }
+                    "additionalProperties": { "oneOf": [{"type": "string"}, {"type": "number"}, {"type": "null"}] }
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "description": "Optional — fields 자동 추론 가능하면 생략. 명시 시 우선.",
+                  "properties": {
+                    "fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["name", "dtype"],
+                        "properties": {
+                          "name": { "type": "string" },
+                          "dtype": { "enum": ["number", "string", "date"] }
+                        }
+                      }
                     }
                   }
                 }
               }
+            },
+            {
+              "type": "object",
+              "required": ["kind", "dataSourceId"],
+              "additionalProperties": false,
+              "description": "Sprint 6 — 같은 문서 안 DataSourceBlock 결과를 raw rows 로 사용. viewer 가 DataSourceBlock 의 query 결과 (`{columns, rows}` 또는 `{data: [...]}`) 를 `Record<field, value>[]` 로 변환해 engine 에 넘긴다. async + 캐시는 TanStack Query 의 DataSourceBlock 쿼리를 그대로 재사용.",
+              "properties": {
+                "kind":         { "const": "data-source" },
+                "dataSourceId": { "$ref": "#/$defs/Ulid", "description": "참조할 DataSourceBlock 의 id" }
+              }
             }
-          }
+          ]
         },
         "rows": {
           "type": "array",

@@ -19,7 +19,7 @@ function mk(
     rows?: PivotTableBlock['rows']
     cols?: PivotTableBlock['cols']
     values?: PivotTableBlock['values']
-    sourceRows?: PivotTableBlock['source']['rows']
+    sourceRows?: Array<Record<string, string | number | null>>
   },
 ): PivotTableBlock {
   const block: PivotTableBlock = {

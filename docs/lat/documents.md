@@ -127,8 +127,13 @@
   호환. CSV 는 RFC 4180, TSV 는 탭/CR/LF 를 공백으로 강제 escape. UTF-8 BOM
   포함해 Excel mojibake 회피.
 - `PivotTableBlock` — ★ 36번째 블록 (pivot-table-sprint1 47번 archive +
-  pivot-table-sprint2-4 48번 archive + Sprint 5: date 그룹 + calculatedItems).
-  키: `type`, `source` (`{kind:"inline"|"csv", rows[], schema?}`), `rows[]`
+  pivot-table-sprint2-4 48번 archive + Sprint 5: date 그룹 + calculatedItems +
+  Sprint 6: data-source 참조).
+  키: `type`, `source` (oneOf: `{kind:"inline"|"csv", rows[], schema?}` 또는
+  Sprint 6 의 `{kind:"data-source", dataSourceId: ULID}` — 같은 문서 안
+  DataSourceBlock 결과를 viewer 가 useQuery 로 hydration 후 inline 으로
+  변환해 engine 에 넘김. 동일 query key (`['data-source', endpoint,
+  paramsKey]`) 라 DataSourceBlockView 와 캐시 공유), `rows[]`
   (행 차원 — 단순 field 문자열 *또는* `{field, group?}` object: group ∈
   year/quarter/month/week/day 로 시간 자동 bucket), `cols[]` (열 차원, rows
   와 동일 union), `calculatedItems?[]` (행/열 가상 항목, `{axis, name,
@@ -146,15 +151,20 @@
   expr eval 은 SpreadsheetBlock sister grammar 재사용). Sprint 5 helper:
   `dimField`/`dimLabel` (union narrowing), `bucketDate(v, group)` (ISO date
   / epoch ms / Date → year/quarter/month/week(ISO)/day 라벨), `parseExpr`
-  tokenizer 가 백틱 식별자 지원 (`` `Q1` `` → ident). viewer:
+  tokenizer 가 백틱 식별자 지원 (`` `Q1` `` → ident). Sprint 6 helper:
+  `sourceRows(block.source)` (inline/csv 일 때 rows 반환, data-source 일 때
+  `[]` — viewer 가 useQuery 결과로 synthetic clone 만든 후 buildPivot 호출),
+  `payloadToRows(payload)` (DataSource response `{rows:[{...}]}` 또는 tabular
+  `{headers, rows:[[...]]}` 어느 쪽이든 flat object[] 로 변환). viewer:
   [[apps/web/src/components/blocks/PivotTableBlock.tsx]] — cross-tab + row/col/
   grand total amber 하이라이트 + showAs (pct_*/running) 변환 + numberFormat 적용.
   editor: [[apps/web/src/features/editor/blocks/PivotTableBlockEditor.tsx]] —
   source paste (CSV/JSON) + **Available Fields drag panel + Rows/Cols/Values 드롭존**
   (`@dnd-kit/core` augment, 기존 dropdown 은 keyboard fallback 으로 유지) +
-  DimPicker (chip 옆 시간 그룹 dropdown — Sprint 5) + ValuesPicker (field/expr
-  2 모드) + TotalsPicker + SortPicker + FiltersPicker + CalculatedItemsPicker
-  (Sprint 5 — axis/name/formula row). 순수 reducer
+  SourceKindPicker (Sprint 6 — inline/csv/data-source 라디오 + 같은 문서 안
+  DataSourceBlock id select) + DimPicker (chip 옆 시간 그룹 dropdown —
+  Sprint 5) + ValuesPicker (field/expr 2 모드) + TotalsPicker + SortPicker +
+  FiltersPicker + CalculatedItemsPicker (Sprint 5 — axis/name/formula row). 순수 reducer
   [[apps/web/src/features/editor/blocks/PivotTableBlockEditor.tsx#applyPivotDragEnd]] —
   dnd-kit DragEndEvent id 두 개 → 다음 pivot block (no-op 시 같은 reference 반환).
   widgetExport CSV 매트릭스 직렬화

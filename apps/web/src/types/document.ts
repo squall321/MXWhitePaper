@@ -1207,24 +1207,32 @@ export interface FigureIndexBlock {
 export interface PivotTableBlock {
   type: 'pivot-table'
   id: Ulid
-  source: {
-    kind: 'inline' | 'csv'
-    /**
-     * Raw rows — each is a flat object of field→value. csv kind 이면 CSV text 도 inline 으로 paste 시점에 parse 후 저장.
-     */
-    rows: {
-      [k: string]: (string | number | null) | undefined
-    }[]
-    /**
-     * Optional — fields 자동 추론 가능하면 생략. 명시 시 우선.
-     */
-    schema?: {
-      fields?: {
-        name: string
-        dtype: 'number' | 'string' | 'date'
-      }[]
-    }
-  }
+  source:
+    | {
+        kind: 'inline' | 'csv'
+        /**
+         * Raw rows — each is a flat object of field→value. csv kind 이면 CSV text 도 inline 으로 paste 시점에 parse 후 저장.
+         */
+        rows: {
+          [k: string]: (string | number | null) | undefined
+        }[]
+        /**
+         * Optional — fields 자동 추론 가능하면 생략. 명시 시 우선.
+         */
+        schema?: {
+          fields?: {
+            name: string
+            dtype: 'number' | 'string' | 'date'
+          }[]
+        }
+      }
+    | {
+        kind: 'data-source'
+        /**
+         * Crockford base32 ULID
+         */
+        dataSourceId: string
+      }
   /**
    * Row 축 dimension field 이름 list (e.g., ['department', 'year']). Sprint 5 — 각 항목은 단순 field 이름 (문자열) 이거나 시간 자동 그룹을 위해 {field, group} object. group 은 'year'|'quarter'|'month'|'week'|'day' 중 하나로 raw row 의 date 를 bucket. 미명시 field 는 raw value 사용.
    */

@@ -1,8 +1,15 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { WidgetExportMenu } from './WidgetExportMenu'
-import { buildPivot, drillRows, dimField, dimLabel } from './pivotEngine'
+import { buildPivot, drillRows, dimField, dimLabel, sourceRows } from './pivotEngine'
+import { fetchDataSource } from './DataSourceBlock'
 import { Modal } from '@/components/ui/Modal'
-import type { PivotTableBlock } from '@/types/document'
+import { useEditorStore } from '@/features/editor/state'
+import type {
+  Block,
+  DataSourceBlock as DataSourceBlockType,
+  PivotTableBlock,
+} from '@/types/document'
 
 /**
  * PivotTableBlock viewer — Sprint 1 real cross-tab.
@@ -18,11 +25,18 @@ import type { PivotTableBlock } from '@/types/document'
 interface DrillState {
   rowTuple: string[]
   colTuple: string[]
-  rows: PivotTableBlock['source']['rows']
+  rows: ReturnType<typeof sourceRows>
 }
 
 export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
-  const result = useMemo(() => buildPivot(block), [block])
+  // Sprint 6 — when `source.kind === 'data-source'`, the pivot defers to a
+  // sibling DataSourceBlock for raw rows. We resolve that block from the
+  // editor draft (read-mode reuses the same store), fire the same
+  // useQuery key as DataSourceBlockView so TanStack dedupes the request,
+  // and inject the fetched rows into a synthetic clone that buildPivot
+  // can consume unchanged.
+  const hydrated = useHydratedPivotBlock(block)
+  const result = useMemo(() => buildPivot(hydrated.block), [hydrated.block])
   const empty = block.options?.emptyCell ?? '-'
   const measures = block.values
   const showMeasureRow = measures.length > 1
@@ -38,6 +52,33 @@ export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
     setDrill({ rowTuple, colTuple, rows })
   }
 
+  // csvText derived early — must be defined before any early return to keep
+  // hook order stable across hydration state changes (rules of hooks).
+  const csvText = useMemo(() => buildCsv(result, measures, empty), [result, measures, empty])
+
+  if (hydrated.status === 'loading') {
+    return (
+      <div
+        className="my-2 rounded border border-dashed border-gray-300 bg-gray-50 p-3 text-xs text-gray-600 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
+        data-block-type="pivot-table"
+        data-pivot-source-state="loading"
+      >
+        Pivot Table · data-source 로딩 중…
+      </div>
+    )
+  }
+  if (hydrated.status === 'error') {
+    return (
+      <div
+        className="my-2 rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
+        data-block-type="pivot-table"
+        data-pivot-source-state="error"
+      >
+        Pivot Table · data-source 오류: {hydrated.error}
+      </div>
+    )
+  }
+
   const isEmpty = result.rowHeaders.length === 0 || result.colHeaders.length === 0
 
   if (isEmpty) {
@@ -49,8 +90,8 @@ export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
       >
         <p className="font-semibold">Pivot Table</p>
         <p className="mt-1">
-          source rows={block.source.rows.length} · rows=[{block.rows.join(', ') || '∅'}] ·
-          cols=[{block.cols.join(', ') || '∅'}] · values={measures.length}
+          source rows={sourceRows(block.source).length} · rows=[{block.rows.map(dimLabel).join(', ') || '∅'}] ·
+          cols=[{block.cols.map(dimLabel).join(', ') || '∅'}] · values={measures.length}
         </p>
         <p className="mt-1 text-[11px] text-gray-500">
           데이터 또는 row/col 축이 비어있어 표가 없습니다.
@@ -58,8 +99,6 @@ export function PivotTableBlockView({ block }: { block: PivotTableBlock }) {
       </div>
     )
   }
-
-  const csvText = useMemo(() => buildCsv(result, measures, empty), [result, measures, empty])
 
   return (
     <div className="group relative my-2" data-export-root="pivot-table">
@@ -351,10 +390,10 @@ export function PivotDrillModal({
 
 function buildDrillTitle(block: PivotTableBlock, drill: DrillState): string {
   const rowPart = block.rows
-    .map((f, i) => `${f}=${drill.rowTuple[i] ?? ''}`)
+    .map((d, i) => `${dimLabel(d)}=${drill.rowTuple[i] ?? ''}`)
     .join(' / ')
   const colPart = block.cols
-    .map((f, i) => `${f}=${drill.colTuple[i] ?? ''}`)
+    .map((d, i) => `${dimLabel(d)}=${drill.colTuple[i] ?? ''}`)
     .join(' / ')
   const parts = [rowPart, colPart].filter(Boolean)
   return parts.length > 0 ? `Drill-down · ${parts.join(' × ')}` : 'Drill-down'
@@ -367,7 +406,7 @@ function buildDrillTitle(block: PivotTableBlock, drill: DrillState): string {
  */
 function collectDrillFields(
   block: PivotTableBlock,
-  rows: PivotTableBlock['source']['rows'],
+  rows: ReturnType<typeof sourceRows>,
 ): string[] {
   const out: string[] = []
   const seen = new Set<string>()
@@ -505,4 +544,108 @@ function csvEscape(v: string): string {
     return `"${v.replace(/"/g, '""')}"`
   }
   return v
+}
+
+// ── Sprint 6 — data-source hydration ────────────────────────────────────
+type HydrationStatus = 'inline' | 'loading' | 'error' | 'ready'
+interface HydrationResult {
+  block: PivotTableBlock
+  status: HydrationStatus
+  error?: string
+}
+
+/**
+ * Resolve a sibling DataSourceBlock by id from the current editor draft.
+ * Returns null when the draft is unavailable (rare — read-only viewers
+ * still mount the editor store) or the id is missing / not a DataSource.
+ */
+function findDataSourceBlock(
+  draftSections: ReadonlyArray<{ blocks?: Array<Block> }>,
+  id: string,
+): DataSourceBlockType | null {
+  for (const section of draftSections) {
+    for (const b of section.blocks ?? []) {
+      if (b.id === id && b.type === 'data-source') return b as DataSourceBlockType
+    }
+  }
+  return null
+}
+
+/**
+ * Coerce a DataSource payload into the flat `Record<field, value>[]` that
+ * pivotEngine consumes. Two shapes accepted:
+ *   - `{rows: [{...}]}` (already shaped like an array of objects)
+ *   - `{headers: [...], rows: [[...]]}` (tabular — zip headers with cells)
+ * Anything else → `[]` (caller renders empty state).
+ */
+export function payloadToRows(
+  payload: unknown,
+): Array<Record<string, string | number | null>> {
+  if (!payload || typeof payload !== 'object') return []
+  const p = payload as Record<string, unknown>
+  if (Array.isArray(p.rows) && p.rows.length > 0) {
+    const first = p.rows[0]
+    // Already flat objects.
+    if (first && typeof first === 'object' && !Array.isArray(first)) {
+      return p.rows as Array<Record<string, string | number | null>>
+    }
+    // Tabular — combine with `headers`.
+    if (Array.isArray(first) && Array.isArray(p.headers)) {
+      const headers = p.headers as string[]
+      return (p.rows as unknown[][]).map((row) => {
+        const out: Record<string, string | number | null> = {}
+        for (let i = 0; i < headers.length; i++) {
+          const v = row[i]
+          out[headers[i] ?? `col_${i}`] =
+            typeof v === 'string' || typeof v === 'number' || v === null
+              ? v
+              : v == null
+                ? null
+                : String(v)
+        }
+        return out
+      })
+    }
+  }
+  return []
+}
+
+function useHydratedPivotBlock(block: PivotTableBlock): HydrationResult {
+  const draft = useEditorStore((s) => s.draft)
+  const inline = block.source?.kind !== 'data-source'
+
+  const dataSourceBlock = useMemo(() => {
+    if (inline) return null
+    const id = (block.source as { dataSourceId?: string }).dataSourceId
+    if (!id || !draft) return null
+    return findDataSourceBlock(draft.sections ?? [], id)
+  }, [inline, block.source, draft])
+
+  const endpoint = dataSourceBlock?.endpoint ?? ''
+  const params = dataSourceBlock?.params ?? null
+  // Share the cache key with DataSourceBlockView — TanStack dedupes the
+  // request so a doc with both a DataSource viewer AND a Pivot referencing
+  // it fires the network call once.
+  const { data, error, isLoading } = useQuery({
+    queryKey: ['data-source', endpoint, JSON.stringify(params)],
+    queryFn: () => fetchDataSource(endpoint, params),
+    enabled: !inline && Boolean(endpoint),
+    retry: false,
+  })
+
+  if (inline) return { block, status: 'inline' }
+  if (!dataSourceBlock) {
+    return { block, status: 'error', error: 'dataSourceId not found in document' }
+  }
+  if (isLoading) return { block, status: 'loading' }
+  if (error) {
+    return { block, status: 'error', error: (error as Error).message }
+  }
+
+  const rows = payloadToRows(data?.data ?? null)
+  const hydrated: PivotTableBlock = {
+    ...block,
+    source: { kind: 'inline', rows },
+  }
+  return { block: hydrated, status: 'ready' }
 }

@@ -92,7 +92,7 @@ export interface PivotResult {
   grandTotals?: (number | null)[]
 }
 
-type RawRow = PivotTableBlock['source']['rows'][number]
+type RawRow = ReturnType<typeof sourceRows>[number]
 type Measure = PivotTableBlock['values'][number]
 type FilterSpec = NonNullable<PivotTableBlock['filters']>[number]
 
@@ -103,6 +103,20 @@ type FilterSpec = NonNullable<PivotTableBlock['filters']>[number]
  */
 export type DimSpec = NonNullable<PivotTableBlock['rows']>[number]
 export type DateGroup = 'year' | 'quarter' | 'month' | 'week' | 'day'
+
+/**
+ * Sprint 6 — read the inline raw rows from a PivotTableBlock's `source`.
+ * Source is now a union: inline/csv carry `rows`, data-source defers to
+ * a sibling DataSourceBlock and exposes `rows` as `[]` here (the viewer
+ * hydrates a synthetic clone with rows from useDataSource() before
+ * calling buildPivot — engine stays pure).
+ */
+export function sourceRows(
+  source: PivotTableBlock['source'],
+): readonly Record<string, string | number | null | undefined>[] {
+  if (source && 'rows' in source && Array.isArray(source.rows)) return source.rows
+  return []
+}
 
 /** Field name a `DimSpec` reads from a raw row. */
 export function dimField(d: DimSpec): string {
@@ -545,7 +559,7 @@ export function drillRows(
 ): RawRow[] {
   const rowDims = block.rows as DimSpec[]
   const colDims = block.cols as DimSpec[]
-  const rawRows: RawRow[] = block.source?.rows ?? []
+  const rawRows: RawRow[] = sourceRows(block.source) as RawRow[]
   const filtered = applyFilters(rawRows, block.filters)
   return filtered.filter((r) => {
     for (let i = 0; i < rowDims.length; i++) {
@@ -636,7 +650,7 @@ export function buildPivot(block: PivotTableBlock): PivotResult {
   const rowDims = block.rows as DimSpec[]
   const colDims = block.cols as DimSpec[]
   const measures = block.values
-  const rawRows: RawRow[] = block.source?.rows ?? []
+  const rawRows: RawRow[] = sourceRows(block.source) as RawRow[]
 
   // Sprint 2: filter first — everything below operates on `rows`.
   const rows = applyFilters(rawRows, block.filters)

@@ -3,6 +3,22 @@
  */
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
+
+// Sprint 6 — PivotTableBlockEditor mounts the live PivotTableBlockView as
+// a preview, which now reads useQuery for the data-source hydration path.
+// Wrap with a fresh QueryClientProvider so React doesn't throw.
+function harness(node: ReactNode) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
+  })
+  return <QueryClientProvider client={client}>{node}</QueryClientProvider>
+}
+
+function ssr(node: ReactNode) {
+  return renderToStaticMarkup(harness(node))
+}
 import {
   PivotTableBlockEditor,
   applyPivotDragEnd,
@@ -28,7 +44,7 @@ function mkBlock(over: Partial<PivotTableBlock> = {}): PivotTableBlock {
 
 describe('PivotTableBlockEditor', () => {
   it('SSR — Source paste / DimPicker / ValuesPicker / Preview 영역 모두 노출', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockEditor block={mkBlock()} onChange={vi.fn()} />,
     )
     expect(html).toContain('Pivot Table')
@@ -70,7 +86,7 @@ describe('PivotTableBlockEditor', () => {
   })
 
   it('detected fields 노출 + 감지된 필드 명 포함', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockEditor
         block={mkBlock({
           source: {
@@ -87,7 +103,7 @@ describe('PivotTableBlockEditor', () => {
   })
 
   it('preview 동작 — 빈 축이면 안내 메시지', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockEditor block={mkBlock()} onChange={vi.fn()} />,
     )
     expect(html).toContain('표가 없습니다')
@@ -96,7 +112,7 @@ describe('PivotTableBlockEditor', () => {
   // ── Sprint 2 — Totals / Sort / Filters UI ────────────────────────────
 
   it('Sprint 2 SSR — Totals(3 checkbox) + Sort(axis/by/order) + Filters(Add button) 노출', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockEditor
         block={mkBlock({
           source: { kind: 'inline', rows: [{ d: 'A', v: 1 }] },
@@ -119,7 +135,7 @@ describe('PivotTableBlockEditor', () => {
   })
 
   it('Sprint 2 SSR — existing totals 값이 checkbox checked 로 반영', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockEditor
         block={mkBlock({
           source: { kind: 'inline', rows: [{ d: 'A', v: 1 }] },
@@ -136,7 +152,7 @@ describe('PivotTableBlockEditor', () => {
   })
 
   it('Sprint 2 SSR — existing sort 값이 select / radio 에 반영', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockEditor
         block={mkBlock({
           source: { kind: 'inline', rows: [{ d: 'A', v: 1 }] },
@@ -153,7 +169,7 @@ describe('PivotTableBlockEditor', () => {
   })
 
   it('Sprint 2 SSR — 기존 filters 가 row 로 렌더', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockEditor
         block={mkBlock({
           source: { kind: 'inline', rows: [{ d: 'A', v: 1 }] },
@@ -175,7 +191,7 @@ describe('PivotTableBlockEditor', () => {
   // ── Sprint 4 — calculated field (measure.expr) UI ────────────────────
 
   it('Sprint 4 SSR — field 모드 (default) 일 때 mode toggle 2 개 + field select 렌더', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockEditor
         block={mkBlock({
           source: { kind: 'inline', rows: [{ revenue: 100, cost: 30 }] },
@@ -192,7 +208,7 @@ describe('PivotTableBlockEditor', () => {
   })
 
   it('Sprint 4 SSR — expr 모드일 때 textarea + 사용 가능 fields 힌트 노출', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockEditor
         block={mkBlock({
           source: { kind: 'inline', rows: [{ revenue: 100, cost: 30 }] },
@@ -213,7 +229,7 @@ describe('PivotTableBlockEditor', () => {
   // ── DnD pivot pickers ──────────────────────────────────────────────────
 
   it('DnD SSR — Available Fields panel 렌더 + 각 필드가 draggable 버튼으로 노출', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockEditor
         block={mkBlock({
           source: {
@@ -234,7 +250,7 @@ describe('PivotTableBlockEditor', () => {
   })
 
   it('DnD SSR — Rows / Cols / Values 모두 droppable zone wrapper 보유', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockEditor
         block={mkBlock({
           source: { kind: 'inline', rows: [{ a: 1, b: 2 }] },
@@ -250,7 +266,7 @@ describe('PivotTableBlockEditor', () => {
   })
 
   it('DnD accessibility — DnD 추가 후에도 기존 dropdown fallback 보존 (회귀 가드)', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <PivotTableBlockEditor
         block={mkBlock({
           source: { kind: 'inline', rows: [{ a: 1, b: 2 }] },

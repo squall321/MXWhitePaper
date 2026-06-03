@@ -1273,6 +1273,10 @@ class Schema(BaseModel):
 
 
 class Source(BaseModel):
+    """
+    Inline / CSV source — rows[] 는 paste 시점에 저장.
+    """
+
     model_config = ConfigDict(
         extra='forbid',
     )
@@ -1284,6 +1288,21 @@ class Source(BaseModel):
     schema_: Schema | None = Field(None, alias='schema')
     """
     Optional — fields 자동 추론 가능하면 생략. 명시 시 우선.
+    """
+
+
+class Source1(BaseModel):
+    """
+    Sprint 6 — 같은 문서 안 DataSourceBlock 결과를 raw rows 로 사용. viewer 가 DataSourceBlock 의 query 결과 (`{columns, rows}` 또는 `{data: [...]}`) 를 `Record<field, value>[]` 로 변환해 engine 에 넘긴다. async + 캐시는 TanStack Query 의 DataSourceBlock 쿼리를 그대로 재사용.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['data-source']
+    data_source_id: Ulid = Field(..., alias='dataSourceId')
+    """
+    참조할 DataSourceBlock 의 id
     """
 
 
@@ -1494,7 +1513,7 @@ class PivotTableBlock(BaseModel):
     )
     type: Literal['pivot-table']
     id: Ulid
-    source: Source
+    source: Source | Source1
     rows: list[Rows | Rows1]
     """
     Row 축 dimension field 이름 list (e.g., ['department', 'year']). Sprint 5 — 각 항목은 단순 field 이름 (문자열) 이거나 시간 자동 그룹을 위해 {field, group} object. group 은 'year'|'quarter'|'month'|'week'|'day' 중 하나로 raw row 의 date 를 bucket. 미명시 field 는 raw value 사용.
