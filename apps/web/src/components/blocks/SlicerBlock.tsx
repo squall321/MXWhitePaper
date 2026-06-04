@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { fetchDataSource } from './DataSourceBlock'
@@ -32,6 +32,17 @@ export function SlicerBlockView({ block }: Props) {
   const active = useSlicerStore((s) => s.active[block.id] ?? [])
   const toggle = useSlicerStore((s) => s.toggle)
   const setSingle = useSlicerStore((s) => s.setSingle)
+  const setActive = useSlicerStore((s) => s.setActive)
+
+  // H1 — mount-시점 default hydration. block.default 가 있으면 첫 렌더에서
+  // store 에 주입. 사용자가 chip 을 만진 후 ("All" 도 합법 상태) 에는
+  // 덮어쓰지 않는다 — store entry 가 비어있을 때만 적용.
+  useEffect(() => {
+    const def = block.default
+    if (!def || def.length === 0) return
+    if (useSlicerStore.getState().active[block.id]?.length) return
+    setActive(block.id, def)
+  }, [block.id, block.default, setActive])
 
   // ── 1) collect rows depending on source kind ─────────────────────────
   const inlineRows = useMemo<Array<Record<string, unknown>>>(() => {

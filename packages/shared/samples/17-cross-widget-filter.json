@@ -1,0 +1,145 @@
+{
+  "schema_version": "1.0",
+  "id": "FR1SP1ZG6ZNYY3T31VZX896F0M",
+  "slug": "cross-widget-filter",
+  "title": "Cross-widget filter — Slicer + Timeline 데모",
+  "summary": "G2~G4 cross-widget filter 데모. SlicerBlock (부서) + TimelineBlock (기간) 둘 다 PivotTable 과 TableBlock 을 동시 필터링.",
+  "metadata": {
+    "division": "MX",
+    "team": "데이터팀",
+    "group": "분석그룹",
+    "part": "데이터파트",
+    "owners": [
+      "u-demo"
+    ],
+    "tags": [
+      "데모",
+      "slicer",
+      "timeline",
+      "cross-widget"
+    ],
+    "category": "데모",
+    "confidentiality": "internal"
+  },
+  "sections": [
+    {
+      "id": "DJ2HCSCJV88ZV8NG18E2B1K3N1",
+      "number": "1",
+      "level": 1,
+      "title": "Cross-widget filter 데모",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "id": "C3912SH32Q2JMSBJE30DYB1Q3H",
+          "text": "아래 SlicerBlock (`부서`) 와 TimelineBlock (`기간`) 를 조작하면 같은 inline 데이터를 공유하는 Pivot 표와 Table 이 동시에 필터링된다. 둘 다 `boundSlicers` 로 binding."
+        },
+        {
+          "type": "slicer",
+          "id": "4BCSFA8MB5VPAD5QPXEC8FA4V7",
+          "label": "부서",
+          "field": "dept",
+          "multiSelect": true,
+          "source": {
+            "kind": "inline",
+            "rows": [
+              { "dept": "Sales", "date": "2026-01-15", "amount": 120 },
+              { "dept": "R&D", "date": "2026-01-22", "amount": 80 },
+              { "dept": "HR", "date": "2026-02-05", "amount": 35 },
+              { "dept": "Sales", "date": "2026-02-18", "amount": 150 },
+              { "dept": "R&D", "date": "2026-03-02", "amount": 90 },
+              { "dept": "Sales", "date": "2026-03-15", "amount": 200 },
+              { "dept": "HR", "date": "2026-04-08", "amount": 40 },
+              { "dept": "R&D", "date": "2026-04-25", "amount": 110 }
+            ]
+          }
+        },
+        {
+          "type": "timeline",
+          "id": "8GB9BDCAPVG6TFJTBXVRR183EB",
+          "label": "기간",
+          "field": "date",
+          "min": "2026-01-01",
+          "max": "2026-04-30",
+          "source": {
+            "kind": "inline",
+            "rows": [
+              { "dept": "Sales", "date": "2026-01-15", "amount": 120 },
+              { "dept": "R&D", "date": "2026-01-22", "amount": 80 },
+              { "dept": "HR", "date": "2026-02-05", "amount": 35 },
+              { "dept": "Sales", "date": "2026-02-18", "amount": 150 },
+              { "dept": "R&D", "date": "2026-03-02", "amount": 90 },
+              { "dept": "Sales", "date": "2026-03-15", "amount": 200 },
+              { "dept": "HR", "date": "2026-04-08", "amount": 40 },
+              { "dept": "R&D", "date": "2026-04-25", "amount": 110 }
+            ]
+          }
+        },
+        {
+          "type": "pivot-table",
+          "id": "Q65AMA7ZYXSYDBGHDAAP5302W7",
+          "source": {
+            "kind": "inline",
+            "rows": [
+              { "dept": "Sales", "date": "2026-01-15", "amount": 120 },
+              { "dept": "R&D", "date": "2026-01-22", "amount": 80 },
+              { "dept": "HR", "date": "2026-02-05", "amount": 35 },
+              { "dept": "Sales", "date": "2026-02-18", "amount": 150 },
+              { "dept": "R&D", "date": "2026-03-02", "amount": 90 },
+              { "dept": "Sales", "date": "2026-03-15", "amount": 200 },
+              { "dept": "HR", "date": "2026-04-08", "amount": 40 },
+              { "dept": "R&D", "date": "2026-04-25", "amount": 110 }
+            ]
+          },
+          "rows": [
+            { "field": "date", "group": "month" }
+          ],
+          "cols": [
+            "dept"
+          ],
+          "values": [
+            { "field": "amount", "agg": "sum", "label": "매출 합계" }
+          ],
+          "boundSlicers": [
+            "4BCSFA8MB5VPAD5QPXEC8FA4V7",
+            "8GB9BDCAPVG6TFJTBXVRR183EB"
+          ],
+          "totals": {
+            "row": true,
+            "col": true,
+            "grand": true
+          }
+        },
+        {
+          "type": "table",
+          "id": "AFEXK1KJ78TB3HK6SK3XE5BAP7",
+          "caption": "raw 데이터 (같은 inline rows 가 Pivot 과 공유)",
+          "headers": ["dept", "date", "amount"],
+          "rows": [
+            ["Sales", "2026-01-15", "120"],
+            ["R&D", "2026-01-22", "80"],
+            ["HR", "2026-02-05", "35"],
+            ["Sales", "2026-02-18", "150"],
+            ["R&D", "2026-03-02", "90"],
+            ["Sales", "2026-03-15", "200"],
+            ["HR", "2026-04-08", "40"],
+            ["R&D", "2026-04-25", "110"]
+          ],
+          "boundSlicers": [
+            "4BCSFA8MB5VPAD5QPXEC8FA4V7",
+            "8GB9BDCAPVG6TFJTBXVRR183EB"
+          ],
+          "options": {
+            "stripe": true,
+            "searchable": true
+          }
+        },
+        {
+          "type": "callout",
+          "id": "P6VGP7GAS4S373TJD8KDKDSJFP",
+          "variant": "tip",
+          "text": "Slicer 의 chip 을 누르거나 Timeline 슬라이더를 움직이면 Pivot 과 Table 행이 즉시 줄어든다. 같은 zustand store (`useSlicerStore`) 를 공유하므로 widget 추가 시 한 번의 store 구독으로 모든 cross-widget filter 가 동작."
+        }
+      ]
+    }
+  ]
+}

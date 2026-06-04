@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { fetchDataSource } from './DataSourceBlock'
@@ -48,6 +48,17 @@ export function TimelineBlockView({ block }: Props) {
   const active = useSlicerStore((s) => s.active[block.id] ?? [])
   const setActive = useSlicerStore((s) => s.setActive)
   const clear = useSlicerStore((s) => s.clear)
+
+  // H1 — mount-시점 default hydration. block.default 가 [from, to] 면
+  // 첫 렌더에서 store 에 주입. store 에 이미 entry 가 있으면 (사용자가
+  // 슬라이더를 만진 후) 덮어쓰지 않는다. block.id 가 의존성에 들어가야
+  // 새 timeline 으로 라우팅됐을 때 다시 한 번 동작.
+  useEffect(() => {
+    const def = block.default
+    if (!def || def.length !== 2) return
+    if (useSlicerStore.getState().active[block.id]?.length) return
+    setActive(block.id, [def[0], def[1]] as string[])
+  }, [block.id, block.default, setActive])
 
   const inlineRows = useMemo<Array<Record<string, unknown>>>(() => {
     if (sourceKind === 'inline') {
