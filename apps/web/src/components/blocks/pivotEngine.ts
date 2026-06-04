@@ -576,6 +576,31 @@ export function drillRows(
   })
 }
 
+/**
+ * J — Chart drill helper. Given raw rows + the same filter list the
+ * aggregator used + a labelField + a clicked label value, return the
+ * rows that contributed to that bucket. `series` (optional) lets a
+ * future caller scope drill to a single series; currently we ignore it
+ * because Chart's aggregations all read from the same rows.
+ *
+ * Mirrors PivotTable's `drillRows` — same shape so the modal can reuse
+ * the rendering helpers.
+ */
+export function drillChartRows(
+  rawRows: ReadonlyArray<RawRow>,
+  filters: ReadonlyArray<FilterSpec> | undefined,
+  labelField: string,
+  label: string,
+): RawRow[] {
+  if (!labelField) return []
+  const filtered = applyFilters([...rawRows], filters ? [...filters] : undefined)
+  return filtered.filter((r) => {
+    const v = r[labelField]
+    if (v == null) return false
+    return String(v) === label
+  })
+}
+
 export type { RawRow }
 
 /**

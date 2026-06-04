@@ -325,6 +325,12 @@
   를 *덮어쓴* synthetic clone 을 render. boundSlicers 에 SlicerBlock /
   TimelineBlock id 를 적으면 PivotTable 과 동일하게 cross-widget filter.
   source 없으면 today 와 동일 — 100% back-compat.
+  ★ **J** — drill-down 모달. line/bar/area chart 클릭 시 activeLabel 을
+  추출해 [[apps/web/src/components/blocks/pivotEngine.ts#drillChartRows]]
+  로 해당 라벨에 기여한 raw rows 를 추출 → ChartDrillModal (Modal 공용
+  컴포넌트) 가 PivotDrillModal 과 동일한 shape 으로 표시. drill 은 source
+  + labelField + aggregations 가 모두 있을 때만 활성 (cursor: pointer).
+  pie/radar/scatter 는 activeLabel concept 이 다르므로 의도적으로 제외.
 - `ColumnsBlock`, `TabsBlock`, `AccordionBlock`, `GalleryBlock`, …
 
 전체 enum 은 [[src/app/schemas/document.py]] 참고. 새 block type 추가 시:

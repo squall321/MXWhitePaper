@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Area,
@@ -33,7 +33,8 @@ import { chartLabeledToCsv } from '@/lib/widgetExport'
 import { fetchDataSource } from './DataSourceBlock'
 import { payloadToRows, collectSlicerFilters } from './PivotTableBlock'
 import { collectTimelineFilters } from './TimelineBlock'
-import { aggregateChartData, type ChartAgg } from './pivotEngine'
+import { aggregateChartData, drillChartRows, type ChartAgg } from './pivotEngine'
+import { Modal } from '@/components/ui/Modal'
 import { useEditorStore } from '@/features/editor/state'
 import { useSlicerStore } from '@/features/slicer/store'
 
@@ -105,8 +106,21 @@ function scatterPoints(series: ChartBlock['data']['series'][number]) {
  * query key as DataSourceBlockView so the underlying HTTP fetch is shared
  * across DataSourceBlock + PivotTable + Chart that all reference the
  * same data-source id.
+ *
+ * J — also returns `drillContext` with the filtered raw rows + the
+ * applied filter list, so the click handler can call `drillChartRows`
+ * for a single label without re-fetching or re-merging filters.
  */
-function useHydratedChartBlock(block: ChartBlock): ChartBlock {
+interface DrillContext {
+  rawRows: Array<Record<string, string | number | null>>
+  allFilters: Array<{ field: string; op: string; value: unknown }>
+  labelField: string
+}
+
+function useHydratedChartBlock(block: ChartBlock): {
+  block: ChartBlock
+  drillContext: DrillContext | null
+} {
   const draft = useEditorStore((s) => s.draft)
   const slicerActive = useSlicerStore((s) => s.active)
   const source = (block as { source?: { kind: string; dataSourceId?: string; rows?: Array<Record<string, unknown>> } }).source
@@ -137,8 +151,10 @@ function useHydratedChartBlock(block: ChartBlock): ChartBlock {
     retry: false,
   })
 
-  return useMemo<ChartBlock>(() => {
-    if (!source || !labelField || !aggregations?.length) return block
+  return useMemo<{ block: ChartBlock; drillContext: DrillContext | null }>(() => {
+    if (!source || !labelField || !aggregations?.length) {
+      return { block, drillContext: null }
+    }
 
     const rawRows = inline
       ? (source.rows ?? []) as Array<Record<string, unknown>>
@@ -146,7 +162,7 @@ function useHydratedChartBlock(block: ChartBlock): ChartBlock {
 
     const slicerFilters = collectSlicerFilters(boundSlicers, draft?.sections ?? [], slicerActive)
     const timelineFilters = collectTimelineFilters(boundSlicers, draft?.sections ?? [], slicerActive)
-    const allFilters = [...(filters ?? []), ...slicerFilters, ...timelineFilters] as unknown as Parameters<typeof aggregateChartData>[3]
+    const allFilters = [...(filters ?? []), ...slicerFilters, ...timelineFilters]
 
     // aggregateChartData expects RawRow shape (string | number | null).
     // Coerce loose unknowns down — non-primitive cells become strings.
@@ -162,25 +178,53 @@ function useHydratedChartBlock(block: ChartBlock): ChartBlock {
       return out
     })
 
-    const { labels, series } = aggregateChartData(coerced, labelField, aggregations, allFilters)
+    const { labels, series } = aggregateChartData(
+      coerced,
+      labelField,
+      aggregations,
+      allFilters as Parameters<typeof aggregateChartData>[3],
+    )
     return {
-      ...block,
-      data: {
-        ...block.data,
-        labels,
-        series: series.map((s) => ({
-          name: s.name,
-          values: s.values,
-          ...(s.color !== undefined ? { color: s.color } : {}),
-          ...(s.yAxisIndex !== undefined ? { yAxisIndex: s.yAxisIndex } : {}),
-        })),
+      block: {
+        ...block,
+        data: {
+          ...block.data,
+          labels,
+          series: series.map((s) => ({
+            name: s.name,
+            values: s.values,
+            ...(s.color !== undefined ? { color: s.color } : {}),
+            ...(s.yAxisIndex !== undefined ? { yAxisIndex: s.yAxisIndex } : {}),
+          })),
+        },
+      },
+      drillContext: {
+        rawRows: coerced,
+        allFilters,
+        labelField,
       },
     }
   }, [block, source, labelField, aggregations, filters, boundSlicers, data, draft, slicerActive, inline])
 }
 
 export function ChartBlockView({ block: rawBlock }: { block: ChartBlock }) {
-  const block = useHydratedChartBlock(rawBlock)
+  const { block, drillContext } = useHydratedChartBlock(rawBlock)
+  // J — drill-down state. Click on a chart label opens a modal with the
+  // raw rows that contributed to that bucket. Only meaningful when
+  // `drillContext` is populated (i.e. block.source + labelField + aggs
+  // are all set). For ECharts engine path we currently skip drill — the
+  // ECharts renderer ships its own native drill via brush/zoom.
+  const [drillLabel, setDrillLabel] = useState<string | null>(null)
+  const drillRows = useMemo(() => {
+    if (!drillContext || drillLabel === null) return []
+    return drillChartRows(
+      drillContext.rawRows,
+      drillContext.allFilters as Parameters<typeof drillChartRows>[1],
+      drillContext.labelField,
+      drillLabel,
+    )
+  }, [drillContext, drillLabel])
+
   // engine === 'echarts' uses the richer ECharts renderer (zoom, brush,
   // markPoint, markArea). Default 'recharts' keeps the original simple
   // surface for back-compat.
@@ -214,10 +258,110 @@ export function ChartBlockView({ block: rawBlock }: { block: ChartBlock }) {
       )}
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          {renderChart(block, data, gridStroke, axisStroke, tooltipContentStyle, tooltipItemStyle, getRechartsPalette(theme))}
+          {renderChart(
+            block,
+            data,
+            gridStroke,
+            axisStroke,
+            tooltipContentStyle,
+            tooltipItemStyle,
+            getRechartsPalette(theme),
+            drillContext ? (label) => setDrillLabel(label) : null,
+          )}
         </ResponsiveContainer>
       </div>
+      {drillLabel !== null && drillContext && (
+        <ChartDrillModal
+          title={block.title}
+          labelField={drillContext.labelField}
+          label={drillLabel}
+          rows={drillRows as ReadonlyArray<Record<string, string | number | null>>}
+          onClose={() => setDrillLabel(null)}
+        />
+      )}
     </figure>
+  )
+}
+
+/**
+ * J — Chart drill modal. Mirrors PivotDrillModal but renders rows from a
+ * Chart's source (not Pivot's). Fields shown: labelField + every other
+ * field present in the rows (first-seen order).
+ */
+export function ChartDrillModal({
+  title,
+  labelField,
+  label,
+  rows,
+  onClose,
+}: {
+  title: string | undefined
+  labelField: string
+  label: string
+  rows: ReadonlyArray<Record<string, string | number | null>>
+  onClose: () => void
+}) {
+  const fields = useMemo<string[]>(() => {
+    const seen = new Set<string>([labelField])
+    const out = [labelField]
+    for (const r of rows) {
+      for (const k of Object.keys(r)) {
+        if (!seen.has(k)) {
+          seen.add(k)
+          out.push(k)
+        }
+      }
+    }
+    return out
+  }, [rows, labelField])
+  const headerLabel = title
+    ? `${title} — ${labelField}: ${label}`
+    : `${labelField}: ${label}`
+  return (
+    <Modal open onClose={onClose} title={headerLabel} size="xl">
+      <div data-testid="chart-drill-modal" className="px-5 py-3">
+        <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+          {rows.length === 0
+            ? '해당 라벨에 속한 raw row 가 없습니다.'
+            : `${rows.length} row${rows.length === 1 ? '' : 's'}`}
+        </p>
+        {rows.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                  {fields.map((f) => (
+                    <th
+                      key={`chart-drill-h-${f}`}
+                      className="border-b border-gray-200 px-2 py-1.5 text-left font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200"
+                    >
+                      {f}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr
+                    key={`chart-drill-r-${i}`}
+                    className={i % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50'}
+                  >
+                    {fields.map((f) => (
+                      <td
+                        key={`chart-drill-c-${i}-${f}`}
+                        className="border-b border-gray-100 px-2 py-1 text-gray-800 dark:border-gray-800 dark:text-gray-200"
+                      >
+                        {r[f] == null ? '' : String(r[f])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
 
@@ -229,8 +373,22 @@ function renderChart(
   tooltipContentStyle: CSSProperties,
   tooltipItemStyle: CSSProperties,
   palette: readonly string[],
+  onLabelClick: ((label: string) => void) | null,
 ) {
   const seriesNames = block.data.series.map((s) => s.name)
+  // J — recharts attaches an onClick to the chart root. The callback
+  // receives `{activeLabel, activePayload}`; we forward the label string
+  // when present so the parent opens the drill modal. null guard means
+  // drill is silently no-op when source is missing.
+  const handleChartClick = onLabelClick
+    ? (e: { activeLabel?: string | number } | null | undefined) => {
+        const label = e?.activeLabel
+        if (label === undefined) return
+        onLabelClick(String(label))
+      }
+    : undefined
+  // Visual affordance — pointer when drill is wired up, default otherwise.
+  const cursorStyle: CSSProperties | undefined = onLabelClick ? { cursor: 'pointer' } : undefined
   const tooltipProps = {
     wrapperStyle: { outline: 'none' },
     isAnimationActive: false,
@@ -242,7 +400,7 @@ function renderChart(
   switch (block.chartType) {
     case 'line':
       return (
-        <LineChart data={data}>
+        <LineChart data={data} onClick={handleChartClick} style={cursorStyle}>
           <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
           <XAxis dataKey="label" stroke={axisStroke} tick={{ fill: axisStroke }} />
           <YAxis stroke={axisStroke} tick={{ fill: axisStroke }} />
@@ -262,7 +420,7 @@ function renderChart(
       )
     case 'bar':
       return (
-        <BarChart data={data}>
+        <BarChart data={data} onClick={handleChartClick} style={cursorStyle}>
           <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
           <XAxis dataKey="label" stroke={axisStroke} tick={{ fill: axisStroke }} />
           <YAxis stroke={axisStroke} tick={{ fill: axisStroke }} />
@@ -275,7 +433,7 @@ function renderChart(
       )
     case 'area':
       return (
-        <AreaChart data={data}>
+        <AreaChart data={data} onClick={handleChartClick} style={cursorStyle}>
           <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
           <XAxis dataKey="label" stroke={axisStroke} tick={{ fill: axisStroke }} />
           <YAxis stroke={axisStroke} tick={{ fill: axisStroke }} />
