@@ -134,10 +134,53 @@
           }
         },
         {
+          "type": "kpi-cards",
+          "id": "P2EDYECE7MN7Q5RGX9X6RN7KKR",
+          "source": {
+            "kind": "inline",
+            "rows": [
+              { "dept": "Sales", "date": "2026-01-15", "amount": 120 },
+              { "dept": "R&D", "date": "2026-01-22", "amount": 80 },
+              { "dept": "HR", "date": "2026-02-05", "amount": 35 },
+              { "dept": "Sales", "date": "2026-02-18", "amount": 150 },
+              { "dept": "R&D", "date": "2026-03-02", "amount": 90 },
+              { "dept": "Sales", "date": "2026-03-15", "amount": 200 },
+              { "dept": "HR", "date": "2026-04-08", "amount": 40 },
+              { "dept": "R&D", "date": "2026-04-25", "amount": 110 }
+            ]
+          },
+          "boundSlicers": [
+            "4BCSFA8MB5VPAD5QPXEC8FA4V7",
+            "8GB9BDCAPVG6TFJTBXVRR183EB"
+          ],
+          "items": [
+            {
+              "label": "총 매출",
+              "value": 0,
+              "compute": { "field": "amount", "agg": "sum" }
+            },
+            {
+              "label": "평균",
+              "value": 0,
+              "compute": { "field": "amount", "agg": "avg" }
+            },
+            {
+              "label": "건수",
+              "value": 0,
+              "compute": { "field": "amount", "agg": "count" }
+            },
+            {
+              "label": "최대",
+              "value": 0,
+              "compute": { "field": "amount", "agg": "max" }
+            }
+          ]
+        },
+        {
           "type": "callout",
           "id": "P6VGP7GAS4S373TJD8KDKDSJFP",
           "variant": "tip",
-          "text": "Slicer 의 chip 을 누르거나 Timeline 슬라이더를 움직이면 Pivot 과 Table 행이 즉시 줄어든다. 같은 zustand store (`useSlicerStore`) 를 공유하므로 widget 추가 시 한 번의 store 구독으로 모든 cross-widget filter 가 동작."
+          "text": "Slicer 의 chip 을 누르거나 Timeline 슬라이더를 움직이면 Pivot 표/Table 의 행 + KpiCards 카드 4개 + Chart (있다면) 가 동시에 재계산된다. 같은 zustand store (`useSlicerStore`) 를 공유하므로 widget 추가 시 한 번의 store 구독으로 모든 cross-widget filter 가 동작."
         }
       ]
     }

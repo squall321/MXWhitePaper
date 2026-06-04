@@ -567,7 +567,50 @@ export interface KpiCardsBlock {
        */
       palette?: string[]
     }
+    /**
+     * I (cycle b) — viewer 가 raw rows (block.source) 에서 자동 계산할 카드. 지정 시 정적 `value` 를 무시하고 source rows 에 (block.filters + boundSlicers 가 만든 filter) 를 적용한 후 (field, agg) 로 재집계해 value 를 덮어쓴다. agg 미지정 시 'sum'. 사용 예: 모든 카드가 같은 매출 데이터에서 dept 별로 계산 — slicer 가 dept 를 바꾸면 모든 카드 동시 재계산.
+     */
+    compute?: {
+      /**
+       * source rows 의 어떤 numeric field 를 집계할지
+       */
+      field: string
+      agg?: 'sum' | 'avg' | 'count' | 'min' | 'max'
+      /**
+       * 이 카드만 추가로 거를 row 필터. 예: {field:'status', value:'closed'}. block.filters 와 boundSlicers filter 가 적용된 후 추가 적용. value 가 배열이면 in semantic.
+       */
+      when?: {
+        field: string
+        value: any
+      }
+    }
   }[]
+  /**
+   * I (cycle b) — boundSlicers / 자동 계산 (items[i].compute) 을 위한 raw rows. 미지정 시 모든 카드는 정적 (items[i].value 그대로) 으로 렌더. PivotTable / ChartBlock 의 source 와 동일 shape.
+   */
+  source?:
+    | {
+        kind: 'inline'
+        rows: {
+          [k: string]: (string | number | null) | undefined
+        }[]
+      }
+    | {
+        kind: 'data-source'
+        dataSourceId: Ulid
+      }
+  /**
+   * I (cycle b) — source rows 에 적용할 raw filter. Pivot 의 filters 와 동일 shape. boundSlicers 가 만든 filter 와 concat. source 가 없으면 무시.
+   */
+  filters?: {
+    field: string
+    op: 'in' | 'not_in' | 'gt' | 'lt' | 'between' | 'top_n' | 'bottom_n'
+    value: any
+  }[]
+  /**
+   * I (cycle b) — listen 할 SlicerBlock / TimelineBlock id 목록. source 가 지정되어야 의미.
+   */
+  boundSlicers?: Ulid[]
   /**
    * 표시 옵션. 모두 optional, default 동작은 ON.
    */

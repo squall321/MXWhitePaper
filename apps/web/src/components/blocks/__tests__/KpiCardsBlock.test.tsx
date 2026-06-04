@@ -1,7 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactNode } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KpiCardsBlockView } from '../KpiCardsBlock'
 import type { KpiCardsBlock } from '@/types/document'
+
+// I (cycle b) — KpiCardsBlockView 가 useQuery 호출하므로 provider 래핑.
+function ssr(node: ReactNode): string {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
+  })
+  return renderToStaticMarkup(<QueryClientProvider client={client}>{node}</QueryClientProvider>)
+}
 
 const ID = (n: number) => '01HZX' + String(n).padStart(21, '0')
 
@@ -11,7 +21,7 @@ function block(items: KpiCardsBlock['items']): KpiCardsBlock {
 
 describe('<KpiCardsBlockView /> — sparkline (WIDGET-09)', () => {
   it('omits sparkline svg when item has no sparkline field (backwards compat)', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <KpiCardsBlockView block={block([{ label: '매출', value: '1.2M' }])} />,
     )
     expect(html).toContain('매출')
@@ -20,7 +30,7 @@ describe('<KpiCardsBlockView /> — sparkline (WIDGET-09)', () => {
   })
 
   it('renders an inline sparkline svg (default line kind) when item.sparkline.values is set', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <KpiCardsBlockView
         block={block([
           {
@@ -38,7 +48,7 @@ describe('<KpiCardsBlockView /> — sparkline (WIDGET-09)', () => {
   })
 
   it('renders a bar sparkline with <rect> children when kind="bar"', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <KpiCardsBlockView
         block={block([
           {
@@ -56,7 +66,7 @@ describe('<KpiCardsBlockView /> — sparkline (WIDGET-09)', () => {
   })
 
   it('renders sparklines for multiple cards independently', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <KpiCardsBlockView
         block={block([
           { label: 'A', value: 1, sparkline: { values: [1, 2, 3] } },
@@ -72,7 +82,7 @@ describe('<KpiCardsBlockView /> — sparkline (WIDGET-09)', () => {
   })
 
   it('skips sparkline when values array is empty', () => {
-    const html = renderToStaticMarkup(
+    const html = ssr(
       <KpiCardsBlockView
         block={block([{ label: 'Empty', value: 0, sparkline: { values: [] } }])}
       />,
@@ -82,7 +92,7 @@ describe('<KpiCardsBlockView /> — sparkline (WIDGET-09)', () => {
 
   describe('sparkline color forwarding (color-picker cycle)', () => {
     it('forwards `sparkline.color` to Sparkline (line stroke)', () => {
-      const html = renderToStaticMarkup(
+      const html = ssr(
         <KpiCardsBlockView
           block={block([
             { label: 'Sales', value: 100, sparkline: { values: [1, 2, 3], color: '#1428A0' } },
@@ -93,7 +103,7 @@ describe('<KpiCardsBlockView /> — sparkline (WIDGET-09)', () => {
     })
 
     it('forwards `sparkline.palette` to Sparkline bars', () => {
-      const html = renderToStaticMarkup(
+      const html = ssr(
         <KpiCardsBlockView
           block={block([
             {

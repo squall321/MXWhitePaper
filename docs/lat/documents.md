@@ -218,6 +218,12 @@
   (emerald/red/gray) → `currentColor` fallback. `palette` 는 bar kind 한정 per-bar
   cycle (line/win-loss 무시), `color` 보다 우선. editor 는 4-preset 스와치 (chart
   PALETTE 의 #1428A0 / #10B981 / #F59E0B / #DC2626) + custom hex input 노출.
+  ★ **I (cycle b)** — `source`/`filters`/`boundSlicers` (block 레벨) +
+  `items[i].compute: {field, agg?, when?}` (per-card). compute 있는 카드는
+  viewer 가 source rows 에 filters+boundSlicers 적용 후 (field, agg) 로
+  재계산해 정적 value 를 덮어쓴다. `when` 은 카드만의 추가 in-filter (예:
+  마감/진행 분리). 정적 카드와 compute 카드는 한 block 안에 공존 가능.
+  helper: [[apps/web/src/components/blocks/KpiCardsBlock.tsx#useHydratedKpiCardsBlock]].
 - `ListBlock` — `style: "bullet"|"number"|"check"`, `items[]` (depth 는 indent
   prefix), `options.stripe?` (default `true`, depth=0 항목 한정 zebra — 중첩 항목
   무영향).

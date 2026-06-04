@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { ChartBlock, TableBlock } from '@/types/document'
+import { BoundSlicersPicker } from './PivotTableBlockEditor'
 import { ChartBlockView } from '@/components/blocks/ChartBlock'
 import { EChartsView, type EChartsViewHandle } from '@/components/blocks/EChartsView'
 import { useEditorStore } from '@/features/editor/state'
@@ -1589,7 +1590,265 @@ export function ChartBlockEditor({ block, onChange }: ChartBlockEditorProps) {
           />
         </div>
       )}
+
+      {/* I (cycle a) — H2 source / aggregations / boundSlicers picker.
+          source 가 없으면 chart 는 today 와 동일하게 data.{labels,series}
+          를 그대로 render. source 가 지정되면 viewer 가 aggregateChartData
+          로 데이터 재계산. picker 는 schema 의 5 optional 필드를 모두
+          노출하되 source 가 없을 때 labelField/aggregations/filters/
+          boundSlicers 는 dimmed (편집 가능하지만 효과 없음을 안내). */}
+      <ChartSourcePanel block={block} onChange={onChange} />
+
+      <BoundSlicersPicker
+        block={block}
+        onChange={(next) => onChange(next as ChartBlock)}
+        testIdPrefix="chart-bound-slicer"
+      />
     </div>
+  )
+}
+
+/**
+ * I (cycle a) — Chart 의 H2 cross-widget filter 필드를 편집하는 패널.
+ *
+ *   - source: inline rows / data-source ref 중 선택. PivotTable 의
+ *     SourceKindPicker 와 유사하나 chart 는 csv 모드 미지원 (시리즈
+ *     concept 이 csv 와 직결되지 않아 의도적으로 제외).
+ *   - labelField: x 축 값을 뽑을 raw row 의 field name.
+ *   - aggregations[]: 시리즈마다 {field, agg, name?, color?, yAxisIndex?}.
+ *     1 행 = 1 시리즈. row repeater 패턴.
+ *
+ * filters[] 는 source 가 raw rows 를 가질 때만 의미 있고 schema 는 이미
+ * Pivot 의 filters 와 동일 shape. 여기서는 JSON 텍스트 박스로 편집을
+ * 허용 (저빈도 편집 가정). boundSlicers 는 generic BoundSlicersPicker
+ * 가 위에서 처리한다.
+ */
+function ChartSourcePanel({
+  block,
+  onChange,
+}: {
+  block: ChartBlock
+  onChange: (next: ChartBlock) => void
+}) {
+  const draft = useEditorStore((s) => s.draft)
+  const ext = block as ChartBlock & {
+    source?: { kind: 'inline'; rows: Array<Record<string, unknown>> } | { kind: 'data-source'; dataSourceId: string }
+    labelField?: string
+    aggregations?: Array<{ field: string; agg?: 'sum' | 'avg' | 'count' | 'min' | 'max'; name?: string; color?: string; yAxisIndex?: 0 | 1 }>
+    filters?: Array<{ field: string; op: string; value: unknown }>
+  }
+  const source = ext.source
+  const sourceKind: 'none' | 'inline' | 'data-source' = source?.kind ?? 'none'
+  const labelField = ext.labelField ?? ''
+  const aggregations = ext.aggregations ?? []
+
+  const dataSources = useMemo(() => {
+    const out: Array<{ id: string; endpoint: string }> = []
+    for (const section of draft?.sections ?? []) {
+      for (const b of section.blocks ?? []) {
+        if (b.type === 'data-source') {
+          out.push({ id: b.id, endpoint: (b as { endpoint?: string }).endpoint ?? '' })
+        }
+      }
+    }
+    return out
+  }, [draft])
+
+  // Field name suggestions — 인라인이면 첫 행에서, data-source 면 사용자가
+  // 직접 입력하도록 datalist 만 비워둠 (런타임 응답이라 정적 추정 불가).
+  const fieldHints = useMemo<string[]>(() => {
+    if (source?.kind !== 'inline') return []
+    const first = source.rows[0]
+    return first ? Object.keys(first) : []
+  }, [source])
+
+  const setSourceKind = (next: 'none' | 'inline' | 'data-source') => {
+    if (next === sourceKind) return
+    const rest = { ...block } as ChartBlock
+    if (next === 'none') {
+      delete (rest as { source?: unknown }).source
+      onChange(rest)
+      return
+    }
+    if (next === 'inline') {
+      ;(rest as { source?: unknown }).source = { kind: 'inline', rows: [] }
+    } else {
+      ;(rest as { source?: unknown }).source = {
+        kind: 'data-source',
+        dataSourceId: dataSources[0]?.id ?? '',
+      }
+    }
+    onChange(rest)
+  }
+
+  const patchAggs = (next: typeof aggregations) => {
+    const rest = { ...block } as ChartBlock
+    if (next.length === 0) delete (rest as { aggregations?: unknown }).aggregations
+    else (rest as { aggregations?: unknown }).aggregations = next
+    onChange(rest)
+  }
+
+  const sourceMissing = sourceKind === 'none'
+
+  return (
+    <section
+      className="mt-2 rounded border border-dashed border-gray-300 p-2 dark:border-gray-700"
+      data-testid="chart-source-panel"
+    >
+      <p className="mb-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+        Data source (slicer / timeline 연동)
+        <span className="ml-1 font-normal text-gray-500 dark:text-gray-400">
+          ({sourceMissing
+            ? 'none — 정적 차트 (data.labels / data.series 그대로 사용)'
+            : 'aggregated — boundSlicers 가 차트를 다시 그림'})
+        </span>
+      </p>
+
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
+        <span className="font-semibold text-gray-700 dark:text-gray-200">Source kind:</span>
+        {(['none', 'inline', 'data-source'] as const).map((k) => (
+          <label key={k} className="flex items-center gap-1">
+            <input
+              type="radio"
+              name={`chart-source-kind-${block.id}`}
+              checked={sourceKind === k}
+              onChange={() => setSourceKind(k)}
+              data-testid={`chart-source-kind-${k}`}
+            />
+            {k}
+          </label>
+        ))}
+        {sourceKind === 'data-source' && (
+          <select
+            value={(source as { dataSourceId?: string }).dataSourceId ?? ''}
+            onChange={(e) => {
+              const rest = { ...block } as ChartBlock
+              ;(rest as { source?: unknown }).source = {
+                kind: 'data-source',
+                dataSourceId: e.target.value,
+              }
+              onChange(rest)
+            }}
+            aria-label="DataSource id"
+            data-testid="chart-data-source-id"
+            className="rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+          >
+            {dataSources.length === 0 && <option value="">(no DataSourceBlock)</option>}
+            {dataSources.map((ds) => (
+              <option key={ds.id} value={ds.id}>
+                {ds.id.slice(0, 8)}… · {ds.endpoint || '(no endpoint)'}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      <div className={'mb-2 flex flex-wrap items-center gap-2 text-[11px] ' + (sourceMissing ? 'opacity-50' : '')}>
+        <span className="font-semibold text-gray-700 dark:text-gray-200">labelField:</span>
+        <input
+          type="text"
+          value={labelField}
+          onChange={(e) => {
+            const rest = { ...block } as ChartBlock
+            const v = e.target.value
+            if (v === '') delete (rest as { labelField?: unknown }).labelField
+            else (rest as { labelField?: unknown }).labelField = v
+            onChange(rest)
+          }}
+          placeholder="dept"
+          list={`chart-fields-${block.id}`}
+          disabled={sourceMissing}
+          data-testid="chart-label-field"
+          className="flex-1 rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+        />
+        {fieldHints.length > 0 && (
+          <datalist id={`chart-fields-${block.id}`}>
+            {fieldHints.map((f) => (
+              <option key={f} value={f} />
+            ))}
+          </datalist>
+        )}
+      </div>
+
+      <div className={sourceMissing ? 'opacity-50' : ''}>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+            aggregations[] — 한 행 = 한 시리즈
+          </span>
+          <button
+            type="button"
+            onClick={() => patchAggs([...aggregations, { field: '', agg: 'sum' }])}
+            disabled={sourceMissing}
+            data-testid="chart-agg-add"
+            className="rounded border border-gray-300 px-1 text-[10px] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-800"
+          >
+            + add
+          </button>
+        </div>
+        {aggregations.length === 0 ? (
+          <p className="text-[10px] italic text-gray-400 dark:text-gray-500">
+            (시리즈 없음 — labelField + aggregations 가 모두 지정되어야 viewer 가 차트를 재계산함)
+          </p>
+        ) : (
+          <ul className="space-y-0.5">
+            {aggregations.map((a, i) => (
+              <li key={i} className="flex flex-wrap items-center gap-1 text-[11px]">
+                <input
+                  type="text"
+                  value={a.field}
+                  onChange={(e) => {
+                    const next = aggregations.map((x, idx) => (idx === i ? { ...x, field: e.target.value } : x))
+                    patchAggs(next)
+                  }}
+                  placeholder="amount"
+                  list={`chart-fields-${block.id}`}
+                  disabled={sourceMissing}
+                  data-testid={`chart-agg-${i}-field`}
+                  className="w-20 rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+                />
+                <select
+                  value={a.agg ?? 'sum'}
+                  onChange={(e) => {
+                    const next = aggregations.map((x, idx) => (idx === i ? { ...x, agg: e.target.value as 'sum' | 'avg' | 'count' | 'min' | 'max' } : x))
+                    patchAggs(next)
+                  }}
+                  disabled={sourceMissing}
+                  data-testid={`chart-agg-${i}-agg`}
+                  className="rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+                >
+                  {(['sum', 'avg', 'count', 'min', 'max'] as const).map((agg) => (
+                    <option key={agg} value={agg}>
+                      {agg}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={a.name ?? ''}
+                  onChange={(e) => {
+                    const next = aggregations.map((x, idx) => (idx === i ? { ...x, name: e.target.value || undefined } : x))
+                    patchAggs(next)
+                  }}
+                  placeholder="시리즈 라벨"
+                  disabled={sourceMissing}
+                  data-testid={`chart-agg-${i}-name`}
+                  className="flex-1 rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+                />
+                <button
+                  type="button"
+                  onClick={() => patchAggs(aggregations.filter((_, idx) => idx !== i))}
+                  aria-label={`remove aggregation ${i + 1}`}
+                  data-testid={`chart-agg-${i}-remove`}
+                  className="rounded border border-gray-300 px-1 text-[10px] text-gray-500 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   )
 }
 

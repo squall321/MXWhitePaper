@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { KpiCardsBlock, Slug } from '@/types/document'
 import { Button, Field, IconButton, Input } from '@/components/ui'
 import { useEditorStore } from '@/features/editor/state'
@@ -7,6 +7,7 @@ import { KpiCardsBlockView } from '@/components/blocks/KpiCardsBlock'
 import { BlockHelpDrawer } from '@/features/editor/components/BlockHelpDrawer'
 import { ZebraToggle } from './ZebraToggle'
 import { useT } from '@/lib/i18n'
+import { BoundSlicersPicker } from './PivotTableBlockEditor'
 
 /**
  * Sparkline color preset swatches — first four entries from the chart light
@@ -200,6 +201,18 @@ export function KpiCardsBlockEditor({ slug, block }: Props) {
         </p>
         <KpiCardsBlockView block={local} />
       </div>
+
+      {/* I (cycle b) — boundSlicers / source / per-item compute picker.
+          source 가 지정되어야 compute 가 의미. 카드별 compute 는 인라인
+          체크박스로 켜고 field/agg 입력. push() 가 patchBlock 호출까지 처리. */}
+      <KpiSourcePanel block={local} onChange={push} />
+
+      <BoundSlicersPicker
+        block={local}
+        onChange={(next) => void push(next as KpiCardsBlock)}
+        testIdPrefix="kpi-bound-slicer"
+      />
+
       <BlockHelpDrawer
         open={helpOpen}
         onClose={() => setHelpOpen(false)}
@@ -218,6 +231,222 @@ export function KpiCardsBlockEditor({ slug, block }: Props) {
         }}
       />
     </div>
+  )
+}
+
+/**
+ * I (cycle b) — KpiCards 의 source / filters / per-item compute 편집 패널.
+ * compute 토글이 있는 카드는 정적 value 입력이 disabled 되지 않지만
+ * runtime 에서는 viewer 가 그 값을 덮어쓴다.
+ */
+function KpiSourcePanel({
+  block,
+  onChange,
+}: {
+  block: KpiCardsBlock
+  onChange: (next: KpiCardsBlock) => void
+}) {
+  const draft = useEditorStore((s) => s.draft)
+  const ext = block as KpiCardsBlock & {
+    source?: { kind: 'inline'; rows: Array<Record<string, unknown>> } | { kind: 'data-source'; dataSourceId: string }
+  }
+  const sourceKind: 'none' | 'inline' | 'data-source' = ext.source?.kind ?? 'none'
+  const sourceMissing = sourceKind === 'none'
+
+  const dataSources = useMemo(() => {
+    const out: Array<{ id: string; endpoint: string }> = []
+    for (const section of draft?.sections ?? []) {
+      for (const b of section.blocks ?? []) {
+        if (b.type === 'data-source') {
+          out.push({ id: b.id, endpoint: (b as { endpoint?: string }).endpoint ?? '' })
+        }
+      }
+    }
+    return out
+  }, [draft])
+
+  const fieldHints = useMemo<string[]>(() => {
+    if (ext.source?.kind !== 'inline') return []
+    const first = ext.source.rows[0]
+    return first ? Object.keys(first) : []
+  }, [ext.source])
+
+  const setSourceKind = (next: 'none' | 'inline' | 'data-source') => {
+    if (next === sourceKind) return
+    const rest = { ...block } as KpiCardsBlock
+    if (next === 'none') delete (rest as { source?: unknown }).source
+    else if (next === 'inline') {
+      ;(rest as { source?: unknown }).source = { kind: 'inline', rows: [] }
+    } else {
+      ;(rest as { source?: unknown }).source = {
+        kind: 'data-source',
+        dataSourceId: dataSources[0]?.id ?? '',
+      }
+    }
+    onChange(rest)
+  }
+
+  const patchItem = (idx: number, patch: Partial<KpiCardsBlock['items'][number]>) => {
+    const items = block.items.map((it, i) => (i === idx ? { ...it, ...patch } : it))
+    onChange({ ...block, items })
+  }
+
+  const toggleCompute = (idx: number) => {
+    const item = block.items[idx]
+    if (!item) return
+    const cur = (item as { compute?: { field: string } }).compute
+    if (cur) {
+      const next = { ...item } as KpiCardsBlock['items'][number]
+      delete (next as { compute?: unknown }).compute
+      const items = block.items.map((it, i) => (i === idx ? next : it))
+      onChange({ ...block, items })
+    } else {
+      patchItem(idx, ({ compute: { field: '', agg: 'sum' } } as unknown) as Partial<KpiCardsBlock['items'][number]>)
+    }
+  }
+
+  const setComputeField = (idx: number, field: string) => {
+    const item = block.items[idx]
+    if (!item) return
+    const cur = (item as { compute?: { field: string; agg?: string } }).compute
+    const compute = { ...(cur ?? { agg: 'sum' }), field }
+    patchItem(idx, ({ compute } as unknown) as Partial<KpiCardsBlock['items'][number]>)
+  }
+
+  const setComputeAgg = (idx: number, agg: 'sum' | 'avg' | 'count' | 'min' | 'max') => {
+    const item = block.items[idx]
+    if (!item) return
+    const cur = (item as { compute?: { field: string; agg?: string } }).compute
+    const compute = { ...(cur ?? { field: '' }), agg }
+    patchItem(idx, ({ compute } as unknown) as Partial<KpiCardsBlock['items'][number]>)
+  }
+
+  return (
+    <section
+      className="mt-2 rounded border border-dashed border-gray-300 p-2 dark:border-gray-700"
+      data-testid="kpi-source-panel"
+    >
+      <p className="mb-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+        Data source (slicer / timeline 연동)
+        <span className="ml-1 font-normal text-gray-500 dark:text-gray-400">
+          ({sourceMissing
+            ? 'none — 모든 카드 정적'
+            : 'aggregated — compute 토글된 카드는 source 에서 재계산'})
+        </span>
+      </p>
+
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
+        <span className="font-semibold text-gray-700 dark:text-gray-200">Source kind:</span>
+        {(['none', 'inline', 'data-source'] as const).map((k) => (
+          <label key={k} className="flex items-center gap-1">
+            <input
+              type="radio"
+              name={`kpi-source-kind-${block.id}`}
+              checked={sourceKind === k}
+              onChange={() => setSourceKind(k)}
+              data-testid={`kpi-source-kind-${k}`}
+            />
+            {k}
+          </label>
+        ))}
+        {sourceKind === 'data-source' && (
+          <select
+            value={(ext.source as { dataSourceId?: string }).dataSourceId ?? ''}
+            onChange={(e) => {
+              const rest = { ...block } as KpiCardsBlock
+              ;(rest as { source?: unknown }).source = {
+                kind: 'data-source',
+                dataSourceId: e.target.value,
+              }
+              onChange(rest)
+            }}
+            aria-label="DataSource id"
+            data-testid="kpi-data-source-id"
+            className="rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+          >
+            {dataSources.length === 0 && <option value="">(no DataSourceBlock)</option>}
+            {dataSources.map((ds) => (
+              <option key={ds.id} value={ds.id}>
+                {ds.id.slice(0, 8)}… · {ds.endpoint || '(no endpoint)'}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      <div className={sourceMissing ? 'opacity-50' : ''}>
+        <p className="mb-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+          per-card compute
+        </p>
+        {block.items.length === 0 ? (
+          <p className="text-[10px] italic text-gray-400 dark:text-gray-500">
+            카드 없음 — 위에서 카드를 먼저 추가하세요
+          </p>
+        ) : (
+          <ul className="space-y-0.5">
+            {block.items.map((item, idx) => {
+              const compute = (item as { compute?: { field: string; agg?: 'sum' | 'avg' | 'count' | 'min' | 'max' } }).compute
+              const on = !!compute
+              return (
+                <li key={idx} className="flex flex-wrap items-center gap-1 text-[11px]">
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => toggleCompute(idx)}
+                      disabled={sourceMissing}
+                      data-testid={`kpi-compute-${idx}-on`}
+                    />
+                    <span className="font-mono text-gray-600 dark:text-gray-300">
+                      [{idx}] {item.label || '(no label)'}
+                    </span>
+                  </label>
+                  {on && (
+                    <>
+                      <input
+                        type="text"
+                        value={compute.field}
+                        onChange={(e) => setComputeField(idx, e.target.value)}
+                        placeholder="amount"
+                        list={`kpi-fields-${block.id}`}
+                        disabled={sourceMissing}
+                        data-testid={`kpi-compute-${idx}-field`}
+                        className="w-20 rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+                      />
+                      <select
+                        value={compute.agg ?? 'sum'}
+                        onChange={(e) =>
+                          setComputeAgg(
+                            idx,
+                            e.target.value as 'sum' | 'avg' | 'count' | 'min' | 'max',
+                          )
+                        }
+                        disabled={sourceMissing}
+                        data-testid={`kpi-compute-${idx}-agg`}
+                        className="rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+                      >
+                        {(['sum', 'avg', 'count', 'min', 'max'] as const).map((agg) => (
+                          <option key={agg} value={agg}>
+                            {agg}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        {fieldHints.length > 0 && (
+          <datalist id={`kpi-fields-${block.id}`}>
+            {fieldHints.map((f) => (
+              <option key={f} value={f} />
+            ))}
+          </datalist>
+        )}
+      </div>
+    </section>
   )
 }
 
