@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactNode } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KpiCardsBlockView } from '../KpiCardsBlock'
 import { GanttBlockView } from '../GanttBlock'
 import { ChartBlockView } from '../ChartBlock'
@@ -8,6 +10,14 @@ import type {
   GanttBlock,
   KpiCardsBlock,
 } from '@/types/document'
+
+// H2 — ChartBlockView 가 useQuery 호출하므로 provider 래핑.
+function ssrChart(node: ReactNode): string {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
+  })
+  return renderToStaticMarkup(<QueryClientProvider client={client}>{node}</QueryClientProvider>)
+}
 
 // Stubs — the same pattern used by other block tests.
 vi.mock('@/features/glossary/useGlossary', () => ({
@@ -57,7 +67,7 @@ describe('WidgetExportMenu mounts on each widget block', () => {
         xAxisLabel: 'Quarter',
       },
     }
-    const html = renderToStaticMarkup(<ChartBlockView block={block} />)
+    const html = ssrChart(<ChartBlockView block={block} />)
     expect(html).toContain('data-export-root="chart"')
     expect(html).toContain('data-widget-export-toggle')
   })

@@ -1,7 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactNode } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ChartBlockView } from '../ChartBlock'
 import type { ChartBlock } from '@/types/document'
+
+// H2 (G5) — ChartBlockView 가 useQuery 를 호출하므로 QueryClientProvider
+// 래핑이 필요. provider 가 없으면 "No QueryClient set" 에러.
+function ssr(node: ReactNode): string {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
+  })
+  return renderToStaticMarkup(<QueryClientProvider client={client}>{node}</QueryClientProvider>)
+}
 
 const baseData: ChartBlock['data'] = {
   labels: ['Q1', 'Q2', 'Q3', 'Q4'],
@@ -20,7 +31,7 @@ describe('<ChartBlockView />', () => {
       title: 'KPI 추이',
       data: baseData,
     }
-    const html = renderToStaticMarkup(<ChartBlockView block={block} />)
+    const html = ssr(<ChartBlockView block={block} />)
     // The Recharts ResponsiveContainer ships the chart container even at SSR.
     expect(html).toContain('recharts-responsive-container')
     expect(html).toContain('KPI 추이')
@@ -33,7 +44,7 @@ describe('<ChartBlockView />', () => {
       chartType: 'bar',
       data: baseData,
     }
-    const html = renderToStaticMarkup(<ChartBlockView block={block} />)
+    const html = ssr(<ChartBlockView block={block} />)
     expect(html).toContain('recharts-responsive-container')
   })
 
@@ -44,7 +55,7 @@ describe('<ChartBlockView />', () => {
       chartType: 'pie',
       data: { labels: [], series: [] },
     }
-    const html = renderToStaticMarkup(<ChartBlockView block={block} />)
+    const html = ssr(<ChartBlockView block={block} />)
     expect(html).toContain('recharts-responsive-container')
   })
 })

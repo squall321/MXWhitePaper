@@ -1,7 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactNode } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ChartBlockView, getRechartsPalette } from '../ChartBlock'
 import type { ChartBlock } from '@/types/document'
+
+function ssr(node: ReactNode): string {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
+  })
+  return renderToStaticMarkup(<QueryClientProvider client={client}>{node}</QueryClientProvider>)
+}
 
 const block: ChartBlock = {
   type: 'chart',
@@ -15,14 +24,14 @@ const block: ChartBlock = {
 
 describe('<ChartBlockView /> darkmode classes (recharts engine)', () => {
   it('figure surface declares dark variants for border/bg', () => {
-    const html = renderToStaticMarkup(<ChartBlockView block={block} />)
+    const html = ssr(<ChartBlockView block={block} />)
     expect(html).toContain('dark:bg-gray-900')
     expect(html).toContain('dark:border-gray-700')
   })
 
   it('figure title gets dark-mode text-color variant', () => {
     const withTitle: ChartBlock = { ...block, title: 'Sales' }
-    const html = renderToStaticMarkup(<ChartBlockView block={withTitle} />)
+    const html = ssr(<ChartBlockView block={withTitle} />)
     expect(html).toContain('dark:text-gray-100')
     expect(html).toContain('Sales')
   })

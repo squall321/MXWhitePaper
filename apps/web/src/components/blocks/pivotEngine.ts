@@ -588,7 +588,7 @@ export type { RawRow }
  *   top_n/bot_n   — `value` is positive int; sort rows by the field
  *                   numerically and slice. Stable for ties (first-seen wins).
  */
-function applyFilters(rows: RawRow[], filters: FilterSpec[] | undefined): RawRow[] {
+export function applyFilters(rows: RawRow[], filters: FilterSpec[] | undefined): RawRow[] {
   if (!filters || filters.length === 0) return rows
   let out = rows
   for (const f of filters) {
@@ -1124,4 +1124,105 @@ function evalCalcExpr(node: ExprNode, ctx: Map<string, number>): number | null {
       }
     }
   }
+}
+
+// ── H2 (G5) — ChartBlock aggregator ────────────────────────────────────
+//
+// Pivot 의 2D cross-tab 과 달리 chart 는 1D — labels (x축) 한 줄 +
+// 시리즈 N 개. `aggregateChartData` 는 raw rows 를 받아 labelField 로
+// 그룹하고, aggregations[] 각 entry 마다 한 시리즈 (`{name, values}`)
+// 를 만들어 chart-engine 이 기대하는 `{labels, series}` shape 으로
+// 반환. 이 결과를 ChartBlock 의 `data` 슬롯에 그대로 덮으면 recharts /
+// echarts 양쪽 모두 추가 변경 없이 동작한다.
+//
+// Filter 단계는 `applyFilters` 를 재사용 — boundSlicers (Slicer/Timeline
+// 가 만든 between/in 필터) 가 PivotTable 과 동일한 entry point 를 거치게.
+
+export interface ChartAgg {
+  field: string
+  agg?: AggKind
+  name?: string
+  color?: string
+  yAxisIndex?: 0 | 1
+}
+
+export interface ChartSeries {
+  name: string
+  values: number[]
+  color?: string
+  yAxisIndex?: 0 | 1
+}
+
+export interface ChartAggregateResult {
+  labels: string[]
+  series: ChartSeries[]
+}
+
+export function aggregateChartData(
+  rawRows: ReadonlyArray<RawRow>,
+  labelField: string,
+  aggregations: ReadonlyArray<ChartAgg>,
+  filters: ReadonlyArray<FilterSpec> | undefined,
+): ChartAggregateResult {
+  if (!labelField || aggregations.length === 0) {
+    return { labels: [], series: [] }
+  }
+
+  // 1) raw filter (block.filters + collected slicer/timeline filters).
+  const rows = applyFilters([...rawRows], filters ? [...filters] : undefined)
+
+  // 2) labels = labelField 의 distinct 값 (first-seen 순서). null/undefined skip.
+  const labels: string[] = []
+  const labelIdx = new Map<string, number>()
+  for (const r of rows) {
+    const v = r[labelField]
+    if (v == null) continue
+    const s = String(v)
+    if (!labelIdx.has(s)) {
+      labelIdx.set(s, labels.length)
+      labels.push(s)
+    }
+  }
+
+  if (labels.length === 0) {
+    // labels 가 비어있어도 시리즈 shape 은 유지 (engine 이 빈 차트로 처리).
+    return {
+      labels: [],
+      series: aggregations.map((a) => ({
+        name: a.name ?? a.field,
+        values: [],
+        ...(a.color !== undefined ? { color: a.color } : {}),
+        ...(a.yAxisIndex !== undefined ? { yAxisIndex: a.yAxisIndex } : {}),
+      })),
+    }
+  }
+
+  // 3) row 들을 label bucket 으로 묶기.
+  const buckets: RawRow[][] = labels.map(() => [])
+  for (const r of rows) {
+    const v = r[labelField]
+    if (v == null) continue
+    const idx = labelIdx.get(String(v))
+    if (idx === undefined) continue
+    buckets[idx]!.push(r)
+  }
+
+  // 4) 시리즈마다 bucket 별 aggregate. expression 은 미지원 (raw field 만)
+  //    — chart 의 agg 는 의도적으로 단순. 향후 필요시 expr 분기 추가.
+  const series: ChartSeries[] = aggregations.map((a) => {
+    const aggKind = a.agg ?? 'sum'
+    const values: number[] = buckets.map((rowsInBucket) => {
+      const n = aggregate(rowsInBucket, a.field, aggKind)
+      // chart 의 axis 는 number — null 을 0 으로 coerce. count 는 항상 number.
+      return n ?? 0
+    })
+    return {
+      name: a.name ?? a.field,
+      values,
+      ...(a.color !== undefined ? { color: a.color } : {}),
+      ...(a.yAxisIndex !== undefined ? { yAxisIndex: a.yAxisIndex } : {}),
+    }
+  })
+
+  return { labels, series }
 }

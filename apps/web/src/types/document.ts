@@ -753,6 +753,58 @@ export interface ChartBlock {
         color?: string
       }
   )[]
+  /**
+   * H2 (G5) — optional cross-widget filter / data-source link. 미지정 시 기존처럼 `data.labels`/`data.series[].values` 가 그대로 렌더. 지정 시 viewer 가 source 의 rows 를 `labelField` 로 그룹 + `aggregations[]` 의 (field, agg) 로 시리즈를 재계산해 `data` 를 *덮어쓰는* hydration 결과를 만든다. boundSlicers / filters 가 raw rows 단계에서 적용되어 slicer/timeline 클릭이 chart 도 다시 그리게 한다. Pivot/Table 의 source 와 동일 shape.
+   */
+  source?:
+    | {
+        kind: 'inline'
+        rows: {
+          [k: string]: (string | number | null) | undefined
+        }[]
+      }
+    | {
+        kind: 'data-source'
+        dataSourceId: Ulid
+      }
+  /**
+   * H2 (G5) — `source` 의 rows 에서 어떤 field 를 distinct labels (x축) 로 쓸지. source 가 있을 때만 의미. distinct values 의 first-seen 순서가 곧 labels 순서.
+   */
+  labelField?: string
+  /**
+   * H2 (G5) — source rows 를 labelField 로 그룹한 뒤 각 항목을 어떻게 측정할지. source 와 함께 지정. 각 entry → 한 시리즈. agg 미지정 시 'sum'. name 미지정 시 field 자체.
+   */
+  aggregations?: {
+    /**
+     * rows 의 어떤 numeric field 를 집계할지
+     */
+    field: string
+    agg?: 'sum' | 'avg' | 'count' | 'min' | 'max'
+    /**
+     * 시리즈 라벨 (legend / tooltip). 미지정 시 field.
+     */
+    name?: string
+    /**
+     * 시리즈 색 — CSS hex 또는 named.
+     */
+    color?: string
+    /**
+     * dual-axis 일 때 어느 축에 그릴지.
+     */
+    yAxisIndex?: 0 | 1
+  }[]
+  /**
+   * H2 (G5) — source rows 에 적용할 raw filter. Pivot 의 filters 와 동일 shape (`{field, op, value}`). boundSlicers 가 만든 filter 와 concat. source 가 없으면 무시.
+   */
+  filters?: {
+    field: string
+    op: 'in' | 'not_in' | 'gt' | 'lt' | 'between' | 'top_n' | 'bottom_n'
+    value: any
+  }[]
+  /**
+   * H2 (G5) — 이 chart 를 listen 시킬 SlicerBlock / TimelineBlock id 목록. source 가 지정되어야 의미 (raw rows 에 filter 를 걸 곳이 있어야 함). source 없는 chart 에 적어두면 viewer 가 silently no-op.
+   */
+  boundSlicers?: Ulid[]
   meta?: BlockMeta
 }
 export interface GanttBlock {

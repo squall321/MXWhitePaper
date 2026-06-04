@@ -842,6 +842,89 @@ class Annotations2(BaseModel):
     color: str | None = None
 
 
+class Source(BaseModel):
+    """
+    H2 (G5) — optional cross-widget filter / data-source link. 미지정 시 기존처럼 `data.labels`/`data.series[].values` 가 그대로 렌더. 지정 시 viewer 가 source 의 rows 를 `labelField` 로 그룹 + `aggregations[]` 의 (field, agg) 로 시리즈를 재계산해 `data` 를 *덮어쓰는* hydration 결과를 만든다. boundSlicers / filters 가 raw rows 단계에서 적용되어 slicer/timeline 클릭이 chart 도 다시 그리게 한다. Pivot/Table 의 source 와 동일 shape.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['inline']
+    rows: list[dict[str, str | float | None]]
+
+
+class Source1(BaseModel):
+    """
+    H2 (G5) — optional cross-widget filter / data-source link. 미지정 시 기존처럼 `data.labels`/`data.series[].values` 가 그대로 렌더. 지정 시 viewer 가 source 의 rows 를 `labelField` 로 그룹 + `aggregations[]` 의 (field, agg) 로 시리즈를 재계산해 `data` 를 *덮어쓰는* hydration 결과를 만든다. boundSlicers / filters 가 raw rows 단계에서 적용되어 slicer/timeline 클릭이 chart 도 다시 그리게 한다. Pivot/Table 의 source 와 동일 shape.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['data-source']
+    data_source_id: Ulid = Field(..., alias='dataSourceId')
+
+
+class Agg(Enum):
+    sum = 'sum'
+    avg = 'avg'
+    count = 'count'
+    min = 'min'
+    max = 'max'
+
+
+class YAxisIndex1(IntEnum):
+    """
+    dual-axis 일 때 어느 축에 그릴지.
+    """
+
+    integer_0 = 0
+    integer_1 = 1
+
+
+class Aggregation(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    field: str
+    """
+    rows 의 어떤 numeric field 를 집계할지
+    """
+    agg: Agg | None = Agg.sum
+    name: str | None = None
+    """
+    시리즈 라벨 (legend / tooltip). 미지정 시 field.
+    """
+    color: str | None = None
+    """
+    시리즈 색 — CSS hex 또는 named.
+    """
+    y_axis_index: YAxisIndex1 | None = Field(None, alias='yAxisIndex')
+    """
+    dual-axis 일 때 어느 축에 그릴지.
+    """
+
+
+class Op(Enum):
+    in_ = 'in'
+    not_in = 'not_in'
+    gt = 'gt'
+    lt = 'lt'
+    between = 'between'
+    top_n = 'top_n'
+    bottom_n = 'bottom_n'
+
+
+class Filter(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    field: str
+    op: Op
+    value: Any
+
+
 class ChartBlock(BaseModel):
     """
     Chart block — `engine` selects the renderer. 'recharts' (default) uses our existing simple chart UI; 'echarts' unlocks rich interaction (zoom, brush, hover slope, markPoint annotations, markArea regions). With 'echarts' the data fields below still drive the dataset, but `options` accepts any ECharts EChartsOption fragment that gets merged on top.
@@ -877,6 +960,26 @@ class ChartBlock(BaseModel):
     annotations: list[Annotations | Annotations1 | Annotations2] | None = None
     """
     차트 위 도형 (P3) — 사용자가 데이터 좌표계에 직접 얹는 화살표/박스/마커/노트. ImageAnnotation 의 카운터파트이지만 좌표가 (x, y) 데이터 단위.
+    """
+    source: Source | Source1 | None = None
+    """
+    H2 (G5) — optional cross-widget filter / data-source link. 미지정 시 기존처럼 `data.labels`/`data.series[].values` 가 그대로 렌더. 지정 시 viewer 가 source 의 rows 를 `labelField` 로 그룹 + `aggregations[]` 의 (field, agg) 로 시리즈를 재계산해 `data` 를 *덮어쓰는* hydration 결과를 만든다. boundSlicers / filters 가 raw rows 단계에서 적용되어 slicer/timeline 클릭이 chart 도 다시 그리게 한다. Pivot/Table 의 source 와 동일 shape.
+    """
+    label_field: str | None = Field(None, alias='labelField')
+    """
+    H2 (G5) — `source` 의 rows 에서 어떤 field 를 distinct labels (x축) 로 쓸지. source 가 있을 때만 의미. distinct values 의 first-seen 순서가 곧 labels 순서.
+    """
+    aggregations: list[Aggregation] | None = None
+    """
+    H2 (G5) — source rows 를 labelField 로 그룹한 뒤 각 항목을 어떻게 측정할지. source 와 함께 지정. 각 entry → 한 시리즈. agg 미지정 시 'sum'. name 미지정 시 field 자체.
+    """
+    filters: list[Filter] | None = None
+    """
+    H2 (G5) — source rows 에 적용할 raw filter. Pivot 의 filters 와 동일 shape (`{field, op, value}`). boundSlicers 가 만든 filter 와 concat. source 가 없으면 무시.
+    """
+    bound_slicers: list[Ulid] | None = Field(None, alias='boundSlicers')
+    """
+    H2 (G5) — 이 chart 를 listen 시킬 SlicerBlock / TimelineBlock id 목록. source 가 지정되어야 의미 (raw rows 에 filter 를 걸 곳이 있어야 함). source 없는 chart 에 적어두면 viewer 가 silently no-op.
     """
     meta: BlockMeta | None = None
 
@@ -1272,7 +1375,7 @@ class Schema(BaseModel):
     fields: list[FieldModel] | None = None
 
 
-class Source(BaseModel):
+class Source2(BaseModel):
     """
     Inline / CSV source — rows[] 는 paste 시점에 저장.
     """
@@ -1291,7 +1394,7 @@ class Source(BaseModel):
     """
 
 
-class Source1(BaseModel):
+class Source3(BaseModel):
     """
     Sprint 6 — 같은 문서 안 DataSourceBlock 결과를 raw rows 로 사용. viewer 가 DataSourceBlock 의 query 결과 (`{columns, rows}` 또는 `{data: [...]}`) 를 `Record<field, value>[]` 로 변환해 engine 에 넘긴다. async + 캐시는 TanStack Query 의 DataSourceBlock 쿼리를 그대로 재사용.
     """
@@ -1353,7 +1456,7 @@ class Cols1(BaseModel):
     group: Group1 | None = None
 
 
-class Agg(Enum):
+class Agg1(Enum):
     sum = 'sum'
     count = 'count'
     avg = 'avg'
@@ -1389,7 +1492,7 @@ class Value1(BaseModel):
     """
     Sprint 4 — calculated field 식. 각 row 의 fields 를 식별자로 참조하는 산술식 (예: 'revenue - cost', 'profit / revenue * 100'). 지원 연산: + - * / 와 괄호. 평가 결과를 numeric 으로 모은 뒤 agg 적용 (sum/avg/...). 잘못된 식이거나 row 에 필드 없을 시 그 row 는 무시.
     """
-    agg: Agg
+    agg: Agg1
     label: str | None = None
     """
     표시 이름; default = '{agg}({field})' 또는 '{agg}({expr})'
@@ -1485,17 +1588,7 @@ class Sort(BaseModel):
     order: Order | None = Order.desc
 
 
-class Op(Enum):
-    in_ = 'in'
-    not_in = 'not_in'
-    gt = 'gt'
-    lt = 'lt'
-    between = 'between'
-    top_n = 'top_n'
-    bottom_n = 'bottom_n'
-
-
-class Filter(BaseModel):
+class Filter1(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
@@ -1514,7 +1607,7 @@ class PivotTableBlock(BaseModel):
     )
     type: Literal['pivot-table']
     id: Ulid
-    source: Source | Source1
+    source: Source2 | Source3
     rows: list[Rows | Rows1]
     """
     Row 축 dimension field 이름 list (e.g., ['department', 'year']). Sprint 5 — 각 항목은 단순 field 이름 (문자열) 이거나 시간 자동 그룹을 위해 {field, group} object. group 은 'year'|'quarter'|'month'|'week'|'day' 중 하나로 raw row 의 date 를 bucket. 미명시 field 는 raw value 사용.
@@ -1537,7 +1630,7 @@ class PivotTableBlock(BaseModel):
     Sprint 5 — 행/열 축 안 가상 항목 (e.g. 'Q1 = Jan + Feb + Mar'). 각 item 은 base aggregation 이 끝난 후 합성. formula 는 다른 같은-축 항목 라벨을 식별자로 참조하는 산술식 (+ - * / 와 괄호). 평가는 각 measure × (반대 축의 각 위치) 마다 한 번. base 항목과 라벨 충돌 시 calculated item 가 추가 (덮어쓰기 X).
     """
     sort: Sort | None = None
-    filters: list[Filter] | None = None
+    filters: list[Filter1] | None = None
     bound_slicers: list[Ulid] | None = Field(None, alias='boundSlicers')
     """
     Sprint 6 (G2) — listen 할 SlicerBlock id 목록. viewer 가 hydration 단계에서 각 slicer 의 active values 를 filter (`{field, op:'in', value: [...]}`) 로 변환해 기존 filters 에 concat. slicer 가 같은 dataSourceId (또는 inline rows) 를 가리켜야 의미 있음.
@@ -1545,7 +1638,7 @@ class PivotTableBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
-class Source2(BaseModel):
+class Source4(BaseModel):
     """
     Inline source — distinct values 직접 명시. 작은 enum 에 유용.
     """
@@ -1557,7 +1650,7 @@ class Source2(BaseModel):
     rows: list[dict[str, str | float | None]]
 
 
-class Source3(BaseModel):
+class Source5(BaseModel):
     """
     Same DataSourceBlock 의 rows 를 slicer 데이터로 사용. 보통 같은 Pivot 이 가리키는 DataSourceBlock 과 같은 id 를 적는다.
     """
@@ -1587,7 +1680,7 @@ class SlicerBlock(BaseModel):
     """
     어느 field 를 slice 할지 (e.g. 'dept')
     """
-    source: Source2 | Source3 | None = None
+    source: Source4 | Source5 | None = None
     multi_select: bool | None = Field(False, alias='multiSelect')
     """
     true 면 다중 chip 활성 가능 (Ctrl+클릭). false 면 한 번에 하나
@@ -1599,7 +1692,7 @@ class SlicerBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
-class Source4(BaseModel):
+class Source6(BaseModel):
     """
     Inline source — 날짜 도메인을 rows 의 `field` 값에서 추론. SlicerBlock 과 동일 shape.
     """
@@ -1611,7 +1704,7 @@ class Source4(BaseModel):
     rows: list[dict[str, str | float | None]]
 
 
-class Source5(BaseModel):
+class Source7(BaseModel):
     """
     Same DataSourceBlock 의 rows 를 timeline 데이터로 사용.
     """
@@ -1641,7 +1734,7 @@ class TimelineBlock(BaseModel):
     """
     필터링할 날짜 field 이름 (e.g. 'date'). 값은 ISO-8601 (YYYY-MM-DD) 가정.
     """
-    source: Source4 | Source5 | None = None
+    source: Source6 | Source7 | None = None
     min: str | None = None
     """
     도메인 최소값 (ISO date). 명시하지 않으면 rows[field] 의 min.

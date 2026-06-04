@@ -312,6 +312,13 @@
   ★ `xy-line` 은 시리즈마다 자유로운 `(x, y)` 쌍 — `data.labels` 무시,
   `series[].points: [{x, y, err?, errLow?, errHigh?}]` 사용. stress-strain
   처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교 + error bar.
+  ★ **H2 (G5)** — `source` / `labelField` / `aggregations[]` / `filters` /
+  `boundSlicers[]` optional 추가. 지정 시 viewer 가
+  [[apps/web/src/components/blocks/pivotEngine.ts#aggregateChartData]] 로
+  raw rows 를 그룹 + 시리즈별 (field, agg) 집계해 `data.{labels, series}`
+  를 *덮어쓴* synthetic clone 을 render. boundSlicers 에 SlicerBlock /
+  TimelineBlock id 를 적으면 PivotTable 과 동일하게 cross-widget filter.
+  source 없으면 today 와 동일 — 100% back-compat.
 - `ColumnsBlock`, `TabsBlock`, `AccordionBlock`, `GalleryBlock`, …
 
 전체 enum 은 [[src/app/schemas/document.py]] 참고. 새 block type 추가 시:

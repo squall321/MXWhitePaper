@@ -1,4 +1,5 @@
-import type { CSSProperties } from 'react'
+import { useMemo, type CSSProperties } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   Area,
   AreaChart,
@@ -24,11 +25,17 @@ import {
   YAxis,
   ZAxis,
 } from 'recharts'
-import type { ChartBlock } from '@/types/document'
+import type { Block, ChartBlock, DataSourceBlock as DataSourceBlockType } from '@/types/document'
 import { EChartsView } from './EChartsView'
 import { useResolvedTheme } from '@/features/theme/useResolvedTheme'
 import { WidgetExportMenu } from './WidgetExportMenu'
 import { chartLabeledToCsv } from '@/lib/widgetExport'
+import { fetchDataSource } from './DataSourceBlock'
+import { payloadToRows, collectSlicerFilters } from './PivotTableBlock'
+import { collectTimelineFilters } from './TimelineBlock'
+import { aggregateChartData, type ChartAgg } from './pivotEngine'
+import { useEditorStore } from '@/features/editor/state'
+import { useSlicerStore } from '@/features/slicer/store'
 
 const PALETTE = [
   '#1428A0',
@@ -91,7 +98,89 @@ function scatterPoints(series: ChartBlock['data']['series'][number]) {
   return (series.values ?? []).map((y, i) => ({ x: i, y }))
 }
 
-export function ChartBlockView({ block }: { block: ChartBlock }) {
+/**
+ * H2 (G5) — when `block.source` is set, re-aggregate raw rows so slicers /
+ * timelines can drive the chart. Returns the original block unchanged
+ * when `source` is missing (today's behaviour). The hook fires the same
+ * query key as DataSourceBlockView so the underlying HTTP fetch is shared
+ * across DataSourceBlock + PivotTable + Chart that all reference the
+ * same data-source id.
+ */
+function useHydratedChartBlock(block: ChartBlock): ChartBlock {
+  const draft = useEditorStore((s) => s.draft)
+  const slicerActive = useSlicerStore((s) => s.active)
+  const source = (block as { source?: { kind: string; dataSourceId?: string; rows?: Array<Record<string, unknown>> } }).source
+  const labelField = (block as { labelField?: string }).labelField
+  const aggregations = (block as { aggregations?: ChartAgg[] }).aggregations
+  const filters = (block as { filters?: Array<{ field: string; op: string; value: unknown }> }).filters
+  const boundSlicers = (block as { boundSlicers?: ReadonlyArray<string> }).boundSlicers
+
+  const inline = source?.kind === 'inline'
+  const dsId = source?.kind === 'data-source' ? source.dataSourceId : undefined
+
+  const dataSourceBlock = useMemo<DataSourceBlockType | null>(() => {
+    if (!dsId || !draft) return null
+    for (const section of draft.sections ?? []) {
+      for (const b of (section.blocks ?? []) as Block[]) {
+        if (b.id === dsId && b.type === 'data-source') return b as DataSourceBlockType
+      }
+    }
+    return null
+  }, [dsId, draft])
+
+  const endpoint = dataSourceBlock?.endpoint ?? ''
+  const params = dataSourceBlock?.params ?? null
+  const { data } = useQuery({
+    queryKey: ['data-source', endpoint, JSON.stringify(params)],
+    queryFn: () => fetchDataSource(endpoint, params),
+    enabled: !inline && Boolean(endpoint),
+    retry: false,
+  })
+
+  return useMemo<ChartBlock>(() => {
+    if (!source || !labelField || !aggregations?.length) return block
+
+    const rawRows = inline
+      ? (source.rows ?? []) as Array<Record<string, unknown>>
+      : (payloadToRows(data?.data ?? null) as Array<Record<string, unknown>>)
+
+    const slicerFilters = collectSlicerFilters(boundSlicers, draft?.sections ?? [], slicerActive)
+    const timelineFilters = collectTimelineFilters(boundSlicers, draft?.sections ?? [], slicerActive)
+    const allFilters = [...(filters ?? []), ...slicerFilters, ...timelineFilters] as unknown as Parameters<typeof aggregateChartData>[3]
+
+    // aggregateChartData expects RawRow shape (string | number | null).
+    // Coerce loose unknowns down — non-primitive cells become strings.
+    const coerced = rawRows.map((r) => {
+      const out: Record<string, string | number | null> = {}
+      for (const [k, v] of Object.entries(r)) {
+        out[k] = typeof v === 'string' || typeof v === 'number' || v === null
+          ? v
+          : v == null
+            ? null
+            : String(v)
+      }
+      return out
+    })
+
+    const { labels, series } = aggregateChartData(coerced, labelField, aggregations, allFilters)
+    return {
+      ...block,
+      data: {
+        ...block.data,
+        labels,
+        series: series.map((s) => ({
+          name: s.name,
+          values: s.values,
+          ...(s.color !== undefined ? { color: s.color } : {}),
+          ...(s.yAxisIndex !== undefined ? { yAxisIndex: s.yAxisIndex } : {}),
+        })),
+      },
+    }
+  }, [block, source, labelField, aggregations, filters, boundSlicers, data, draft, slicerActive, inline])
+}
+
+export function ChartBlockView({ block: rawBlock }: { block: ChartBlock }) {
+  const block = useHydratedChartBlock(rawBlock)
   // engine === 'echarts' uses the richer ECharts renderer (zoom, brush,
   // markPoint, markArea). Default 'recharts' keeps the original simple
   // surface for back-compat.

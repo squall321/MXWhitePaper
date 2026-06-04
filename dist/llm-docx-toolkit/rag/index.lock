@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-03T13:55:01.567250+00:00",
+  "generated_at": "2026-06-04T03:01:55.319791+00:00",
   "source_hashes": {
-    "packages/shared/schemas/document.json": "f85088488e59d7bee1c0550f3d34b70c9fa7a2e407908c5f47a008904061a70c",
+    "packages/shared/schemas/document.json": "9bcaf56f14711961d49f703efd8744537dc0a80d6a7fcf7aa35531d9364808ac",
     "apps/api/app/services/widget_markers.py": "29b9da045c859288c6bcb1195176ee9ebb9b50c2c5376c419d5c293632a5658e",
     "apps/api/app/services/docx_import.py": "d94c9ff2c7460aad728531dd574675e35170e718ae69681f4434593daf63fc47",
     "docs/llm-input-rules.md": "65efb69044b37e1ebc8cf38e9437cefea57a8bffeb39970694d6c164fac544d6",
@@ -31,7 +31,7 @@
   ],
   "chunk_count": 160,
   "embedding_backend_fingerprint": "chunks-only:v1",
-  "chunks_sha256": "7f11b98c4dbbcf014e741055158a20f4217fe3f52196ea2566ba70c96a0aed7a",
+  "chunks_sha256": "1dca79fddc13ccf4ffad8fc6236e61ca88a818792a8331e3422b4e615fae0a1e",
   "sources": [
     "document.json",
     "example:all",
