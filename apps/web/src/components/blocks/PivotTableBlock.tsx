@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { WidgetExportMenu } from './WidgetExportMenu'
-import { downloadBlob, drillRowsToCsv } from '@/lib/widgetExport'
+import { drillRowsToCsv, drillRowsToTsv } from '@/lib/widgetExport'
+import { DrillExportControls } from './DrillExportControls'
 import { buildPivot, drillRows, dimField, dimLabel, sourceRows } from './pivotEngine'
 import { fetchDataSource } from './DataSourceBlock'
 import { collectTimelineFilters } from './TimelineBlock'
@@ -347,17 +348,12 @@ export function PivotDrillModal({
               : `${drill.rows.length} row${drill.rows.length === 1 ? '' : 's'}`}
           </p>
           {drill.rows.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                const csv = drillRowsToCsv(fields, drill.rows as ReadonlyArray<Record<string, unknown>>)
-                downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'pivot-drill.csv')
-              }}
-              data-testid="pivot-drill-csv"
-              className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
-            >
-              📥 CSV
-            </button>
+            <DrillExportControls
+              buildCsv={() => drillRowsToCsv(fields, drill.rows as ReadonlyArray<Record<string, unknown>>)}
+              buildTsv={() => drillRowsToTsv(fields, drill.rows as ReadonlyArray<Record<string, unknown>>)}
+              filename="pivot-drill"
+              testIdPrefix="pivot-drill"
+            />
           )}
         </div>
         {drill.rows.length > 0 && (

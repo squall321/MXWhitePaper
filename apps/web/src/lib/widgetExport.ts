@@ -154,6 +154,79 @@ export function drillSingleRowToCsv(
   return rowsToCsv(['field', 'value'], fields.map((f) => [f, row[f]]))
 }
 
+/** UTF-8 BOM — Excel 의 한글 깨짐 회피용. CSV/TSV 앞에 붙여서 download. */
+export const UTF8_BOM = '﻿'
+
+/**
+ * N — TSV variant of `rowsToCsv`. Excel 은 .tsv 를 .csv 보다 더 견고하게
+ * 인식 (특히 한글/콤마 함유 데이터). tab/CR/LF 는 공백으로 collapse
+ * (`tsvCell` 재사용) — Excel 의 TSV 파서는 quoting 을 인식하지 않으므로
+ * 라인 단위 안전성을 우선.
+ */
+export function rowsToTsv(
+  headers: ReadonlyArray<string>,
+  rows: ReadonlyArray<ReadonlyArray<unknown>>,
+): string {
+  const lines: string[] = []
+  lines.push(headers.map(tsvCell).join('\t'))
+  for (const row of rows) {
+    lines.push(row.map(tsvCell).join('\t'))
+  }
+  return lines.join('\r\n')
+}
+
+/** N — drill rows → TSV (chart/kpi/pivot 다중 행). */
+export function drillRowsToTsv(
+  fields: ReadonlyArray<string>,
+  rows: ReadonlyArray<Record<string, unknown>>,
+): string {
+  const body = rows.map((r) => fields.map((f) => r[f]))
+  return rowsToTsv(fields, body)
+}
+
+/** N — single-row TSV (table). */
+export function drillSingleRowToTsv(
+  fields: ReadonlyArray<string>,
+  row: Record<string, unknown>,
+): string {
+  return rowsToTsv(['field', 'value'], fields.map((f) => [f, row[f]]))
+}
+
+/**
+ * N — Copy text to system clipboard (best-effort). Returns true on
+ * success, false on failure (clipboard unavailable, permission denied).
+ *
+ * Falls back to a hidden textarea + `execCommand('copy')` when the
+ * async Clipboard API is missing (older Safari, insecure context).
+ */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  // Modern path — async Clipboard API.
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // Fall through to fallback.
+    }
+  }
+  // Fallback — hidden textarea trick. Safe in jsdom (it returns false).
+  if (typeof document === 'undefined') return false
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    const ok = document.execCommand?.('copy') ?? false
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
+
 /** KPI cards → CSV. Columns: label, value, delta, trend (drop trend if all empty). */
 export function kpiCardsToCsv(
   items: ReadonlyArray<{

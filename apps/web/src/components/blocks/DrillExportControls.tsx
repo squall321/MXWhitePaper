@@ -1,0 +1,93 @@
+/**
+ * N — drill modal export controls (4 modal 공통).
+ *
+ * 3 가지 액션을 한 줄로:
+ *   - 📥 CSV: UTF-8 BOM + CSV (Excel 한글 호환)
+ *   - 📋 Copy: TSV 를 system clipboard 로 (스프레드시트 paste 친화)
+ *   - 📥 TSV: BOM + TSV (Excel 이 .csv 보다 더 견고하게 인식)
+ *
+ * Callers 가 두 builder (csv / tsv) 를 prop 으로 전달 — single-row vs
+ * multi-row drill 에 따라 다른 helper 를 사용해야 하므로 컴포넌트가
+ * shape 을 모름. 결과 텍스트만 받아 download / clipboard 트리거.
+ */
+import { useState } from 'react'
+import { copyToClipboard, downloadBlob, UTF8_BOM } from '@/lib/widgetExport'
+
+interface Props {
+  /** Build the CSV text — caller chooses drillRowsToCsv vs drillSingleRowToCsv. */
+  buildCsv: () => string
+  /** Build the TSV text — same shape choice as CSV. */
+  buildTsv: () => string
+  /** File stem (no extension). e.g. `chart-drill-Sales`. */
+  filename: string
+  /** test-id prefix — e.g. `chart-drill` → buttons get `chart-drill-csv` etc. */
+  testIdPrefix: string
+}
+
+export function DrillExportControls({
+  buildCsv,
+  buildTsv,
+  filename,
+  testIdPrefix,
+}: Props) {
+  const [copyFlash, setCopyFlash] = useState<'idle' | 'ok' | 'fail'>('idle')
+
+  const handleCsv = () => {
+    const csv = UTF8_BOM + buildCsv()
+    downloadBlob(
+      new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+      `${filename}.csv`,
+    )
+  }
+  const handleTsv = () => {
+    const tsv = UTF8_BOM + buildTsv()
+    downloadBlob(
+      new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8' }),
+      `${filename}.tsv`,
+    )
+  }
+  const handleCopy = async () => {
+    const ok = await copyToClipboard(buildTsv())
+    setCopyFlash(ok ? 'ok' : 'fail')
+    window.setTimeout(() => setCopyFlash('idle'), 1500)
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={handleCsv}
+        data-testid={`${testIdPrefix}-csv`}
+        title="UTF-8 BOM 포함 CSV (Excel 한글 호환)"
+        className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
+      >
+        📥 CSV
+      </button>
+      <button
+        type="button"
+        onClick={handleTsv}
+        data-testid={`${testIdPrefix}-tsv`}
+        title="UTF-8 BOM 포함 TSV (Excel 이 더 견고하게 인식)"
+        className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
+      >
+        📥 TSV
+      </button>
+      <button
+        type="button"
+        onClick={() => void handleCopy()}
+        data-testid={`${testIdPrefix}-copy`}
+        title="TSV 를 클립보드로 복사 (스프레드시트 paste 친화)"
+        className={
+          'rounded border px-2 py-0.5 text-[11px] transition-colors ' +
+          (copyFlash === 'ok'
+            ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+            : copyFlash === 'fail'
+              ? 'border-red-400 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300'
+              : 'border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800')
+        }
+      >
+        {copyFlash === 'ok' ? '✓ 복사됨' : copyFlash === 'fail' ? '⚠ 실패' : '📋 Copy'}
+      </button>
+    </div>
+  )
+}

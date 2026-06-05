@@ -29,7 +29,8 @@ import type { Block, ChartBlock, DataSourceBlock as DataSourceBlockType } from '
 import { EChartsView } from './EChartsView'
 import { useResolvedTheme } from '@/features/theme/useResolvedTheme'
 import { WidgetExportMenu } from './WidgetExportMenu'
-import { chartLabeledToCsv, downloadBlob, drillRowsToCsv } from '@/lib/widgetExport'
+import { chartLabeledToCsv, drillRowsToCsv, drillRowsToTsv } from '@/lib/widgetExport'
+import { DrillExportControls } from './DrillExportControls'
 import { fetchDataSource } from './DataSourceBlock'
 import { payloadToRows, collectSlicerFilters } from './PivotTableBlock'
 import { collectTimelineFilters } from './TimelineBlock'
@@ -327,17 +328,12 @@ export function ChartDrillModal({
               : `${rows.length} row${rows.length === 1 ? '' : 's'}`}
           </p>
           {rows.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                const csv = drillRowsToCsv(fields, rows as ReadonlyArray<Record<string, unknown>>)
-                downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `chart-drill-${label}.csv`)
-              }}
-              data-testid="chart-drill-csv"
-              className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
-            >
-              📥 CSV
-            </button>
+            <DrillExportControls
+              buildCsv={() => drillRowsToCsv(fields, rows as ReadonlyArray<Record<string, unknown>>)}
+              buildTsv={() => drillRowsToTsv(fields, rows as ReadonlyArray<Record<string, unknown>>)}
+              filename={`chart-drill-${label}`}
+              testIdPrefix="chart-drill"
+            />
           )}
         </div>
         {rows.length > 0 && (
@@ -468,11 +464,25 @@ function renderChart(
       )
     case 'pie': {
       const pData = pieData(block)
+      // N — Pie sector click — datum carries `{name, value}` (name == label).
+      const handlePieClick = onLabelClick
+        ? (d: { name?: string | number } | null | undefined) => {
+            if (d?.name === undefined) return
+            onLabelClick(String(d.name))
+          }
+        : undefined
       return (
-        <PieChart>
+        <PieChart style={cursorStyle}>
           <Tooltip {...tooltipProps} />
           <Legend verticalAlign="bottom" />
-          <Pie data={pData} dataKey="value" nameKey="name" outerRadius={90} label>
+          <Pie
+            data={pData}
+            dataKey="value"
+            nameKey="name"
+            outerRadius={90}
+            label
+            onClick={handlePieClick}
+          >
             {pData.map((_, i) => (
               <Cell key={i} fill={palette[i % palette.length]} />
             ))}
@@ -481,8 +491,9 @@ function renderChart(
       )
     }
     case 'radar':
+      // N — RadarChart 의 onClick 도 LineChart 와 같은 activeLabel 시그니처.
       return (
-        <RadarChart data={data}>
+        <RadarChart data={data} onClick={handleChartClick} style={cursorStyle}>
           <PolarGrid />
           <PolarAngleAxis dataKey="label" />
           <PolarRadiusAxis />
@@ -499,9 +510,21 @@ function renderChart(
           ))}
         </RadarChart>
       )
-    case 'scatter':
+    case 'scatter': {
+      // N — Scatter point click. scatterPoints emits `(x: index, y: value)`
+      // so the clicked datum's x is the label's index in block.data.labels.
+      // Map back to the label string so drill resolution stays uniform with
+      // line/bar/area.
+      const handlePointClick = onLabelClick
+        ? (d: { x?: number } | null | undefined) => {
+            if (d?.x === undefined) return
+            const label = block.data.labels[d.x]
+            if (label === undefined) return
+            onLabelClick(String(label))
+          }
+        : undefined
       return (
-        <ScatterChart>
+        <ScatterChart style={cursorStyle}>
           <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
           <XAxis type="number" dataKey="x" name="x" stroke={axisStroke} tick={{ fill: axisStroke }} />
           <YAxis type="number" dataKey="y" name="y" stroke={axisStroke} tick={{ fill: axisStroke }} />
@@ -514,10 +537,12 @@ function renderChart(
               name={s.name}
               data={scatterPoints(s)}
               fill={palette[i % palette.length]}
+              onClick={handlePointClick}
             />
           ))}
         </ScatterChart>
       )
+    }
     default:
       // Exhaustive fallback — render the data as a table-ish list.
       return (

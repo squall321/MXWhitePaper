@@ -26,7 +26,8 @@ import {
   type ConditionalStyle,
 } from './conditionalFormatting'
 import { WidgetExportMenu } from './WidgetExportMenu'
-import { downloadBlob, drillSingleRowToCsv, flatTableToCsv } from '@/lib/widgetExport'
+import { drillSingleRowToCsv, drillSingleRowToTsv, flatTableToCsv } from '@/lib/widgetExport'
+import { DrillExportControls } from './DrillExportControls'
 import { collectSlicerFilters, payloadToRows } from './PivotTableBlock'
 import { collectTimelineFilters } from './TimelineBlock'
 import { fetchDataSource } from './DataSourceBlock'
@@ -919,17 +920,12 @@ export function TableDrillModal({
           ) : (
             <span />
           )}
-          <button
-            type="button"
-            onClick={() => {
-              const csv = drillSingleRowToCsv(fields, row as Record<string, unknown>)
-              downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'table-drill-row.csv')
-            }}
-            data-testid="table-drill-csv"
-            className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
-          >
-            📥 CSV
-          </button>
+          <DrillExportControls
+            buildCsv={() => drillSingleRowToCsv(fields, row as Record<string, unknown>)}
+            buildTsv={() => drillSingleRowToTsv(fields, row as Record<string, unknown>)}
+            filename="table-drill-row"
+            testIdPrefix="table-drill"
+          />
         </div>
         <table className="min-w-full text-xs">
           <tbody>

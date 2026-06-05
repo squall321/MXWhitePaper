@@ -345,6 +345,15 @@
   hide). RFC 4180 quoting 은 `csvCell` 재사용. sample 17 의 source 에
   region/manager/deal_id 3 hidden 컬럼 추가해 drill modal 의 amber 배지
   데모.
+  ★ **N** — drill modal 확장: pie/radar/scatter 도 drill (sector/arm/
+  point 클릭 시 activeLabel/datum 추출 → 같은 ChartDrillModal). 모든
+  modal 은 [[apps/web/src/components/blocks/DrillExportControls.tsx]]
+  (공용 컴포넌트) 가 📥 CSV / 📥 TSV / 📋 Copy 3 버튼 노출 — UTF-8 BOM
+  prefix (Excel 한글 호환) + TSV 변형 (`drillRowsToTsv` /
+  `drillSingleRowToTsv`) + `copyToClipboard` (async Clipboard API
+  우선, fallback execCommand textarea). PyInstaller hidden import
+  이슈는 F2 의 preflight 가 이미 해결 — N 사이클 재검증으로 4 binary
+  모두 정상 build 확인 (mxwp-{validator,rules,mcp,import} 1.0.0).
   ★ **J** — drill-down 모달. line/bar/area chart 클릭 시 activeLabel 을
   추출해 [[apps/web/src/components/blocks/pivotEngine.ts#drillChartRows]]
   로 해당 라벨에 기여한 raw rows 를 추출 → ChartDrillModal (Modal 공용

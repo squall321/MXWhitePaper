@@ -4,7 +4,8 @@ import type { Block, DataSourceBlock as DataSourceBlockType, KpiCardsBlock } fro
 import { getZebraClass } from '@/features/editor/blocks/zebra'
 import { Sparkline } from '@/features/home/components/Sparkline'
 import { WidgetExportMenu } from './WidgetExportMenu'
-import { downloadBlob, drillRowsToCsv, kpiCardsToCsv } from '@/lib/widgetExport'
+import { drillRowsToCsv, drillRowsToTsv, kpiCardsToCsv } from '@/lib/widgetExport'
+import { DrillExportControls } from './DrillExportControls'
 import { fetchDataSource } from './DataSourceBlock'
 import { payloadToRows, collectSlicerFilters } from './PivotTableBlock'
 import { collectTimelineFilters } from './TimelineBlock'
@@ -278,17 +279,12 @@ export function KpiDrillModal({
               : `${rows.length} row${rows.length === 1 ? '' : 's'}`}
           </p>
           {rows.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                const csv = drillRowsToCsv(fields, rows as ReadonlyArray<Record<string, unknown>>)
-                downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `kpi-drill-${label}.csv`)
-              }}
-              data-testid="kpi-drill-csv"
-              className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
-            >
-              📥 CSV
-            </button>
+            <DrillExportControls
+              buildCsv={() => drillRowsToCsv(fields, rows as ReadonlyArray<Record<string, unknown>>)}
+              buildTsv={() => drillRowsToTsv(fields, rows as ReadonlyArray<Record<string, unknown>>)}
+              filename={`kpi-drill-${label}`}
+              testIdPrefix="kpi-drill"
+            />
           )}
         </div>
         {rows.length > 0 && (
