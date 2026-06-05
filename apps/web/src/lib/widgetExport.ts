@@ -146,12 +146,16 @@ export function drillRowsToCsv(
  * M-2 — single-row CSV ("row 상세" 의 Table drill modal 용도).
  * Two columns: field name + value. caller 가 fields 순서를 정의 (header
  * 컬럼 먼저 → hidden 컬럼).
+ *
+ * S3 — 컬럼명 collision 회피. 사용자 source row 가 'field' / 'value'
+ * 라는 키를 가질 수도 있어 header 가 ambiguous. unicode 비가시 wrapper
+ * (`__` prefix) 로 unique 보장 + strict parser 가 user 컬럼과 구별 가능.
  */
 export function drillSingleRowToCsv(
   fields: ReadonlyArray<string>,
   row: Record<string, unknown>,
 ): string {
-  return rowsToCsv(['field', 'value'], fields.map((f) => [f, row[f]]))
+  return rowsToCsv(['__field__', '__value__'], fields.map((f) => [f, row[f]]))
 }
 
 /** UTF-8 BOM — Excel 의 한글 깨짐 회피용. CSV/TSV 앞에 붙여서 download. */
@@ -184,12 +188,12 @@ export function drillRowsToTsv(
   return rowsToTsv(fields, body)
 }
 
-/** N — single-row TSV (table). */
+/** N — single-row TSV (table). S3 — header collision 회피, CSV 와 동일. */
 export function drillSingleRowToTsv(
   fields: ReadonlyArray<string>,
   row: Record<string, unknown>,
 ): string {
-  return rowsToTsv(['field', 'value'], fields.map((f) => [f, row[f]]))
+  return rowsToTsv(['__field__', '__value__'], fields.map((f) => [f, row[f]]))
 }
 
 /**

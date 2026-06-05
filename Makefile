@@ -75,3 +75,19 @@ clean:
 	rm -f infra/apptainer/*.sif
 	rm -rf infra/data
 	@echo "✓ images and data removed"
+
+# S6 — local PyInstaller smoke test. N-3 사이클의 수동 verify 단축.
+# preflight (hidden import 누락 체크) + build lite + 4 binary --version
+# 응답 확인. CI 는 .github/workflows/llm-docx-toolkit.yml 에서 동일
+# pipeline 을 example docx 까지 verify (이 target 은 단축 버전).
+pyinstaller-smoke:
+	apptainer exec instance://mxwp_api bash -lc '\
+		cd /workspace/dist/llm-docx-toolkit && \
+		python3 build.py --variant lite 2>&1 | tail -20 && \
+		echo "=== binary version check ===" && \
+		for b in mxwp-validator mxwp-rules mxwp-mcp mxwp-import; do \
+			echo "--- $$b ---"; \
+			./bin/$$b-linux --version || { echo "[FAIL] $$b"; exit 1; }; \
+		done && \
+		echo "✓ all 4 binaries respond to --version" \
+	'

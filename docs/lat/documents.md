@@ -354,6 +354,20 @@
   우선, fallback execCommand textarea). PyInstaller hidden import
   이슈는 F2 의 preflight 가 이미 해결 — N 사이클 재검증으로 4 binary
   모두 정상 build 확인 (mxwp-{validator,rules,mcp,import} 1.0.0).
+  ★ **N ultra-review + suspected fix** — 6-skeptic adversarial review
+  (commit `cf3cfe3`) 가 4 confirmed bug fix: Scatter `d.x` 가 pixel
+  coord → `d.payload.x` (recharts 3.8.1 type 정의 확인). copy-flash
+  setTimeout → useRef + cleanup. emoji button 의 a11y → aria-hidden +
+  aria-label + aria-live polite. empty-string label drill 거부.
+  suspected 6 항목 fix: **CSV 는 BOM 유지** (Excel 한글), **TSV 는 BOM
+  제거** (Excel TSV 가 BOM 없이 더 잘 동작 + strict parser 호환).
+  drill single-row 의 헤더 컬럼 `__field__`/`__value__` 로 rename
+  (user 데이터 collision 회피). ECharts engine 일 때 drillContext 가
+  있으면 amber badge "drill: ECharts 자체 도구 사용" hint. Pie 의
+  cursor:pointer 는 `<Pie>` 자체에만 (Legend 영역 제외), Radar 도
+  PolarAngleAxis.tick + Radar style 에만. `make pyinstaller-smoke`
+  target 추가 (Makefile) — 로컬에서 build + 4 binary --version 단축
+  verify.
   ★ **J** — drill-down 모달. line/bar/area chart 클릭 시 activeLabel 을
   추출해 [[apps/web/src/components/blocks/pivotEngine.ts#drillChartRows]]
   로 해당 라벨에 기여한 raw rows 를 추출 → ChartDrillModal (Modal 공용

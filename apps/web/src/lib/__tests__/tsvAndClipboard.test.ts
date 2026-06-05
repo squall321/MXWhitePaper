@@ -43,7 +43,7 @@ describe('drillSingleRowToTsv', () => {
       dept: 'Sales',
       amount: 100,
     })
-    expect(tsv).toBe('field\tvalue\r\ndept\tSales\r\namount\t100')
+    expect(tsv).toBe('__field__\t__value__\r\ndept\tSales\r\namount\t100')
   })
 })
 
@@ -59,6 +59,30 @@ describe('copyToClipboard', () => {
     // Defensive: just verify it resolves with a boolean.
     const ok = await copyToClipboard('hello')
     expect(typeof ok).toBe('boolean')
+  })
+
+  it('falls back to execCommand textarea when async Clipboard API throws (S2)', async () => {
+    if (typeof navigator === 'undefined' || typeof document === 'undefined') return
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    if (!descriptor || !descriptor.configurable) return
+    // async API 가 throw → fallback path 가 실행되는지 확인
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: async () => { throw new Error('permission denied') } },
+      configurable: true,
+    })
+    // jsdom 의 execCommand 는 기본적으로 undefined — 임시로 spy 설치
+    let execCalled = false
+    const originalExec = document.execCommand
+    Object.defineProperty(document, 'execCommand', {
+      value: () => { execCalled = true; return true },
+      configurable: true,
+      writable: true,
+    })
+    const ok = await copyToClipboard('via fallback')
+    expect(execCalled).toBe(true)
+    expect(ok).toBe(true)
+    if (originalExec) document.execCommand = originalExec
+    Object.defineProperty(navigator, 'clipboard', descriptor)
   })
 
   it('uses async Clipboard API when available (env-permitting)', async () => {

@@ -60,6 +60,10 @@ export function DrillExportControls({
   }
 
   const handleCsv = () => {
+    // S1 — CSV 는 BOM 유지. Excel/한글 OS 의 호환 가치가 strict-parser
+    // 의 header[0] 오염 risk 보다 큼 (사용 시나리오: 사용자 → Excel).
+    // strict parser (python csv / go encoding/csv) 사용자는 docs/lat/
+    // documents.md 의 ★ N 항목의 안내대로 `﻿` strip.
     const csv = UTF8_BOM + buildCsv()
     downloadBlob(
       new Blob([csv], { type: 'text/csv;charset=utf-8' }),
@@ -67,9 +71,11 @@ export function DrillExportControls({
     )
   }
   const handleTsv = () => {
-    const tsv = UTF8_BOM + buildTsv()
+    // S1 — TSV 는 BOM 제거. Excel 의 TSV 인코딩 추정은 BOM 없이도 UTF-8
+    // 로 잘 동작하고, BOM 이 있으면 strict parser (R, awk 의 일부) 가
+    // 깨짐. CSV 와 TSV 의 contract 가 다른 게 정상.
     downloadBlob(
-      new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8' }),
+      new Blob([buildTsv()], { type: 'text/tab-separated-values;charset=utf-8' }),
       `${filename}.tsv`,
     )
   }

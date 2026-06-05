@@ -229,8 +229,26 @@ export function ChartBlockView({ block: rawBlock }: { block: ChartBlock }) {
   // engine === 'echarts' uses the richer ECharts renderer (zoom, brush,
   // markPoint, markArea). Default 'recharts' keeps the original simple
   // surface for back-compat.
+  //
+  // S4 — ECharts engine 은 drill modal 을 지원 안 한다 (자체 brush/zoom
+  // 가 있음). 사용자가 source/boundSlicers 를 설정해놨는데 engine 만
+  // echarts 로 바꾸면 silent 하게 drill 이 사라지는 함정 — 작은 hint 로
+  // 알림. EChartsView 위에 floating note.
   if (block.engine === 'echarts') {
-    return <EChartsView block={block} />
+    return (
+      <div className="relative">
+        {drillContext !== null && (
+          <span
+            data-testid="echarts-drill-disabled-hint"
+            title="ECharts engine 은 자체 brush/zoom 으로 drill 대신, recharts 로 전환 시 drill modal 사용 가능"
+            className="absolute right-2 top-2 z-10 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+          >
+            drill: ECharts 자체 도구 사용
+          </span>
+        )}
+        <EChartsView block={block} />
+      </div>
+    )
   }
   const theme = useResolvedTheme()
   const gridStroke = theme === 'dark' ? '#374151' : '#E5E7EB'
@@ -474,8 +492,11 @@ function renderChart(
             onLabelClick(String(d.name))
           }
         : undefined
+      // S5 — cursor:pointer 를 PieChart root 가 아니라 <Pie> 자체에만
+      // 부착. PieChart root 는 Legend 도 포함하므로 Legend 영역까지
+      // pointer cursor 가 적용되어 "drill 가능" 인상을 잘못 주는 것 회피.
       return (
-        <PieChart style={cursorStyle}>
+        <PieChart>
           <Tooltip {...tooltipProps} />
           <Legend verticalAlign="bottom" />
           <Pie
@@ -485,6 +506,7 @@ function renderChart(
             outerRadius={90}
             label
             onClick={handlePieClick}
+            style={cursorStyle}
           >
             {pData.map((_, i) => (
               <Cell key={i} fill={palette[i % palette.length]} />
@@ -495,10 +517,13 @@ function renderChart(
     }
     case 'radar':
       // N — RadarChart 의 onClick 도 LineChart 와 같은 activeLabel 시그니처.
+      // S5 — Radar 는 PolarAngleAxis 의 label 영역이 click target 이지만
+      // RadarChart 의 Legend 는 클릭 비활성 영역이라 cursor 가 그쪽까지
+      // 적용되면 혼란. radial-grid 영역만 cursor scope.
       return (
-        <RadarChart data={data} onClick={handleChartClick} style={cursorStyle}>
+        <RadarChart data={data} onClick={handleChartClick}>
           <PolarGrid />
-          <PolarAngleAxis dataKey="label" />
+          <PolarAngleAxis dataKey="label" tick={cursorStyle ? { fill: axisStroke, cursor: 'pointer' } : { fill: axisStroke }} />
           <PolarRadiusAxis />
           <Tooltip {...tooltipProps} />
           <Legend verticalAlign="bottom" />
@@ -509,6 +534,7 @@ function renderChart(
               stroke={palette[i % palette.length]}
               fill={palette[i % palette.length]}
               fillOpacity={0.25}
+              style={cursorStyle}
             />
           ))}
         </RadarChart>
