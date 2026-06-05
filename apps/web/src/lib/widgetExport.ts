@@ -129,6 +129,31 @@ export function rowsToCsv(headers: ReadonlyArray<string>, rows: ReadonlyArray<Re
   return lines.join('\r\n')
 }
 
+/**
+ * M-2 — Drill modal rows → CSV. Headers are explicit (caller passes the
+ * field union — modal already computed it for display). Each row reads
+ * each field; missing keys become empty cells. Pure.
+ */
+export function drillRowsToCsv(
+  fields: ReadonlyArray<string>,
+  rows: ReadonlyArray<Record<string, unknown>>,
+): string {
+  const body = rows.map((r) => fields.map((f) => r[f]))
+  return rowsToCsv(fields, body)
+}
+
+/**
+ * M-2 — single-row CSV ("row 상세" 의 Table drill modal 용도).
+ * Two columns: field name + value. caller 가 fields 순서를 정의 (header
+ * 컬럼 먼저 → hidden 컬럼).
+ */
+export function drillSingleRowToCsv(
+  fields: ReadonlyArray<string>,
+  row: Record<string, unknown>,
+): string {
+  return rowsToCsv(['field', 'value'], fields.map((f) => [f, row[f]]))
+}
+
 /** KPI cards → CSV. Columns: label, value, delta, trend (drop trend if all empty). */
 export function kpiCardsToCsv(
   items: ReadonlyArray<{

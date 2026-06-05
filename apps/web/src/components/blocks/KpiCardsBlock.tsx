@@ -4,7 +4,7 @@ import type { Block, DataSourceBlock as DataSourceBlockType, KpiCardsBlock } fro
 import { getZebraClass } from '@/features/editor/blocks/zebra'
 import { Sparkline } from '@/features/home/components/Sparkline'
 import { WidgetExportMenu } from './WidgetExportMenu'
-import { kpiCardsToCsv } from '@/lib/widgetExport'
+import { downloadBlob, drillRowsToCsv, kpiCardsToCsv } from '@/lib/widgetExport'
 import { fetchDataSource } from './DataSourceBlock'
 import { payloadToRows, collectSlicerFilters } from './PivotTableBlock'
 import { collectTimelineFilters } from './TimelineBlock'
@@ -271,11 +271,26 @@ export function KpiDrillModal({
   return (
     <Modal open onClose={onClose} title={`${label} — 기여한 행`} size="xl">
       <div data-testid="kpi-drill-modal" className="px-5 py-3">
-        <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-          {rows.length === 0
-            ? '이 카드에 기여한 row 가 없습니다.'
-            : `${rows.length} row${rows.length === 1 ? '' : 's'}`}
-        </p>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {rows.length === 0
+              ? '이 카드에 기여한 row 가 없습니다.'
+              : `${rows.length} row${rows.length === 1 ? '' : 's'}`}
+          </p>
+          {rows.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const csv = drillRowsToCsv(fields, rows as ReadonlyArray<Record<string, unknown>>)
+                downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `kpi-drill-${label}.csv`)
+              }}
+              data-testid="kpi-drill-csv"
+              className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
+            >
+              📥 CSV
+            </button>
+          )}
+        </div>
         {rows.length > 0 && (
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">

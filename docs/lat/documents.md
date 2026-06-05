@@ -338,6 +338,13 @@
   가 없음 — TableBlock 은 block.headers 가 projection 역할. sample 17 의
   table 블록도 source.kind='inline' + filters: amount>50 + drill 안내
   callout 으로 업데이트.
+  ★ **M** — drill modal CSV export (4 modal 일괄). Pivot/Chart/Kpi 는
+  `drillRowsToCsv(fields, rows)` (행렬), Table 은 `drillSingleRowToCsv
+  (fields, row)` (field,value 두 컬럼) 로 직렬화 후 `downloadBlob` 으로
+  다운로드. 모든 modal 의 헤더에 📥 CSV 버튼 노출 (rows 가 비어있으면
+  hide). RFC 4180 quoting 은 `csvCell` 재사용. sample 17 의 source 에
+  region/manager/deal_id 3 hidden 컬럼 추가해 drill modal 의 amber 배지
+  데모.
   ★ **J** — drill-down 모달. line/bar/area chart 클릭 시 activeLabel 을
   추출해 [[apps/web/src/components/blocks/pivotEngine.ts#drillChartRows]]
   로 해당 라벨에 기여한 raw rows 를 추출 → ChartDrillModal (Modal 공용

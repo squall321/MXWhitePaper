@@ -120,14 +120,14 @@
           "source": {
             "kind": "inline",
             "rows": [
-              { "dept": "Sales", "date": "2026-01-15", "amount": 120 },
-              { "dept": "R&D", "date": "2026-01-22", "amount": 80 },
-              { "dept": "HR", "date": "2026-02-05", "amount": 35 },
-              { "dept": "Sales", "date": "2026-02-18", "amount": 150 },
-              { "dept": "R&D", "date": "2026-03-02", "amount": 90 },
-              { "dept": "Sales", "date": "2026-03-15", "amount": 200 },
-              { "dept": "HR", "date": "2026-04-08", "amount": 40 },
-              { "dept": "R&D", "date": "2026-04-25", "amount": 110 }
+              { "dept": "Sales", "date": "2026-01-15", "amount": 120, "region": "Seoul",   "manager": "u-park",  "deal_id": "D-001" },
+              { "dept": "R&D",   "date": "2026-01-22", "amount": 80,  "region": "Busan",   "manager": "u-kim",   "deal_id": "D-002" },
+              { "dept": "HR",    "date": "2026-02-05", "amount": 35,  "region": "Seoul",   "manager": "u-lee",   "deal_id": "D-003" },
+              { "dept": "Sales", "date": "2026-02-18", "amount": 150, "region": "Daegu",   "manager": "u-park",  "deal_id": "D-004" },
+              { "dept": "R&D",   "date": "2026-03-02", "amount": 90,  "region": "Seoul",   "manager": "u-kim",   "deal_id": "D-005" },
+              { "dept": "Sales", "date": "2026-03-15", "amount": 200, "region": "Busan",   "manager": "u-park",  "deal_id": "D-006" },
+              { "dept": "HR",    "date": "2026-04-08", "amount": 40,  "region": "Incheon", "manager": "u-lee",   "deal_id": "D-007" },
+              { "dept": "R&D",   "date": "2026-04-25", "amount": 110, "region": "Seoul",   "manager": "u-kim",   "deal_id": "D-008" }
             ]
           },
           "filters": [

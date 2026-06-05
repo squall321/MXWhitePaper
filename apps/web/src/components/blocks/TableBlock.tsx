@@ -26,7 +26,7 @@ import {
   type ConditionalStyle,
 } from './conditionalFormatting'
 import { WidgetExportMenu } from './WidgetExportMenu'
-import { flatTableToCsv } from '@/lib/widgetExport'
+import { downloadBlob, drillSingleRowToCsv, flatTableToCsv } from '@/lib/widgetExport'
 import { collectSlicerFilters, payloadToRows } from './PivotTableBlock'
 import { collectTimelineFilters } from './TimelineBlock'
 import { fetchDataSource } from './DataSourceBlock'
@@ -911,11 +911,26 @@ export function TableDrillModal({
   return (
     <Modal open onClose={onClose} title={title} size="lg">
       <div data-testid="table-drill-modal" className="px-5 py-3">
-        {hiddenCount > 0 && (
-          <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-            {hiddenCount} 개의 숨겨진 컬럼 포함
-          </p>
-        )}
+        <div className="mb-2 flex items-center justify-between">
+          {hiddenCount > 0 ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {hiddenCount} 개의 숨겨진 컬럼 포함
+            </p>
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              const csv = drillSingleRowToCsv(fields, row as Record<string, unknown>)
+              downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'table-drill-row.csv')
+            }}
+            data-testid="table-drill-csv"
+            className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
+          >
+            📥 CSV
+          </button>
+        </div>
         <table className="min-w-full text-xs">
           <tbody>
             {fields.map((f) => {

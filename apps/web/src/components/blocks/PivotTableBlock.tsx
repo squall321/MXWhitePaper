@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { WidgetExportMenu } from './WidgetExportMenu'
+import { downloadBlob, drillRowsToCsv } from '@/lib/widgetExport'
 import { buildPivot, drillRows, dimField, dimLabel, sourceRows } from './pivotEngine'
 import { fetchDataSource } from './DataSourceBlock'
 import { collectTimelineFilters } from './TimelineBlock'
@@ -339,11 +340,26 @@ export function PivotDrillModal({
   return (
     <Modal open onClose={onClose} title={headerLabel} size="xl">
       <div data-testid="pivot-drill-modal" className="px-5 py-3">
-        <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-          {drill.rows.length === 0
-            ? '해당 셀에 속한 raw row 가 없습니다.'
-            : `${drill.rows.length} row${drill.rows.length === 1 ? '' : 's'}`}
-        </p>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {drill.rows.length === 0
+              ? '해당 셀에 속한 raw row 가 없습니다.'
+              : `${drill.rows.length} row${drill.rows.length === 1 ? '' : 's'}`}
+          </p>
+          {drill.rows.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const csv = drillRowsToCsv(fields, drill.rows as ReadonlyArray<Record<string, unknown>>)
+                downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'pivot-drill.csv')
+              }}
+              data-testid="pivot-drill-csv"
+              className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
+            >
+              📥 CSV
+            </button>
+          )}
+        </div>
         {drill.rows.length > 0 && (
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
