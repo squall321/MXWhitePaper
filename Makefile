@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs status migrate seed schema-gen schema-validate openapi-dump codegen test lint clean
+.PHONY: help build up down restart logs status migrate seed schema-gen schema-validate openapi-dump codegen test lint clean pyinstaller-smoke
 
 help:
 	@echo "MX White Paper — Apptainer-based stack"
@@ -80,10 +80,12 @@ clean:
 # preflight (hidden import 누락 체크) + build lite + 4 binary --version
 # 응답 확인. CI 는 .github/workflows/llm-docx-toolkit.yml 에서 동일
 # pipeline 을 example docx 까지 verify (이 target 은 단축 버전).
+# self-review F5 — `set -o pipefail` 로 build 실패가 tail 파이프에 의해
+# 삼켜지지 않게 함. --clean 으로 stale work-dir 의 dependency drift 회피.
 pyinstaller-smoke:
-	apptainer exec instance://mxwp_api bash -lc '\
+	apptainer exec instance://mxwp_api bash -lc 'set -o pipefail; \
 		cd /workspace/dist/llm-docx-toolkit && \
-		python3 build.py --variant lite 2>&1 | tail -20 && \
+		python3 build.py --clean --variant lite 2>&1 | tail -20 && \
 		echo "=== binary version check ===" && \
 		for b in mxwp-validator mxwp-rules mxwp-mcp mxwp-import; do \
 			echo "--- $$b ---"; \

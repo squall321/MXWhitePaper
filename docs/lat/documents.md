@@ -340,7 +340,9 @@
   callout 으로 업데이트.
   ★ **M** — drill modal CSV export (4 modal 일괄). Pivot/Chart/Kpi 는
   `drillRowsToCsv(fields, rows)` (행렬), Table 은 `drillSingleRowToCsv
-  (fields, row)` (field,value 두 컬럼) 로 직렬화 후 `downloadBlob` 으로
+  (fields, row)` (`__field__`,`__value__` 두 컬럼 — self-review F2 에서
+  user data 의 `field`/`value` 키 collision 회피용으로 rename) 로
+  직렬화 후 `downloadBlob` 으로
   다운로드. 모든 modal 의 헤더에 📥 CSV 버튼 노출 (rows 가 비어있으면
   hide). RFC 4180 quoting 은 `csvCell` 재사용. sample 17 의 source 에
   region/manager/deal_id 3 hidden 컬럼 추가해 drill modal 의 amber 배지

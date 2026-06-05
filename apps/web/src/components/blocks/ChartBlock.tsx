@@ -241,7 +241,12 @@ export function ChartBlockView({ block: rawBlock }: { block: ChartBlock }) {
           <span
             data-testid="echarts-drill-disabled-hint"
             title="ECharts engine 은 자체 brush/zoom 으로 drill 대신, recharts 로 전환 시 drill modal 사용 가능"
-            className="absolute right-2 top-2 z-10 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+            // self-review F4 — pointer-events: none. badge 가 ECharts 의
+            // legend/title (top-right 위치) 위에 z-10 으로 떠 있어서 그
+            // 영역 클릭이 badge 에 가로채짐. pointer 통과시켜 underlying
+            // 차트 interaction 보존. title tooltip 은 hover 만 캡처 — pe-none
+            // 적용해도 chrome/safari 에서 정상 동작.
+            className="pointer-events-none absolute right-2 top-2 z-10 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
           >
             drill: ECharts 자체 도구 사용
           </span>
@@ -492,11 +497,19 @@ function renderChart(
             onLabelClick(String(d.name))
           }
         : undefined
-      // S5 — cursor:pointer 를 PieChart root 가 아니라 <Pie> 자체에만
-      // 부착. PieChart root 는 Legend 도 포함하므로 Legend 영역까지
-      // pointer cursor 가 적용되어 "drill 가능" 인상을 잘못 주는 것 회피.
+      // S5 (self-review F1) — recharts 3.8.1 은 <Pie style={...}> 를
+      // silently drop 한다 (Pie 가 adaptEventsOfChild 로 event prop 만
+      // 통과시킴, style 은 stripped). 따라서 root <PieChart> 에 cursor
+      // 부착 + Tailwind 의 child-selector 로 Legend 영역만 cursor:default
+      // 으로 reset 해 affordance 와 click target 을 일치시킴.
       return (
-        <PieChart>
+        <PieChart
+          className={
+            cursorStyle
+              ? 'cursor-pointer [&_.recharts-legend-wrapper]:cursor-default'
+              : undefined
+          }
+        >
           <Tooltip {...tooltipProps} />
           <Legend verticalAlign="bottom" />
           <Pie
@@ -506,7 +519,6 @@ function renderChart(
             outerRadius={90}
             label
             onClick={handlePieClick}
-            style={cursorStyle}
           >
             {pData.map((_, i) => (
               <Cell key={i} fill={palette[i % palette.length]} />
@@ -517,13 +529,21 @@ function renderChart(
     }
     case 'radar':
       // N — RadarChart 의 onClick 도 LineChart 와 같은 activeLabel 시그니처.
-      // S5 — Radar 는 PolarAngleAxis 의 label 영역이 click target 이지만
-      // RadarChart 의 Legend 는 클릭 비활성 영역이라 cursor 가 그쪽까지
-      // 적용되면 혼란. radial-grid 영역만 cursor scope.
+      // S5 (self-review F1) — recharts 가 Radar style 을 무시 + click 은
+      // chart 전체에서 발생. cursor 와 click 영역 일치를 위해 root 에
+      // cursor 부착 + Legend 만 default 로 reset.
       return (
-        <RadarChart data={data} onClick={handleChartClick}>
+        <RadarChart
+          data={data}
+          onClick={handleChartClick}
+          className={
+            cursorStyle
+              ? 'cursor-pointer [&_.recharts-legend-wrapper]:cursor-default'
+              : undefined
+          }
+        >
           <PolarGrid />
-          <PolarAngleAxis dataKey="label" tick={cursorStyle ? { fill: axisStroke, cursor: 'pointer' } : { fill: axisStroke }} />
+          <PolarAngleAxis dataKey="label" tick={{ fill: axisStroke }} />
           <PolarRadiusAxis />
           <Tooltip {...tooltipProps} />
           <Legend verticalAlign="bottom" />
@@ -534,7 +554,6 @@ function renderChart(
               stroke={palette[i % palette.length]}
               fill={palette[i % palette.length]}
               fillOpacity={0.25}
-              style={cursorStyle}
             />
           ))}
         </RadarChart>
@@ -548,7 +567,17 @@ function renderChart(
       const handlePointClick = onLabelClick
         ? (d: { payload?: { x?: number } } | null | undefined) => {
             const idx = d?.payload?.x
-            if (idx === undefined || !Number.isInteger(idx)) return
+            // self-review F3 — range guard. Number.isInteger 만으론
+            // 음수나 labels 범위 밖이 통과해 labels[idx]==undefined →
+            // String(undefined)==='undefined' 가 빈 문자열 가드를 통과해
+            // onLabelClick('undefined') 호출되는 silent bug 회피.
+            if (
+              idx === undefined ||
+              !Number.isInteger(idx) ||
+              idx < 0 ||
+              idx >= block.data.labels.length
+            )
+              return
             const label = block.data.labels[idx]
             if (label == null || String(label) === '') return
             onLabelClick(String(label))

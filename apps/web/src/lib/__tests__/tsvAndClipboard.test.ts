@@ -65,24 +65,27 @@ describe('copyToClipboard', () => {
     if (typeof navigator === 'undefined' || typeof document === 'undefined') return
     const descriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
     if (!descriptor || !descriptor.configurable) return
-    // async API 가 throw → fallback path 가 실행되는지 확인
-    Object.defineProperty(navigator, 'clipboard', {
-      value: { writeText: async () => { throw new Error('permission denied') } },
-      configurable: true,
-    })
-    // jsdom 의 execCommand 는 기본적으로 undefined — 임시로 spy 설치
-    let execCalled = false
+    // self-review F6 — try/finally 로 mock 누수 회피. assertion 실패 시
+    // 다른 test 가 mock 된 clipboard / execCommand 를 inherit 못 하게.
     const originalExec = document.execCommand
-    Object.defineProperty(document, 'execCommand', {
-      value: () => { execCalled = true; return true },
-      configurable: true,
-      writable: true,
-    })
-    const ok = await copyToClipboard('via fallback')
-    expect(execCalled).toBe(true)
-    expect(ok).toBe(true)
-    if (originalExec) document.execCommand = originalExec
-    Object.defineProperty(navigator, 'clipboard', descriptor)
+    let execCalled = false
+    try {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: async () => { throw new Error('permission denied') } },
+        configurable: true,
+      })
+      Object.defineProperty(document, 'execCommand', {
+        value: () => { execCalled = true; return true },
+        configurable: true,
+        writable: true,
+      })
+      const ok = await copyToClipboard('via fallback')
+      expect(execCalled).toBe(true)
+      expect(ok).toBe(true)
+    } finally {
+      if (originalExec) document.execCommand = originalExec
+      Object.defineProperty(navigator, 'clipboard', descriptor)
+    }
   })
 
   it('uses async Clipboard API when available (env-permitting)', async () => {
