@@ -393,8 +393,10 @@ function renderChart(
   // drill is silently no-op when source is missing.
   const handleChartClick = onLabelClick
     ? (e: { activeLabel?: string | number } | null | undefined) => {
+        // N (Fix D) — recharts 가 background click 시 e 자체가 null 이거나
+        // activeLabel 이 빈 문자열일 수 있다. empty/null 모두 거부.
         const label = e?.activeLabel
-        if (label === undefined) return
+        if (label == null || String(label) === '') return
         onLabelClick(String(label))
       }
     : undefined
@@ -467,7 +469,8 @@ function renderChart(
       // N — Pie sector click — datum carries `{name, value}` (name == label).
       const handlePieClick = onLabelClick
         ? (d: { name?: string | number } | null | undefined) => {
-            if (d?.name === undefined) return
+            // N (Fix D) — name=='' 이거나 null 이면 drill 의미 없음.
+            if (d?.name == null || String(d.name) === '') return
             onLabelClick(String(d.name))
           }
         : undefined
@@ -511,15 +514,17 @@ function renderChart(
         </RadarChart>
       )
     case 'scatter': {
-      // N — Scatter point click. scatterPoints emits `(x: index, y: value)`
-      // so the clicked datum's x is the label's index in block.data.labels.
-      // Map back to the label string so drill resolution stays uniform with
-      // line/bar/area.
+      // N — Scatter point click. recharts 3.x 의 ScatterPointItem.x 는
+      // 픽셀 좌표 (top-left of wrapping rect) 라 그대로 labels[] index 로
+      // 쓸 수 없다 (모두 undefined). 진짜 datum 은 `payload` 에 있고
+      // scatterPoints() 가 `{x: i, y: value}` 를 emit 하므로 `payload.x`
+      // 가 곧 labels[i] index. ultra-review (Fix A) 가 잡은 항목.
       const handlePointClick = onLabelClick
-        ? (d: { x?: number } | null | undefined) => {
-            if (d?.x === undefined) return
-            const label = block.data.labels[d.x]
-            if (label === undefined) return
+        ? (d: { payload?: { x?: number } } | null | undefined) => {
+            const idx = d?.payload?.x
+            if (idx === undefined || !Number.isInteger(idx)) return
+            const label = block.data.labels[idx]
+            if (label == null || String(label) === '') return
             onLabelClick(String(label))
           }
         : undefined

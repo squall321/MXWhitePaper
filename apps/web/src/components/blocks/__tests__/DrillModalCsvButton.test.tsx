@@ -22,7 +22,9 @@ describe('drill modal — 📥 CSV button', () => {
       />,
     )
     expect(html).toContain('data-testid="chart-drill-csv"')
-    expect(html).toContain('📥 CSV')
+    // N ultra-review (Fix C): emoji 는 <span aria-hidden>, label 분리됨
+    expect(html).toContain('📥')
+    expect(html).toContain('CSV')
   })
 
   it('ChartDrillModal — absent when rows empty', () => {

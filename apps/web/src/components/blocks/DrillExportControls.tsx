@@ -9,8 +9,14 @@
  * Callers 가 두 builder (csv / tsv) 를 prop 으로 전달 — single-row vs
  * multi-row drill 에 따라 다른 helper 를 사용해야 하므로 컴포넌트가
  * shape 을 모름. 결과 텍스트만 받아 download / clipboard 트리거.
+ *
+ * Ultra-review fixes (post-N):
+ *   - Fix B: setTimeout 을 useRef + cleanup 으로 → rapid double-click
+ *     race + unmount-during-flash 의 state warning 회피.
+ *   - Fix C: emoji 는 aria-hidden, button 자체는 aria-label, copy state
+ *     change 는 aria-live="polite" 으로 SR 사용자에게 알림.
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { copyToClipboard, downloadBlob, UTF8_BOM } from '@/lib/widgetExport'
 
 interface Props {
@@ -31,6 +37,27 @@ export function DrillExportControls({
   testIdPrefix,
 }: Props) {
   const [copyFlash, setCopyFlash] = useState<'idle' | 'ok' | 'fail'>('idle')
+  // Fix B — single timer ref so double-clicks reset cleanly + unmount
+  // cleanup prevents "setState on unmounted component" warnings.
+  const flashTimer = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (flashTimer.current !== null) {
+        window.clearTimeout(flashTimer.current)
+        flashTimer.current = null
+      }
+    }
+  }, [])
+
+  const scheduleFlash = (state: 'ok' | 'fail') => {
+    setCopyFlash(state)
+    if (flashTimer.current !== null) window.clearTimeout(flashTimer.current)
+    flashTimer.current = window.setTimeout(() => {
+      setCopyFlash('idle')
+      flashTimer.current = null
+    }, 1500)
+  }
 
   const handleCsv = () => {
     const csv = UTF8_BOM + buildCsv()
@@ -48,9 +75,13 @@ export function DrillExportControls({
   }
   const handleCopy = async () => {
     const ok = await copyToClipboard(buildTsv())
-    setCopyFlash(ok ? 'ok' : 'fail')
-    window.setTimeout(() => setCopyFlash('idle'), 1500)
+    scheduleFlash(ok ? 'ok' : 'fail')
   }
+
+  // Fix C — aria-live polite status region 미러링 copy state. SR users
+  // 가 클릭 결과를 들을 수 있다 (sr-only 라 시각적으로는 안 보임).
+  const copyStatusText =
+    copyFlash === 'ok' ? '클립보드에 복사됨' : copyFlash === 'fail' ? '복사 실패' : ''
 
   return (
     <div className="flex items-center gap-1">
@@ -58,24 +89,27 @@ export function DrillExportControls({
         type="button"
         onClick={handleCsv}
         data-testid={`${testIdPrefix}-csv`}
+        aria-label="UTF-8 BOM 포함 CSV 다운로드"
         title="UTF-8 BOM 포함 CSV (Excel 한글 호환)"
         className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
       >
-        📥 CSV
+        <span aria-hidden="true">📥 </span>CSV
       </button>
       <button
         type="button"
         onClick={handleTsv}
         data-testid={`${testIdPrefix}-tsv`}
+        aria-label="UTF-8 BOM 포함 TSV 다운로드"
         title="UTF-8 BOM 포함 TSV (Excel 이 더 견고하게 인식)"
         className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
       >
-        📥 TSV
+        <span aria-hidden="true">📥 </span>TSV
       </button>
       <button
         type="button"
         onClick={() => void handleCopy()}
         data-testid={`${testIdPrefix}-copy`}
+        aria-label="TSV 를 클립보드로 복사"
         title="TSV 를 클립보드로 복사 (스프레드시트 paste 친화)"
         className={
           'rounded border px-2 py-0.5 text-[11px] transition-colors ' +
@@ -86,8 +120,23 @@ export function DrillExportControls({
               : 'border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800')
         }
       >
-        {copyFlash === 'ok' ? '✓ 복사됨' : copyFlash === 'fail' ? '⚠ 실패' : '📋 Copy'}
+        {copyFlash === 'ok' ? (
+          <><span aria-hidden="true">✓ </span>복사됨</>
+        ) : copyFlash === 'fail' ? (
+          <><span aria-hidden="true">⚠ </span>실패</>
+        ) : (
+          <><span aria-hidden="true">📋 </span>Copy</>
+        )}
       </button>
+      {/* Fix C — SR-only live region. polite = 사용자의 다른 행동 안 끊음. */}
+      <span
+        role="status"
+        aria-live="polite"
+        data-testid={`${testIdPrefix}-status`}
+        className="sr-only"
+      >
+        {copyStatusText}
+      </span>
     </div>
   )
 }
