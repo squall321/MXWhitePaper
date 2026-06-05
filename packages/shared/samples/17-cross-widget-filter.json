@@ -112,17 +112,26 @@
         {
           "type": "table",
           "id": "AFEXK1KJ78TB3HK6SK3XE5BAP7",
-          "caption": "raw 데이터 (같은 inline rows 가 Pivot 과 공유)",
+          "caption": "raw 데이터 (source.kind='inline' 로 Pivot/KpiCards 와 공유. filters: amount>50)",
           "headers": ["dept", "date", "amount"],
           "rows": [
-            ["Sales", "2026-01-15", "120"],
-            ["R&D", "2026-01-22", "80"],
-            ["HR", "2026-02-05", "35"],
-            ["Sales", "2026-02-18", "150"],
-            ["R&D", "2026-03-02", "90"],
-            ["Sales", "2026-03-15", "200"],
-            ["HR", "2026-04-08", "40"],
-            ["R&D", "2026-04-25", "110"]
+            ["IGNORED — source overrides", "IGNORED", "0"]
+          ],
+          "source": {
+            "kind": "inline",
+            "rows": [
+              { "dept": "Sales", "date": "2026-01-15", "amount": 120 },
+              { "dept": "R&D", "date": "2026-01-22", "amount": 80 },
+              { "dept": "HR", "date": "2026-02-05", "amount": 35 },
+              { "dept": "Sales", "date": "2026-02-18", "amount": 150 },
+              { "dept": "R&D", "date": "2026-03-02", "amount": 90 },
+              { "dept": "Sales", "date": "2026-03-15", "amount": 200 },
+              { "dept": "HR", "date": "2026-04-08", "amount": 40 },
+              { "dept": "R&D", "date": "2026-04-25", "amount": 110 }
+            ]
+          },
+          "filters": [
+            { "field": "amount", "op": "gt", "value": 50 }
           ],
           "boundSlicers": [
             "4BCSFA8MB5VPAD5QPXEC8FA4V7",
@@ -180,7 +189,7 @@
           "type": "callout",
           "id": "P6VGP7GAS4S373TJD8KDKDSJFP",
           "variant": "tip",
-          "text": "Slicer 의 chip 을 누르거나 Timeline 슬라이더를 움직이면 Pivot 표/Table 의 행 + KpiCards 카드 4개 + Chart (있다면) 가 동시에 재계산된다. 같은 zustand store (`useSlicerStore`) 를 공유하므로 widget 추가 시 한 번의 store 구독으로 모든 cross-widget filter 가 동작."
+          "text": "Slicer 의 chip 을 누르거나 Timeline 슬라이더를 움직이면 Pivot 표/Table 의 행 + KpiCards 카드 4개 + Chart (있다면) 가 동시에 재계산된다. 같은 zustand store (`useSlicerStore`) 를 공유하므로 widget 추가 시 한 번의 store 구독으로 모든 cross-widget filter 가 동작. ★ TableBlock 도 이제 `source.kind='inline'` 로 raw rows 를 받고 `filters` (amount>50) + boundSlicers 를 적용한 뒤 `headers` 컬럼으로 project — 행 클릭 시 drill modal 이 source 의 *전체* 컬럼 (headers 외 hidden 컬럼 포함) 을 key:value 로 표시."
         }
       ]
     }

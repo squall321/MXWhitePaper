@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { CellBlock, TableBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
@@ -458,6 +458,10 @@ export function TableBlockEditor({ slug, block }: Props) {
           })()}
           onChange={(patch) => schedule({ ...local, ...patch })}
         />
+        <TableSourcePanel
+          block={local}
+          onChange={(next) => schedule(next)}
+        />
         <BoundSlicersPicker
           block={local}
           onChange={(next) => schedule(next)}
@@ -654,6 +658,10 @@ export function TableBlockEditor({ slug, block }: Props) {
         block={local}
         headerNames={local.headers}
         onChange={(patch) => schedule({ ...local, ...patch })}
+      />
+      <TableSourcePanel
+        block={local}
+        onChange={(next) => schedule(next)}
       />
       <BoundSlicersPicker
         block={local}
@@ -968,5 +976,135 @@ function ArrowBtn({
     >
       <span aria-hidden="true">{glyph}</span>
     </button>
+  )
+}
+
+/**
+ * L-1 — TableBlock 의 `source` / `filters` 편집 패널.
+ *
+ * ChartSourcePanel 과 형태는 같지만 `labelField` / `aggregations` 가 없다.
+ * TableBlock 은 viewer 가 raw rows 를 `block.headers` 의 컬럼명으로 projection
+ * 하므로 별도 label/aggregation 입력이 필요 없다 (참고: docs/lat/documents.md
+ * TableBlock 의 ★ K 노트).
+ *
+ * 노출하는 컨트롤:
+ *   - source kind 라디오: none / inline / data-source
+ *   - data-source 일 때 같은 문서 안 DataSourceBlock 선택 `<select>`
+ *   - inline rows 의 첫 행 키를 datalist 로 자동완성 힌트 (현재는 filter
+ *     editor 가 JSON-only 라 직접 쓰이진 않지만 ChartSourcePanel 과 일관)
+ *
+ * filters[] 편집 UI 는 본 사이클 범위 밖 (JSON 직접 편집).
+ */
+function TableSourcePanel({
+  block,
+  onChange,
+}: {
+  block: TableBlock
+  onChange: (next: TableBlock) => void
+}) {
+  const draft = useEditorStore((s) => s.draft)
+  const source = block.source
+  const sourceKind: 'none' | 'inline' | 'data-source' = source?.kind ?? 'none'
+
+  const dataSources = useMemo(() => {
+    const out: Array<{ id: string; endpoint: string }> = []
+    for (const section of draft?.sections ?? []) {
+      for (const b of section.blocks ?? []) {
+        if (b.type === 'data-source') {
+          out.push({ id: b.id, endpoint: (b as { endpoint?: string }).endpoint ?? '' })
+        }
+      }
+    }
+    return out
+  }, [draft])
+
+  const fieldHints = useMemo<string[]>(() => {
+    if (source?.kind !== 'inline') return []
+    const first = source.rows[0]
+    return first ? Object.keys(first) : []
+  }, [source])
+
+  const setSourceKind = (next: 'none' | 'inline' | 'data-source') => {
+    if (next === sourceKind) return
+    const rest = { ...block } as TableBlock
+    if (next === 'none') {
+      delete (rest as { source?: unknown }).source
+      onChange(rest)
+      return
+    }
+    if (next === 'inline') {
+      ;(rest as { source?: unknown }).source = { kind: 'inline', rows: [] }
+    } else {
+      ;(rest as { source?: unknown }).source = {
+        kind: 'data-source',
+        dataSourceId: dataSources[0]?.id ?? '',
+      }
+    }
+    onChange(rest)
+  }
+
+  const sourceMissing = sourceKind === 'none'
+
+  return (
+    <section
+      className="mt-2 rounded border border-dashed border-gray-300 p-2 dark:border-gray-700"
+      data-testid="table-source-panel"
+    >
+      <p className="mb-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+        Data source (slicer / timeline 연동)
+        <span className="ml-1 font-normal text-gray-500 dark:text-gray-400">
+          ({sourceMissing
+            ? 'none — 정적 표 (block.rows 그대로 사용)'
+            : 'projected — boundSlicers / filters 가 행을 다시 계산'})
+        </span>
+      </p>
+
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
+        <span className="font-semibold text-gray-700 dark:text-gray-200">Source kind:</span>
+        {(['none', 'inline', 'data-source'] as const).map((k) => (
+          <label key={k} className="flex items-center gap-1">
+            <input
+              type="radio"
+              name={`table-source-kind-${block.id}`}
+              checked={sourceKind === k}
+              onChange={() => setSourceKind(k)}
+              data-testid={`table-source-kind-${k}`}
+            />
+            {k}
+          </label>
+        ))}
+        {sourceKind === 'data-source' && (
+          <select
+            value={(source as { dataSourceId?: string }).dataSourceId ?? ''}
+            onChange={(e) => {
+              const rest = { ...block } as TableBlock
+              ;(rest as { source?: unknown }).source = {
+                kind: 'data-source',
+                dataSourceId: e.target.value,
+              }
+              onChange(rest)
+            }}
+            aria-label="DataSource id"
+            data-testid="table-data-source-id"
+            className="rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+          >
+            {dataSources.length === 0 && <option value="">(no DataSourceBlock)</option>}
+            {dataSources.map((ds) => (
+              <option key={ds.id} value={ds.id}>
+                {ds.id.slice(0, 8)}… · {ds.endpoint || '(no endpoint)'}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      {fieldHints.length > 0 && (
+        <datalist id={`table-fields-${block.id}`}>
+          {fieldHints.map((f) => (
+            <option key={f} value={f} />
+          ))}
+        </datalist>
+      )}
+    </section>
   )
 }

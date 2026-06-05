@@ -333,6 +333,11 @@
   KpiCardsBlock 의 compute card 도 동일 — 카드 클릭 → KpiDrillModal 이
   `applyFilters([rawRows], baseFilters + per-card when)` 의 결과 rows 를
   표시. ChartDrillModal / PivotDrillModal 과 동일 modal 언어.
+  ★ **L** — TableBlockEditor 의 `TableSourcePanel` 신규 (sparse/flat 두
+  분기 모두 노출). ChartSourcePanel 과 형태 같지만 labelField/aggregations
+  가 없음 — TableBlock 은 block.headers 가 projection 역할. sample 17 의
+  table 블록도 source.kind='inline' + filters: amount>50 + drill 안내
+  callout 으로 업데이트.
   ★ **J** — drill-down 모달. line/bar/area chart 클릭 시 activeLabel 을
   추출해 [[apps/web/src/components/blocks/pivotEngine.ts#drillChartRows]]
   로 해당 라벨에 기여한 raw rows 를 추출 → ChartDrillModal (Modal 공용
