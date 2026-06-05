@@ -27,9 +27,13 @@ import {
 } from './conditionalFormatting'
 import { WidgetExportMenu } from './WidgetExportMenu'
 import { flatTableToCsv } from '@/lib/widgetExport'
-import { collectSlicerFilters } from './PivotTableBlock'
+import { collectSlicerFilters, payloadToRows } from './PivotTableBlock'
 import { collectTimelineFilters } from './TimelineBlock'
+import { fetchDataSource } from './DataSourceBlock'
+import { applyFilters } from './pivotEngine'
 import { useSlicerStore } from '@/features/slicer/store'
+import { useQuery } from '@tanstack/react-query'
+import type { Block, DataSourceBlock as DataSourceBlockType } from '@/types/document'
 
 /**
  * Schema → helper bridge. The generated DocumentJSON type uses a tuple
@@ -153,6 +157,9 @@ interface FlatViewProps {
   rules?: ConditionalRule[]
   // Precomputed per-column raw values for top_n/bottom_n. Index = column.
   columnValuesByCol: string[][]
+  /** K — row click handler. Receives the hydrated row's index (== source rows
+   * index after filter). null/undefined means no drill (no source). */
+  onRowClick?: (origIndex: number) => void
 }
 
 /**
@@ -175,6 +182,7 @@ function FlatTableBody({
   sortable,
   rules,
   columnValuesByCol,
+  onRowClick,
 }: FlatViewProps) {
   const headers = block.headers
   return (
@@ -232,7 +240,8 @@ function FlatTableBody({
         {visibleRows.map(({ row, origIndex }, rIdx) => (
           <tr
             key={origIndex}
-            className={`${stripe ? 'odd:bg-white even:bg-gray-50 dark:odd:bg-gray-900 dark:even:bg-gray-800' : 'bg-white dark:bg-gray-900'} transition-colors hover:bg-smsg-50/50 dark:hover:bg-gray-700/50`}
+            onClick={onRowClick ? () => onRowClick(origIndex) : undefined}
+            className={`${stripe ? 'odd:bg-white even:bg-gray-50 dark:odd:bg-gray-900 dark:even:bg-gray-800' : 'bg-white dark:bg-gray-900'} transition-colors hover:bg-smsg-50/50 dark:hover:bg-gray-700/50${onRowClick ? ' cursor-pointer' : ''}`}
           >
             {rowNumbers && (
               <td
@@ -408,7 +417,7 @@ function SparseTableBody({
  * In full-edit mode a hover affordance ("📊 차트로") opens a modal
  * prefilled with the table's data converted to chart series.
  */
-export function TableBlockView({ block }: { block: TableBlock }) {
+export function TableBlockView({ block: rawBlock }: { block: TableBlock }) {
   const t = useT()
   const isFullEditing = useEditorStore(editorSelectors.isFullEditing)
   const slug = useEditorStore((s) => s.slug)
@@ -417,6 +426,13 @@ export function TableBlockView({ block }: { block: TableBlock }) {
   const apply = useEditorStore((s) => s.applyServerSnapshot)
   const setConflict = useEditorStore((s) => s.setConflict)
 
+  // K — when block.source is set, swap block.rows with hydrated rows from
+  // source + filters. block.headers is still authoritative for column
+  // mapping. drillRawByIndex aligns hydrated rows back to raw source rows
+  // so click → modal shows the full row (incl. columns not in headers).
+  const { block, drillRawByIndex } = useHydratedTableBlock(rawBlock)
+
+  const [drillRowIdx, setDrillRowIdx] = useState<number | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [pending, setPending] = useState(() => buildChartFromTable(block))
   const [busy, setBusy] = useState(false)
@@ -671,6 +687,7 @@ export function TableBlockView({ block }: { block: TableBlock }) {
               sortable={sortable}
               rules={rules}
               columnValuesByCol={columnValuesByCol}
+              onRowClick={drillRawByIndex ? (idx) => setDrillRowIdx(idx) : undefined}
             />
           )}
           {footerRow && !isSparse && (
@@ -713,6 +730,15 @@ export function TableBlockView({ block }: { block: TableBlock }) {
         </button>
       )}
 
+      {drillRowIdx !== null && drillRawByIndex && drillRawByIndex[drillRowIdx] && (
+        <TableDrillModal
+          caption={block.caption}
+          headers={block.headers}
+          row={drillRawByIndex[drillRowIdx]!}
+          onClose={() => setDrillRowIdx(null)}
+        />
+      )}
+
       {modalOpen && (
         <Modal
           open={modalOpen}
@@ -752,5 +778,177 @@ export function TableBlockView({ block }: { block: TableBlock }) {
         </Modal>
       )}
     </div>
+  )
+}
+
+// ── K — TableBlock hydration & drill-down ───────────────────────────────
+
+interface TableHydration {
+  block: TableBlock
+  /**
+   * For each *hydrated* row index, the original raw source row (incl.
+   * fields not represented in block.headers). `null` when no source is
+   * configured — caller skips drill UI in that case.
+   * Cells may be undefined (missing key) — coerce at render time.
+   */
+  drillRawByIndex: Array<Record<string, string | number | null | undefined>> | null
+}
+
+/**
+ * K — when `block.source` is set, replace `block.rows` with rows
+ * derived from raw source rows (filtered through block.filters +
+ * collected slicer/timeline filters). `block.headers` stays the
+ * column projection — each header becomes a column whose cells are the
+ * source row's matching field, coerced to string. Sparse mode (cells)
+ * skips this entirely so merge semantics survive.
+ *
+ * Drill modal reads `drillRawByIndex` to surface the *full* row (incl.
+ * columns the table doesn't show in `headers`) on click.
+ */
+function useHydratedTableBlock(block: TableBlock): TableHydration {
+  const draft = useEditorStore((s) => s.draft)
+  const slicerActive = useSlicerStore((s) => s.active)
+
+  const ext = block as TableBlock & {
+    source?: { kind: 'inline'; rows: Array<Record<string, unknown>> } | { kind: 'data-source'; dataSourceId: string }
+    filters?: Array<{ field: string; op: string; value: unknown }>
+  }
+  const source = ext.source
+  const filters = ext.filters
+  const isSparse = !!(block.cells && block.cells.length > 0)
+  const inline = source?.kind === 'inline'
+  const dsId = source?.kind === 'data-source' ? source.dataSourceId : undefined
+
+  const dataSourceBlock = useMemo<DataSourceBlockType | null>(() => {
+    if (!dsId || !draft) return null
+    for (const section of draft.sections ?? []) {
+      for (const b of (section.blocks ?? []) as Block[]) {
+        if (b.id === dsId && b.type === 'data-source') return b as DataSourceBlockType
+      }
+    }
+    return null
+  }, [dsId, draft])
+
+  const endpoint = dataSourceBlock?.endpoint ?? ''
+  const params = dataSourceBlock?.params ?? null
+  const { data } = useQuery({
+    queryKey: ['data-source', endpoint, JSON.stringify(params)],
+    queryFn: () => fetchDataSource(endpoint, params),
+    enabled: !inline && Boolean(endpoint),
+    retry: false,
+  })
+
+  return useMemo<TableHydration>(() => {
+    if (!source || isSparse) return { block, drillRawByIndex: null }
+
+    const rawRows = inline
+      ? (source.rows ?? []) as Array<Record<string, unknown>>
+      : (payloadToRows(data?.data ?? null) as Array<Record<string, unknown>>)
+
+    const slicerFilters = collectSlicerFilters(block.boundSlicers, draft?.sections ?? [], slicerActive)
+    const timelineFilters = collectTimelineFilters(block.boundSlicers, draft?.sections ?? [], slicerActive)
+    const allFilters = [...(filters ?? []), ...slicerFilters, ...timelineFilters]
+
+    // RawRow shape — coerce non-primitive cells (object → JSON-ish string).
+    const coerced: Array<Record<string, string | number | null>> = rawRows.map((r) => {
+      const out: Record<string, string | number | null> = {}
+      for (const [k, v] of Object.entries(r)) {
+        out[k] = typeof v === 'string' || typeof v === 'number' || v === null
+          ? v
+          : v == null
+            ? null
+            : String(v)
+      }
+      return out
+    })
+
+    const filtered = applyFilters([...coerced], allFilters as Parameters<typeof applyFilters>[1])
+    // Project each filtered row onto block.headers — missing cells → ''.
+    const projectedRows: string[][] = filtered.map((r) =>
+      block.headers.map((h) => {
+        const v = r[h]
+        return v == null ? '' : String(v)
+      }),
+    )
+    return {
+      block: { ...block, rows: projectedRows },
+      drillRawByIndex: filtered,
+    }
+  }, [block, source, isSparse, inline, data, draft, slicerActive, filters])
+}
+
+/**
+ * K — drill modal showing the *full* raw row for one clicked table row.
+ * Field union prefers `block.headers` order, then appends any raw
+ * fields that don't appear in headers (the "hidden columns").
+ */
+export function TableDrillModal({
+  caption,
+  headers,
+  row,
+  onClose,
+}: {
+  caption: string | undefined
+  headers: ReadonlyArray<string>
+  row: Record<string, string | number | null | undefined>
+  onClose: () => void
+}) {
+  const fields = useMemo<string[]>(() => {
+    const seen = new Set<string>(headers)
+    const out: string[] = [...headers]
+    for (const k of Object.keys(row)) {
+      if (!seen.has(k)) {
+        seen.add(k)
+        out.push(k)
+      }
+    }
+    return out
+  }, [headers, row])
+  const hiddenCount = fields.length - headers.length
+  const title = caption
+    ? `${caption} — 행 상세`
+    : '행 상세'
+  return (
+    <Modal open onClose={onClose} title={title} size="lg">
+      <div data-testid="table-drill-modal" className="px-5 py-3">
+        {hiddenCount > 0 && (
+          <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+            {hiddenCount} 개의 숨겨진 컬럼 포함
+          </p>
+        )}
+        <table className="min-w-full text-xs">
+          <tbody>
+            {fields.map((f) => {
+              const v = row[f]
+              const isHidden = !headers.includes(f)
+              return (
+                <tr
+                  key={f}
+                  className={isHidden ? 'bg-amber-50/40 dark:bg-amber-900/10' : ''}
+                >
+                  <th
+                    className="border-b border-gray-200 px-2 py-1 text-left font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200"
+                    scope="row"
+                  >
+                    {f}
+                    {isHidden && (
+                      <span
+                        className="ml-1 rounded bg-amber-100 px-1 text-[9px] font-normal text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                        title="block.headers 에 없는 source 컬럼"
+                      >
+                        hidden
+                      </span>
+                    )}
+                  </th>
+                  <td className="border-b border-gray-100 px-2 py-1 text-gray-800 dark:border-gray-800 dark:text-gray-200">
+                    {v == null ? '' : String(v)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Modal>
   )
 }

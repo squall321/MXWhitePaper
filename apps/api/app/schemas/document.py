@@ -513,6 +513,49 @@ class Options1(BaseModel):
     """
 
 
+class Source(BaseModel):
+    """
+    K — optional raw row source. 미지정 시 block.rows 가 그대로 표시 (today 동작, 100% back-compat). 지정 시 viewer 가 source rows 에 (block.filters + boundSlicers 가 만든 filter) 를 적용한 뒤 block.headers 의 컬럼 이름으로 매핑해 block.rows 를 *덮어쓴* synthetic clone 을 render. K drill modal 은 클릭한 행의 source row 전체 (headers 외 컬럼 포함) 표시. Pivot/Chart/KpiCards 의 source 와 동일 shape. sparse cells 모드에는 적용 안 함.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['inline']
+    rows: list[dict[str, str | float | None]]
+
+
+class Source1(BaseModel):
+    """
+    K — optional raw row source. 미지정 시 block.rows 가 그대로 표시 (today 동작, 100% back-compat). 지정 시 viewer 가 source rows 에 (block.filters + boundSlicers 가 만든 filter) 를 적용한 뒤 block.headers 의 컬럼 이름으로 매핑해 block.rows 를 *덮어쓴* synthetic clone 을 render. K drill modal 은 클릭한 행의 source row 전체 (headers 외 컬럼 포함) 표시. Pivot/Chart/KpiCards 의 source 와 동일 shape. sparse cells 모드에는 적용 안 함.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['data-source']
+    data_source_id: Ulid = Field(..., alias='dataSourceId')
+
+
+class Op(Enum):
+    in_ = 'in'
+    not_in = 'not_in'
+    gt = 'gt'
+    lt = 'lt'
+    between = 'between'
+    top_n = 'top_n'
+    bottom_n = 'bottom_n'
+
+
+class Filter(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    field: str
+    op: Op
+    value: Any
+
+
 class Trend(Enum):
     up = 'up'
     down = 'down'
@@ -609,7 +652,7 @@ class Item(BaseModel):
     """
 
 
-class Source(BaseModel):
+class Source2(BaseModel):
     """
     I (cycle b) — boundSlicers / 자동 계산 (items[i].compute) 을 위한 raw rows. 미지정 시 모든 카드는 정적 (items[i].value 그대로) 으로 렌더. PivotTable / ChartBlock 의 source 와 동일 shape.
     """
@@ -621,7 +664,7 @@ class Source(BaseModel):
     rows: list[dict[str, str | float | None]]
 
 
-class Source1(BaseModel):
+class Source3(BaseModel):
     """
     I (cycle b) — boundSlicers / 자동 계산 (items[i].compute) 을 위한 raw rows. 미지정 시 모든 카드는 정적 (items[i].value 그대로) 으로 렌더. PivotTable / ChartBlock 의 source 와 동일 shape.
     """
@@ -633,17 +676,7 @@ class Source1(BaseModel):
     data_source_id: Ulid = Field(..., alias='dataSourceId')
 
 
-class Op(Enum):
-    in_ = 'in'
-    not_in = 'not_in'
-    gt = 'gt'
-    lt = 'lt'
-    between = 'between'
-    top_n = 'top_n'
-    bottom_n = 'bottom_n'
-
-
-class Filter(BaseModel):
+class Filter1(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
@@ -673,11 +706,11 @@ class KpiCardsBlock(BaseModel):
     type: Literal['kpi-cards']
     id: Ulid
     items: list[Item]
-    source: Source | Source1 | None = None
+    source: Source2 | Source3 | None = None
     """
     I (cycle b) — boundSlicers / 자동 계산 (items[i].compute) 을 위한 raw rows. 미지정 시 모든 카드는 정적 (items[i].value 그대로) 으로 렌더. PivotTable / ChartBlock 의 source 와 동일 shape.
     """
-    filters: list[Filter] | None = None
+    filters: list[Filter1] | None = None
     """
     I (cycle b) — source rows 에 적용할 raw filter. Pivot 의 filters 와 동일 shape. boundSlicers 가 만든 filter 와 concat. source 가 없으면 무시.
     """
@@ -940,7 +973,7 @@ class Annotations2(BaseModel):
     color: str | None = None
 
 
-class Source2(BaseModel):
+class Source4(BaseModel):
     """
     H2 (G5) — optional cross-widget filter / data-source link. 미지정 시 기존처럼 `data.labels`/`data.series[].values` 가 그대로 렌더. 지정 시 viewer 가 source 의 rows 를 `labelField` 로 그룹 + `aggregations[]` 의 (field, agg) 로 시리즈를 재계산해 `data` 를 *덮어쓰는* hydration 결과를 만든다. boundSlicers / filters 가 raw rows 단계에서 적용되어 slicer/timeline 클릭이 chart 도 다시 그리게 한다. Pivot/Table 의 source 와 동일 shape.
     """
@@ -952,7 +985,7 @@ class Source2(BaseModel):
     rows: list[dict[str, str | float | None]]
 
 
-class Source3(BaseModel):
+class Source5(BaseModel):
     """
     H2 (G5) — optional cross-widget filter / data-source link. 미지정 시 기존처럼 `data.labels`/`data.series[].values` 가 그대로 렌더. 지정 시 viewer 가 source 의 rows 를 `labelField` 로 그룹 + `aggregations[]` 의 (field, agg) 로 시리즈를 재계산해 `data` 를 *덮어쓰는* hydration 결과를 만든다. boundSlicers / filters 가 raw rows 단계에서 적용되어 slicer/timeline 클릭이 chart 도 다시 그리게 한다. Pivot/Table 의 source 와 동일 shape.
     """
@@ -996,7 +1029,7 @@ class Aggregation(BaseModel):
     """
 
 
-class Filter1(BaseModel):
+class Filter2(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
@@ -1041,7 +1074,7 @@ class ChartBlock(BaseModel):
     """
     차트 위 도형 (P3) — 사용자가 데이터 좌표계에 직접 얹는 화살표/박스/마커/노트. ImageAnnotation 의 카운터파트이지만 좌표가 (x, y) 데이터 단위.
     """
-    source: Source2 | Source3 | None = None
+    source: Source4 | Source5 | None = None
     """
     H2 (G5) — optional cross-widget filter / data-source link. 미지정 시 기존처럼 `data.labels`/`data.series[].values` 가 그대로 렌더. 지정 시 viewer 가 source 의 rows 를 `labelField` 로 그룹 + `aggregations[]` 의 (field, agg) 로 시리즈를 재계산해 `data` 를 *덮어쓰는* hydration 결과를 만든다. boundSlicers / filters 가 raw rows 단계에서 적용되어 slicer/timeline 클릭이 chart 도 다시 그리게 한다. Pivot/Table 의 source 와 동일 shape.
     """
@@ -1053,7 +1086,7 @@ class ChartBlock(BaseModel):
     """
     H2 (G5) — source rows 를 labelField 로 그룹한 뒤 각 항목을 어떻게 측정할지. source 와 함께 지정. 각 entry → 한 시리즈. agg 미지정 시 'sum'. name 미지정 시 field 자체.
     """
-    filters: list[Filter1] | None = None
+    filters: list[Filter2] | None = None
     """
     H2 (G5) — source rows 에 적용할 raw filter. Pivot 의 filters 와 동일 shape (`{field, op, value}`). boundSlicers 가 만든 filter 와 concat. source 가 없으면 무시.
     """
@@ -1455,7 +1488,7 @@ class Schema(BaseModel):
     fields: list[FieldModel] | None = None
 
 
-class Source4(BaseModel):
+class Source6(BaseModel):
     """
     Inline / CSV source — rows[] 는 paste 시점에 저장.
     """
@@ -1474,7 +1507,7 @@ class Source4(BaseModel):
     """
 
 
-class Source5(BaseModel):
+class Source7(BaseModel):
     """
     Sprint 6 — 같은 문서 안 DataSourceBlock 결과를 raw rows 로 사용. viewer 가 DataSourceBlock 의 query 결과 (`{columns, rows}` 또는 `{data: [...]}`) 를 `Record<field, value>[]` 로 변환해 engine 에 넘긴다. async + 캐시는 TanStack Query 의 DataSourceBlock 쿼리를 그대로 재사용.
     """
@@ -1668,7 +1701,7 @@ class Sort(BaseModel):
     order: Order | None = Order.desc
 
 
-class Filter2(BaseModel):
+class Filter3(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
@@ -1687,7 +1720,7 @@ class PivotTableBlock(BaseModel):
     )
     type: Literal['pivot-table']
     id: Ulid
-    source: Source4 | Source5
+    source: Source6 | Source7
     rows: list[Rows | Rows1]
     """
     Row 축 dimension field 이름 list (e.g., ['department', 'year']). Sprint 5 — 각 항목은 단순 field 이름 (문자열) 이거나 시간 자동 그룹을 위해 {field, group} object. group 은 'year'|'quarter'|'month'|'week'|'day' 중 하나로 raw row 의 date 를 bucket. 미명시 field 는 raw value 사용.
@@ -1710,7 +1743,7 @@ class PivotTableBlock(BaseModel):
     Sprint 5 — 행/열 축 안 가상 항목 (e.g. 'Q1 = Jan + Feb + Mar'). 각 item 은 base aggregation 이 끝난 후 합성. formula 는 다른 같은-축 항목 라벨을 식별자로 참조하는 산술식 (+ - * / 와 괄호). 평가는 각 measure × (반대 축의 각 위치) 마다 한 번. base 항목과 라벨 충돌 시 calculated item 가 추가 (덮어쓰기 X).
     """
     sort: Sort | None = None
-    filters: list[Filter2] | None = None
+    filters: list[Filter3] | None = None
     bound_slicers: list[Ulid] | None = Field(None, alias='boundSlicers')
     """
     Sprint 6 (G2) — listen 할 SlicerBlock id 목록. viewer 가 hydration 단계에서 각 slicer 의 active values 를 filter (`{field, op:'in', value: [...]}`) 로 변환해 기존 filters 에 concat. slicer 가 같은 dataSourceId (또는 inline rows) 를 가리켜야 의미 있음.
@@ -1718,7 +1751,7 @@ class PivotTableBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
-class Source6(BaseModel):
+class Source8(BaseModel):
     """
     Inline source — distinct values 직접 명시. 작은 enum 에 유용.
     """
@@ -1730,7 +1763,7 @@ class Source6(BaseModel):
     rows: list[dict[str, str | float | None]]
 
 
-class Source7(BaseModel):
+class Source9(BaseModel):
     """
     Same DataSourceBlock 의 rows 를 slicer 데이터로 사용. 보통 같은 Pivot 이 가리키는 DataSourceBlock 과 같은 id 를 적는다.
     """
@@ -1760,7 +1793,7 @@ class SlicerBlock(BaseModel):
     """
     어느 field 를 slice 할지 (e.g. 'dept')
     """
-    source: Source6 | Source7 | None = None
+    source: Source8 | Source9 | None = None
     multi_select: bool | None = Field(False, alias='multiSelect')
     """
     true 면 다중 chip 활성 가능 (Ctrl+클릭). false 면 한 번에 하나
@@ -1772,7 +1805,7 @@ class SlicerBlock(BaseModel):
     meta: BlockMeta | None = None
 
 
-class Source8(BaseModel):
+class Source10(BaseModel):
     """
     Inline source — 날짜 도메인을 rows 의 `field` 값에서 추론. SlicerBlock 과 동일 shape.
     """
@@ -1784,7 +1817,7 @@ class Source8(BaseModel):
     rows: list[dict[str, str | float | None]]
 
 
-class Source9(BaseModel):
+class Source11(BaseModel):
     """
     Same DataSourceBlock 의 rows 를 timeline 데이터로 사용.
     """
@@ -1814,7 +1847,7 @@ class TimelineBlock(BaseModel):
     """
     필터링할 날짜 field 이름 (e.g. 'date'). 값은 ISO-8601 (YYYY-MM-DD) 가정.
     """
-    source: Source8 | Source9 | None = None
+    source: Source10 | Source11 | None = None
     min: str | None = None
     """
     도메인 최소값 (ISO date). 명시하지 않으면 rows[field] 의 min.
@@ -2407,6 +2440,14 @@ class TableBlock(BaseModel):
     bound_slicers: list[Ulid] | None = Field(None, alias='boundSlicers')
     """
     ULIDs of SlicerBlocks whose active value sets should filter this table. Each slicer's `field` must match one of the table's `headers` (1:1 column-by-header mapping); columns whose header doesn't match any active slicer pass through unchanged. Empty/missing → no slicer-driven filter, equivalent to slicer 'All' state. Sparse `cells` layout: filter is skipped (merged-cell semantics make row-by-row filtering ambiguous).
+    """
+    source: Source | Source1 | None = None
+    """
+    K — optional raw row source. 미지정 시 block.rows 가 그대로 표시 (today 동작, 100% back-compat). 지정 시 viewer 가 source rows 에 (block.filters + boundSlicers 가 만든 filter) 를 적용한 뒤 block.headers 의 컬럼 이름으로 매핑해 block.rows 를 *덮어쓴* synthetic clone 을 render. K drill modal 은 클릭한 행의 source row 전체 (headers 외 컬럼 포함) 표시. Pivot/Chart/KpiCards 의 source 와 동일 shape. sparse cells 모드에는 적용 안 함.
+    """
+    filters: list[Filter] | None = None
+    """
+    K — source rows 에 적용할 raw filter. boundSlicers 가 만든 filter 와 concat. source 가 없으면 무시. Pivot 의 filters 와 동일 shape.
     """
     meta: BlockMeta | None = None
 

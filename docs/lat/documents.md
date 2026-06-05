@@ -325,6 +325,14 @@
   를 *덮어쓴* synthetic clone 을 render. boundSlicers 에 SlicerBlock /
   TimelineBlock id 를 적으면 PivotTable 과 동일하게 cross-widget filter.
   source 없으면 today 와 동일 — 100% back-compat.
+  ★ **K** — TableBlock 에도 `source` / `filters` optional 추가. 지정 시
+  viewer 가 raw rows 에 filter 를 적용한 뒤 `block.headers` 의 컬럼명으로
+  project 해 `block.rows` 를 *덮은* synthetic clone 을 render. sparse
+  cells 모드는 skip. 행 클릭 → TableDrillModal 이 그 row 의 source 전체
+  컬럼 (headers 에 없는 *hidden* 컬럼 포함) 을 key:value 리스트로 표시.
+  KpiCardsBlock 의 compute card 도 동일 — 카드 클릭 → KpiDrillModal 이
+  `applyFilters([rawRows], baseFilters + per-card when)` 의 결과 rows 를
+  표시. ChartDrillModal / PivotDrillModal 과 동일 modal 언어.
   ★ **J** — drill-down 모달. line/bar/area chart 클릭 시 activeLabel 을
   추출해 [[apps/web/src/components/blocks/pivotEngine.ts#drillChartRows]]
   로 해당 라벨에 기여한 raw rows 를 추출 → ChartDrillModal (Modal 공용

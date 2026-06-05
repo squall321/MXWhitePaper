@@ -520,6 +520,28 @@ export interface TableBlock {
    * ULIDs of SlicerBlocks whose active value sets should filter this table. Each slicer's `field` must match one of the table's `headers` (1:1 column-by-header mapping); columns whose header doesn't match any active slicer pass through unchanged. Empty/missing → no slicer-driven filter, equivalent to slicer 'All' state. Sparse `cells` layout: filter is skipped (merged-cell semantics make row-by-row filtering ambiguous).
    */
   boundSlicers?: Ulid[]
+  /**
+   * K — optional raw row source. 미지정 시 block.rows 가 그대로 표시 (today 동작, 100% back-compat). 지정 시 viewer 가 source rows 에 (block.filters + boundSlicers 가 만든 filter) 를 적용한 뒤 block.headers 의 컬럼 이름으로 매핑해 block.rows 를 *덮어쓴* synthetic clone 을 render. K drill modal 은 클릭한 행의 source row 전체 (headers 외 컬럼 포함) 표시. Pivot/Chart/KpiCards 의 source 와 동일 shape. sparse cells 모드에는 적용 안 함.
+   */
+  source?:
+    | {
+        kind: 'inline'
+        rows: {
+          [k: string]: (string | number | null) | undefined
+        }[]
+      }
+    | {
+        kind: 'data-source'
+        dataSourceId: Ulid
+      }
+  /**
+   * K — source rows 에 적용할 raw filter. boundSlicers 가 만든 filter 와 concat. source 가 없으면 무시. Pivot 의 filters 와 동일 shape.
+   */
+  filters?: {
+    field: string
+    op: 'in' | 'not_in' | 'gt' | 'lt' | 'between' | 'top_n' | 'bottom_n'
+    value: any
+  }[]
   meta?: BlockMeta
 }
 export interface ImageBlock {

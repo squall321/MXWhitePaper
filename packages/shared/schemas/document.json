@@ -470,6 +470,49 @@
           "type": "array",
           "items": { "$ref": "#/$defs/Ulid" }
         },
+        "source": {
+          "description": "K — optional raw row source. 미지정 시 block.rows 가 그대로 표시 (today 동작, 100% back-compat). 지정 시 viewer 가 source rows 에 (block.filters + boundSlicers 가 만든 filter) 를 적용한 뒤 block.headers 의 컬럼 이름으로 매핑해 block.rows 를 *덮어쓴* synthetic clone 을 render. K drill modal 은 클릭한 행의 source row 전체 (headers 외 컬럼 포함) 표시. Pivot/Chart/KpiCards 의 source 와 동일 shape. sparse cells 모드에는 적용 안 함.",
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["kind", "rows"],
+              "additionalProperties": false,
+              "properties": {
+                "kind": { "const": "inline" },
+                "rows": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": { "oneOf": [{"type": "string"}, {"type": "number"}, {"type": "null"}] }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": ["kind", "dataSourceId"],
+              "additionalProperties": false,
+              "properties": {
+                "kind":         { "const": "data-source" },
+                "dataSourceId": { "$ref": "#/$defs/Ulid" }
+              }
+            }
+          ]
+        },
+        "filters": {
+          "type": "array",
+          "description": "K — source rows 에 적용할 raw filter. boundSlicers 가 만든 filter 와 concat. source 가 없으면 무시. Pivot 의 filters 와 동일 shape.",
+          "items": {
+            "type": "object",
+            "required": ["field", "op", "value"],
+            "additionalProperties": false,
+            "properties": {
+              "field": { "type": "string" },
+              "op":    { "enum": ["in", "not_in", "gt", "lt", "between", "top_n", "bottom_n"] },
+              "value": {}
+            }
+          }
+        },
         "meta": { "$ref": "#/$defs/BlockMeta" }
       }
     },
