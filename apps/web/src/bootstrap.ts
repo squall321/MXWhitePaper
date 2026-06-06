@@ -63,7 +63,7 @@ export function bootstrapAuth() {
   try {
      
     console.info('[mxwp] boot', {
-      apiUrl: (import.meta.env.VITE_API_URL as string) || '/api/v1',
+      apiUrl: (import.meta.env.VITE_API_URL as string) || `${import.meta.env.BASE_URL}api/v1`,
       hasAccessToken,
       navigatorOnline:
         typeof navigator !== 'undefined' ? navigator.onLine : 'n/a',

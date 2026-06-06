@@ -98,7 +98,7 @@ export async function revokeShareLink(token: string): Promise<void> {
  *   - 401 from the password gate isn't intercepted into a refresh loop.
  */
 function publicClient(): AxiosInstance {
-  const baseURL = (import.meta.env.VITE_API_URL as string) || '/api/v1'
+  const baseURL = (import.meta.env.VITE_API_URL as string) || `${import.meta.env.BASE_URL}api/v1`
   return axios.create({ baseURL, timeout: 15_000, withCredentials: false })
 }
 

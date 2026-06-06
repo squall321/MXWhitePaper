@@ -3,7 +3,13 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
 
+// Served at the root by default; behind the HWAX portal it's reverse-proxied under a sub-path,
+// so set VITE_BASE_PATH=/mx-white-paper/ (build AND dev) → assets/router/api all sit under it.
+const BASE = process.env.VITE_BASE_PATH || '/'
+const API_PREFIX = `${BASE}api`.replace(/\/{2,}/g, '/') // "/api" or "/mx-white-paper/api"
+
 export default defineConfig({
+  base: BASE,
   plugins: [react()],
   resolve: {
     alias: {
@@ -27,10 +33,13 @@ export default defineConfig({
       // host's 127.0.0.1:8800 — set VITE_PROXY_TARGET in .env (e.g.
       // http://<server-public-ip>:8800) to bypass loopback and dial the
       // host's external interface instead.
-      '/api': {
+      // Match the base-prefixed path (e.g. /mx-white-paper/api) and strip the base back to
+      // /api before forwarding, so the backend (which serves /api/v1) is reached either way.
+      [API_PREFIX]: {
         target: process.env.VITE_PROXY_TARGET || 'http://127.0.0.1:8800',
         changeOrigin: true,
         secure: false,
+        rewrite: (p) => p.replace(new RegExp(`^${BASE}`), '/'),
       },
     },
   },

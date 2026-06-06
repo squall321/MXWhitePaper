@@ -4,7 +4,9 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios'
 
-const baseURL = (import.meta.env.VITE_API_URL as string) || '/api/v1'
+// Default follows the app's base path so it works both standalone (base "/") and behind the
+// HWAX portal sub-path (base "/mx-white-paper/" → "/mx-white-paper/api/v1"). Override with VITE_API_URL.
+const baseURL = (import.meta.env.VITE_API_URL as string) || `${import.meta.env.BASE_URL}api/v1`
 
 export const apiClient = axios.create({
   baseURL,
