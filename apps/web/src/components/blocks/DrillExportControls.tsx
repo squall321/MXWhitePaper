@@ -53,10 +53,12 @@ export function DrillExportControls({
   const scheduleFlash = (state: 'ok' | 'fail') => {
     setCopyFlash(state)
     if (flashTimer.current !== null) window.clearTimeout(flashTimer.current)
+    // Polish 3 — 1.5s → 2.5s. SR 사용자가 polite live region 을 끝까지
+    // 듣고 사용자도 success 확인할 수 있는 여유.
     flashTimer.current = window.setTimeout(() => {
       setCopyFlash('idle')
       flashTimer.current = null
-    }, 1500)
+    }, 2500)
   }
 
   const handleCsv = () => {
@@ -97,7 +99,7 @@ export function DrillExportControls({
         data-testid={`${testIdPrefix}-csv`}
         aria-label="UTF-8 BOM 포함 CSV 다운로드"
         title="UTF-8 BOM 포함 CSV (Excel 한글 호환)"
-        className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
+        className="rounded border border-gray-300 px-2 py-1 text-xs min-h-[24px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
       >
         <span aria-hidden="true">📥 </span>CSV
       </button>
@@ -107,7 +109,7 @@ export function DrillExportControls({
         data-testid={`${testIdPrefix}-tsv`}
         aria-label="UTF-8 BOM 포함 TSV 다운로드"
         title="UTF-8 BOM 포함 TSV (Excel 이 더 견고하게 인식)"
-        className="rounded border border-gray-300 px-2 py-0.5 text-[11px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
+        className="rounded border border-gray-300 px-2 py-1 text-xs min-h-[24px] hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
       >
         <span aria-hidden="true">📥 </span>TSV
       </button>
@@ -118,7 +120,9 @@ export function DrillExportControls({
         aria-label="TSV 를 클립보드로 복사"
         title="TSV 를 클립보드로 복사 (스프레드시트 paste 친화)"
         className={
-          'rounded border px-2 py-0.5 text-[11px] transition-colors ' +
+          // Polish 3 — motion-safe gate: prefers-reduced-motion 사용자에게 색
+          // 깜박임 줄임. transition 만 끄는 거라 state 자체는 동일.
+          'rounded border px-2 py-1 text-xs min-h-[24px] motion-safe:transition-colors ' +
           (copyFlash === 'ok'
             ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
             : copyFlash === 'fail'

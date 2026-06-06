@@ -54,16 +54,16 @@ describe('drillSingleRowToCsv', () => {
       amount: 100,
       region: 'Seoul',
     })
-    expect(csv).toBe('__field__,__value__\r\ndept,Sales\r\namount,100\r\nregion,Seoul')
+    expect(csv).toBe('\uE000field,\uE001value\r\ndept,Sales\r\namount,100\r\nregion,Seoul')
   })
 
   it('fields not present in row → empty value', () => {
     const csv = drillSingleRowToCsv(['a', 'b'], { a: 1 })
-    expect(csv).toBe('__field__,__value__\r\na,1\r\nb,')
+    expect(csv).toBe('\uE000field,\uE001value\r\na,1\r\nb,')
   })
 
   it('field order is preserved from caller (header columns first)', () => {
     const csv = drillSingleRowToCsv(['a', 'z', 'm'], { z: 2, m: 3, a: 1 })
-    expect(csv).toBe('__field__,__value__\r\na,1\r\nz,2\r\nm,3')
+    expect(csv).toBe('\uE000field,\uE001value\r\na,1\r\nz,2\r\nm,3')
   })
 })

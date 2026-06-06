@@ -107,6 +107,7 @@ describe('<DrillExportControls /> — copy flash timer cleanup pattern (Fix B)',
     expect(src).toMatch(/useEffect\(\(\)\s*=>\s*\{\s*return\s*\(\)\s*=>\s*\{[\s\S]*?clearTimeout\(flashTimer\.current\)/)
   })
   it('cancels the previous timer before scheduling a new one (race-free)', () => {
-    expect(src).toMatch(/if\s*\(flashTimer\.current\s*!==\s*null\)\s*window\.clearTimeout\(flashTimer\.current\)\s*\n\s*flashTimer\.current\s*=\s*window\.setTimeout/)
+    // 두 호출 사이에 주석이 들어가도 매칭하도록 [\s\S]*? 로 완화.
+    expect(src).toMatch(/if\s*\(flashTimer\.current\s*!==\s*null\)\s*window\.clearTimeout\(flashTimer\.current\)[\s\S]*?flashTimer\.current\s*=\s*window\.setTimeout/)
   })
 })

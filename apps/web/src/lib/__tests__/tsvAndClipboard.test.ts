@@ -43,7 +43,7 @@ describe('drillSingleRowToTsv', () => {
       dept: 'Sales',
       amount: 100,
     })
-    expect(tsv).toBe('__field__\t__value__\r\ndept\tSales\r\namount\t100')
+    expect(tsv).toBe('\uE000field\t\uE001value\r\ndept\tSales\r\namount\t100')
   })
 })
 

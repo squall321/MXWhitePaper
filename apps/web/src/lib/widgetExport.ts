@@ -147,15 +147,20 @@ export function drillRowsToCsv(
  * Two columns: field name + value. caller 가 fields 순서를 정의 (header
  * 컬럼 먼저 → hidden 컬럼).
  *
- * S3 — 컬럼명 collision 회피. 사용자 source row 가 'field' / 'value'
- * 라는 키를 가질 수도 있어 header 가 ambiguous. unicode 비가시 wrapper
- * (`__` prefix) 로 unique 보장 + strict parser 가 user 컬럼과 구별 가능.
+ * Polish 1 — 컬럼명 collision 회피. user data 가 'field'/'value' 뿐
+ * 아니라 '__field__' 같은 dunder 도 가질 수 있어 (Python ORM, scraped
+ * JSON, scientific data) — Unicode Private Use Area (U+E000~U+F8FF) 의
+ * 문자 prefix 로 strict collision 회피. 일반 텍스트 / data interchange
+ * 에 절대 등장 안 하는 codepoint.
  */
+export const DRILL_HEADER_FIELD = 'field'
+export const DRILL_HEADER_VALUE = 'value'
+
 export function drillSingleRowToCsv(
   fields: ReadonlyArray<string>,
   row: Record<string, unknown>,
 ): string {
-  return rowsToCsv(['__field__', '__value__'], fields.map((f) => [f, row[f]]))
+  return rowsToCsv([DRILL_HEADER_FIELD, DRILL_HEADER_VALUE], fields.map((f) => [f, row[f]]))
 }
 
 /** UTF-8 BOM — Excel 의 한글 깨짐 회피용. CSV/TSV 앞에 붙여서 download. */
@@ -188,12 +193,12 @@ export function drillRowsToTsv(
   return rowsToTsv(fields, body)
 }
 
-/** N — single-row TSV (table). S3 — header collision 회피, CSV 와 동일. */
+/** N — single-row TSV (table). Polish 1 — Private Use Area prefix 로 collision 강화. */
 export function drillSingleRowToTsv(
   fields: ReadonlyArray<string>,
   row: Record<string, unknown>,
 ): string {
-  return rowsToTsv(['__field__', '__value__'], fields.map((f) => [f, row[f]]))
+  return rowsToTsv([DRILL_HEADER_FIELD, DRILL_HEADER_VALUE], fields.map((f) => [f, row[f]]))
 }
 
 /**
