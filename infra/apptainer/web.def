@@ -47,9 +47,11 @@ From: node:20-bookworm-slim
 %startscript
     # PRODUCTION: serve the BAKED, prebuilt dist statically. No pnpm, no build, no network.
     # `serve -s` does SPA fallback (any unknown path → index.html). The dist already has the base
-    # path baked into its asset/router URLs, so the front nginx must serve it under that prefix
-    # (the HWAX portal passes /mx-white-paper/ through to here).
-    exec serve -s /opt/web/dist -l 5173
+    # path baked into its asset/router URLs, so the front nginx serves it under that prefix
+    # (the HWAX portal strips /mx-white-paper/ and forwards to this serve at the root).
+    # Detach with setsid+nohup so the daemon survives the startscript shell returning (an `exec`
+    # here gets reaped — the instance then has NO running process and :5173 never opens).
+    setsid nohup serve -s /opt/web/dist -l tcp://0.0.0.0:5173 > /tmp/serve.log 2>&1 < /dev/null &
 
 %help
     MX White Paper Web container (static-serve of a prebuilt SPA).
