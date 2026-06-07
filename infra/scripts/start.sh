@@ -236,24 +236,14 @@ if [ "${MXWP_COREPACK_OFFLINE:-0}" = "1" ]; then
   COREPACK_NET_ARGS=(--env "COREPACK_ENABLE_NETWORK=0")
 fi
 
-# Sub-path serving: set MXWP_BASE_PATH=/mx-white-paper/ in .env to run behind the HWAX portal
-# (assets/router under the prefix; API at <prefix>api/v1). Unset → root, unchanged behaviour.
-MXWP_BASE="${MXWP_BASE_PATH:-/}"
-VITE_API_URL_VAL="${MXWP_BASE%/}/api/v1"   # "/api/v1" at root, "/mx-white-paper/api/v1" behind portal
-
+# The web instance serves the PREBUILT SPA dist baked into web.sif (web.def → `serve -s`). It does
+# NOT build at start, so no pnpm/corepack/proxy/VITE env is needed here. The SPA's base path was
+# baked at ONLINE build time (MXWP_BASE_PATH=/mx-white-paper/ pnpm build → apptainer build), and the
+# front layer (HWAX portal nginx) serves it under /mx-white-paper/ and routes /mx-white-paper/api →
+# the API. The bind/web-tmp are kept only so the interactive `apptainer run` (dev) path still works.
 start_instance "$INST_WEB" "$WEB_SIF" \
   --bind "$REPO_ROOT:/workspace" \
-  --bind "$DATA_DIR/web-tmp:/tmp" \
-  --env "VITE_BASE_PATH=${MXWP_BASE}" \
-  --env "VITE_API_URL=${VITE_API_URL_VAL}" \
-  --env "VITE_PROXY_TARGET=${VITE_PROXY_TARGET:-http://127.0.0.1:${API_PORT}}" \
-  --env "HTTP_PROXY=${MXWP_PROXY}" \
-  --env "HTTPS_PROXY=${MXWP_PROXY}" \
-  --env "NO_PROXY=localhost,127.0.0.1,::1" \
-  "${COREPACK_NET_ARGS[@]}" \
-  --env "COREPACK_ENABLE_STRICT=0" \
-  --env "COREPACK_ENABLE_DOWNLOAD_PROMPT=0" \
-  --env "NODE_TLS_REJECT_UNAUTHORIZED=${MXWP_NODE_TLS_VERIFY:-0}"
+  --bind "$DATA_DIR/web-tmp:/tmp"
 
 echo
 echo "✓ stack started"

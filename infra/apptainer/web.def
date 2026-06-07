@@ -1,24 +1,36 @@
 Bootstrap: docker
 From: node:20-bookworm-slim
 
+# ── How this image serves the web ──────────────────────────────────────────────────────────────
+# The SPA is built ONLINE (on a host that can reach npm) BEFORE `apptainer build`, and the built
+# `apps/web/dist` is BAKED into the image (%files below). The container then serves that static dist
+# with a tiny baked-in static server (`serve`) — it does NOT run pnpm/corepack at start, so it works
+# on cae00's TLS-intercept network where npm is unreachable.
+#
+# The /api proxy that vite-dev/preview used to provide is handled by the FRONT layer instead: behind
+# the HWAX portal, nginx forwards /mx-white-paper/api → the API. (Standalone, point your own proxy or
+# set VITE_API_URL to the API origin.)
+#
+# CRITICAL: the dist is base-path-specific. Build it ONLINE with the SAME prefix cae00 serves under:
+#   MXWP_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build   (then `apptainer build web.sif`)
+
 %labels
     Maintainer  squall321@gmail.com
     Component   mxwp-web
-    Version     0.1.0
+    Version     0.2.0
+
+%files
+    # Prebuilt SPA (must exist on the ONLINE builder before `apptainer build`).
+    apps/web/dist /opt/web/dist
 
 %post
     set -eux
-    apt-get update
-    apt-get install -y --no-install-recommends git ca-certificates
-    rm -rf /var/lib/apt/lists/*
-    # Install pnpm directly via npm instead of corepack — corepack does a
-    # network-bound integrity check on EVERY invocation that fails behind
-    # SSL-intercepting corporate proxies (UNABLE_TO_VERIFY_LEAF_SIGNATURE),
-    # and COREPACK_ENABLE_NETWORK=0 makes it refuse to use the cached
-    # binary too. Skipping corepack avoids that catch-22.
+    # Bake a tiny static file server while we're still online; no runtime npm needed.
+    npm install -g serve@14
+    # Keep pnpm for the interactive %runscript dev path (online machines only).
     corepack disable 2>/dev/null || true
     npm install -g pnpm@9.12.0
-    mkdir -p /workspace
+    mkdir -p /workspace /opt/web/dist
 
 %environment
     export PATH=/usr/local/bin:$PATH
@@ -26,26 +38,23 @@ From: node:20-bookworm-slim
     export PATH=$PNPM_HOME:$PATH
 
 %runscript
-    # Interactive DEV (HMR). For production serving use the instance (%startscript) below.
+    # Interactive DEV (HMR) — ONLINE machines only (needs pnpm/network). Not used on cae00.
     cd /workspace
     pnpm install --frozen-lockfile=false
     pnpm schema:gen
     exec pnpm --filter @mx/web dev --host 0.0.0.0 --port 5173 "$@"
 
 %startscript
-    # PRODUCTION: build the SPA (base baked in from VITE_BASE_PATH) then serve the built dist via
-    # `vite preview` (static + the /api proxy declared in vite.config preview block). start.sh
-    # injects VITE_BASE_PATH / VITE_API_URL / VITE_PROXY_TARGET, so the build + preview pick up the
-    # portal sub-path automatically (unset → root, unchanged).
-    cd /workspace
-    pnpm install --frozen-lockfile=false >/tmp/pnpm-install.log 2>&1
-    pnpm schema:gen >>/tmp/pnpm-install.log 2>&1
-    pnpm --filter @mx/web build >>/tmp/web-build.log 2>&1
-    exec pnpm --filter @mx/web preview --host 0.0.0.0 --port 5173
+    # PRODUCTION: serve the BAKED, prebuilt dist statically. No pnpm, no build, no network.
+    # `serve -s` does SPA fallback (any unknown path → index.html). The dist already has the base
+    # path baked into its asset/router URLs, so the front nginx must serve it under that prefix
+    # (the HWAX portal passes /mx-white-paper/ through to here).
+    exec serve -s /opt/web/dist -l 5173
 
 %help
-    MX White Paper Web container.
-    Instance (production): build + `vite preview` serving dist  ← apptainer instance start (%startscript)
-    Run (interactive dev): `vite dev` with HMR                  ← apptainer run (%runscript)
-    Build sif: apptainer build infra/apptainer/web.sif infra/apptainer/web.def
-    Behind the HWAX portal: set MXWP_BASE_PATH=/mx-white-paper/ in .env (start.sh threads it through).
+    MX White Paper Web container (static-serve of a prebuilt SPA).
+    PRODUCTION (cae00, no build): online → `MXWP_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build`
+      → `apptainer build web.sif web.def` (bakes apps/web/dist) → push via images-to-drive.sh →
+      cae00 `images-from-drive.sh` + `start.sh` → instance runs `serve -s /opt/web/dist`.
+    DEV (online): `apptainer run web.sif` → vite dev with HMR.
+    /api is proxied by the front layer (HWAX portal nginx: /mx-white-paper/api → API), not here.

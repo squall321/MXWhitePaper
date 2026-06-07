@@ -17,22 +17,39 @@ One env var drives everything: **`MXWP_BASE_PATH`** (in `.env`).
 - `VITE_BASE_PATH=$MXWP_BASE_PATH` — Vite `base` (assets), router `basename`, api-client default.
 - `VITE_API_URL=<prefix>api/v1` — so the FE calls `/mx-white-paper/api/v1`.
 
-## Production = build + serve (not the dev server)
+## Production = prebuilt dist baked into web.sif, served by `serve` (NO build on the server)
 
-The web instance no longer runs `vite dev` for production. `infra/apptainer/web.def` `%startscript`
-now **builds** the SPA (base baked in) and serves the built `dist` via **`vite preview`**:
+> **IMPORTANT for cae00 (corporate TLS-intercept network): npm/corepack are UNREACHABLE there**
+> (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`), so the web container must NOT run pnpm at start. It doesn't.
 
+`infra/apptainer/web.def`:
+- `%files apps/web/dist /opt/web/dist` — the **prebuilt SPA is baked into the image** at
+  `apptainer build` time (online).
+- `%post` bakes a tiny static server (`serve@14`).
+- `%startscript` = **`exec serve -s /opt/web/dist -l 5173`** — pure static serve, SPA fallback, no
+  pnpm, no network. `serve` serves at the **root**, so the front layer (portal) **strips**
+  `/mx-white-paper/`; the SPA's asset/router/api URLs are baked with the prefix.
+- `/api` is handled by the **front layer**, not the container: the portal routes
+  `/mx-white-paper/api/` → the API `:8800` (`HWAXPortal/backend/config/routes.env`).
+- `%runscript` still runs `vite dev` for interactive development on online machines only.
+
+### Online build → Drive → cae00 (no build anywhere on cae00)
+
+```bash
+# ONLINE host (can reach npm):
+MXWP_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build        # base baked into dist
+apptainer build infra/apptainer/web.sif infra/apptainer/web.def    # bakes dist into web.sif
+./infra/scripts/images-to-drive.sh                                 # web.sif → Google Drive
+
+# cae00 (no npm, no Docker Hub):
+./infra/scripts/images-from-drive.sh    # pulls web.sif (+ verifies sha256) into infra/apptainer/
+./infra/scripts/start.sh                # build.sh skips (sif exists); web runs `serve` (no build)
 ```
-pnpm --filter @mx/web build      # VITE_BASE_PATH baked into asset/router/api URLs
-vite preview --host 0.0.0.0 --port 5173
-```
 
-`vite preview` serves `dist` under the base AND handles the `/api` proxy — but note **preview does
-NOT inherit `server.proxy`**, so `apps/web/vite.config.ts` declares a separate `preview` block
-referencing the same `API_PROXY` object (matches `<base>api`, rewrites the prefix back to `/api`
-before forwarding to `VITE_PROXY_TARGET` → the API on :8800).
-
-`apptainer run` (`%runscript`) still launches **`vite dev`** (HMR) for interactive development.
+New env in `.env`: `MXWP_IMAGES_REMOTE=MxwpDrive:MXWhitePaper/images` (reuses the same rclone remote
+as `MXWP_DRIVE_REMOTE`). Scripts: `infra/scripts/images-to-drive.sh` / `images-from-drive.sh`
+(mirror HWAXPortal's). postgres/meili/minio/api sifs change rarely — ship them once with
+`MXWP_IMAGES_ALL=1`; normally only `web.sif` is re-shipped.
 
 ## Files changed (for reference)
 
