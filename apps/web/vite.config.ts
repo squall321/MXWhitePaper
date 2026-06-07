@@ -66,57 +66,22 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id: string) {
-          // ── First-party (src/) splits ────────────────────────────────────
-          // The two giant chunks from the prior cycle were SectionEditor
-          // (~1.3 MB) and BlockRenderer (~1.2 MB). Those stayed huge because
-          // the heavy block editors (whiteboard / form / org-chart / chart /
-          // math …) all rolled up into the same compile unit. Forcing the
-          // SVG-heavy WhiteboardBlockEditor and the validation-heavy
-          // FormBlockEditor into their own chunks lets Rollup keep their
-          // dependency closure (DnD-kit subtrees, recharts in form preview)
-          // out of the editor critical path. The `lazy()` calls in
-          // BlockRenderer.tsx ensure those chunks are only fetched when a
-          // user actually opens that block in edit mode.
-          if (id.includes('/src/features/editor/blocks/WhiteboardBlockEditor')) return 'block-whiteboard'
-          if (id.includes('/src/features/editor/blocks/FormBlockEditor')) return 'block-form'
-          if (id.includes('/src/features/editor/blocks/OrgChartBlockEditor')) return 'block-org-chart'
-          if (id.includes('/src/features/editor/blocks/FlowBlockEditor')) return 'block-flow'
-          if (id.includes('/src/features/editor/blocks/GanttBlockEditor')) return 'block-gantt'
-          if (id.includes('/src/features/editor/blocks/CalculatorBlockEditor')) return 'block-calculator'
-          if (id.includes('/src/features/editor/blocks/DashboardEmbedBlockEditor')) return 'block-dashboard-embed'
-          if (id.includes('/src/features/editor/blocks/DataSourceBlockEditor')) return 'block-data-source'
-          if (id.includes('/src/features/editor/blocks/KpiCardsBlockEditor')) return 'block-kpi'
-          if (id.includes('/src/features/editor/blocks/GalleryBlockEditor')) return 'block-gallery'
-          if (id.includes('/src/features/editor/blocks/ChartBlockEditor')) return 'block-chart'
-          if (id.includes('/src/features/editor/blocks/MathBlockEditor')) return 'block-math'
-          // Presentation surface — only needed under /docs/:slug/present.
-          if (id.includes('/src/features/presentation/') || id.includes('/src/pages/Presentation')) return 'presentation'
-          // Rarely-shown editor modals — keep them off the critical path.
-          if (
-            id.includes('/src/features/editor/components/BulkActionsBar') ||
-            id.includes('/src/features/editor/components/ConflictMergeModal') ||
-            id.includes('/src/features/editor/components/KeyboardShortcutsModal') ||
-            id.includes('/src/features/editor/components/FindReplaceModal') ||
-            id.includes('/src/features/editor/components/SectionLinkPicker') ||
-            id.includes('/src/features/block-library/SnippetPicker') ||
-            id.includes('/src/features/block-library/SnippetSaveModal')
-          ) {
-            return 'editor-modals'
-          }
-
-          // ── Vendor splits (existing) ────────────────────────────────────
+          // ── First-party (src/) splits: NONE ──────────────────────────────
+          // We used to force the heavy block editors / presentation / modals into named manual
+          // chunks. But those app modules import shared vendor libs (recharts, react-query, router)
+          // AND each other, so a manual split created cross-chunk CIRCULAR dependencies
+          // (vendor↔block-chart↔editor-modals↔query/router, vendor↔presentation↔router) that crash
+          // at runtime with init-order errors: "Cannot access 'L_'/'W_' before initialization",
+          // "E is not a function", "index.mjs:1". The blocks are ALREADY lazy()-imported in
+          // BlockRenderer.tsx, so Rollup code-splits them on its own — let it, and don't force any
+          // src/ chunk. (Vendor libs below are still split; node_modules has no app-level cycles.)
           if (!id.includes('node_modules')) return undefined
           if (id.includes('@blocknote') || id.includes('@mantine')) return 'editor'
-          if (id.includes('mermaid')) return 'mermaid'
-          // Excalidraw ships its own giant runtime (~4 MB) for the headless
-          // exportToSvg path used by FlowBlock. Isolate so the main
-          // bundle / vendor chunk doesn't carry it for docs that never
-          // touch an excalidraw flow.
-          if (id.includes('@excalidraw/excalidraw') || id.includes('roughjs')) return 'excalidraw'
-          // Cytoscape + cose-bilkent are heavy; isolate them so /dep-graph's
-          // dynamic import can fetch them on demand without polluting the
-          // editor critical path.
-          if (id.includes('cytoscape') || id.includes('cose-base')) return 'graph-cytoscape'
+          // NOTE: mermaid / excalidraw / cytoscape are NOT force-chunked. They're heavy but they
+          // import shared vendor libs and each other, so a manual chunk created cross-chunk circular
+          // deps (vendor↔mermaid↔excalidraw↔vendor) → runtime init-order crashes. They're already
+          // dynamically import()-ed where used, so Rollup splits them on demand on its own — forcing
+          // a named chunk only re-introduces the cycle. Let them fall through to 'vendor'.
           // recharts@3 + its internal redux store and d3 form a tight circular-dependency cluster.
           // Splitting ANY of it into a separate chunk creates a cross-chunk circular dep that breaks
           // module init order ("legendSelectors: E is not a function" / "Cannot access W_ before
