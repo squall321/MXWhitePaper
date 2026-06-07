@@ -117,7 +117,15 @@ export default defineConfig({
           // dynamic import can fetch them on demand without polluting the
           // editor critical path.
           if (id.includes('cytoscape') || id.includes('cose-base')) return 'graph-cytoscape'
-          if (id.includes('recharts') || id.includes('d3-')) return 'charts'
+          // recharts@3 has an internal redux store (redux/react-redux/reselect/@reduxjs/toolkit).
+          // Those MUST land in the SAME chunk as recharts, or a recharts selector factory runs
+          // before reselect is initialized → "legendSelectors.js: E is not a function". Route the
+          // redux closure into 'charts' alongside recharts. (immer is pulled by @reduxjs/toolkit.)
+          if (
+            id.includes('recharts') || id.includes('d3-') ||
+            id.includes('node_modules/redux/') || id.includes('react-redux') ||
+            id.includes('reselect') || id.includes('@reduxjs/toolkit') || id.includes('node_modules/immer/')
+          ) return 'charts'
           if (id.includes('katex')) return 'math'
           if (id.includes('@dnd-kit')) return 'dnd'
           if (id.includes('@tanstack')) return 'query'
