@@ -72,6 +72,7 @@ drift 가 의심되면 사용자에게 알릴 것 (수정해도 되는지 확인
 | `docs/01-plan/`, `docs/02-design/` (PDCA) | **왜 / 언제** 이렇게 만들기로 했나? |
 | `docs/04-report/` | **무엇을** 만들었나 (완료 리포트) |
 | `docs/deployment-playbook.md` | 어떻게 배포하나? |
+| `docs/HWAX-PORTAL-INTEGRATION.md` | HWAX 포탈 서브경로(`/mx-white-paper/`) 서빙 — `MXWP_BASE_PATH`, build+preview |
 | `docs/copilot/` | Copilot 에 위임할 작업 명세 |
 | `docs/llm-document-formats.md` | 외부 LLM 이 import 될 docx/pptx 를 어떻게 만들어야 하나 |
 | `docs/llm-widgets-via-api.md` | 외부 LLM 이 풍부한 위젯 (callout/chart/tabs 등) 을 어떻게 API 로 만드나 |

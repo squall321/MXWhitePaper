@@ -236,10 +236,16 @@ if [ "${MXWP_COREPACK_OFFLINE:-0}" = "1" ]; then
   COREPACK_NET_ARGS=(--env "COREPACK_ENABLE_NETWORK=0")
 fi
 
+# Sub-path serving: set MXWP_BASE_PATH=/mx-white-paper/ in .env to run behind the HWAX portal
+# (assets/router under the prefix; API at <prefix>api/v1). Unset → root, unchanged behaviour.
+MXWP_BASE="${MXWP_BASE_PATH:-/}"
+VITE_API_URL_VAL="${MXWP_BASE%/}/api/v1"   # "/api/v1" at root, "/mx-white-paper/api/v1" behind portal
+
 start_instance "$INST_WEB" "$WEB_SIF" \
   --bind "$REPO_ROOT:/workspace" \
   --bind "$DATA_DIR/web-tmp:/tmp" \
-  --env "VITE_API_URL=/api/v1" \
+  --env "VITE_BASE_PATH=${MXWP_BASE}" \
+  --env "VITE_API_URL=${VITE_API_URL_VAL}" \
   --env "VITE_PROXY_TARGET=${VITE_PROXY_TARGET:-http://127.0.0.1:${API_PORT}}" \
   --env "HTTP_PROXY=${MXWP_PROXY}" \
   --env "HTTPS_PROXY=${MXWP_PROXY}" \

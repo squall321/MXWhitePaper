@@ -26,18 +26,26 @@ From: node:20-bookworm-slim
     export PATH=$PNPM_HOME:$PATH
 
 %runscript
+    # Interactive DEV (HMR). For production serving use the instance (%startscript) below.
     cd /workspace
     pnpm install --frozen-lockfile=false
     pnpm schema:gen
     exec pnpm --filter @mx/web dev --host 0.0.0.0 --port 5173 "$@"
 
 %startscript
+    # PRODUCTION: build the SPA (base baked in from VITE_BASE_PATH) then serve the built dist via
+    # `vite preview` (static + the /api proxy declared in vite.config preview block). start.sh
+    # injects VITE_BASE_PATH / VITE_API_URL / VITE_PROXY_TARGET, so the build + preview pick up the
+    # portal sub-path automatically (unset → root, unchanged).
     cd /workspace
     pnpm install --frozen-lockfile=false >/tmp/pnpm-install.log 2>&1
     pnpm schema:gen >>/tmp/pnpm-install.log 2>&1
-    exec pnpm --filter @mx/web dev --host 0.0.0.0 --port 5173
+    pnpm --filter @mx/web build >>/tmp/web-build.log 2>&1
+    exec pnpm --filter @mx/web preview --host 0.0.0.0 --port 5173
 
 %help
-    MX White Paper Web (Vite dev) container.
-    Build:   apptainer build infra/apptainer/web.sif infra/apptainer/web.def
-    Run:     apptainer instance start --bind <repo>:/workspace infra/apptainer/web.sif mxwp_web
+    MX White Paper Web container.
+    Instance (production): build + `vite preview` serving dist  ← apptainer instance start (%startscript)
+    Run (interactive dev): `vite dev` with HMR                  ← apptainer run (%runscript)
+    Build sif: apptainer build infra/apptainer/web.sif infra/apptainer/web.def
+    Behind the HWAX portal: set MXWP_BASE_PATH=/mx-white-paper/ in .env (start.sh threads it through).

@@ -8,6 +8,17 @@ import path from 'node:path'
 const BASE = process.env.VITE_BASE_PATH || '/'
 const API_PREFIX = `${BASE}api`.replace(/\/{2,}/g, '/') // "/api" or "/mx-white-paper/api"
 
+// Shared by both `server` (dev) and `preview` (serves the production build) — vite preview does
+// NOT inherit server.proxy, so we reference the same object in both.
+const API_PROXY = {
+  [API_PREFIX]: {
+    target: process.env.VITE_PROXY_TARGET || 'http://127.0.0.1:8800',
+    changeOrigin: true,
+    secure: false,
+    rewrite: (p: string) => p.replace(new RegExp(`^${BASE}`), '/'),
+  },
+}
+
 export default defineConfig({
   base: BASE,
   plugins: [react()],
@@ -27,21 +38,22 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     allowedHosts: true,
-    proxy: {
-      // Default: host loopback. On installs where Apptainer puts each
-      // instance into its own netns, the web container can't reach the
-      // host's 127.0.0.1:8800 — set VITE_PROXY_TARGET in .env (e.g.
-      // http://<server-public-ip>:8800) to bypass loopback and dial the
-      // host's external interface instead.
-      // Match the base-prefixed path (e.g. /mx-white-paper/api) and strip the base back to
-      // /api before forwarding, so the backend (which serves /api/v1) is reached either way.
-      [API_PREFIX]: {
-        target: process.env.VITE_PROXY_TARGET || 'http://127.0.0.1:8800',
-        changeOrigin: true,
-        secure: false,
-        rewrite: (p) => p.replace(new RegExp(`^${BASE}`), '/'),
-      },
-    },
+    // Default: host loopback. On installs where Apptainer puts each instance into its own netns,
+    // the web container can't reach 127.0.0.1:8800 — set VITE_PROXY_TARGET in .env (e.g.
+    // http://<server-public-ip>:8800) to dial the host's external interface instead.
+    // Match the base-prefixed path (e.g. /mx-white-paper/api) and strip the base back to /api
+    // before forwarding, so the backend (which serves /api/v1) is reached either way.
+    proxy: API_PROXY,
+  },
+  // `vite preview` (used to serve the production build) does NOT inherit server.proxy, so the
+  // same /api forwarding must be declared here too. This is how we run behind the HWAX portal:
+  // build with VITE_BASE_PATH, then `vite preview` serves the prefixed dist + proxies /…/api.
+  preview: {
+    host: true,
+    port: 5173,
+    strictPort: true,
+    allowedHosts: true,
+    proxy: API_PROXY,
   },
   build: {
     outDir: 'dist',
