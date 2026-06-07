@@ -245,6 +245,22 @@ start_instance "$INST_WEB" "$WEB_SIF" \
   --bind "$REPO_ROOT:/workspace" \
   --bind "$DATA_DIR/web-tmp:/tmp"
 
+# Don't rely on the SIF %startscript firing in every apptainer environment — explicitly (re)launch
+# the static server inside the instance, detached. Idempotent: skip if :5173 already answers.
+if ! curl -fsS -m 2 "http://127.0.0.1:${WEB_PORT}/" >/dev/null 2>&1; then
+  "$APPTAINER" exec "instance://$INST_WEB" sh -c \
+    "setsid nohup serve -s /opt/web/dist -l tcp://0.0.0.0:${WEB_PORT} > /tmp/serve.log 2>&1 < /dev/null &" \
+    >/dev/null 2>&1 || true
+  for _i in $(seq 1 15); do
+    curl -fsS -m 2 "http://127.0.0.1:${WEB_PORT}/" >/dev/null 2>&1 && break; sleep 1
+  done
+fi
+if curl -fsS -m 2 "http://127.0.0.1:${WEB_PORT}/" >/dev/null 2>&1; then
+  echo "  ✓ web serving on ${WEB_PORT}"
+else
+  echo "  ! web NOT serving on ${WEB_PORT} — check: $APPTAINER exec instance://$INST_WEB cat /tmp/serve.log"
+fi
+
 echo
 echo "✓ stack started"
 echo "  postgres : 127.0.0.1:${POSTGRES_PORT}"
