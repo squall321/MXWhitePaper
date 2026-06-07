@@ -92,7 +92,12 @@ export function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    defaultValues: import.meta.env.DEV ? DEV_DEFAULTS : { email: '', password: '' },
+    // Prefill the test account in dev OR when VITE_PREFILL_LOGIN=1 (set for the HWAX portal demo
+    // build so the login form shows admin@mx.local / admin1234! ready to submit). Empty otherwise.
+    defaultValues:
+      import.meta.env.DEV || import.meta.env.VITE_PREFILL_LOGIN === '1'
+        ? DEV_DEFAULTS
+        : { email: '', password: '' },
   })
 
   // Already logged-in users shouldn't see the login form. Wait for the
