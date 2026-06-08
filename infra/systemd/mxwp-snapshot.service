@@ -1,0 +1,27 @@
+[Unit]
+Description=MX White Paper nightly snapshot (Postgres + MinIO + retention prune)
+# Require the stack unit so the timer doesn't fire while apptainer instances
+# are down (snapshot.sh would exit 1). Soft dependency — if mxwp-stack is
+# masked/disabled we still try; the script itself sanity-checks instances.
+Wants=mxwp-stack.service
+After=mxwp-stack.service
+
+[Service]
+Type=oneshot
+# Same PATH override rationale as mxwp-stack.service — user-systemd's
+# default PATH can omit apptainer's install dir.
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# __REPO_ROOT__ is replaced by install-snapshot-timer.sh at install time.
+# (We can't use %h-relative paths because the repo lives wherever the user
+# checked it out, not necessarily under $HOME.)
+ExecStart=__REPO_ROOT__/infra/scripts/snapshot-retention.sh
+# Snapshot work is bounded by mc mirror + tar; small dev DB + few-hundred-MB
+# MinIO finishes in tens of seconds. Cap generously to catch runaway pg_dump
+# without aborting a legitimately large mirror.
+TimeoutStartSec=2h
+# No restart on failure — nightly cadence is enough; spurious retries would
+# just spam journald. Operator inspects journalctl --user -u mxwp-snapshot.
+Restart=no
+
+[Install]
+# user timer triggers this; no WantedBy needed for the service itself.

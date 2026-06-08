@@ -1,0 +1,16 @@
+[Unit]
+Description=Nightly trigger for MX White Paper snapshot
+
+[Timer]
+# Daily at 00:00 local time. RandomizedDelaySec spreads the load if multiple
+# zones happen to share underlying storage and avoids a thundering-herd of
+# pg_dump + mc mirror at the same wall-clock instant.
+OnCalendar=daily
+RandomizedDelaySec=15min
+# Persistent=true means a missed nightly run (host was off) fires on next
+# boot — important for laptops/dev boxes that aren't on 24/7.
+Persistent=true
+Unit=mxwp-snapshot.service
+
+[Install]
+WantedBy=timers.target

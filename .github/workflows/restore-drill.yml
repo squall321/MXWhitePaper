@@ -1,0 +1,191 @@
+name: restore-drill
+
+# A.3-2 — Weekly disaster-recovery drill.
+#
+# snapshot.sh + restore-snapshot.sh 가 실제로 round-trip 하는지 확인. CI
+# runner 에서 stack 을 끝까지 띄우고, seed → snapshot → mutate → restore →
+# verify 까지 한 사이클을 돌린다. 단순히 script 가 exit 0 으로 끝났는지가
+# 아니라 pre/post state 의 row count 가 일치하는지를 비교해서 silent-pass
+# (psql/mc 가 0 으로 끝났지만 데이터가 비어있는 경우) 를 막는다.
+#
+# 트리거:
+#   1. schedule cron — 매주 월요일 06:00 UTC.
+#   2. workflow_dispatch — 수동.
+#   3. push to main — snapshot/restore script 변경 시.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - 'infra/scripts/snapshot.sh'
+      - 'infra/scripts/restore-snapshot.sh'
+      - '.github/workflows/restore-drill.yml'
+
+concurrency:
+  group: restore-drill-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drill:
+    name: Snapshot → mutate → restore round-trip
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ALLOW_PLACEHOLDER_SECRETS: '1'
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Apptainer + Node + Python ────────────────────────────────────
+      - name: Install Apptainer
+        run: |
+          set -euxo pipefail
+          ver=1.5.0
+          wget -q "https://github.com/apptainer/apptainer/releases/download/v${ver}/apptainer_${ver}_amd64.deb"
+          sudo apt-get update
+          sudo apt-get install -y "./apptainer_${ver}_amd64.deb"
+          apptainer --version
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: 'pnpm' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      # ── Dependencies ─────────────────────────────────────────────────
+      - run: pnpm install --frozen-lockfile=false
+      - run: pip install datamodel-code-generator
+      - run: pnpm schema:gen
+
+      # ── Apptainer stack ──────────────────────────────────────────────
+      - name: Prepare .env (CI placeholders allowed by ALLOW_PLACEHOLDER_SECRETS)
+        run: cp .env.example .env
+
+      - name: Build .sif images
+        run: ./infra/scripts/build.sh
+
+      - name: Start the 5-service stack
+        run: ./infra/scripts/start.sh
+
+      - name: Wait for /healthz
+        run: |
+          set -euo pipefail
+          for i in {1..60}; do
+            if curl -sf http://127.0.0.1:8800/healthz >/dev/null && \
+               curl -sf http://127.0.0.1:5173/ >/dev/null; then
+              echo "stack ready after ${i} attempts"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "stack never opened :8800/:5173" >&2
+          apptainer instance list || true
+          exit 1
+
+      - name: Migrate + seed
+        run: |
+          ./infra/scripts/migrate.sh
+          ./infra/scripts/seed.sh
+
+      # ── Drill ────────────────────────────────────────────────────────
+      - name: Pre-state checksum
+        id: pre
+        run: |
+          set -euo pipefail
+          mkdir -p infra/logs/restore-drill
+          # _common.sh 에 정의된 POSTGRES_* / MINIO_* 를 그대로 사용.
+          . ./infra/scripts/_common.sh
+          DOC_COUNT_PRE=$(apptainer exec instance://mxwp_postgres \
+            psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+            "SELECT count(*) FROM documents;")
+          # MinIO object total across all non-backup buckets.
+          OBJ_COUNT_PRE=$(apptainer exec instance://mxwp_minio sh -c '
+            mc alias set local "http://127.0.0.1:'"$MINIO_API_PORT"'" \
+              "'"$MINIO_ROOT_USER"'" "'"$MINIO_ROOT_PASSWORD"'" >/dev/null
+            mc ls --recursive local/ 2>/dev/null | grep -v "^$" | wc -l
+          ' || echo 0)
+          echo "docs=$DOC_COUNT_PRE objects=$OBJ_COUNT_PRE"
+          printf '{"docs":%s,"objects":%s}\n' "$DOC_COUNT_PRE" "$OBJ_COUNT_PRE" \
+            > infra/logs/restore-drill/pre.json
+          echo "docs=$DOC_COUNT_PRE" >> "$GITHUB_OUTPUT"
+          echo "objects=$OBJ_COUNT_PRE" >> "$GITHUB_OUTPUT"
+
+      - name: Take snapshot
+        run: ./infra/scripts/snapshot.sh --note "ci-restore-drill"
+
+      - name: Mutate state (delete one document)
+        run: |
+          set -euo pipefail
+          . ./infra/scripts/_common.sh
+          apptainer exec instance://mxwp_postgres \
+            psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+            "DELETE FROM documents WHERE id = (SELECT id FROM documents ORDER BY id LIMIT 1);"
+
+      - name: Verify counts changed
+        run: |
+          set -euo pipefail
+          . ./infra/scripts/_common.sh
+          DOC_COUNT_MUT=$(apptainer exec instance://mxwp_postgres \
+            psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+            "SELECT count(*) FROM documents;")
+          PRE="${{ steps.pre.outputs.docs }}"
+          echo "pre=$PRE mutated=$DOC_COUNT_MUT"
+          if [ "$DOC_COUNT_MUT" = "$PRE" ]; then
+            echo "::error::mutation no-op — DELETE did not change count, drill cannot verify restore"
+            exit 1
+          fi
+
+      - name: Restore latest snapshot
+        # restore-snapshot.sh 의 1st arg 가 비면 `latest` 로 resolve 되지만
+        # --yes 는 *2nd* 위치라서 latest 를 명시해야 confirmation 우회가 동작.
+        run: ./infra/scripts/restore-snapshot.sh latest --yes
+
+      - name: Post-state checksum + diff
+        run: |
+          set -euo pipefail
+          . ./infra/scripts/_common.sh
+          DOC_COUNT_POST=$(apptainer exec instance://mxwp_postgres \
+            psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+            "SELECT count(*) FROM documents;")
+          OBJ_COUNT_POST=$(apptainer exec instance://mxwp_minio sh -c '
+            mc alias set local "http://127.0.0.1:'"$MINIO_API_PORT"'" \
+              "'"$MINIO_ROOT_USER"'" "'"$MINIO_ROOT_PASSWORD"'" >/dev/null
+            mc ls --recursive local/ 2>/dev/null | grep -v "^$" | wc -l
+          ' || echo 0)
+          printf '{"docs":%s,"objects":%s}\n' "$DOC_COUNT_POST" "$OBJ_COUNT_POST" \
+            > infra/logs/restore-drill/post.json
+          echo "── pre ──"; cat infra/logs/restore-drill/pre.json
+          echo "── post ──"; cat infra/logs/restore-drill/post.json
+          if ! diff -q infra/logs/restore-drill/pre.json infra/logs/restore-drill/post.json; then
+            echo "::error::restore drift — pre/post counts diverged"
+            exit 1
+          fi
+
+      - name: Smoke /healthz + GET /api/v1/documents
+        # restore-snapshot.sh 는 instance 가 사전에 stop 상태였다면 끝나서도
+        # API/WEB 을 다시 띄우지 않는다. healthz 가 죽어 있으면 drill 실패로 본다.
+        run: |
+          set -euo pipefail
+          curl -sf http://127.0.0.1:8800/healthz >/dev/null
+          curl -sf http://127.0.0.1:8800/api/v1/documents >/dev/null
+
+      # ── Artifacts ────────────────────────────────────────────────────
+      - name: Upload snapshot tarball + counts log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: restore-drill-${{ github.run_id }}
+          path: |
+            infra/backups/snapshots/*.tar.gz
+            infra/backups/snapshots/*.sha256
+            infra/logs/restore-drill/
+            infra/logs/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Tear down stack
+        if: always()
+        run: ./infra/scripts/stop.sh || true

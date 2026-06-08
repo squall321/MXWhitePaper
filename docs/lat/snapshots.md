@@ -186,6 +186,102 @@ fallback 사용 패턴 유지.
 
 설정값을 Settings 로 옮기고 싶으면 두 곳 모두 같이 갱신해야 한다.
 
+## 자동화 (systemd timer)
+
+스냅샷 생성을 cron 대신 **systemd user timer** 로 돌린다 — `mxwp-stack.service`
+와 같은 user-level 단위로 묶여 linger 만 켜져 있으면 reboot 후에도 살아 있음.
+
+| 파일 | 역할 |
+|---|---|
+| [[src/infra/systemd/mxwp-snapshot.service]] | `snapshot.sh --note "auto-timer"` 를 oneshot 으로 실행 |
+| [[src/infra/systemd/mxwp-snapshot.timer]] | `OnCalendar=*-*-* 03:30:00` (로컬 TZ, persistent=true) |
+
+### 설치
+
+```bash
+cp infra/systemd/mxwp-snapshot.{service,timer} ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now mxwp-snapshot.timer
+```
+
+linger 가 꺼져 있으면 [[src/infra/systemd/README.md]] 참조 (1회 sudo 필요).
+
+### 상태 확인
+
+```bash
+./infra/scripts/snapshot.sh --status
+# 내부적으로:
+#   systemctl --user list-timers mxwp-snapshot.timer
+#   systemctl --user status mxwp-snapshot.service --no-pager
+#   ls -lh "$SNAPSHOT_DIR" | tail -5
+```
+
+`--status` 는 실제 스냅샷을 만들지 않는다 — timer 의 다음 실행 시각 / 마지막
+종료 코드 / 최근 산출물 5 개만 보여주는 read-only 진단 플래그.
+
+## 복원 드릴 (restore-drill.yml)
+
+[[src/.github/workflows/restore-drill.yml]] — **주 1 회** (`schedule: cron '0 4 * * 1'`,
+월요일 04:00 UTC) GitHub Actions 가 가장 최근 스냅샷을 임시 postgres + minio
+컨테이너에 풀어 검증한다. 실 운영 인스턴스는 건드리지 않음 — runner 안
+ephemeral 환경.
+
+검증 항목:
+
+1. 사이드카 sha256 일치
+2. `manifest.json` 의 components 가 tar 안 실제 파일과 1:1 매칭
+3. `psql` 로 dump 적용 후 `SELECT count(*) FROM documents` 가 > 0
+4. `mc mirror` 로 `mxwp-images` 복원 후 임의 객체 `HEAD` 200
+
+산출물 (artifact name: `restore-drill-<run-id>`):
+
+- `drill-report.md` — 위 4 단계 PASS/FAIL 표 + 사용된 스냅샷 id
+- `psql-restore.log`, `mc-mirror.log` — 원시 로그
+- 실패 시 GitHub issue 자동 생성 (`label: snapshot-drill-failure`)
+
+수동 trigger: workflow_dispatch (특정 snapshot id 지정 가능).
+
+## 보존 (snapshot-retention.sh)
+
+타이머가 매일 돌면 디스크가 금방 찬다 — wrapper 가 보존 정책을 강제.
+
+[[src/infra/scripts/snapshot-retention.sh]] — `SNAPSHOT_DIR` 안에서 mtime 기준
+`MXWP_SNAPSHOT_RETAIN_DAYS` (기본 **7 일**) 보다 오래된 `mxwp-snapshot-*.tar.gz`
+와 짝꿍 `.sha256` 사이드카를 함께 삭제. `.deleted` suffix 없이 즉시 unlink
+(재현 가능한 generator 가 아니므로 trash 보관 안 함).
+
+```bash
+./infra/scripts/snapshot-retention.sh                          # 기본 7 일
+MXWP_SNAPSHOT_RETAIN_DAYS=30 ./infra/scripts/snapshot-retention.sh
+MXWP_SNAPSHOT_RETAIN_DAYS=30 SNAPSHOT_DIR=/data/snapshots ./infra/scripts/snapshot-retention.sh
+```
+
+`mxwp-snapshot.service` 의 `ExecStartPost=` 에서 호출되므로 timer 가 돌 때마다
+**생성 직후** retention 이 같이 실행 — 별도 timer 가 필요 없음.
+
+## 3-zone 안전 (timer 의 범위)
+
+본 timer 는 **설치된 zone 한 곳만** 백업한다. MXWhitePaper 는 3-zone (dev /
+staging / prod) 으로 운영되는데, `mxwp-snapshot.timer` 를 zone A 호스트의
+`~/.config/systemd/user/` 에 깔면 zone A 의 postgres + MinIO 만 스냅샷이
+잡힌다. zone B/C 가 자동으로 따라오지 않음.
+
+3-zone 간 **교차 복제는 별도 채널** — 기존 Google Drive sync
+([[src/infra/scripts/data-dump-to-drive.sh]], [[src/infra/scripts/data-merge-from-drive.sh]],
+setup-drive-sync.sh) 가 담당하며 snapshot timer 와 독립적으로 동작한다.
+
+운영 룰:
+
+| zone | timer 설치 | drive sync |
+|---|---|---|
+| prod | enable (매일 03:30 로컬) | dump → Drive |
+| staging | enable (테스트용 — 짧은 retention 권장) | merge ← Drive (필요 시) |
+| dev | disable | manual |
+
+timer 가 동작 중인 zone 의 호스트 장애 = 해당 zone 의 백업 손실. Drive
+복제가 있어야 zone 간 회복 가능. timer 와 Drive sync 는 **AND 조건**으로
+설계되어 있다 — 한쪽만으로는 다중 zone 복구가 불가능.
+
 ## 테스트 지도
 
 | 파일 | 무엇 |
