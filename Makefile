@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs status migrate seed schema-gen schema-validate openapi-dump codegen test lint clean pyinstaller-smoke
+.PHONY: help build up down restart logs status migrate seed schema-gen schema-validate openapi-dump codegen test lint clean pyinstaller-smoke build-web ship-web pull-web ship
 
 help:
 	@echo "MX White Paper — Apptainer-based stack"
@@ -18,6 +18,12 @@ help:
 	@echo "  make test            Run all tests"
 	@echo "  make lint            Run linters across the monorepo"
 	@echo "  make clean           Remove .sif images and bind-mounted data (DESTRUCTIVE)"
+	@echo ""
+	@echo "  ─ Portal ship pipeline (online build host → Drive → cae00) ─"
+	@echo "  make build-web       Build SPA dist (portal base baked) + repack web.sif"
+	@echo "  make ship-web        Push web.sif to Drive (rclone, sha256-verified)"
+	@echo "  make ship            build-web + ship-web (one-shot online-side release)"
+	@echo "  make pull-web        Pull web.sif from Drive into infra/apptainer/ (run on cae00)"
 
 SCRIPTS := ./infra/scripts
 
@@ -93,3 +99,35 @@ pyinstaller-smoke:
 		done && \
 		echo "✓ all 4 binaries respond to --version" \
 	'
+
+# ── Portal ship pipeline (D) ─────────────────────────────────────────
+# 3-zone 아키텍처를 자동화 — online build host → Drive → cae00.
+#
+#   make build-web  : SPA dist 빌드 (portal base 베이크) + web.sif 재포장
+#                     온라인 빌드 호스트 (인터넷 / npm / Docker-Hub 도달 가능) 에서만 실행.
+#   make ship-web   : web.sif 를 Drive 로 push (sha256 verify).
+#                     온라인 빌드 호스트에서 build-web 직후 실행.
+#   make ship       : 위 둘을 묶은 one-shot — 일반적인 릴리즈 흐름.
+#   make pull-web   : Drive 에서 web.sif 받아 infra/apptainer/ 에 stage.
+#                     cae00 (corp TLS-intercept) 에서만 실행 — 빌드 0 회.
+#
+# 사용 흐름:
+#   [online host]   make ship                # build + push
+#   [cae00]         make pull-web && make up # pull + start (no build)
+#
+# .env 의 MXWP_IMAGES_REMOTE (예: MxwpDrive:MXWhitePaper/images) 필수.
+build-web:
+	@echo "→ building SPA dist with portal base"
+	@MXWP_BASE_PATH=$${MXWP_BASE_PATH:-/mx-white-paper/} \
+		pnpm --filter @mx/web build
+	@echo "→ rebuilding web.sif (bakes apps/web/dist)"
+	@apptainer build --force infra/apptainer/web.sif infra/apptainer/web.def
+
+ship-web:
+	@$(SCRIPTS)/images-to-drive.sh
+
+ship: build-web ship-web
+	@echo "✓ web.sif built + shipped to Drive"
+
+pull-web:
+	@$(SCRIPTS)/images-from-drive.sh

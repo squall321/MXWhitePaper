@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-06T22:19:58.717055+00:00",
+  "generated_at": "2026-06-08T06:38:07.070625+00:00",
   "source_hashes": {
     "packages/shared/schemas/document.json": "f0f49355cd0997075a2d6b268e2c8d254d5d40d3e10abbf84b6528a364f5d582",
     "apps/api/app/services/widget_markers.py": "29b9da045c859288c6bcb1195176ee9ebb9b50c2c5376c419d5c293632a5658e",

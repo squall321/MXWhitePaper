@@ -97,6 +97,12 @@ class Settings(BaseSettings):
     # POST /admin/audit-retention/prune-now 는 여전히 동작한다.
     audit_retention_enabled: bool = Field(default=True)
 
+    # B-1 (2026-06-08) — housekeeping ticker. images_pending TTL sweep +
+    # document_versions retention compaction 을 in-process 로 돌린다 (기존
+    # 7 ticker 와 같은 패턴). 끄면 CLI (apps/api/app/scripts/sweep_pending.py
+    # / compact_versions.py) 가 여전히 동작한다.
+    maintenance_runner_enabled: bool = Field(default=True)
+
     # ── SMTP / Email (cycle: email integration) ──────────────────────
     # When `email_enabled=False` the email service logs to stdout under a
     # "[EMAIL CONSOLE FALLBACK]" prefix so dev never depends on a real MTA.

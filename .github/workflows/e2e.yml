@@ -1,0 +1,138 @@
+name: e2e
+
+# B-2 (2026-06-08) — Playwright E2E in CI.
+#
+# E2E 는 5 service apptainer stack (postgres + meili + minio + api + web) 을
+# 통째로 띄워야 의미가 있어 GitHub-hosted ubuntu (vCPU 2, RAM 7GB, ephemeral
+# disk) 에서는 무겁고 종종 timeout. 두 가지 트리거를 지원:
+#
+#   1. `workflow_dispatch` — 수동 실행. 사용자가 self-hosted runner 또는
+#      여유로운 ubuntu-latest 에서 의도적으로 돌릴 때.
+#   2. `push` to main 의 e2e/ + apps/web/ + apps/api/ 경로 — 변경된 코드의
+#      회귀를 catch 하기 위한 nightly-but-on-push.
+#
+# Apptainer stack 부팅 단계 (별도 step) → playwright run → artifact 저장
+# (HTML report + screenshots + videos for failure).
+#
+# 사용자 룰 — runner 가 self-hosted 인 경우 `runs-on: [self-hosted, linux,
+# apptainer]` 로 라벨 변경 권장 (apt install apptainer 단계 생략 가능).
+
+on:
+  workflow_dispatch:
+    inputs:
+      grep:
+        description: 'Optional Playwright grep pattern (e.g. login).'
+        required: false
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/tests/e2e/**'
+      - 'apps/web/playwright.config.ts'
+      - 'apps/web/src/**'
+      - 'apps/api/app/**'
+      - '.github/workflows/e2e.yml'
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright E2E (chromium-desktop)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # 사용자 룰 — CI 의 ephemeral 인스턴스에서는 placeholder secret 통과 허용.
+      # 회전된 production 환경에는 영향 0 (이 env 가 set 안 되면 _common.sh 의
+      # guard 가 정상 abort).
+      ALLOW_PLACEHOLDER_SECRETS: '1'
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Apptainer + Node + Python ────────────────────────────────────
+      - name: Install Apptainer
+        run: |
+          set -euxo pipefail
+          ver=1.5.0
+          wget -q "https://github.com/apptainer/apptainer/releases/download/v${ver}/apptainer_${ver}_amd64.deb"
+          sudo apt-get update
+          sudo apt-get install -y "./apptainer_${ver}_amd64.deb"
+          apptainer --version
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: 'pnpm' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      # ── Dependencies ─────────────────────────────────────────────────
+      - run: pnpm install --frozen-lockfile=false
+      - run: pip install datamodel-code-generator
+      - run: pnpm schema:gen
+      - name: Install Playwright browsers
+        run: pnpm --filter @mx/web exec playwright install --with-deps chromium
+
+      # ── Apptainer stack ──────────────────────────────────────────────
+      - name: Prepare .env (CI placeholders allowed by ALLOW_PLACEHOLDER_SECRETS)
+        run: cp .env.example .env
+
+      - name: Build .sif images
+        run: ./infra/scripts/build.sh
+
+      - name: Start the 5-service stack
+        run: ./infra/scripts/start.sh
+
+      - name: Wait for /healthz
+        run: |
+          set -euo pipefail
+          for i in {1..60}; do
+            if curl -sf http://127.0.0.1:8800/healthz >/dev/null && \
+               curl -sf http://127.0.0.1:5173/ >/dev/null; then
+              echo "stack ready after ${i} attempts"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "stack never opened :8800/:5173" >&2
+          apptainer instance list || true
+          exit 1
+
+      - name: Migrate + seed
+        run: |
+          ./infra/scripts/migrate.sh
+          ./infra/scripts/seed.sh
+
+      # ── Playwright ───────────────────────────────────────────────────
+      - name: Run Playwright
+        working-directory: apps/web
+        run: |
+          if [ -n "${{ inputs.grep }}" ]; then
+            pnpm exec playwright test --grep "${{ inputs.grep }}" --project=chromium-desktop
+          else
+            pnpm exec playwright test --project=chromium-desktop
+          fi
+
+      # ── Artifacts ────────────────────────────────────────────────────
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: infra/logs/e2e-report
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload test-results (screenshots/videos)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: apps/web/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Tear down stack
+        if: always()
+        run: ./infra/scripts/stop.sh || true

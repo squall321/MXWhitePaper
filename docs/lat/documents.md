@@ -169,7 +169,7 @@
   [[apps/web/src/features/editor/blocks/PivotTableBlockEditor.tsx#applyPivotDragEnd]] —
   dnd-kit DragEndEvent id 두 개 → 다음 pivot block (no-op 시 같은 reference 반환).
   widgetExport CSV 매트릭스 직렬화
-  (cycle 3, [[apps/web/src/features/widgetExport.ts]]). drill-down: viewer 의
+  (cycle 3, [[apps/web/src/lib/widgetExport.ts]]). drill-down: viewer 의
   data cell 클릭 → [[apps/web/src/components/blocks/pivotEngine.ts#drillRows]] 가
   filter 재적용 + dim 매칭으로 raw rows 추출 → `Modal`
   ([[apps/web/src/components/ui/Modal.tsx]]) 에 field-by-row table 표시 (Esc /
@@ -611,7 +611,7 @@ materialized view refresh 도 스킵 가능.
     `STRIPE_CLASSES` map의 `gantt` 엔트리는 type 완전성 위한 dummy — 본문 fill은
     GanttBlockView 인라인 `#F9FAFB`).
 
-11. **블록 다크 모드 = Tailwind `dark:` 변형 의무** — `bg-white`/`border-gray-200`/
+12. **블록 다크 모드 = Tailwind `dark:` 변형 의무** — `bg-white`/`border-gray-200`/
     `border-gray-300` 가 있는 *모든* 블록 className에 같은 line에 `dark:bg-gray-900`/
     `dark:border-gray-700`/`dark:border-gray-600` 동반 (block-darkmode-batch
     사이클에서 26 파일 일괄 적용). 의도 예외 2건은 `AllBlocksDarkmode.test.ts` 의
@@ -621,7 +621,7 @@ materialized view refresh 도 스킵 가능.
     검출. SVG 블록의 fill/stroke는 `var(--smsg-...)` 토큰 사용 (별개 — chart/gantt/
     orgchart darkmode 사이클 참조).
 
-12. **블록 반응형 = `grid-cols-N` (N>=2) 는 `sm:`/`md:` 변형 의무** — 데스크탑 위주
+13. **블록 반응형 = `grid-cols-N` (N>=2) 는 `sm:`/`md:` 변형 의무** — 데스크탑 위주
     grid가 mobile (375px) 에서 깨지지 않게 `grid-cols-1` 로 시작 + `sm:grid-cols-N`
     (640px+) 또는 `md:grid-cols-N` (768px+) 변형 동반. responsive-audit 사이클에서
     blocks/ + features/editor/ 전수 적용 (ConflictMergeModal 3-col, ChartBlockEditor
@@ -629,7 +629,7 @@ materialized view refresh 도 스킵 가능.
     PdfBlockEditor 2-col, BlockInsertPalette 4-col). 회귀 가드
     [[src/components/blocks/__tests__/AllBlocksResponsive.test.ts]] 가 blocks/ 신규
     파일 자동 검출 (features/editor 는 별도 audit 필요 시 동일 패턴 확장).
-11. **pydantic v2 codegen 은 JSON Schema 의 `oneOf` 의 `not: required` 부분을
+14. **pydantic v2 codegen 은 JSON Schema 의 `oneOf` 의 `not: required` 부분을
     무시한다** — `datamodel-codegen` 이 두 helper class + `RootModel` union 으로
     풀지만 cross-branch 거부 (양쪽 모두 set 입력) 는 모델 validator 가 필요.
     [[packages/shared/codegen/generate-py.py#_inject_after_meta]] 가 매 regen 마다

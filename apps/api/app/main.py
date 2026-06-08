@@ -402,6 +402,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     reminder_task: _asyncio.Task[None] | None = None
     cron_task: _asyncio.Task[None] | None = None
     audit_pruner_task: _asyncio.Task[None] | None = None
+    maintenance_task: _asyncio.Task[None] | None = None
     if settings.backup_enabled:
         from .services.backup_runner import backup_ticker
 
@@ -453,6 +454,15 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         audit_pruner_task = _asyncio.create_task(
             audit_pruner_ticker(), name="mxwp-audit-pruner",
         )
+
+    # B-1 (2026-06-08) — housekeeping ticker (images_pending TTL sweep +
+    # document_versions retention). Single-replica. Hourly.
+    if getattr(settings, "maintenance_runner_enabled", True):
+        from .services.maintenance_runner import maintenance_ticker
+
+        maintenance_task = _asyncio.create_task(
+            maintenance_ticker(), name="mxwp-maintenance-runner",
+        )
     try:
         yield
     finally:
@@ -464,6 +474,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             reminder_task,
             cron_task,
             audit_pruner_task,
+            maintenance_task,
         ):
             if t is None:
                 continue
