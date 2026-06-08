@@ -39,6 +39,19 @@ class Settings(BaseSettings):
     jwt_access_ttl_seconds: int = Field(default=3600)
     jwt_refresh_ttl_seconds: int = Field(default=604800)
     jwt_algorithm: str = Field(default="HS256")
+    # Refresh-cookie path. "/api/v1/auth" (tight) standalone; set "/" behind the HWAX portal so the
+    # cookie is sent to /mx-white-paper/api/v1/auth/refresh (see auth.py REFRESH_COOKIE_PATH).
+    refresh_cookie_path: str = Field(default="/api/v1/auth")
+
+    # ── HWAX Portal SSO (true single sign-on) ──────────────────────────────────────────────────
+    # When set, /api/v1/auth/portal-callback accepts a short-lived RS256 launch token minted by the
+    # HWAX portal, verifies it against the portal's JWKS, upserts the user by email, and starts a
+    # local session — so a user logged into the portal lands here logged-in (no second login).
+    # Empty portal_jwks_url disables the endpoint (returns 404), keeping standalone deploys safe.
+    portal_jwks_url: str = Field(default="")          # e.g. http://localhost:8723/.well-known/jwks.json
+    portal_audience: str = Field(default="mx-white-paper")   # token `aud` we accept
+    portal_sso_default_role: str = Field(default="editor")   # role for auto-created SSO users
+    portal_sso_landing: str = Field(default="/mx-white-paper/")  # where to send the browser after login
 
     # CORS
     cors_origins: str = Field(default="http://localhost:5173,http://localhost:80")

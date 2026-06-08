@@ -25,6 +25,7 @@ from .routers.approvals import router as approvals_router
 from .routers.audit import router as audit_router
 from .routers.audit_retention import router as audit_retention_router
 from .routers.auth import router as auth_router
+from .routers.portal_sso import router as portal_sso_router
 from .routers.auth_flows import router as auth_flows_router
 from .routers.automation import router as automation_router
 from .routers.backups import router as backups_router
@@ -539,6 +540,8 @@ def create_app() -> FastAPI:
     app.include_router(imports_router)
     # Sprint 6 — auth, search, glossary, widgets
     app.include_router(auth_router)
+    # HWAX portal SSO callback (true single sign-on; no-op/404 unless portal_jwks_url is set).
+    app.include_router(portal_sso_router)
     # Cycle 0026 — email verification + password reset flows.
     app.include_router(auth_flows_router)
     app.include_router(search_router)

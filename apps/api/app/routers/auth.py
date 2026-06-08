@@ -38,7 +38,12 @@ from app.services.signup_service import create_user_account
 router = APIRouter(prefix="/api/v1", tags=["auth"])
 
 REFRESH_COOKIE = "mxwp_refresh"
-REFRESH_COOKIE_PATH = "/api/v1/auth"
+# Cookie path. Standalone the app+API share an origin at "/", so "/api/v1/auth" scopes the refresh
+# cookie tightly. BEHIND THE HWAX PORTAL the browser hits /mx-white-paper/api/v1/auth/refresh, which
+# is NOT under "/api/v1/auth", so the cookie would never be sent → logged out on reload. Set
+# REFRESH_COOKIE_PATH=/ in .env there (the server reads the cookie by name, so path only governs
+# which browser requests carry it). Default preserves the tight standalone scope.
+REFRESH_COOKIE_PATH = get_settings().refresh_cookie_path
 
 # Cycle 17 — short-lived JWT minted after the password step succeeds for a
 # user who has 2FA enabled. The FE swaps it for a real access token at
