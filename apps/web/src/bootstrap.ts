@@ -78,9 +78,13 @@ export function bootstrapAuth() {
     refresh: async () => Boolean(await refresh()),
     onUnauthenticated: () => {
       if (typeof window === 'undefined') return
-      if (window.location.pathname === '/login') return
+      // portal sub-path 안전: BASE_URL 가 '/mx-white-paper/' 라면
+      // pathname 도 '/mx-white-paper/login' 형태. base + 'login' 조합으로
+      // 비교/이동해야 standalone(BASE_URL='/') 과 portal 양쪽 모두 동작.
+      const loginPath = `${import.meta.env.BASE_URL}login`
+      if (window.location.pathname === loginPath) return
       const here = window.location.pathname + window.location.search
-      window.location.assign(`/login?return=${encodeURIComponent(here)}`)
+      window.location.assign(`${loginPath}?return=${encodeURIComponent(here)}`)
     },
     // 401 silent refresh 중 AuthGuard 가 user=null 을 보고 /login 으로
     // 깜박 redirect 하지 않도록 hydrating 시그널을 빌려 씀.

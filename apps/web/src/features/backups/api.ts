@@ -119,6 +119,6 @@ export async function runNow(body: RunNowInput): Promise<RunNowResult> {
 
 /** Build the absolute URL to GET (redirects to a presigned MinIO URL). */
 export function downloadRunUrl(id: string): string {
-  const base = (import.meta.env.VITE_API_URL as string) || '/api/v1'
+  const base = (import.meta.env.VITE_API_URL as string) || `${import.meta.env.BASE_URL}api/v1`
   return `${base}/backups/runs/${encodeURIComponent(id)}/download`
 }

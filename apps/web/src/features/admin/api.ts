@@ -143,7 +143,7 @@ export async function listAuditActions(): Promise<string[]> {
 /** Build a relative URL for the CSV export (axios baseURL prefixed). */
 export function auditCsvUrl(params: AuditListParams): string {
   const base =
-    (import.meta.env.VITE_API_URL as string | undefined) || '/api/v1'
+    (import.meta.env.VITE_API_URL as string | undefined) || `${import.meta.env.BASE_URL}api/v1`
   const qs = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
     if (v === undefined || v === null || v === '') continue

@@ -25,7 +25,7 @@ export function DiagPage() {
     void runChecks(setChecks)
   }, [])
 
-  const apiUrl = (import.meta.env.VITE_API_URL as string) || '/api/v1'
+  const apiUrl = (import.meta.env.VITE_API_URL as string) || `${import.meta.env.BASE_URL}api/v1`
 
   return (
     <div className="mx-auto max-w-2xl p-6 font-mono text-sm">
@@ -83,7 +83,10 @@ export function DiagPage() {
             } catch {
               /* private mode */
             }
-            location.assign('/login')
+            // portal sub-path 안전: BASE_URL 가 '/mx-white-paper/' 일 때
+            // /login 으로 직접 가면 host root 404. BrowserRouter 의 basename
+            // 과 일치하도록 BASE_URL prefix 를 사용.
+            location.assign(`${import.meta.env.BASE_URL}login`)
           }}
           className="rounded bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
         >
@@ -130,7 +133,7 @@ export function DiagPage() {
 }
 
 async function runChecks(setChecks: (rows: CheckRow[]) => void): Promise<void> {
-  const apiUrl = (import.meta.env.VITE_API_URL as string) || '/api/v1'
+  const apiUrl = (import.meta.env.VITE_API_URL as string) || `${import.meta.env.BASE_URL}api/v1`
   const rows: CheckRow[] = [
     { label: 'GET /healthz', status: 'pending' },
     { label: 'POST /auth/login (admin/admin1234!)', status: 'pending' },

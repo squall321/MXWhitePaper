@@ -5,18 +5,34 @@ import path from 'node:path'
 
 // Served at the root by default; behind the HWAX portal it's reverse-proxied under a sub-path,
 // so set VITE_BASE_PATH=/mx-white-paper/ (build AND dev) → assets/router/api all sit under it.
-const BASE = process.env.VITE_BASE_PATH || '/'
+//
+// Audit fix H2 — VITE_BASE_PATH 끝슬래시 정규화. 사용자가 '/mx-white-paper'
+// (trailing slash 없이) 로 잘못 설정하면 vite 의 `base` 가 broken (asset
+// URL 생성 깨짐) + API_PREFIX 가 '/mx-white-paperapi' 가 되어 proxy match
+// 실패. 입력을 항상 trailing slash 로 정규화 → 한 가지 silent foot-gun 제거.
+function normalizeBase(input: string | undefined): string {
+  const v = (input || '/').trim()
+  return v.endsWith('/') ? v : v + '/'
+}
+
+const BASE = normalizeBase(process.env.VITE_BASE_PATH)
 const API_PREFIX = `${BASE}api`.replace(/\/{2,}/g, '/') // "/api" or "/mx-white-paper/api"
 
-// Shared by both `server` (dev) and `preview` (serves the production build) — vite preview does
-// NOT inherit server.proxy, so we reference the same object in both.
-const API_PROXY = {
-  [API_PREFIX]: {
-    target: process.env.VITE_PROXY_TARGET || 'http://127.0.0.1:8800',
-    changeOrigin: true,
-    secure: false,
-    rewrite: (p: string) => p.replace(new RegExp(`^${BASE}`), '/'),
-  },
+// Shared between `server` (dev) and `preview` (production build serve) — vite preview does NOT
+// inherit server.proxy, so each must have its own proxy config.
+//
+// Audit fix M2 — `http-proxy` 가 옵션 객체를 *내부에서 mutate* (listener 등록 등) 한다.
+// 같은 ref 를 server + preview 둘 다 받으면 listener 중복 등록 risk. factory 로 매번
+// 새 객체를 만들어 둘 다 *깨끗한 옵션* 을 받게.
+function makeApiProxy() {
+  return {
+    [API_PREFIX]: {
+      target: process.env.VITE_PROXY_TARGET || 'http://127.0.0.1:8800',
+      changeOrigin: true,
+      secure: false,
+      rewrite: (p: string) => p.replace(new RegExp(`^${BASE}`), '/'),
+    },
+  }
 }
 
 export default defineConfig({
@@ -43,7 +59,7 @@ export default defineConfig({
     // http://<server-public-ip>:8800) to dial the host's external interface instead.
     // Match the base-prefixed path (e.g. /mx-white-paper/api) and strip the base back to /api
     // before forwarding, so the backend (which serves /api/v1) is reached either way.
-    proxy: API_PROXY,
+    proxy: makeApiProxy(),
   },
   // `vite preview` (used to serve the production build) does NOT inherit server.proxy, so the
   // same /api forwarding must be declared here too. This is how we run behind the HWAX portal:
@@ -53,7 +69,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     allowedHosts: true,
-    proxy: API_PROXY,
+    proxy: makeApiProxy(),
   },
   build: {
     outDir: 'dist',

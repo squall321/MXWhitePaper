@@ -119,7 +119,7 @@ export function DocumentReaderPage() {
   // the read-only UX never depends on the analytics pipeline.
   useEffect(() => {
     if (!slug || !data) return
-    const url = (import.meta.env.VITE_API_URL as string | undefined) || '/api/v1'
+    const url = (import.meta.env.VITE_API_URL as string | undefined) || `${import.meta.env.BASE_URL}api/v1`
     void fetch(`${url}/documents/${slug}/view`, {
       method: 'POST',
       credentials: 'include',

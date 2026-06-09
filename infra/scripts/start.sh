@@ -256,7 +256,17 @@ if ! curl -fsS -m 2 "http://127.0.0.1:${WEB_PORT}/" >/dev/null 2>&1; then
   done
 fi
 if curl -fsS -m 2 "http://127.0.0.1:${WEB_PORT}/" >/dev/null 2>&1; then
-  echo "  ✓ web serving on ${WEB_PORT}"
+  # Audit fix M1 — 빈 dist + serve 조합은 200 / empty index.html 을 반환해서
+  # /healthz 도 없는 web 컨테이너가 silently broken 상태로 healthy 처럼
+  # 보임 (H4 의 build-time precheck 가 fail-fast 하지만, 누군가 dist 를
+  # 지우고 instance restart 한 경우의 backup guard). index.html 의
+  # `<script type="module"` 존재로 *진짜 SPA build* 인지 검증.
+  if curl -fsS -m 2 "http://127.0.0.1:${WEB_PORT}/" 2>/dev/null | grep -q 'script type="module"'; then
+    echo "  ✓ web serving on ${WEB_PORT}"
+  else
+    echo "  ⚠ web responds on ${WEB_PORT} but index.html missing SPA script tags — dist 가 비어있을 수 있다"
+    echo "    재빌드: make build-web 또는 pnpm --filter @mx/web build"
+  fi
 else
   echo "  ! web NOT serving on ${WEB_PORT} — check: $APPTAINER exec instance://$INST_WEB cat /tmp/serve.log"
 fi

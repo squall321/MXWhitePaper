@@ -130,7 +130,9 @@ export function SectionEditor({
       // The wiki-create fallback: redirect to /docs/new instead of inserting.
       if (insertText.startsWith('__create__')) {
         const slug = insertText.slice('__create__'.length)
-        window.location.href = `/docs/new?slug=${encodeURIComponent(slug)}`
+        // portal sub-path 안전: BASE_URL prefix 로 BrowserRouter basename
+        // 과 일치시킴. standalone(BASE_URL='/') 과 portal 양쪽 모두 동작.
+        window.location.href = `${import.meta.env.BASE_URL}docs/new?slug=${encodeURIComponent(slug)}`
         return
       }
       insertAtCaret(sel.match.consume, insertText)

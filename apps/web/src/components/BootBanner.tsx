@@ -20,7 +20,7 @@ export function BootBanner() {
 
   if (!visible) return null
 
-  const apiUrl = (import.meta.env.VITE_API_URL as string) || '/api/v1'
+  const apiUrl = (import.meta.env.VITE_API_URL as string) || `${import.meta.env.BASE_URL}api/v1`
   const online = typeof navigator !== 'undefined' ? navigator.onLine : true
 
   return (

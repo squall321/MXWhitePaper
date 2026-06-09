@@ -111,6 +111,19 @@ build_or_pull "$MEILI_SIF"    ""  "$APPT_DIR/meili.def"
 build_or_pull "$MINIO_SIF"    ""  "$APPT_DIR/minio.def"
 
 build_or_pull "$API_SIF"      ""  "$APPT_DIR/api.def"
+
+# Audit fix H4 — web.def 의 `%files apps/web/dist /opt/web/dist` 가 dist 부재
+# 시 silent 하게 빈 디렉토리를 바인드한다 → serve 가 빈 index.html 을 200
+# 으로 응답해서 instance 가 healthy 처럼 보이지만 실제로는 broken SPA.
+# build.sh 자체에서 미리 검출해 명시적 에러 + 빌드 명령 안내.
+if [ ! -f "$REPO_ROOT/apps/web/dist/index.html" ]; then
+  echo
+  echo "✗ apps/web/dist/index.html 없음 — web.sif 가 빈 SPA 를 패키지 한다."
+  echo "  Portal 모드: MXWP_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build"
+  echo "  Standalone : pnpm --filter @mx/web build"
+  echo "  또는 make build-web (Drive ship pipeline 사용 시)."
+  exit 1
+fi
 build_or_pull "$WEB_SIF"      ""  "$APPT_DIR/web.def"
 
 echo

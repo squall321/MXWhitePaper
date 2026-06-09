@@ -92,12 +92,23 @@ export function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    // Prefill the test account in dev OR when VITE_PREFILL_LOGIN=1 (set for the HWAX portal demo
-    // build so the login form shows admin@mx.local / admin1234! ready to submit). Empty otherwise.
-    defaultValues:
-      import.meta.env.DEV || import.meta.env.VITE_PREFILL_LOGIN === '1'
-        ? DEV_DEFAULTS
-        : { email: '', password: '' },
+    // Prefill the test account in dev.
+    //
+    // Audit fix H3 — `VITE_PREFILL_LOGIN=1` 은 *데모 환경 한정* opt-in.
+    // production 배포에 실수로 켜지면 admin@mx.local / admin1234! 자격증명이
+    // 사전 입력된 채 노출되는 *credential leak* 이 된다. 두 가지 안전장치:
+    //   1) `MODE === 'production'` 이면 prefill 무시 (build mode 검증)
+    //   2) prefill 활성화 시 console.warn 으로 로그 명시 (운영 알람용)
+    // dev mode (vite dev) 는 그대로 admin defaults 채움 — 로컬 개발자 편의.
+    defaultValues: (() => {
+      if (import.meta.env.DEV) return DEV_DEFAULTS
+      if (import.meta.env.VITE_PREFILL_LOGIN === '1' && import.meta.env.MODE !== 'production') {
+        // eslint-disable-next-line no-console
+        console.warn('[mxwp] VITE_PREFILL_LOGIN=1 enabled — login form prefilled with demo credentials. Disable for real production builds.')
+        return DEV_DEFAULTS
+      }
+      return { email: '', password: '' }
+    })(),
   })
 
   // Already logged-in users shouldn't see the login form. Wait for the

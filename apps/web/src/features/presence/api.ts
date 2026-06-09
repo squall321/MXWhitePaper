@@ -52,6 +52,6 @@ export async function leavePresence(slug: string): Promise<void> {
  */
 export function streamUrl(slug: string): string {
   const base =
-    (import.meta.env.VITE_API_URL as string | undefined) || '/api/v1'
+    (import.meta.env.VITE_API_URL as string | undefined) || `${import.meta.env.BASE_URL}api/v1`
   return `${base}/presence/${encodeURIComponent(slug)}/stream`
 }
