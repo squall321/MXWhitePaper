@@ -258,6 +258,40 @@ collision 을 일찍 거부 (alternative 정책) 함으로써 SSO 머지 시점�
 피한다. 자체가입 후 같은 email 로 SSO 시도 → SSO 라우터의 기존 collision
 핸들링이 처리.
 
+### HWAX Portal SSO (true SSO callback)
+
+★ `a397a02` (Opus 4.8) 에서 추가, `c82c407` 후속 cycle 에서 4xx→500 cascade
+bug fix. [[src/app/routers/portal_sso.py]] 가 `POST /api/v1/auth/portal-callback`
+하나로 진정한 SSO 를 제공:
+
+- HWAX portal 이 RS256 launch JWT (aud, scope=launch, exp, jti) mint → 사용자가
+  portal 의 MXWP 타일 클릭 시 자동 POST.
+- 서버: JWKS fetch (5min 캐시, `portal_jwks_url` 기반) → RS256 verify → aud /
+  scope / jti 검사 → 사용자 upsert by email (없으면 자동 생성, `portal_sso_
+  default_role` 기본 'editor') → refresh cookie set → 303 redirect to
+  `portal_sso_landing` (기본 `/mx-white-paper/`).
+- SPA bootstrap 이 `/auth/refresh` 로 access token 발급 → no 2nd login.
+
+Disabled by default: `portal_jwks_url` 빈 문자열이면 endpoint 가 **404
+sso_disabled** 반환 (standalone 안전성). REFRESH_COOKIE_PATH 가 settings 로
+빠짐 — portal sub-path 뒤에서는 `.env` 에 `REFRESH_COOKIE_PATH=/` 설정 필수
+(기본 `/api/v1/auth` 은 standalone 전용).
+
+**APIError 패턴 함정**: portal_sso 의 7 분기 (`bad_token` / `no_key` /
+`invalid_token` / `wrong_scope` / `replay` / `no_team` / `sso_disabled`) 가
+한때 `APIError(status_code=..., code=..., message=...)` 로 작성되어 모두 500
+TypeError 로 떨어졌음. 정정 후 각 분기마다 dedicated subclass + class
+attribute (`http_status`/`code`) 패턴 적용 — 다른 라우터들의 `*ValidationError`
+와 동일 컨벤션. 신규 SSO 라우터 추가 시 *반드시* 이 패턴 따를 것.
+
+In-process replay guard: `_seen_jti` dict 가 max `exp` 까지 보유. 다중
+worker / 멀티 replica 시점에는 Redis 로 backed 해야 일관성 유지 (현재는 단일
+uvicorn 가정).
+
+테스트 [[apps/api/tests/test_portal_sso.py]] — disabled 404 + malformed 401 +
+no_key 401 + happy 303 + replay 401 = 5 case (cycle 19 의 test_sso.py 와는
+별개 — 그건 SSO providers CRUD).
+
 ## 자주 묻는 것 / 함정
 
 1. **`get_settings()` 은 lru_cache** — 테스트에서 환경변수 바꿔도 재로드 안 됨.

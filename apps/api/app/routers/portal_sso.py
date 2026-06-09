@@ -34,6 +34,44 @@ from app.routers.auth import _set_refresh_cookie
 
 router = APIRouter(prefix="/api/v1/auth", tags=["portal-sso"])
 
+
+# Bug fix (2026-06-09) — `APIError.__init__()` 가 `status_code`/`code` kwarg
+# 를 받지 않아 4xx 분기가 모두 500 으로 떨어지던 문제. 다른 라우터들의
+# 표준 패턴 (subclass + class attribute) 으로 정정.
+class _SsoDisabledError(APIError):
+    http_status = 404
+    code = "sso_disabled"
+
+
+class _BadTokenError(APIError):
+    http_status = 401
+    code = "bad_token"
+
+
+class _NoKeyError(APIError):
+    http_status = 401
+    code = "no_key"
+
+
+class _InvalidTokenError(APIError):
+    http_status = 401
+    code = "invalid_token"
+
+
+class _WrongScopeError(APIError):
+    http_status = 401
+    code = "wrong_scope"
+
+
+class _ReplayError(APIError):
+    http_status = 401
+    code = "replay"
+
+
+class _NoTeamError(APIError):
+    http_status = 503
+    code = "no_team"
+
 # Tiny in-process JWKS cache + replay guard (single-process uvicorn). For multi-replica, back these
 # with Redis — same seam as the rest of the app.
 _jwks_cache: dict[str, Any] = {"keys": None, "fetched": 0.0}
@@ -66,24 +104,24 @@ async def _verify_portal_token(token: str) -> dict[str, Any]:
     try:
         header = jwt.get_unverified_header(token)
     except Exception as e:  # noqa: BLE001
-        raise APIError(status_code=401, code="bad_token", message="malformed launch token") from e
+        raise _BadTokenError("malformed launch token") from e
     key = next((k for k in keys if k.get("kid") == header.get("kid")), None) or (keys[0] if keys else None)
     if key is None:
-        raise APIError(status_code=401, code="no_key", message="portal JWKS has no usable key")
+        raise _NoKeyError("portal JWKS has no usable key")
     try:
         claims = jwt.decode(
             token, key, algorithms=["RS256"], audience=s.portal_audience,
             options={"require": ["exp", "aud", "sub", "jti"]},
         )
     except Exception as e:  # noqa: BLE001
-        raise APIError(status_code=401, code="invalid_token", message="launch token rejected") from e
+        raise _InvalidTokenError("launch token rejected") from e
     if claims.get("scope") != "launch":
-        raise APIError(status_code=401, code="wrong_scope", message="not a launch token")
+        raise _WrongScopeError("not a launch token")
     now = time.time()
     _gc_jti(now)
     jti = claims["jti"]
     if jti in _seen_jti:
-        raise APIError(status_code=401, code="replay", message="launch token already used")
+        raise _ReplayError("launch token already used")
     _seen_jti[jti] = float(claims["exp"])
     return claims
 
@@ -100,7 +138,7 @@ async def _upsert_user(s: AsyncSession, *, email: str, name: str) -> dict[str, A
     # so we store a random hash the local password path can never match. Attach to the first team.
     team = (await s.execute(text("SELECT id FROM teams LIMIT 1"))).scalar()
     if team is None:
-        raise APIError(status_code=503, code="no_team", message="no team configured — run seed first")
+        raise _NoTeamError("no team configured — run seed first")
     cfg = get_settings()
     role = cfg.portal_sso_default_role if cfg.portal_sso_default_role in ("reader", "editor", "owner", "admin") else "editor"
     uid = str(uuid4())
@@ -124,7 +162,7 @@ async def portal_callback(
 ) -> Response:
     cfg = get_settings()
     if not cfg.portal_jwks_url:
-        raise APIError(status_code=404, code="sso_disabled", message="portal SSO not enabled")
+        raise _SsoDisabledError("portal SSO not enabled")
 
     claims = await _verify_portal_token(token)
     user = await _upsert_user(s, email=claims["email"], name=claims.get("name") or "")
