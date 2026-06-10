@@ -5,7 +5,7 @@
 > *작성* 가이드는 `llm-input-rules.md` / `llm-widgets-via-api.md` /
 > `llm-document-formats.md` 를 보라.
 
-문서 표현 (DocumentJSON v1.0) 은 37 종 block 의 트리다. 일부는
+문서 표현 (DocumentJSON v1.0) 은 38 종 block 의 트리다. 일부는
 plain text 로 평탄화하면 정보가 사라진다 — 표는 셀, 차트는 데이터, 피벗은
 계산이다. 이 문서는 **각 block 을 사람-가독 형태로 풀어내는 규칙** +
 인용 / 참조 시 어떤 식별자를 쓸지 정한다.
@@ -85,7 +85,13 @@ plain text 로 평탄화하면 정보가 사라진다 — 표는 셀, 차트는 
 | `paragraph.meta.note === 'page-break-before'` | 페이지 나눔 — 무시 |
 | `pivot-table` ★ | **별도 챕터 §3** |
 | `slicer` ★ | **별도 챕터 §4** |
+| `timeline` ★ | slicer 의 날짜 range 변형 — **§4** 와 동일하게 시점 의존성을 명시 |
 | `spreadsheet` | `cells[]` 의 numeric/text 만 평탄화. formula 는 *원문 인용* 후 결과 (계산된 값) 도 함께 |
+
+> 집계 위젯 4종 (`pivot-table` / `table` / `chart` / `kpi-cards`) 은
+> 독자가 셀·막대·카드를 클릭해 raw rows 를 검증 (drill 모달) 하고
+> CSV/TSV 로 내보낼 수 있다 — 인용 시 "원본 행으로 검증 가능" 이라고
+> 언급해도 된다.
 
 ---
 
@@ -111,9 +117,10 @@ plain text 로 평탄화하면 정보가 사라진다 — 표는 셀, 차트는 
 5. **필터 / Top N** — `filters` 의 `in`/`top_n`/`bottom_n` 은 "(상위 10개
    만), (선택된 부서: Sales, R&D)" 식으로 *제외된 데이터가 있음을 명시*.
    LLM 이 모든 데이터를 본 듯 답하면 오답.
-6. **boundSlicers** — 다른 slicer 가 이 피벗의 필터를 결정한다. 답변
-   시점의 slicer 상태는 LLM 이 알 수 없으니 "현재 활성 slicer 에 따라
-   결과가 다를 수 있음" 단서를 한 줄 넣어라.
+6. **boundSlicers** — 같은 문서의 slicer / timeline 이 이 위젯의 필터를
+   결정한다 (Pivot 뿐 아니라 Table·Chart·KpiCards 4종 모두 지원). 답변
+   시점의 slicer / timeline 상태는 LLM 이 알 수 없으니 "현재 활성
+   slicer / 선택 기간에 따라 결과가 다를 수 있음" 단서를 한 줄 넣어라.
 7. **숫자는 *유효 자릿수* 만**. raw `12345.6789` 를 그대로 옮기지 말고
    `numberFormat` 따르거나 thousands+2dp 정도로.
 8. **drill-down 데이터는 *질문이 있을 때만***. 표 평탄화는 정보 없는
@@ -132,7 +139,7 @@ plain text 로 평탄화하면 정보가 사라진다 — 표는 셀, 차트는 
 
 ---
 
-## 4. Slicer 읽기 ★
+## 4. Slicer / Timeline 읽기 ★
 
 `SlicerBlock` 은 인터랙티브 widget — 사용자가 chip 을 클릭하면 같은
 문서의 pivot/chart 가 다시 그려진다. LLM 은 chip 상태를 직접 보지
@@ -146,6 +153,14 @@ plain text 로 평탄화하면 정보가 사라진다 — 표는 셀, 차트는 
 - `multiSelect=true` 면 다중 가능 — 답변에 그 가능성을 적시.
 - slicer 자체가 정보 source 가 아니다 — *어떤 값이 선택 가능한지*
   목록만 전달 (distinct values).
+
+`TimelineBlock` 은 slicer 의 날짜 range 변형이다 — chip 대신 날짜
+슬라이더 2개로 `[from, to]` 구간을 고르고, bound 위젯에
+`{field, op:'between', value:[lo,hi]}` 필터가 걸린다. 선택 구간 역시
+휘발성 UI 상태라 LLM 은 현재 구간을 알 수 없다 — "선택된 기간에 따라
+결과가 달라질 수 있음" 단서를 slicer 와 똑같이 넣어라. `default`
+(`[isoFrom, isoTo]` 2-원소) 와 `min`/`max` (도메인) 가 있으면 그 값만
+사실로 인용 가능.
 
 ---
 

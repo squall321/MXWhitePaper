@@ -126,6 +126,13 @@ markdown 마커 (`**bold**`, `*italic*`, `[text](url)`) 도 인식.
   모두 반영됨. docx 는 `Light Grid Accent 1` ↔ `Table Grid` 분기, html 은
   `b-table striped` ↔ `b-table no-stripe` 클래스, pptx 는 `table.horz_banding`
   토글, markdown 은 `<!-- stripe:false -->` 주석으로 옵션만 보존.
+- ★ *API 직접 작성 (§8) 한정*: `source` (inline rows | data-source 참조) +
+  `filters?` + `boundSlicers?` (§3.14) 지정 시 viewer 가 raw rows 에 필터를
+  적용한 뒤 `headers` 의 컬럼명으로 투영해 `rows` 를 *덮어씀* — 정적 rows 는
+  무시. sparse `cells` 모드는 source 무시. filters 의 `op` 에 `between` 가능
+  (value 는 `[lo, hi]` 2-tuple — 양쪽 numeric coerce 가능하면 수치 비교,
+  아니면 문자열 비교 = ISO 날짜 사전순). 독자는 행 클릭으로 raw row 전체
+  (숨겨진 컬럼 포함) 를 drill 모달에서 검증 가능. docx 본문에서는 표현 불가.
 
 ### 2.9 spreadsheet (편집 가능한 표)
 
@@ -311,6 +318,17 @@ emit 되므로 한 번 사이트에서 보여준 callout 은 다시 docx 로 내
 | MAU   | 5만   | +1k   | up    |
 ```
 
+**compute — source 에서 값 자동 계산 (API 전용)**: API 직접 작성 (§8) 시
+block 에 `source` (inline rows | data-source 참조) 를 두고 카드의
+`items[i].compute: {field, agg?, when?}` 를 지정하면 viewer 가 정적 `value` 를
+무시하고 source rows 에서 재집계해 덮어쓴다. `agg` ∈ sum (기본) / avg / count /
+min / max. `when: {field, value}` 은 *그 카드만의* 추가 row 필터 — value 가
+배열이면 in, 스칼라면 동등 비교. compute 없는 정적 카드와 compute 카드가 한
+block 에 공존 가능. block 레벨 `filters` / `boundSlicers` (§3.14) 도 지원 —
+slicer 클릭 시 compute 카드들만 동시 재계산 (정적 카드는 불변). compute 는
+`source` 가 없으면 의미 없음 — 둘을 함께 지정할 것. docx 표 패턴으로는 정적
+카드만 만들어진다.
+
 ### 3.3 chart (차트)
 
 표:
@@ -326,6 +344,19 @@ emit 되므로 한 번 사이트에서 보여준 callout 은 다시 docx 로 내
 chart 종류 명시하려면 위에 hidden marker `Widget: chart (bar)` 를 추가
 (line/bar/pie/area/radar/scatter). marker 없으면 *autodetect 안 함* —
 chart 는 표와 모양이 같아서 자동 인식 위험. **marker 권장.**
+
+**source/labelField/aggregations — raw rows 자동 집계 (API 전용)**: API 직접
+작성 (§8) 시 `source` (inline rows | data-source 참조) + `labelField` +
+`aggregations: [{field, agg?, name?, color?, yAxisIndex?}]` *셋을 모두* 지정하면
+viewer 가 raw rows 를 labelField 의 distinct 값 (first-seen 순) 으로 그룹하고
+시리즈별 (field, agg) 집계로 `data.labels` / `data.series` 를 **덮어쓴다 —
+이때 정적 `data` 는 무시됨**. `agg` ∈ sum (기본) / avg / count / min / max,
+`name` 미지정 시 field 가 시리즈 라벨, `yAxisIndex` ∈ 0|1 (dual-axis).
+셋 중 하나라도 빠지면 기존 정적 `data` 가 그대로 렌더 (100% 하위호환).
+`filters` / `boundSlicers` (§3.14) 로 slicer/timeline 연동 가능. 독자는
+막대/조각 클릭 (line/bar/area/pie/radar/scatter) 으로 해당 그룹의 raw rows 를
+drill 모달에서 검증 가능 (xy-line 은 drill 제외). docx 표 패턴으로는 정적
+data 차트만 생성된다.
 
 ### 3.4 gantt (간트 차트)
 
@@ -465,10 +496,80 @@ docx 가 strokes 를 표현 못 함 — *MX 안에서만 작성 가능*. docx �
 - **TOP N** — `filters: [{field: "v", op: "top_n", value: 10}]`.
 - **계산 필드** — `values: [{expr: "revenue - cost", agg: "sum",
   label: "이익"}]`.
+- **slicer 연동** — `boundSlicers: [<slicer/timeline 의 ULID>]` 를 나열하면
+  같은 문서의 슬라이서 (§3.14) / 타임라인 (§3.15) 상태에 반응해 재계산.
 
 전체 키 / 8 aggregator / 산술 식 syntax 는
 [llm-widgets-via-api §3.22](./llm-widgets-via-api.md#322-pivot-table-피벗-표-)
 참조.
+
+### 3.14 slicer (크로스-위젯 필터 chip) ★
+
+**docx 로는 만들 수 없다 — API 전용** (§3.13 pivot-table 과 동일). 한 field 의
+distinct 값들을 chip 그룹으로 노출하고, 독자가 chip 을 클릭하면 같은 문서에서
+`boundSlicers` 에 이 slicer 의 id 를 나열한 위젯들 (pivot-table / table /
+chart / kpi-cards) 이 `{field, op: 'in', value}` 필터를 받아 재계산된다.
+
+```jsonc
+{
+  "type": "slicer",
+  "id": "01JSLICER000000000000000XX",  // ULID — bound 위젯이 이 id 를 참조
+  "label": "부서",                      // 선택 — chip 그룹 위 라벨
+  "field": "dept",                      // 필수 — slice 할 필드명
+  "source": { "kind": "inline", "rows": [
+    { "dept": "DS", "revenue": 120 },
+    { "dept": "DX", "revenue": 90 }
+  ]},
+  "multiSelect": false,                 // 선택, 기본 false — 재클릭 시 해제
+  "default": ["DS"]                     // 선택 — 초기 활성 값
+}
+```
+
+연동: 반응할 위젯 쪽에 `boundSlicers: ["01JSLICER000000000000000XX"]` 를 추가.
+`source` 는 `{kind: "data-source", dataSourceId}` 로 같은 DataSourceBlock 을
+가리켜도 됨 — 보통 bound 위젯과 *같은 source* 를 공유하는 게 자연스럽다.
+
+함정:
+
+- `field` 는 source rows 에 *실존하는 키* 여야 함 — 오타 시 chip 이 비거나
+  필터가 모든 행을 걸러버린다.
+- `default` 의 값도 rows 의 실제 distinct 값과 일치해야 초기 상태가 의미 있음.
+- `multiSelect` 미지정 (false) 이면 한 번에 chip 하나 — 재클릭으로 해제.
+- slicer 와 bound 위젯의 source 데이터가 서로 다르면 (distinct 값 불일치)
+  클릭해도 아무것도 안 걸러지는 chip 이 생긴다.
+
+### 3.15 timeline (날짜 range 필터) ★
+
+**docx 로는 만들 수 없다 — API 전용**. slicer 와 같은 boundSlicers 메커니즘을
+공유하지만 chip 대신 날짜 range 슬라이더 2개 (from/to). bound 위젯은
+`{field, op: 'between', value: [isoFrom, isoTo]}` 필터를 받는다.
+
+```jsonc
+{
+  "type": "timeline",
+  "id": "01JTLINE000000000000000XXX",
+  "label": "기간",                          // 선택 — 슬라이더 위 라벨
+  "field": "date",                          // 필수 — ISO 날짜 필드명
+  "source": { "kind": "inline", "rows": [
+    { "date": "2026-01-05", "revenue": 10 },
+    { "date": "2026-02-11", "revenue": 14 }
+  ]},
+  "min": "2026-01-01",                      // 선택 — 도메인. 미지정 시 rows 에서 추론
+  "max": "2026-03-31",
+  "default": ["2026-01-01", "2026-02-28"]   // 선택 — 정확히 2-원소 [from, to]
+}
+```
+
+함정:
+
+- `field` 의 값은 ISO-8601 (`YYYY-MM-DD`) 문자열이어야 함 — between 비교가
+  사전순 = 시간순이 되는 전제. `2026/1/5` 같은 비-ISO 표기는 정렬이 깨진다.
+- `default` 는 *정확히 2-원소* (`minItems: 2, maxItems: 2`) — 1개나 3개면
+  schema 가 거부.
+- `min`/`max` 미지정 시 source rows 의 `field` 값에서 추론 — rows 가 비어
+  있으면 도메인이 없어 슬라이더가 무의미.
+- 한 위젯이 `boundSlicers` 에 slicer 와 timeline 을 *동시에* 나열해 둘 다
+  반응 가능 (같은 store / 같은 메커니즘).
 
 ---
 
@@ -534,6 +635,8 @@ import 후 MX 에디터에서 확인하고 필요시 수정.
 - [ ] tabs/accordion 은 marker 필요
 - [ ] iframe/video/file/pdf/doc-link/glossary 는 marker 필수
 - [ ] image-annotation/whiteboard 는 docx 에서 만들지 말고 MX 에서 직접
+- [ ] interactive 위젯 (slicer/timeline) 은 API 전용 — `field` 가 `source`
+      rows 에 실존하는지, boundSlicers 의 ULID 가 실제 블록 id 인지 정합 확인
 
 ---
 

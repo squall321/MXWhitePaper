@@ -63,7 +63,7 @@ ETag 잠금: 수정 엔드포인트는 `If-Match: W/"<doc_id>-<version>"` 헤더
   },
   "sections": [
     {
-      "id": "01J3ZSEC0000000000000001",
+      "id": "01J3ZSEC000000000000000001",
       "level": 1,
       "title": "개요",
       "blocks": [
@@ -203,15 +203,53 @@ LaTeX 표기. `display`: `"block"` | `"inline"`.
     ["Q2", "120", "20%"]
   ],
   "caption": "분기별 매출 요약",
+  "footer": {
+    "show": true,
+    "label": "합계",
+    "aggregates": ["", "sum", ""]
+  },
   "options": {
-    "footer": "sum",
     "density": "normal"
   }
 }
 ```
 
-`options.footer`: `"sum"`/`"avg"`/`"min"`/`"max"`/null.
+`footer` 는 **top-level** (options 안 아님) — `{show, label?, aggregates}`.
+`aggregates` 는 컬럼별 `""`(skip)/`"sum"`/`"avg"`/`"count"`/`"min"`/`"max"` 배열.
 `options.density`: `"compact"`/`"normal"`/`"comfortable"`.
+
+**2026-06 신설 — `source` / `filters` / `boundSlicers` (동적 표):**
+
+`source` 를 지정하면 viewer 가 raw rows 에 `filters` + 슬라이서 필터를 적용한 뒤
+`headers` 의 컬럼명으로 투영해 `rows` 를 덮어쓴다 (`rows` 는 placeholder — 빈
+배열 가능). `source` 미지정 시 100% 기존 정적 동작.
+
+```json
+{
+  "type": "table",
+  "id": "<ULID>",
+  "headers": ["dept", "date", "amount"],
+  "rows": [],
+  "source": {
+    "kind": "inline",
+    "rows": [
+      {"dept": "Sales", "date": "2026-01-15", "amount": 120, "deal_id": "D-001"},
+      {"dept": "R&D",   "date": "2026-01-22", "amount": 80,  "deal_id": "D-002"}
+    ]
+  },
+  "filters": [{"field": "amount", "op": "gt", "value": 50}],
+  "boundSlicers": ["<SLICER_ULID>"]
+}
+```
+
+- `source`: `{kind:"inline", rows:[...]}` 또는 `{kind:"data-source", dataSourceId:"<ULID>"}`.
+- `filters[].op` ∈ `in|not_in|gt|lt|between|top_n|bottom_n`. `between` 은 `value` 가
+  `[lo, hi]` 2-tuple (numeric 양쪽 coerce 가능 시 수치 비교, 아니면 문자열 비교).
+- sparse `cells` 모드에서는 `source` / 슬라이서 필터가 무시된다 (병합 셀 의미상
+  행 단위 필터 불가).
+- viewer 에서 행 클릭 → drill 모달: 그 source row 의 **전체** 컬럼 (headers 에 없는
+  hidden 컬럼 포함) 표시 — 독자가 투영된 값을 raw 로 검증 가능.
+- `boundSlicers` 사용 패턴은 §3.26 참조.
 
 ### 3.9 kpi-cards (KPI 카드) ★
 
@@ -230,6 +268,37 @@ LaTeX 표기. `display`: `"block"` | `"inline"`.
 `trend`: `"up"` | `"down"` | `"flat"`. `delta` 는 문자열 또는 숫자.
 선택적 `options.stripe` (boolean, default `true`) — 카드 단위 zebra (한 칸 건너 blue).
 
+**2026-06 신설 — `source` + `items[i].compute` (자동 계산 카드):**
+
+```json
+{
+  "type": "kpi-cards",
+  "id": "<ULID>",
+  "source": {
+    "kind": "inline",
+    "rows": [
+      {"dept": "Sales", "status": "closed", "amount": 120},
+      {"dept": "R&D",   "status": "open",   "amount": 80}
+    ]
+  },
+  "items": [
+    {"label": "총 매출",   "value": 0, "compute": {"field": "amount", "agg": "sum"}},
+    {"label": "마감 건수", "value": 0,
+     "compute": {"field": "amount", "agg": "count",
+                 "when": {"field": "status", "value": "closed"}}},
+    {"label": "분기 목표", "value": "500"}
+  ]
+}
+```
+
+- `compute` 가 있는 카드는 viewer 가 source rows 에서 `(field, agg)` 로 재계산해
+  정적 `value` 를 덮어쓴다 (`value` 는 placeholder 라도 필수). `agg` ∈
+  `sum|avg|count|min|max` (기본 `sum`).
+- `when` 은 **그 카드만의** 추가 row 필터 — `value` 가 배열이면 `in`, 스칼라면 동등 비교.
+- 정적 카드 (compute 없음) 와 동적 카드를 한 block 에 공존 가능.
+- block 레벨 `filters?` / `boundSlicers?` 도 지원 (table/chart 와 동일 shape, §3.26) —
+  `source` 없으면 무시.
+
 ### 3.10 chart (데이터 차트) ★
 
 ```json
@@ -240,7 +309,7 @@ LaTeX 표기. `display`: `"block"` | `"inline"`.
   "engine": "recharts",
   "title": "월별 사용자",
   "data": {
-    "categories": ["1월", "2월", "3월", "4월"],
+    "labels": ["1월", "2월", "3월", "4월"],
     "series": [
       {"name": "신규", "values": [120, 150, 180, 210]},
       {"name": "이탈", "values": [10, 12, 15, 18]}
@@ -252,6 +321,45 @@ LaTeX 표기. `display`: `"block"` | `"inline"`.
 `chartType`: `"line"` | `"bar"` | `"pie"` | `"area"` | `"radar"` | `"scatter"`.
 `engine`: `"recharts"` (기본, 단순) | `"echarts"` (고급 인터랙션 — markPoint/
 markArea/dataZoom/brush 등 추가 `options` 필드로 ECharts 옵션 직접 전달).
+
+**2026-06 신설 — `source` + `labelField` + `aggregations` (동적 차트):**
+
+셋을 **모두** 지정하면 viewer 가 raw rows 를 `labelField` 로 그룹하고 시리즈별
+`(field, agg)` 로 집계해 `data.{labels,series}` 를 덮어쓴다. 하나라도 빠지면
+기존 정적 `data` 그대로 렌더 (100% 하위호환).
+
+```json
+{
+  "type": "chart",
+  "id": "<ULID>",
+  "chartType": "bar",
+  "title": "부서별 매출 / 건수",
+  "data": {"labels": [], "series": []},
+  "source": {
+    "kind": "inline",
+    "rows": [
+      {"dept": "Sales", "amount": 120},
+      {"dept": "R&D",   "amount": 80},
+      {"dept": "Sales", "amount": 200}
+    ]
+  },
+  "labelField": "dept",
+  "aggregations": [
+    {"field": "amount", "agg": "sum",   "name": "매출 합계"},
+    {"field": "amount", "agg": "count", "name": "건수", "yAxisIndex": 1}
+  ],
+  "boundSlicers": ["<SLICER_ULID>"]
+}
+```
+
+- `aggregations[]` 한 entry = 한 시리즈. `agg` ∈ `sum|avg|count|min|max` (기본 `sum`),
+  `name` 미지정 시 field 명, `color` (CSS hex/named), `yAxisIndex` ∈ `0|1` (dual-axis).
+- labels 순서 = `labelField` distinct 값의 first-seen 순서.
+- `filters?` / `boundSlicers?` 는 raw rows 단계에 적용 (table 과 동일 shape, §3.26) —
+  `source` 없는 chart 에 적어두면 silently no-op.
+- viewer 에서 막대/포인트 클릭 → 해당 그룹 raw rows drill 모달
+  (`line|bar|area|pie|radar|scatter` 지원, `xy-line` 은 제외) — 독자가 집계값을
+  raw 로 검증 가능.
 
 ### 3.11 gantt (간트 차트)
 
@@ -542,12 +650,18 @@ cross-tab 집계. 외부 LLM 이 "월별 매출 + 작년 동월 대비" 같은 �
 - 후속 item 이 선행 item 참조 가능 (예: `` H1 = `Q1` + `Q2` ``)
 - 잘못된 formula / 0 나누기 / unknown 라벨 → 그 셀만 null. 에러 throw 없음
 
+**G2 (2026-06)** — `boundSlicers?: ULID[]`:
+
+같은 문서의 SlicerBlock / TimelineBlock id 를 나열하면 슬라이서 조작 시
+pivot 이 재집계된다 (slicer 의 active values 가 `{field, op:"in", value}` 필터로
+기존 `filters` 에 concat). 구성 패턴은 §3.26 참조.
+
 LLM 산출 보고서 예시 — "2024년 분기별 부서 매출, Q1+Q2 합계":
 
 ```json
 {
   "type": "pivot-table",
-  "id": "01PIVOTREPORT2024Q4REVENUE",
+  "id": "01PVTRPRT2024Q4REV00000001",
   "source": {
     "kind": "inline",
     "rows": [
@@ -582,6 +696,211 @@ figure-index / gantt) 이 공유한다. 모두 `options.stripe` (boolean, defaul
 가장 안전한 패턴: 클래스 정의를 보고 pydantic 의 필수 필드만 채워 보낸 뒤
 응답이 422 면 `error.details.errors` 가 부족한 필드를 알려줌. 이게 실질적인
 스키마 디스커버리 방법.
+
+### 3.24 slicer (크로스-위젯 필터 chip) ★
+
+같은 문서의 다른 위젯 (pivot-table / table / chart / kpi-cards) 을 필터링하는
+chip 그룹. 단독으로는 아무 효과 없음 — 소비 위젯의 `boundSlicers` 에 이 블록의
+id 를 적어야 동작 (§3.26).
+
+```json
+{
+  "type": "slicer",
+  "id": "<ULID>",
+  "label": "부서",
+  "field": "dept",
+  "multiSelect": true,
+  "default": ["Sales"],
+  "source": {
+    "kind": "inline",
+    "rows": [
+      {"dept": "Sales"},
+      {"dept": "R&D"},
+      {"dept": "HR"}
+    ]
+  }
+}
+```
+
+- `field` 필수 — source rows 의 어느 field 의 distinct values 를 chip 으로 노출할지.
+- `source`: `{kind:"inline", rows}` 또는 `{kind:"data-source", dataSourceId}`
+  (DataSourceBlock 의 rows 재사용 — 보통 소비 위젯이 가리키는 것과 같은 id).
+- `multiSelect` 기본 `false` — chip 한 개만 활성, 재클릭 시 해제. `true` 면 다중 선택.
+- `default`: 초기 활성 값 배열 (string). 미지정 시 빈 set = 전체 통과.
+- chip 클릭 시 bound 위젯들이 `{field, op:"in", value:[활성값...]}` 필터로 재계산.
+
+### 3.25 timeline (날짜 범위 필터) ★
+
+slicer 의 날짜-범위 판. from/to 슬라이더 2개로 구간을 고르면 bound 위젯에
+`{field, op:"between", value:[isoFrom, isoTo]}` 필터가 적용된다.
+
+```json
+{
+  "type": "timeline",
+  "id": "<ULID>",
+  "label": "기간",
+  "field": "date",
+  "min": "2026-01-01",
+  "max": "2026-04-30",
+  "default": ["2026-01-01", "2026-03-31"],
+  "source": {
+    "kind": "inline",
+    "rows": [
+      {"date": "2026-01-15"},
+      {"date": "2026-02-18"},
+      {"date": "2026-04-25"}
+    ]
+  }
+}
+```
+
+- `field`: ISO-8601 (`YYYY-MM-DD`) 날짜 field 이름.
+- `min` / `max`: 슬라이더 도메인. 미지정 시 source rows 의 `field` 값에서 추론.
+- `default`: `[isoFrom, isoTo]` 정확히 2-원소. 미지정 시 전체 통과.
+- `between` 비교는 양쪽 numeric coerce 가능 시 수치, 아니면 문자열 비교
+  (ISO 날짜는 사전순 = 시간순이라 안전).
+- slicer 와 같은 메커니즘 공유 — 소비 위젯의 `boundSlicers` 한 배열에 slicer 와
+  timeline id 를 혼용해 적는다.
+
+### 3.26 cross-widget filter 구성 패턴 ★
+
+slicer + timeline 이 pivot / table / chart / kpi-cards 를 **동시에** 필터링하는
+완전한 레시피. (골든 샘플: `packages/shared/samples/17-cross-widget-filter.json`)
+
+구성 순서:
+
+1. raw rows 를 정한다 — 아래처럼 각 블록의 `source` 에 inline 으로 복제하거나,
+   DataSourceBlock 이 있으면 `{kind:"data-source", dataSourceId}` 로 한 곳만 가리킨다.
+2. slicer (`dept`) + timeline (`date`) 블록을 만들고 **그 id 를 기억**한다.
+3. 소비 위젯마다 같은 `source` + `boundSlicers: [slicerId, timelineId]` 를 적는다.
+4. 결과: chip 클릭 / 슬라이더 이동 → bound 위젯 전부 동시 재계산.
+
+```json
+{
+  "id": "01JWXSECT00000000000000001",
+  "level": 1,
+  "title": "부서별 매출 대시보드",
+  "blocks": [
+    {
+      "type": "slicer",
+      "id": "01JWXSCRDEPT00000000000001",
+      "label": "부서",
+      "field": "dept",
+      "multiSelect": true,
+      "source": {
+        "kind": "inline",
+        "rows": [
+          {"dept": "Sales", "date": "2026-01-15", "amount": 120},
+          {"dept": "R&D",   "date": "2026-02-02", "amount": 80},
+          {"dept": "Sales", "date": "2026-03-15", "amount": 200},
+          {"dept": "HR",    "date": "2026-04-08", "amount": 40}
+        ]
+      }
+    },
+    {
+      "type": "timeline",
+      "id": "01JWXTMRANGE00000000000001",
+      "label": "기간",
+      "field": "date",
+      "min": "2026-01-01",
+      "max": "2026-04-30",
+      "source": {
+        "kind": "inline",
+        "rows": [
+          {"dept": "Sales", "date": "2026-01-15", "amount": 120},
+          {"dept": "R&D",   "date": "2026-02-02", "amount": 80},
+          {"dept": "Sales", "date": "2026-03-15", "amount": 200},
+          {"dept": "HR",    "date": "2026-04-08", "amount": 40}
+        ]
+      }
+    },
+    {
+      "type": "pivot-table",
+      "id": "01JWXPVTMNTH00000000000001",
+      "source": {
+        "kind": "inline",
+        "rows": [
+          {"dept": "Sales", "date": "2026-01-15", "amount": 120},
+          {"dept": "R&D",   "date": "2026-02-02", "amount": 80},
+          {"dept": "Sales", "date": "2026-03-15", "amount": 200},
+          {"dept": "HR",    "date": "2026-04-08", "amount": 40}
+        ]
+      },
+      "rows": [{"field": "date", "group": "month"}],
+      "cols": ["dept"],
+      "values": [{"field": "amount", "agg": "sum", "label": "매출 합계"}],
+      "totals": {"row": true, "col": true, "grand": true},
+      "boundSlicers": ["01JWXSCRDEPT00000000000001", "01JWXTMRANGE00000000000001"]
+    },
+    {
+      "type": "table",
+      "id": "01JWXTBRAW0000000000000001",
+      "caption": "raw 거래 내역",
+      "headers": ["dept", "date", "amount"],
+      "rows": [],
+      "source": {
+        "kind": "inline",
+        "rows": [
+          {"dept": "Sales", "date": "2026-01-15", "amount": 120},
+          {"dept": "R&D",   "date": "2026-02-02", "amount": 80},
+          {"dept": "Sales", "date": "2026-03-15", "amount": 200},
+          {"dept": "HR",    "date": "2026-04-08", "amount": 40}
+        ]
+      },
+      "boundSlicers": ["01JWXSCRDEPT00000000000001", "01JWXTMRANGE00000000000001"]
+    },
+    {
+      "type": "chart",
+      "id": "01JWXCHDEPT000000000000001",
+      "chartType": "bar",
+      "title": "부서별 매출 합계",
+      "data": {"labels": [], "series": []},
+      "source": {
+        "kind": "inline",
+        "rows": [
+          {"dept": "Sales", "date": "2026-01-15", "amount": 120},
+          {"dept": "R&D",   "date": "2026-02-02", "amount": 80},
+          {"dept": "Sales", "date": "2026-03-15", "amount": 200},
+          {"dept": "HR",    "date": "2026-04-08", "amount": 40}
+        ]
+      },
+      "labelField": "dept",
+      "aggregations": [{"field": "amount", "agg": "sum", "name": "매출"}],
+      "boundSlicers": ["01JWXSCRDEPT00000000000001", "01JWXTMRANGE00000000000001"]
+    },
+    {
+      "type": "kpi-cards",
+      "id": "01JWXKP1AGG000000000000001",
+      "source": {
+        "kind": "inline",
+        "rows": [
+          {"dept": "Sales", "date": "2026-01-15", "amount": 120},
+          {"dept": "R&D",   "date": "2026-02-02", "amount": 80},
+          {"dept": "Sales", "date": "2026-03-15", "amount": 200},
+          {"dept": "HR",    "date": "2026-04-08", "amount": 40}
+        ]
+      },
+      "boundSlicers": ["01JWXSCRDEPT00000000000001", "01JWXTMRANGE00000000000001"],
+      "items": [
+        {"label": "총 매출", "value": 0, "compute": {"field": "amount", "agg": "sum"}},
+        {"label": "건수",    "value": 0, "compute": {"field": "amount", "agg": "count"}}
+      ]
+    }
+  ],
+  "subsections": []
+}
+```
+
+함정:
+
+- `boundSlicers` 의 id 는 **같은 문서 안의** slicer / timeline 블록 id 여야 함.
+  오타 → silently no-op (에러 없음).
+- 소비 위젯에 `source` 가 없으면 `boundSlicers` 는 무시된다 (필터를 걸 raw rows
+  가 없으므로).
+- slicer 의 `field` (위 예시의 `dept`) 가 소비 위젯 source rows 에 실제 존재해야
+  필터가 의미 있다.
+- viewer 에서 표 행 / 차트 막대 / pivot 셀 / KPI 카드 클릭 → drill 모달로 독자가
+  집계값을 raw rows 로 검증할 수 있다 (CSV/TSV/클립보드 export 포함).
 
 ---
 
@@ -712,7 +1031,8 @@ figure-index / gantt) 이 공유한다. 모두 `options.stripe` (boolean, defaul
 
 ### 타임라인 / 마일스톤
 
-현재 전용 widget 없음. 두 가지 근사:
+표시용 전용 widget 없음 (§3.25 의 `timeline` 블록은 날짜-범위 *필터* 위젯이라
+마일스톤 표현용이 아님). 두 가지 근사:
 
 선택지 A — **gantt** (날짜 기반):
 
@@ -924,8 +1244,8 @@ If-Match: W/"<doc_id>-<version>"
 Content-Type: application/json
 
 {
-  "section_id": "01J3ZSEC0000000000000001",
-  "after_block_id": "01J3ZPAR0000000000000005",
+  "section_id": "01J3ZSEC000000000000000001",
+  "after_block_id": "01J3ZPAR000000000000000005",
   "block": {
     "type": "callout",
     "id": "<NEW_ULID>",
@@ -940,11 +1260,11 @@ Content-Type: application/json
 ### 4.2 블록 1 개 교체
 
 ```http
-PATCH /api/v1/documents/my-doc/blocks/01J3ZPAR0000000000000005
+PATCH /api/v1/documents/my-doc/blocks/01J3ZPAR000000000000000005
 If-Match: W/"<doc_id>-<version>"
 
 {
-  "block": { "type": "paragraph", "id": "01J3ZPAR0000000000000005", "text": "수정된 본문" }
+  "block": { "type": "paragraph", "id": "01J3ZPAR000000000000000005", "text": "수정된 본문" }
 }
 ```
 

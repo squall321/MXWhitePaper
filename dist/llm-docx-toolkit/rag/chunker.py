@@ -7,6 +7,7 @@ Inputs (TRACKED_SOURCES, see _lock.py):
   - packages/shared/schemas/document.json  → required/optional fields per widget
   - dist/llm-docx-toolkit/llm-system-prompt.md → optional, skip if missing (G7)
   - dist/llm-docx-toolkit/examples/build_examples.py → fixture block lists
+  - docs/archive/*/_INDEX.md (ARCHIVE_INDEX_GLOB)  → per-cycle decision rows
 
 Output ordering is deterministic: chunks are sorted by ``id`` so the
 JSONL hash is reproducible (used by ``_lock.py`` drift detection).
@@ -26,6 +27,7 @@ from typing import Any
 try:
     from .retriever import Chunk
     from ._lock import (
+        ARCHIVE_INDEX_GLOB,
         collect_source_hashes,
         diff_hashes,
         hash_file,
@@ -36,6 +38,7 @@ except ImportError:  # script execution: `python chunker.py`
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from retriever import Chunk  # type: ignore[no-redef]
     from _lock import (  # type: ignore[no-redef]
+        ARCHIVE_INDEX_GLOB,
         collect_source_hashes,
         diff_hashes,
         hash_file,
@@ -495,6 +498,71 @@ def _chunks_from_viewer_guide(repo_root: Path) -> list[Chunk]:
     return out
 
 
+# ── 4c. archive indexes (docs/archive/<YYYY-MM>/_INDEX.md) ────────────
+
+# Cells split on unescaped pipes only — long feature cells contain literal
+# `\|` sequences (e.g. "drillLabel \| null").
+_UNESCAPED_PIPE_RE = re.compile(r"(?<!\\)\|")
+
+
+def _chunks_from_archive(repo_root: Path) -> list[Chunk]:
+    """One chunk per data row of each monthly archive index table
+    (ARCHIVE_INDEX_GLOB). Cell 1 is a dense per-cycle decision summary
+    ("why did we do X") — the whole cell is the chunk text; the feature
+    name (first token before '(') is the heading + id slug."""
+    out: list[Chunk] = []
+    seen_ids: set[str] = set()
+    for path in sorted(repo_root.glob(ARCHIVE_INDEX_GLOB)):
+        month = path.parent.name
+        for ln in path.read_text(encoding="utf-8").splitlines():
+            ln = ln.strip()
+            if not ln.startswith("|"):
+                continue
+            cells = _UNESCAPED_PIPE_RE.split(ln)[1:-1]
+            if len(cells) < 4:
+                continue
+            # Anchor on the last 3 columns (match / date / path) — feature
+            # cells occasionally contain a raw `|` (e.g. "(string | {...})"),
+            # so everything before them is rejoined as cell 1.
+            feature_cell = "|".join(cells[:-3]).strip()
+            match_cell = cells[-3].strip()
+            date_cell = cells[-2].strip()
+            if not feature_cell:
+                continue
+            # Skip the header row ("| feature |" / "| Feature |") and the
+            # divider row ("| --- |" / "| :---: |").
+            if feature_cell.lower().startswith("feature"):
+                continue
+            if set(feature_cell) <= {"-", ":"}:
+                continue
+            name_part = feature_cell.split("(", 1)[0].strip()
+            if not name_part:
+                continue
+            feature = name_part.split()[0]
+            base_id = f"archive#{month}-{_slugify(feature)}"
+            if base_id in seen_ids:  # same feature twice within a month
+                n = 2
+                while f"{base_id}-{n}" in seen_ids:
+                    n += 1
+                base_id = f"{base_id}-{n}"
+            seen_ids.add(base_id)
+            text = feature_cell.replace("\\|", "|")
+            for piece_idx, piece in enumerate(_split_long(text)):
+                cid = base_id + (f"-cont{piece_idx}" if piece_idx else "")
+                out.append(Chunk(
+                    id=cid,
+                    source="archive",
+                    heading=feature,
+                    text=piece,
+                    metadata={
+                        "month": month,
+                        "match": match_cell,
+                        "date": date_cell,
+                    },
+                ))
+    return out
+
+
 # ── 5. examples (build_examples.py fixtures) ──────────────────────────
 
 # We intentionally don't import build_examples.py — it touches the real
@@ -845,6 +913,7 @@ def build_chunks(repo_root: Path) -> list[Chunk]:
     chunks.extend(_chunks_from_schema(repo_root))
     chunks.extend(_chunks_from_system_prompt(repo_root))
     chunks.extend(_chunks_from_viewer_guide(repo_root))
+    chunks.extend(_chunks_from_archive(repo_root))
     chunks.extend(_chunks_from_examples(repo_root))
     chunks.extend(_chunks_from_glossary())
     chunks.sort(key=lambda c: c.id)
@@ -954,6 +1023,7 @@ def main(argv: list[str] | None = None) -> int:
     schema_n = by_source.get("document.json", 0)
     prompt_n = by_source.get("llm-system-prompt.md", 0)
     viewer_n = by_source.get("llm-viewer-guide.md", 0)
+    archive_n = by_source.get("archive", 0)
     glossary_n = by_source.get("glossary", 0)
     examples_n = sum(v for k, v in by_source.items() if k.startswith("example:"))
 
@@ -976,6 +1046,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  document.json: {schema_n}")
     print(f"  llm-system-prompt.md: {prompt_label}")
     print(f"  llm-viewer-guide.md: {viewer_n}")
+    print(f"  archive: {archive_n}")
     print(f"  glossary (DB): {glossary_label}")
     print(f"  examples: {examples_n}")
     print(f"sha256: {sha}")

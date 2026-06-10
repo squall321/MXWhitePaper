@@ -359,4 +359,4 @@ slug 중복은 `skipped` 로 카운트 (에러 아님).
 | [[src/tests/test_imports_roundtrip.py]] | round-trip 엔드포인트 — 이미지 보존, TOC strip/verify, 헤더, 422 |
 | [[src/tests/test_imports_csv.py]] | CSV import — 행 검증, owners, 충돌 |
 | [[src/tests/test_docx_roundtrip.py]] | docx_export → docx_import 라운드트립 (CLI 와는 별개) |
-| [[src/tests/test_cli_roundtrip.py]] | CLI 단위 (예정 — Copilot 위임, `docs/copilot/roundtrip-cli-tests.md`) |
+| `src/tests/test_cli_roundtrip.py` | CLI 단위 (**미작성 — 예정**, Copilot 위임, `docs/copilot/roundtrip-cli-tests.md`. 파일 생성 시 위키링크로 승격) |

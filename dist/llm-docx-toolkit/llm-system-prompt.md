@@ -22,15 +22,16 @@
 
 ---
 
-## 2. 36 Block 한 줄 요약 (LLM 으로 만들 수 있는 29 + 사람 전용 6 + API 전용 1)
+## 2. 38 Block 한 줄 요약 (LLM 으로 만들 수 있는 29 + 사람 전용 6 + API 전용 3)
 
-스키마는 총 36 종 블록 정의. 그 중 6 종 (`spreadsheet` / `form` / `quiz` /
+스키마는 총 38 종 블록 정의. 그 중 6 종 (`spreadsheet` / `form` / `quiz` /
 `calculator` / `data-source` / `dashboard-embed`) 은 사용자 입력 / 라이브 데이터 /
 외부 시스템 의존이라 **docx 본문으로 표현 불가** — 본문에 placeholder 단락만
 두고 사람이 사이트 에디터에서 추가. 자세히는 `llm-input-rules.md` §2.17.
-`pivot-table` 은 docx 가 cross-tab 의미를 못 담아 docx 비표현 — **API 직접
-전송으로만 가능** (`llm-widgets-via-api.md` §3.22). 외부 LLM 이 보고서를
-JSON 으로 직접 생성하는 경로에서 핵심 위젯.
+`pivot-table` (cross-tab) 과 `slicer` / `timeline` (인터랙티브 cross-filter) 은
+docx 가 의미를 못 담아 docx 비표현 — **API 직접 전송으로만 가능**
+(`llm-widgets-via-api.md`). 외부 LLM 이 보고서를 JSON 으로 직접 생성하는
+경로에서 핵심 위젯.
 
 | 블록 | 형태 | 필수 신호 / 비고 |
 |---|---|---|
@@ -51,6 +52,8 @@ JSON 으로 직접 생성하는 경로에서 핵심 위젯.
 | gantt             | 표, 헤더 = `name`,`start`,`end`(+`progress`)      | 세 컬럼 |
 | flow              | code block 안 mermaid DSL                        | `graph TD` 등. Excalidraw 보존은 API 직접 |
 | pivot-table       | docx 표현 불가 — API 직접 전송                    | rows×cols×values cross-tab. 시간 그룹 + calc items |
+| slicer            | docx 표현 불가 — API 직접 전송                    | `field` distinct 값 chip 그룹 — 클릭 시 bound 위젯 필터 |
+| timeline          | docx 표현 불가 — API 직접 전송                    | ISO 날짜 `field` range 슬라이더 — between 필터 |
 | org-chart         | 들여쓰기 리스트 OR `name`/`parent` 헤더 표        | — |
 | gallery           | 연속 inline 이미지                                | **3개 이상** |
 | columns           | Word "단" 기능 (Layout > Columns > 2/3/4)        | `<w:cols num=N>` |
@@ -71,7 +74,7 @@ JSON 으로 직접 생성하는 경로에서 핵심 위젯.
 | **data-source** 👤 | placeholder 단락 + endpoint URL 명시              | 사용자가 사이트에서 라이브 연결 |
 | **dashboard-embed** 👤 | placeholder 단락 + provider/panelId           | 동일 (Grafana / Looker 등) |
 
-> 위 표가 35 블록 전부. 👤 표시 = LLM 으로 docx 생성 불가, 본문에 placeholder
+> 위 표가 38 블록 전부. 👤 표시 = LLM 으로 docx 생성 불가, 본문에 placeholder
 > 만 두라. 표에 없는 블록명을 만들어내지 마라.
 
 ---
@@ -91,6 +94,9 @@ JSON 으로 직접 생성하는 경로에서 핵심 위젯.
 | 매출  | 100억 | +10%  | up    |
 ```
 
+API 직접 전송 시: block 레벨 `source` + `items[i].compute: {field, agg?, when?}` 로
+카드 값을 rows 에서 재계산 (정적 value 덮어씀). `filters`/`boundSlicers` 지원.
+
 **chart** (marker 필수, autodetect 안 함):
 ```
 Widget: chart (bar)
@@ -98,6 +104,9 @@ Widget: chart (bar)
 | Q1    | 100     | 20     |
 ```
 `bar` → `line` / `pie` / `area` / `radar` / `scatter`.
+API 직접 전송 시: `source` + `labelField` + `aggregations: [{field, agg?, name?,
+color?, yAxisIndex?}]` *셋 다* 지정하면 viewer 가 rows 를 그룹·집계해
+`data.{labels,series}` 를 생성 — 미지정 시 정적 data 그대로 (하위호환).
 
 **gantt**:
 ```
@@ -148,6 +157,29 @@ Widget: chart (bar)
 - `expr` 계산 필드: `{"expr": "revenue - cost", "agg": "sum", "label": "이익"}`.
 
 자세히는 `llm-widgets-via-api.md` §3.22.
+
+**slicer / timeline** (docx 불가 — *API 직접 전송*, 인터랙티브 cross-filter):
+
+```json
+[
+ {"type":"slicer","id":"<ULID>","field":"dept",
+  "source":{"kind":"inline","rows":[{"dept":"Sales","date":"2024-01-15","v":100}]},
+  "multiSelect":true,"default":["Sales"]},
+ {"type":"timeline","id":"<ULID>","field":"date",
+  "source":{"kind":"data-source","dataSourceId":"<ULID>"},
+  "default":["2024-01-01","2024-06-30"]}
+]
+```
+
+- **slicer**: `field` (필수) 의 distinct 값을 chip 그룹으로. 클릭 시 bound
+  위젯에 `{field, op:'in'}` 필터. `multiSelect` 기본 false (재클릭 해제).
+- **timeline**: `field` (필수, ISO 날짜) 의 range 슬라이더 2개 — bound 위젯에
+  `{field, op:'between', value:[lo,hi]}`. `min`/`max` 미지정 시 rows 에서 추론.
+- **연동**: pivot-table / table / chart / kpi-cards 에 `boundSlicers:
+  ["<slicer|timeline id>"]` — 같은 문서 안의 id 만 유효.
+- **table** 도 API 경로에선 `source` + `filters` 지원 — viewer 가 rows 를
+  `headers` 컬럼명으로 투영해 채움 (sparse cells 모드는 source 무시).
+- FilterSpec `op` 는 `between` 지원 — `value` 는 `[lo, hi]` 2-tuple.
 
 **flow excalidraw** — mermaid 가 표준. *외부에서 받은 Excalidraw scene* 만
 보존할 때:

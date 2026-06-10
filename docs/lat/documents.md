@@ -314,7 +314,7 @@
   ★ `boxplot` 은 chart-boxplot 사이클 (cycle 2) 추가 — Q1/median/Q3/min/max +
   outlier 렌더, single-series numeric array 입력 (`block.options.boxplotMode`
   로 raw / precomputed 선택). helper:
-  [[apps/web/src/components/blocks/chartBoxplot.ts#computeQuartiles]].
+  [[apps/web/src/components/blocks/EChartsView.tsx#computeBoxStats]].
   ★ `xy-line` 은 시리즈마다 자유로운 `(x, y)` 쌍 — `data.labels` 무시,
   `series[].points: [{x, y, err?, errLow?, errHigh?}]` 사용. stress-strain
   처럼 시료별 측정점이 다른 데이터를 한 그림에 겹쳐 비교 + error bar.

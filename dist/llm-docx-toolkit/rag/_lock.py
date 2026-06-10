@@ -44,6 +44,11 @@ TRACKED_SOURCES = (
     "dist/llm-docx-toolkit/llm-system-prompt.md",
 )
 
+# Monthly archive decision-summary indexes (source="archive" chunks). Globbed
+# at collect time so a new docs/archive/<YYYY-MM>/ directory is tracked
+# automatically without editing TRACKED_SOURCES.
+ARCHIVE_INDEX_GLOB = "docs/archive/*/_INDEX.md"
+
 
 def hash_file(path: Path) -> str:
     """SHA-256 of file contents, hex-encoded. Returns 'missing' if absent."""
@@ -57,9 +62,13 @@ def hash_file(path: Path) -> str:
 
 
 def collect_source_hashes(repo_root: Path) -> dict[str, str]:
-    """Hash every TRACKED_SOURCES path against repo_root. Returns
-    {relative_path: sha256_hex}. Missing files map to 'missing'."""
-    return {p: hash_file(repo_root / p) for p in TRACKED_SOURCES}
+    """Hash every TRACKED_SOURCES path against repo_root, plus any archive
+    index matched by ARCHIVE_INDEX_GLOB. Returns {relative_path: sha256_hex}.
+    Missing files map to 'missing'."""
+    out = {p: hash_file(repo_root / p) for p in TRACKED_SOURCES}
+    for path in sorted(repo_root.glob(ARCHIVE_INDEX_GLOB)):
+        out[path.relative_to(repo_root).as_posix()] = hash_file(path)
+    return out
 
 
 def write_lock(

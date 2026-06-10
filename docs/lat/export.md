@@ -248,7 +248,7 @@ docx/pptx/pdf 응답은 **동기 + persist 병행**:
 4. 후속 조회는 `GET /{slug}/artifacts` (목록) 와 `GET /artifacts/{id}` (바이트).
    **FE polling 경로 없음 — 1차 응답이 곧 결과.**
 
-만료된 artifact 는 [[src/app/services/retention.py]] 류 cron 이 정리 (확인 필요).
+만료된 artifact 는 [[src/app/services/retention_runner.py]] 의 retention ticker 가 정리.
 
 ## Gotchas
 
@@ -283,5 +283,5 @@ docx/pptx/pdf 응답은 **동기 + persist 병행**:
 | [[src/tests/test_docx_export.py]] | docx 렌더 — 모든 block type 한 번씩 |
 | [[src/tests/test_docx_roundtrip.py]] | docx_export → docx_import 라운드트립 (텍스트 보존, table/list/image 보존) |
 | [[src/tests/test_pptx_export.py]] | pptx 렌더 |
-| [[src/tests/test_html_render.py]] | html 렌더 + TOC |
+| [[src/tests/test_html_export.py]] | html 렌더 + TOC |
 | [[src/tests/test_markdown_export.py]] | markdown 렌더 |

@@ -37,7 +37,7 @@ fi
 # verify dist/llm-docx-toolkit/rag/index.lock is up to date with the
 # current source hashes. Skip silently if chunker.py isn't available
 # (e.g. shallow worktree, contributor without the toolkit).
-STAGED_RAG_SOURCES=$(git diff --cached --name-only | grep -E '^(apps/api/app/services/(docx_import|widget_markers)\.py|packages/shared/schemas/document\.json|docs/llm-input-rules\.md|dist/llm-docx-toolkit/llm-system-prompt\.md)$' || true)
+STAGED_RAG_SOURCES=$(git diff --cached --name-only | grep -E '^(apps/api/app/services/(docx_import|widget_markers)\.py|packages/shared/schemas/document\.json|docs/llm-(input-rules|viewer-guide)\.md|dist/llm-docx-toolkit/llm-system-prompt\.md|docs/archive/[^/]+/_INDEX\.md)$' || true)
 if [ -n "$STAGED_RAG_SOURCES" ] && [ -f "$ROOT/dist/llm-docx-toolkit/rag/chunker.py" ] && [ -f "$ROOT/dist/llm-docx-toolkit/rag/index.lock" ]; then
   if command -v python3 >/dev/null 2>&1; then
     if ! python3 "$ROOT/dist/llm-docx-toolkit/rag/chunker.py" --check >/dev/null 2>&1; then
@@ -46,5 +46,18 @@ if [ -n "$STAGED_RAG_SOURCES" ] && [ -f "$ROOT/dist/llm-docx-toolkit/rag/chunker
     fi
   else
     echo "⚠ python3 unavailable — skipping RAG index drift check (CI will catch it)."
+  fi
+fi
+
+# 4) Knowledge-asset coverage guard (지식 자산 로드맵 Phase 1) — schema 에
+# block 이 추가되면 작성/읽기 가이드에 해당 항목이 *없을 때* 커밋을 막는다.
+# 의미 드리프트 검출 — 위의 hash 기반 RAG check 가 못 잡는 영역.
+STAGED_COVERAGE_SOURCES=$(git diff --cached --name-only | grep -E '^(packages/shared/schemas/document\.json|docs/llm-(input-rules|viewer-guide)\.md)$' || true)
+if [ -n "$STAGED_COVERAGE_SOURCES" ] && [ -f "$ROOT/dist/llm-docx-toolkit/rag/coverage_check.py" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    if ! python3 "$ROOT/dist/llm-docx-toolkit/rag/coverage_check.py" --quiet; then
+      echo "✗ 신규/변경 block 이 LLM 가이드에 미반영. 위 누락 목록을 docs/llm-input-rules.md · docs/llm-viewer-guide.md 에 추가할 것."
+      exit 1
+    fi
   fi
 fi

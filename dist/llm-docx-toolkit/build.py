@@ -115,6 +115,7 @@ a = Analysis(
     datas=[
         ({chunks}, 'rag'),
         ({lock}, 'rag'),
+        ({bm25}, 'rag'),
         ({system_prompt}, '.'),
         ({input_rules}, '.'),
         ({schema}, '.'),
@@ -188,6 +189,7 @@ a = Analysis(
     datas=[
         ({chunks}, 'rag'),
         ({lock}, 'rag'),
+        ({bm25}, 'rag'),
         ({system_prompt}, '.'),
     ] + collect_data_files('mcp'),
     hiddenimports=[
@@ -457,6 +459,20 @@ def _variant_imports_excludes(variant: str) -> tuple[str, str]:
     return hidden, excludes
 
 
+def _ensure_bm25_index() -> Path:
+    """bm25.json must be baked into mxwp-rules / mxwp-mcp: the binary's
+    _MEIPASS data dir is read-only-ish and discarded per run, so `query`
+    (default backend bm25 in lite) cannot build the index lazily there.
+    Regenerate when missing or older than chunks.jsonl."""
+    chunks = HERE / "rag" / "chunks.jsonl"
+    bm25 = HERE / "rag" / "bm25.json"
+    if not bm25.exists() or bm25.stat().st_mtime < chunks.stat().st_mtime:
+        print("[build] bm25.json stale/missing — rebuilding index")
+        run([sys.executable, "-m", "rag.cli", "index", "--backend", "bm25"],
+            cwd=HERE)
+    return bm25
+
+
 def _build_rules(
     work_dir: Path, bin_dir: Path, onefile: bool, variant: str = "lite",
 ) -> Path:
@@ -467,6 +483,7 @@ def _build_rules(
             f"rag/chunks.jsonl or rag/index.lock missing. "
             f"Run: python {HERE / 'rag' / 'chunker.py'}"
         )
+    bm25 = _ensure_bm25_index()
     extra_hidden, extra_excludes = _variant_imports_excludes(variant)
     launcher = _stage_rules_entry(work_dir)
     spec_path = work_dir / "mxwp-rules.spec"
@@ -476,6 +493,7 @@ def _build_rules(
             toolkit=repr(str(HERE)),
             chunks=repr(str(chunks)),
             lock=repr(str(lock)),
+            bm25=repr(str(bm25)),
             system_prompt=repr(str(HERE / "llm-system-prompt.md")),
             input_rules=repr(str(HERE / "llm-input-rules.md")),
             schema=repr(str(SCHEMA)),
@@ -550,6 +568,7 @@ def _build_mcp(
     launcher = _stage_mcp_entry(work_dir)
     chunks = HERE / "rag" / "chunks.jsonl"
     lock = HERE / "rag" / "index.lock"
+    bm25 = _ensure_bm25_index()
     spec_path = work_dir / "mxwp-mcp.spec"
     spec_path.write_text(
         _MCP_SPEC.format(
@@ -557,6 +576,7 @@ def _build_mcp(
             stage=repr(str(launcher.parent)),
             chunks=repr(str(chunks)),
             lock=repr(str(lock)),
+            bm25=repr(str(bm25)),
             system_prompt=repr(str(HERE / "llm-system-prompt.md")),
             onefile="True" if onefile else "False",
             toolkit_dir=repr(str(HERE)),

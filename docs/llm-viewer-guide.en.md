@@ -5,7 +5,7 @@
 > For *authoring* guidance, see `llm-input-rules.md`, `llm-widgets-via-api.md`,
 > and `llm-document-formats.md`.
 
-The document representation (DocumentJSON v1.0) is a tree of 37 block
+The document representation (DocumentJSON v1.0) is a tree of 38 block
 types. Several of them lose information when flattened to plain text —
 tables are cells, charts are data, pivots are computations. This document
 defines **the rules for unpacking each block into a human-readable form**
@@ -90,7 +90,13 @@ When reading:
 | `paragraph.meta.note === 'page-break-before'` | page break — ignore |
 | `pivot-table` ★ | **dedicated chapter §3** |
 | `slicer` ★ | **dedicated chapter §4** |
+| `timeline` ★ | date-range variant of slicer — state the time-dependency exactly as in **§4** |
 | `spreadsheet` | flatten `cells[]` numeric/text only. Cite `formula` *verbatim*, then attach the computed (resolved) value as well |
+
+> The four aggregate widgets (`pivot-table` / `table` / `chart` /
+> `kpi-cards`) let the reader click a cell / bar / card to verify the
+> raw rows (drill modal) and export them as CSV/TSV — when citing, it is
+> fine to mention "verifiable against the source rows".
 
 ---
 
@@ -122,9 +128,11 @@ A pivot table cannot be reduced to plain table citation — its meaning is
    surfaced like "(top 10 only)", "(selected depts: Sales, R&D)" — make
    it clear that *some data was excluded*. Answering as if the LLM saw
    every row is wrong.
-6. **boundSlicers** — sibling slicers drive this pivot's filters. The
-   slicer state at answer time is unknown to the LLM, so add a single
-   meta-note like "results may vary by current active slicer".
+6. **boundSlicers** — sibling slicers / timelines drive this widget's
+   filters (supported on all four of Pivot, Table, Chart, and KpiCards —
+   not just Pivot). The slicer / timeline state at answer time is unknown
+   to the LLM, so add a single meta-note like "results may vary by the
+   current active slicer / selected period".
 7. **Numbers in *significant digits only***. Don't carry `12345.6789`
    verbatim — follow `numberFormat`, or fall back to thousands + 2dp.
 8. **Drill-down data only *when asked***. Flattening the whole pivot is
@@ -143,7 +151,7 @@ Revenue sum by department × quarter (raw dates auto-grouped by quarter).
 
 ---
 
-## 4. Reading Slicer ★
+## 4. Reading Slicer / Timeline ★
 
 `SlicerBlock` is an interactive widget — clicking a chip re-renders the
 sibling pivot/chart in the same document. The LLM cannot directly observe
@@ -159,6 +167,14 @@ When answering:
   in the answer.
 - The slicer itself is NOT an information source — only convey *which
   values are selectable* (the distinct value list).
+
+`TimelineBlock` is the date-range variant of a slicer — two date sliders
+pick a `[from, to]` window instead of chips, and bound widgets receive a
+`{field, op:'between', value:[lo,hi]}` filter. The selected window is the
+same volatile UI state — the LLM cannot observe the current range, so add
+the same clause: "results may vary by the selected period". Only `default`
+(a 2-element `[isoFrom, isoTo]`) and `min`/`max` (the domain), when
+present, may be cited as facts.
 
 ---
 
