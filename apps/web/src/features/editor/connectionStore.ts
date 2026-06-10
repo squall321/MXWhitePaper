@@ -78,7 +78,10 @@ export function startConnectionTracking(): () => void {
     try {
       // We use plain fetch (not the apiClient) so a 401 here doesn't trigger
       // the auth refresh loop. healthz is unauthenticated.
-      const res = await fetch('/api/v1/healthz', { method: 'GET' })
+      // Use the app base so the heartbeat reaches /mx-white-paper/api/v1/healthz behind the portal
+      // (a bare '/api/v1/healthz' 404s there → the editor would wrongly think it's offline).
+      // BASE_URL is "/" standalone, "/mx-white-paper/" behind the portal.
+      const res = await fetch(`${import.meta.env.BASE_URL}api/v1/healthz`, { method: 'GET' })
       if (res.ok) {
         useConnectionStore.setState({ lastPing: Date.now(), online: true })
       } else {

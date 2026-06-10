@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-10T12:17:18.561300+00:00",
+  "generated_at": "2026-06-10T13:30:20.736848+00:00",
   "source_hashes": {
     "packages/shared/schemas/document.json": "f0f49355cd0997075a2d6b268e2c8d254d5d40d3e10abbf84b6528a364f5d582",
     "apps/api/app/services/widget_markers.py": "29b9da045c859288c6bcb1195176ee9ebb9b50c2c5376c419d5c293632a5658e",
@@ -9,7 +9,7 @@
     "docs/llm-viewer-guide.md": "bfd549f95dc44bb31496d7a98dd87b38f22a5e0c373307cf08191929aef89ee1",
     "dist/llm-docx-toolkit/llm-system-prompt.md": "7fedca117ce66c85735b49e73e7be9f609fef5e4674a1e786111a72192d002b5",
     "docs/archive/2026-05/_INDEX.md": "cb303c81d16c64c0ba4f9a275b11cfa7a3b1fbef718fefb43b7bd27d4d863dd4",
-    "docs/archive/2026-06/_INDEX.md": "c6ed85aeab3defb959ee8ebd8088ee68f22c452c874be5360ec3456d39dc20c2"
+    "docs/archive/2026-06/_INDEX.md": "fd451bf39221afe3cba498f55b572f5cba0b5e4e9539d4c1f6f2dcc13f1f3c08"
   },
   "widget_types": [
     "accordion",
@@ -31,7 +31,7 @@
     "video",
     "whiteboard"
   ],
-  "chunk_count": 267,
+  "chunk_count": 269,
   "embedding_backend_fingerprint": "bm25:v1",
-  "chunks_sha256": "1b2cfd2df772430693e0e849840f33e183b28d5685e21b4f56d18aa5cf846731"
+  "chunks_sha256": "6cc07677f0bd8c5f338f873985ab3941645ca5b9899dfc1d2cd7248eb4bfccae"
 }
