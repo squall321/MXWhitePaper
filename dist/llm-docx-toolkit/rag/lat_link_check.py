@@ -24,7 +24,11 @@ Occurrences inside fenced code blocks (``` / ~~~) and inline code spans
 (`...`) are skipped: lat docs use those to show the syntax itself.
 
 Symbol check is best effort: plain substring grep in the resolved file.
-A missing symbol is a 'symbol?' warning, not a failure.
+For '.md' targets the '#symbol' part may also be a GitHub-style heading
+anchor slug; headings are slugified (lowercase, punctuation -> '-',
+collapse '-', 한글 preserved, optional leading '2.9'-style enumeration
+dropped) and compared. A missing symbol is a 'symbol?' warning, not a
+failure.
 
 Exit 1 if any broken link is found; --warn-only forces exit 0.
 """
@@ -88,6 +92,41 @@ def candidate_paths(path: str, lat_file: Path):
     return out
 
 
+ENUM_PREFIX_RE = re.compile(r"^\d+(\.\d+)*\.?\s+")
+
+
+def _slugify(heading: str) -> str:
+    """GitHub-style slug: lowercase, non-alnum -> '-', collapse, strip."""
+    slug = "".join(
+        ch if (ch.isalnum() or ch == "_") else "-" for ch in heading.lower()
+    )
+    return re.sub(r"-+", "-", slug).strip("-")
+
+
+def heading_slugs(text: str):
+    """Anchor slugs for every markdown heading (outside code fences).
+
+    Each heading yields its full slug plus a variant with any leading
+    '2.' / '2.9'-style enumeration stripped (lat anchors use both forms).
+    """
+    slugs = set()
+    in_fence = False
+    for line in text.splitlines():
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = re.match(r"#{1,6}\s+(.+)", line)
+        if not m:
+            continue
+        heading = m.group(1).strip()
+        slugs.add(_slugify(heading))
+        slugs.add(_slugify(ENUM_PREFIX_RE.sub("", heading)))
+    slugs.discard("")
+    return slugs
+
+
 def check():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -123,8 +162,11 @@ def check():
                     text = resolved.read_text(encoding="utf-8")
                 except (UnicodeDecodeError, OSError):
                     continue
-                if symbol not in text:
-                    warnings.append((lat_file, lineno, raw, resolved))
+                if symbol in text:
+                    continue
+                if resolved.suffix == ".md" and symbol in heading_slugs(text):
+                    continue
+                warnings.append((lat_file, lineno, raw, resolved))
 
     rel = lambda p: p.relative_to(REPO_ROOT) if p.is_relative_to(REPO_ROOT) else p
 

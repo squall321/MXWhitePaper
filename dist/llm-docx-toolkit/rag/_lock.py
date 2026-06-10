@@ -32,9 +32,10 @@ LOCK_SCHEMA_VERSION = 1
 # Files whose content the RAG index reflects. ANY change here REQUIRES
 # regenerating chunks + embeddings. Listed in build order (most-stable first).
 #
-# Glossary chunks (source="glossary") come from the live `terms` table — they
-# are not file-backed so they cannot be hashed here. The `glossary` source is
-# advertised in the lock's `sources` field instead (see chunker.py main()).
+# Glossary chunks (source="glossary") come from the live `terms` table when
+# DATABASE_URL is set; the rag/glossary.json offline dump (written by
+# `chunker.py --dump-glossary`) is the file-backed fallback and IS hashed
+# here — regenerating chunks without refreshing the dump trips --check.
 TRACKED_SOURCES = (
     "packages/shared/schemas/document.json",
     "apps/api/app/services/widget_markers.py",
@@ -42,6 +43,7 @@ TRACKED_SOURCES = (
     "docs/llm-input-rules.md",
     "docs/llm-viewer-guide.md",
     "dist/llm-docx-toolkit/llm-system-prompt.md",
+    "dist/llm-docx-toolkit/rag/glossary.json",
 )
 
 # Monthly archive decision-summary indexes (source="archive" chunks). Globbed

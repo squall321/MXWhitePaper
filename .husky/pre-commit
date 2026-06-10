@@ -61,3 +61,13 @@ if [ -n "$STAGED_COVERAGE_SOURCES" ] && [ -f "$ROOT/dist/llm-docx-toolkit/rag/co
     fi
   fi
 fi
+
+# 5) lat 갱신 advisory (지식 자산 로드맵 Phase 6) — staged 파일을 참조하는
+# docs/lat/*.md 문서를 안내한다. non-blocking (출력만, 항상 통과).
+# lat 파일 자신이 staged 인 경우는 노이즈라 입력에서 제외.
+if [ -f "$ROOT/dist/llm-docx-toolkit/rag/lat_impact.py" ] && command -v python3 >/dev/null 2>&1; then
+  STAGED_LAT_IMPACT=$(git diff --cached --name-only | grep -v '^docs/lat/' || true)
+  if [ -n "$STAGED_LAT_IMPACT" ]; then
+    echo "$STAGED_LAT_IMPACT" | xargs python3 "$ROOT/dist/llm-docx-toolkit/rag/lat_impact.py" || true
+  fi
+fi

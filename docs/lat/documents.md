@@ -549,6 +549,14 @@ CamelCase / snake_case / kebab-case 만 공백 분리 (영문 식별자용) — 
 pass-through 가 정답. 회귀 가드: [[src/tests/test_search_hardening.py]] 의
 `test_korean_partial_match_works_natively` (live Meili 필요, 부재 시 skip).
 
+### knowledge 인덱스 (Phase 5 — 시스템 지식 검색)
+
+`documents` 와 별개의 Meilisearch `knowledge` 인덱스 —
+[[src/app/search/knowledge_indexer.py#rebuild_index]] 가 docs/lat/*.md +
+docs/*.md (H2 단위) + docs/archive/*/_INDEX.md (행당 1 doc) 를 전량 교체 적재.
+엔드포인트: `GET /api/v1/search/knowledge` (로그인 필수, `?q=&kind=`) +
+`POST /api/v1/search/knowledge/reindex` (admin 전용) — [[src/app/routers/search.py]].
+
 ### `links` 테이블 인덱스 (backlinks query)
 
 [[src/app/repos/document_repo.py#list_backlinks]] 의 `WHERE L.target_doc_id = ?

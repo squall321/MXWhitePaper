@@ -773,6 +773,11 @@ def _chunks_from_examples(repo_root: Path) -> list[Chunk]:
 
 # ── 6. glossary (DB-backed — approved terms) ──────────────────────────
 
+# Offline dump written by `--dump-glossary` (see _dump_glossary). Lets
+# DB-less environments (CI, PyInstaller binaries) still build glossary
+# chunks. Module-level so tests can monkeypatch it.
+_GLOSSARY_DUMP_PATH = Path(__file__).resolve().parent / "glossary.json"
+
 
 def _glossary_database_url() -> str | None:
     """Resolve a *sync* asyncpg-compatible URL for the chunker. We accept the
@@ -846,22 +851,66 @@ def _fetch_glossary_rows(dsn: str) -> list[dict[str, Any]]:
             loop.close()
 
 
-def _chunks_from_glossary(*, verbose: bool = False) -> list[Chunk]:
-    """Produce one chunk per approved term in the DB. Skips silently when
-    DATABASE_URL is unset or the DB is unreachable — the chunker still
-    succeeds for file-based sources, mirroring how the optional
-    llm-system-prompt source behaves."""
+def _glossary_rows_from_dump() -> list[dict[str, Any]]:
+    """Load rows previously written by ``--dump-glossary``."""
+    payload = json.loads(_GLOSSARY_DUMP_PATH.read_text(encoding="utf-8"))
+    rows = payload.get("rows") or []
+    return [r for r in rows if isinstance(r, dict)]
+
+
+def _glossary_source_mode() -> str | None:
+    """Which glossary source applies: 'db' (DATABASE_URL set), 'dump'
+    (glossary.json present), or None (skip)."""
+    if _glossary_database_url():
+        return "db"
+    if _GLOSSARY_DUMP_PATH.exists():
+        return "dump"
+    return None
+
+
+def _dump_glossary() -> int:
+    """--dump-glossary mode: fetch approved terms from the DB and write
+    them to glossary.json so DB-less builds can use them. Fails loudly —
+    an explicit dump with no DB is an error, unlike the chunk build."""
+    from datetime import datetime, timezone
+
     dsn = _glossary_database_url()
     if not dsn:
+        print("✗ --dump-glossary requires DATABASE_URL (or MXWP_DATABASE_URL)",
+              file=sys.stderr)
+        return 1
+    rows = _fetch_glossary_rows(dsn)
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "rows": rows,
+    }
+    _GLOSSARY_DUMP_PATH.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
+    print(f"wrote {len(rows)} glossary rows to {_GLOSSARY_DUMP_PATH}")
+    return 0
+
+
+def _chunks_from_glossary(*, verbose: bool = False) -> list[Chunk]:
+    """Produce one chunk per approved term. Source priority: live DB when
+    DATABASE_URL is set, else the glossary.json dump if present, else skip
+    silently — the chunker still succeeds for file-based sources, mirroring
+    how the optional llm-system-prompt source behaves."""
+    mode = _glossary_source_mode()
+    if mode is None:
         if verbose:
-            print("  glossary: DATABASE_URL not set — skipping")
+            print("  glossary: DATABASE_URL not set, no glossary.json — skipping")
         return []
-    try:
-        rows = _fetch_glossary_rows(dsn)
-    except Exception as e:  # noqa: BLE001 — DB unreachable is non-fatal here
-        if verbose:
-            print(f"  glossary: skipped ({type(e).__name__}: {e})")
-        return []
+    if mode == "db":
+        try:
+            rows = _fetch_glossary_rows(_glossary_database_url())
+        except Exception as e:  # noqa: BLE001 — DB unreachable is non-fatal here
+            if verbose:
+                print(f"  glossary: skipped ({type(e).__name__}: {e})")
+            return []
+    else:  # dump
+        rows = _glossary_rows_from_dump()
 
     out: list[Chunk] = []
     for r in rows:
@@ -988,11 +1037,19 @@ def main(argv: list[str] | None = None) -> int:
         help="Don't regenerate. Read existing index.lock and exit 1 if any "
              "tracked source hash drifted vs the live repo.",
     )
+    p.add_argument(
+        "--dump-glossary", action="store_true",
+        help="Fetch approved terms via DATABASE_URL and write rag/glossary.json "
+             "(offline dump for DB-less builds), then exit.",
+    )
     args = p.parse_args(argv)
 
     repo_root = args.repo or _autodetect_repo_root()
     out_path = args.out or (Path(__file__).resolve().parent / "chunks.jsonl")
     lock_path = out_path.parent / "index.lock"
+
+    if args.dump_glossary:
+        return _dump_glossary()
 
     if args.check:
         return _check_lock(repo_root, out_path, lock_path)
@@ -1031,10 +1088,13 @@ def main(argv: list[str] | None = None) -> int:
     prompt_label = (
         f"{prompt_n}" if prompt_path.exists() else "skipped — file missing"
     )
-    if _glossary_database_url():
-        glossary_label = f"{glossary_n}"
+    glossary_mode = _glossary_source_mode()
+    if glossary_mode == "db":
+        glossary_line = f"glossary (DB): {glossary_n}"
+    elif glossary_mode == "dump":
+        glossary_line = f"glossary (dump): {glossary_n}"
     else:
-        glossary_label = "skipped — DATABASE_URL unset"
+        glossary_line = "glossary: skipped — DATABASE_URL unset, no glossary.json"
 
     print(f"wrote {len(chunks)} chunks to {out_path} (sha={sha})")
     print(f"wrote lock     to {lock_path}")
@@ -1047,7 +1107,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  llm-system-prompt.md: {prompt_label}")
     print(f"  llm-viewer-guide.md: {viewer_n}")
     print(f"  archive: {archive_n}")
-    print(f"  glossary (DB): {glossary_label}")
+    print(f"  {glossary_line}")
     print(f"  examples: {examples_n}")
     print(f"sha256: {sha}")
     return 0

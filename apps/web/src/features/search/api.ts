@@ -142,6 +142,56 @@ export async function searchSuggest(
   }
 }
 
+/** One hit from GET /search/knowledge (시스템 지식 — lat/guide/doc/archive). */
+export type KnowledgeKind = 'lat' | 'guide' | 'doc' | 'archive'
+
+export interface KnowledgeSearchHit {
+  id: string
+  kind: KnowledgeKind
+  area: string
+  /** Repo-relative source path (e.g. `docs/lat/documents.md`). Not routable. */
+  doc_path: string
+  heading: string
+  snippet: string
+  /** Per-field highlighted strings with `<mark>` tags. */
+  highlights?: {
+    heading?: string
+    body?: string
+  }
+}
+
+export interface KnowledgeSearchResponse {
+  items: KnowledgeSearchHit[]
+  total: number
+}
+
+/**
+ * GET /api/v1/search/knowledge — 시스템 지식 (docs/lat, 가이드, 아카이브) 검색.
+ */
+export async function searchKnowledge(
+  q: string,
+  opts: { kind?: KnowledgeKind | ''; limit?: number; offset?: number } = {},
+): Promise<KnowledgeSearchResponse> {
+  if (!q.trim()) return { items: [], total: 0 }
+  const params: Record<string, string | number> = { q }
+  if (opts.kind) params.kind = opts.kind
+  if (typeof opts.limit === 'number') params.limit = opts.limit
+  if (typeof opts.offset === 'number') params.offset = opts.offset
+  try {
+    const res = await apiClient.get('/search/knowledge', { params })
+    const env = (res.data ?? {}) as {
+      data?: KnowledgeSearchHit[]
+      meta?: { total?: number }
+    }
+    return {
+      items: Array.isArray(env.data) ? env.data : [],
+      total: env.meta?.total ?? 0,
+    }
+  } catch {
+    return { items: [], total: 0 }
+  }
+}
+
 export interface WidgetRegistryEntry {
   type: string
   name: string

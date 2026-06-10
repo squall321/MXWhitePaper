@@ -5,7 +5,7 @@ vi.mock('@/lib/api/client', () => ({
 }))
 
 import { apiClient } from '@/lib/api/client'
-import { searchDocuments, listWidgets } from '../api'
+import { searchDocuments, listWidgets, searchKnowledge } from '../api'
 
 const get = apiClient.get as unknown as ReturnType<typeof vi.fn>
 
@@ -33,6 +33,43 @@ describe('search/api · searchDocuments()', () => {
   it('returns [] when envelope.data is missing', async () => {
     get.mockResolvedValueOnce({ data: {} })
     await expect(searchDocuments('q')).resolves.toEqual([])
+  })
+})
+
+describe('search/api · searchKnowledge()', () => {
+  it('returns empty for an empty query without hitting the API', async () => {
+    await expect(searchKnowledge(' ')).resolves.toEqual({ items: [], total: 0 })
+    expect(get).not.toHaveBeenCalled()
+  })
+
+  it('unwraps the {data, meta} envelope and passes kind/limit/offset params', async () => {
+    get.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'lat:documents:etag',
+            kind: 'lat',
+            area: 'documents',
+            doc_path: 'docs/lat/documents.md',
+            heading: 'ETag 검증',
+            snippet: '...',
+          },
+        ],
+        meta: { total: 7, limit: 20, offset: 0, q: 'etag' },
+      },
+    })
+    const r = await searchKnowledge('etag', { kind: 'lat', limit: 20, offset: 0 })
+    expect(r.total).toBe(7)
+    expect(r.items).toHaveLength(1)
+    expect(r.items[0]!.doc_path).toBe('docs/lat/documents.md')
+    expect(get).toHaveBeenCalledWith('/search/knowledge', {
+      params: { q: 'etag', kind: 'lat', limit: 20, offset: 0 },
+    })
+  })
+
+  it('returns empty on 404 (index not yet built)', async () => {
+    get.mockRejectedValueOnce({ response: { status: 404 } })
+    await expect(searchKnowledge('q')).resolves.toEqual({ items: [], total: 0 })
   })
 })
 

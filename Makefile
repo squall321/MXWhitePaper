@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs status migrate seed schema-gen schema-validate openapi-dump codegen test lint clean pyinstaller-smoke build-web ship-web pull-web ship
+.PHONY: help build up down restart logs status migrate seed schema-gen schema-validate openapi-dump codegen test lint clean pyinstaller-smoke glossary-dump build-web ship-web pull-web ship
 
 help:
 	@echo "MX White Paper — Apptainer-based stack"
@@ -15,6 +15,7 @@ help:
 	@echo "  make schema-validate Validate golden samples against JSON Schema"
 	@echo "  make openapi-dump    Dump FastAPI runtime spec to apps/api/openapi.json"
 	@echo "  make codegen         schema-gen + openapi-dump (run before commit)"
+	@echo "  make glossary-dump   Dump approved glossary terms to rag/glossary.json (needs DB up)"
 	@echo "  make test            Run all tests"
 	@echo "  make lint            Run linters across the monorepo"
 	@echo "  make clean           Remove .sif images and bind-mounted data (DESTRUCTIVE)"
@@ -99,6 +100,12 @@ pyinstaller-smoke:
 		done && \
 		echo "✓ all 4 binaries respond to --version" \
 	'
+
+# Phase 3 — glossary offline dump. DB 의 approved terms 를
+# rag/glossary.json 으로 저장해 DB 없는 환경 (CI / PyInstaller binary) 에서도
+# chunker 가 glossary chunk 를 만들 수 있게 한다.
+glossary-dump:
+	apptainer exec instance://mxwp_api bash -lc 'cd /workspace && set -a && . ./.env && set +a && python3 dist/llm-docx-toolkit/rag/chunker.py --dump-glossary'
 
 # ── Portal ship pipeline (D) ─────────────────────────────────────────
 # 3-zone 아키텍처를 자동화 — online build host → Drive → cae00.

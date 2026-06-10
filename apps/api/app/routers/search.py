@@ -32,11 +32,11 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import get_current_user
+from app.core.auth import get_current_user, require_admin
 from app.core.db import get_db
 from app.core.errors import envelope
 from app.repos import document_repo
-from app.search import meili_indexer
+from app.search import knowledge_indexer, meili_indexer
 from app.services import search_audit
 
 router = APIRouter(prefix="/api/v1", tags=["search"])
@@ -172,6 +172,61 @@ async def search(
             "q": q,
         },
     )
+
+
+@router.get("/search/knowledge")
+async def search_knowledge(
+    q: str = Query(default="", description="검색 쿼리 (빈 값 허용)"),
+    kind: str | None = Query(default=None, description="lat / guide / doc / archive"),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    _user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    """시스템 지식 (docs/lat, docs/*.md, archive _INDEX) 검색 — Phase 5."""
+    try:
+        result = knowledge_indexer.search(q=q, limit=limit, offset=offset, kind=kind)
+    except Exception as e:
+        # 인덱스 장애 시에도 200 + 빈 결과로 fallback (/search 와 동일 정책)
+        return envelope(
+            data=[],
+            meta={"total": 0, "limit": limit, "offset": offset, "q": q, "error": str(e)},
+        )
+
+    hits = result.get("hits", []) if isinstance(result, dict) else []
+    items: list[dict[str, Any]] = []
+    for h in hits:
+        formatted = h.get("_formatted") or {}
+        body_h = formatted.get("body") or ""
+        snippet = body_h or (h.get("body") or "")[:200]
+        items.append({
+            "id": h.get("id"),
+            "kind": h.get("kind"),
+            "area": h.get("area"),
+            "doc_path": h.get("doc_path"),
+            "heading": h.get("heading"),
+            "snippet": snippet,
+            "highlights": {
+                "heading": formatted.get("heading") or h.get("heading") or "",
+                "body": body_h,
+            },
+        })
+    return envelope(
+        data=items,
+        meta={
+            "total": result.get("estimatedTotalHits") or len(items),
+            "limit": limit,
+            "offset": offset,
+            "q": q,
+        },
+    )
+
+
+@router.post("/search/knowledge/reindex")
+async def reindex_knowledge(
+    _admin: dict[str, Any] = Depends(require_admin),
+) -> dict[str, Any]:
+    """knowledge 인덱스 전량 재구축 — admin 전용."""
+    return envelope(data=knowledge_indexer.rebuild_index())
 
 
 @router.get("/search/suggest")

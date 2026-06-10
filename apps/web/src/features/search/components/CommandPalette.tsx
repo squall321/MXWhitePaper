@@ -12,12 +12,14 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   useDocumentSearch,
+  useKnowledgeSearch,
   useRecentSearches,
   useWidgetRegistry,
   useSearchSuggest,
   type RecentSearchItem,
 } from '../hooks/useSearch'
 import type { DocSearchHit, WidgetRegistryEntry } from '../api'
+import { KnowledgeResults } from './KnowledgeResults'
 import { useAuthStore } from '@/features/auth/store'
 import { cn } from '@/components/ui/cn'
 
@@ -36,7 +38,7 @@ interface CommandPaletteProps {
   initialQuery?: string
 }
 
-type Tab = 'docs' | 'tags' | 'people' | 'widgets' | 'commands'
+type Tab = 'docs' | 'knowledge' | 'tags' | 'people' | 'widgets' | 'commands'
 
 /** Filter chip state for the 문서 tab. */
 interface DocFilters {
@@ -92,6 +94,10 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
     [grouped],
   )
 
+  // 시스템 지식 (lat/guide/doc/archive) — roadmap Phase 5.
+  const { data: knowledge, isFetching: knowledgeFetching } = useKnowledgeSearch(q)
+  const knowledgeHits = knowledge?.items ?? []
+
   // Suggest payload for tags / people tabs (cycle 5 J3).
   const { data: suggest } = useSearchSuggest(q)
   const tagMatches = suggest?.tags ?? []
@@ -132,13 +138,15 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
   const optionCount =
     tab === 'docs'
       ? flatDocs.length
-      : tab === 'tags'
-        ? tagMatches.length
-        : tab === 'people'
-          ? peopleMatches.length
-          : tab === 'widgets'
-            ? widgetMatches.length
-            : commandMatches.length
+      : tab === 'knowledge'
+        ? knowledgeHits.length
+        : tab === 'tags'
+          ? tagMatches.length
+          : tab === 'people'
+            ? peopleMatches.length
+            : tab === 'widgets'
+              ? widgetMatches.length
+              : commandMatches.length
 
   const goDoc = useCallback(
     (hit: DocSearchHit, newTab = false) => {
@@ -254,7 +262,7 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
     }
     if (e.key === 'Tab') {
       e.preventDefault()
-      const order: Tab[] = ['docs', 'tags', 'people', 'widgets', 'commands']
+      const order: Tab[] = ['docs', 'knowledge', 'tags', 'people', 'widgets', 'commands']
       const i = order.indexOf(tab)
       const dir = e.shiftKey ? -1 : 1
       const next = order[(i + dir + order.length) % order.length]!
@@ -264,7 +272,7 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       // Left/right arrows switch tabs (cycle 5 J3 polish).
       e.preventDefault()
-      const order: Tab[] = ['docs', 'tags', 'people', 'widgets', 'commands']
+      const order: Tab[] = ['docs', 'knowledge', 'tags', 'people', 'widgets', 'commands']
       const i = order.indexOf(tab)
       const dir = e.key === 'ArrowRight' ? 1 : -1
       const next = order[(i + dir + order.length) % order.length]!
@@ -303,7 +311,7 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
         }
         return
       }
-      // widgets tab — there's no nav action, but we still register the search.
+      // widgets / knowledge tab — there's no nav action, but we still register the search.
       if (q.trim()) recent.push(q.trim())
     }
   }
@@ -351,6 +359,12 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
               onClick={() => setTab('docs')}
               label="문서"
               count={flatDocs.length}
+            />
+            <TabBtn
+              active={tab === 'knowledge'}
+              onClick={() => setTab('knowledge')}
+              label="시스템 지식"
+              count={knowledgeHits.length}
             />
             <TabBtn
               active={tab === 'tags'}
@@ -402,6 +416,16 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
                 onClearRecent={() => recent.clear()}
                 onPick={goDoc}
                 onGraph={goGraph}
+                activeIdx={activeIdx}
+                onActivate={setActiveIdx}
+                listboxId={listboxId}
+                optionId={optionId}
+              />
+            ) : tab === 'knowledge' ? (
+              <KnowledgeResults
+                q={q}
+                items={knowledgeHits}
+                loading={knowledgeFetching}
                 activeIdx={activeIdx}
                 onActivate={setActiveIdx}
                 listboxId={listboxId}

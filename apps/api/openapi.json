@@ -15187,6 +15187,119 @@
         ]
       }
     },
+    "/api/v1/search/knowledge": {
+      "get": {
+        "description": "시스템 지식 (docs/lat, docs/*.md, archive _INDEX) 검색 — Phase 5.",
+        "operationId": "search_knowledge_api_v1_search_knowledge_get",
+        "parameters": [
+          {
+            "description": "검색 쿼리 (빈 값 허용)",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "검색 쿼리 (빈 값 허용)",
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "description": "lat / guide / doc / archive",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "lat / guide / doc / archive",
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Search Knowledge Api V1 Search Knowledge Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Knowledge",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/api/v1/search/knowledge/reindex": {
+      "post": {
+        "description": "knowledge 인덱스 전량 재구축 — admin 전용.",
+        "operationId": "reindex_knowledge_api_v1_search_knowledge_reindex_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reindex Knowledge Api V1 Search Knowledge Reindex Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Reindex Knowledge",
+        "tags": [
+          "search"
+        ]
+      }
+    },
     "/api/v1/search/suggest": {
       "get": {
         "description": "Omnibox 자동완성 — 태그 / 작성자 / 부서 / 최근 문서 제목.\n\n각 카테고리별 최대 `limit` 건. 빈 q 면 모든 리스트가 빈 배열.",

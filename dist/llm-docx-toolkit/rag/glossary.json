@@ -1,0 +1,149 @@
+{
+  "generated_at": "2026-06-10T22:33:12.462776+00:00",
+  "rows": [
+    {
+      "term": "ASP",
+      "definition": "Average Selling Price — 평균 판매가.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "CRDT",
+      "definition": "Conflict-free Replicated Data Type — 분산 협업 데이터 구조.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "CTR",
+      "definition": "Click-Through Rate — 클릭률.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "DAU",
+      "definition": "Daily Active Users — 일 활성 사용자 수.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "DPS",
+      "definition": "Days Payable Sales",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "ETag",
+      "definition": "Entity Tag — HTTP 캐시 및 동시성 제어용 식별자.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "GTM",
+      "definition": "Go-To-Market — 시장 진입 전략 및 출시 계획.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "LCP",
+      "definition": "Largest Contentful Paint — 핵심 콘텐츠 렌더 완료 시각.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "MAU",
+      "definition": "Monthly Active Users — 월 활성 사용자 수.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "MoM",
+      "definition": "Month-over-Month — 전월 대비 증감.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "NPS",
+      "definition": "Net Promoter Score — 추천 의향 점수.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "QoQ",
+      "definition": "Quarter-over-Quarter — 전분기 대비 증감.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "RAG",
+      "definition": "Retrieval-Augmented Generation — 검색 결합 LLM 응답 기법.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "SSOT",
+      "definition": "Single Source Of Truth — 단일 진실 공급원.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "Unpacked",
+      "definition": "삼성 신제품 글로벌 공개 행사.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    },
+    {
+      "term": "YoY",
+      "definition": "Year-over-Year — 전년 대비 증감.",
+      "domain": "general",
+      "domain_name": "일반",
+      "subdomain": null,
+      "term_en": null,
+      "aliases": []
+    }
+  ]
+}

@@ -7,18 +7,45 @@ asyncpg) is covered separately by the API test suite.
 """
 from __future__ import annotations
 
+import json
 import os
 from unittest import mock
 
 from rag import chunker as ck
 
 
-def test_glossary_skipped_without_database_url(monkeypatch) -> None:
-    # Drop the env var, even if the host has one set.
+def test_glossary_skipped_without_database_url(monkeypatch, tmp_path) -> None:
+    # Drop the env var, even if the host has one set, and point the dump
+    # path at a nonexistent file so the fallback doesn't kick in.
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("MXWP_DATABASE_URL", raising=False)
+    monkeypatch.setattr(ck, "_GLOSSARY_DUMP_PATH", tmp_path / "glossary.json")
     chunks = ck._chunks_from_glossary()
     assert chunks == []
+
+
+def test_glossary_built_from_dump_without_database_url(monkeypatch, tmp_path) -> None:
+    """No DATABASE_URL + glossary.json present → chunks come from the dump."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("MXWP_DATABASE_URL", raising=False)
+    dump = tmp_path / "glossary.json"
+    dump.write_text(json.dumps({
+        "generated_at": "2026-06-10T00:00:00+00:00",
+        "rows": [{
+            "term": "GaN",
+            "definition": "질화갈륨 반도체.",
+            "domain": "semiconductor",
+            "domain_name": "반도체",
+            "subdomain": None,
+            "term_en": None,
+            "aliases": [],
+        }],
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(ck, "_GLOSSARY_DUMP_PATH", dump)
+    chunks = ck._chunks_from_glossary()
+    assert len(chunks) == 1
+    assert chunks[0].id == "glossary:semiconductor:gan"
+    assert chunks[0].source == "glossary"
 
 
 def test_glossary_skipped_when_db_unreachable(monkeypatch) -> None:
@@ -78,9 +105,10 @@ def test_glossary_chunks_built_from_mocked_rows(monkeypatch) -> None:
 
 def test_build_chunks_does_not_break_when_glossary_skipped(monkeypatch, tmp_path) -> None:
     """Regression guard: file-based sources keep producing chunks even
-    when glossary is skipped (no DATABASE_URL)."""
+    when glossary is skipped (no DATABASE_URL, no dump)."""
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("MXWP_DATABASE_URL", raising=False)
+    monkeypatch.setattr(ck, "_GLOSSARY_DUMP_PATH", tmp_path / "glossary.json")
     repo_root = ck._autodetect_repo_root()
     chunks = ck.build_chunks(repo_root)
     # File sources (rules / widgets / schema) yield plenty of chunks.

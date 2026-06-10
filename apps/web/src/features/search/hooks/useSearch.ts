@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { searchDocuments, listWidgets, searchSuggest } from '../api'
+import { searchDocuments, listWidgets, searchSuggest, searchKnowledge } from '../api'
 
 /**
  * 200ms debounce for the document search field.
@@ -24,6 +24,22 @@ export function useDocumentSearch(q: string) {
     retry: 1,
     placeholderData: keepPreviousData,
     select: (rows) => (Array.isArray(rows) ? rows : []),
+  })
+}
+
+/**
+ * 시스템 지식 (lat/guide/doc/archive) 검색 — debounced 200ms.
+ * Empty query → no fetch ({ items: [], total: 0 }).
+ */
+export function useKnowledgeSearch(q: string) {
+  const debounced = useDebounced(q, 200)
+  return useQuery({
+    queryKey: ['search', 'knowledge', debounced],
+    queryFn: () => searchKnowledge(debounced),
+    enabled: debounced.trim().length > 0,
+    staleTime: 30_000,
+    retry: 1,
+    placeholderData: keepPreviousData,
   })
 }
 
