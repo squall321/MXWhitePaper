@@ -1,11 +1,34 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type KeyboardEvent,
+} from 'react'
 import type { SpreadsheetBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
-import { evaluateAll, refOf, parseRef } from './spreadsheet/formulaEngine'
+import {
+  evaluateAll,
+  refOf,
+  parseRef,
+  FN_NAMES,
+  DOTTED_ALIASES,
+} from './spreadsheet/formulaEngine'
 import { remapCells } from './spreadsheet/referenceShift'
 import { spreadsheetToDelimited, type CsvDialect } from './spreadsheet/csvExport'
+import { parseSpreadsheetPaste } from './spreadsheet/pasteParse'
 import { getZebraClass } from './zebra'
+
+/** '=' 뒤 함수명 자동완성 후보 — 기본 함수 + 도트 별칭, 알파벳순. */
+const FN_CANDIDATES = [
+  ...FN_NAMES,
+  ...DOTTED_ALIASES.map(([alias]) => alias),
+].sort()
+
+/** 입력 끝의 "함수명 타이핑 중" 토큰 (예: '=SUM(ST' → 'ST'). */
+const FN_PREFIX_RE = /[A-Z.]+$/i
 
 interface Props {
   slug: Slug
@@ -35,6 +58,11 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
   const [local, setLocal] = useState<SpreadsheetBlock>(block)
   const [error, setError] = useState<string | null>(null)
   const [focused, setFocused] = useState<string | null>(null)
+  // Formula 자동완성 dropdown 상태. acDismissed 는 Escape 로 닫은 뒤 다음
+  // 입력 변경까지 다시 열리지 않게 하는 latch.
+  const [acIndex, setAcIndex] = useState(0)
+  const [acDismissed, setAcDismissed] = useState(false)
+  const [acPos, setAcPos] = useState<{ left: number; top: number } | null>(null)
   const debounceRef = useRef<number | null>(null)
 
   // Refs into each input so we can imperatively focus on Tab/Enter/Arrow.
@@ -126,7 +154,70 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
     focusRef(refOf(nc, nr))
   }
 
+  // 후보 목록 — focused 셀의 raw 가 '=' 로 시작하고 마지막 토큰이 함수명
+  // prefix 일 때만 (최대 8개). 빈 배열이면 dropdown 닫힘.
+  const acCandidates = useMemo<string[]>(() => {
+    if (!focused || acDismissed) return []
+    const raw = cells[focused] ?? ''
+    if (!raw.startsWith('=')) return []
+    const m = FN_PREFIX_RE.exec(raw)
+    if (!m) return []
+    const prefix = m[0].toUpperCase()
+    return FN_CANDIDATES.filter((n) => n.startsWith(prefix)).slice(0, 8)
+  }, [focused, acDismissed, cells])
+  const acSelected = Math.min(acIndex, acCandidates.length - 1)
+
+  // Dropdown 을 input 바로 아래에 fixed 로 anchoring — 표가 overflow-x-auto
+  // 컨테이너 안이라 absolute 로는 클리핑되기 때문. (useLayoutEffect 는 SSR
+  // smoke 테스트에서 경고를 내므로 useEffect — 한 프레임 지연은 무시 가능.)
+  useEffect(() => {
+    if (!focused || acCandidates.length === 0) {
+      setAcPos(null)
+      return
+    }
+    const el = inputRefs.current.get(focused)
+    if (!el) {
+      setAcPos(null)
+      return
+    }
+    const r = el.getBoundingClientRect()
+    setAcPos({ left: r.left, top: r.bottom })
+  }, [focused, acCandidates])
+
+  const acceptCandidate = (name: string) => {
+    if (!focused) return
+    const raw = cells[focused] ?? ''
+    const m = FN_PREFIX_RE.exec(raw)
+    if (!m) return
+    setCell(focused, raw.slice(0, m.index) + name + '(')
+    setAcIndex(0)
+  }
+
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>, ref: string) => {
+    // 자동완성 dropdown 열림 상태 — 셀 이동보다 먼저 가로챈다. 닫힘 상태에선
+    // 아래 기존 Tab/Enter/방향키 이동이 그대로 동작.
+    if (focused === ref && acCandidates.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setAcIndex((i) => Math.min(acCandidates.length - 1, i + 1))
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setAcIndex((i) => Math.max(0, i - 1))
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        acceptCandidate(acCandidates[acSelected] as string)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setAcDismissed(true)
+        return
+      }
+    }
     if (e.key === 'Tab') {
       e.preventDefault()
       moveFocus(ref, e.shiftKey ? -1 : 1, 0)
@@ -154,6 +245,38 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
       e.preventDefault()
       moveFocus(ref, 0, 1)
     }
+  }
+
+  /**
+   * 엑셀/Sheets 멀티셀 paste — 클립보드에 탭/개행이 있으면 기본 동작을
+   * 막고 focused 셀을 anchor 로 그리드를 채운다. 경계를 넘으면 rows/cols 를
+   * cap (26x200) 까지 자동 확장. 단일 토큰은 null → 기본 paste 유지.
+   */
+  const onPaste = (e: ClipboardEvent<HTMLInputElement>, ref: string) => {
+    const grid = parseSpreadsheetPaste(e.clipboardData.getData('text/plain'))
+    if (!grid) return
+    e.preventDefault()
+    const pos = parseRef(ref)
+    if (!pos) return
+    const nextCells = { ...(local.cells ?? {}) }
+    let nextRows = rows
+    let nextCols = cols
+    for (let r = 0; r < grid.length; r++) {
+      const tr = pos.row + r
+      if (tr >= 200) break
+      if (tr + 1 > nextRows) nextRows = tr + 1
+      const row = grid[r] ?? []
+      for (let c = 0; c < row.length; c++) {
+        const tc = pos.col + c
+        if (tc >= 26) break
+        if (tc + 1 > nextCols) nextCols = tc + 1
+        const target = refOf(tc, tr)
+        const value = row[c] ?? ''
+        if (value === '') delete nextCells[target]
+        else nextCells[target] = value
+      }
+    }
+    schedule({ ...local, rows: nextRows, cols: nextCols, cells: nextCells })
   }
 
   /**
@@ -322,6 +445,30 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
                     className="group relative min-w-[80px] border border-gray-200 px-2 py-1 font-medium"
                   >
                     <span>{colLabel}</span>
+                    {cols < 26 && (
+                      <span className="absolute right-6 top-1/2 flex -translate-y-1/2 gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => insertCol(c)}
+                          aria-label={`열 ${colLabel} 왼쪽에 삽입`}
+                          title="왼쪽에 열 삽입"
+                          data-spreadsheet-insert-col-left={colLabel}
+                          className="rounded px-0.5 text-[10px] leading-none text-gray-400 opacity-0 hover:bg-smsg-100 hover:text-smsg-700 focus:opacity-100 group-hover:opacity-100"
+                        >
+                          +←
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => insertCol(c + 1)}
+                          aria-label={`열 ${colLabel} 오른쪽에 삽입`}
+                          title="오른쪽에 열 삽입"
+                          data-spreadsheet-insert-col-right={colLabel}
+                          className="rounded px-0.5 text-[10px] leading-none text-gray-400 opacity-0 hover:bg-smsg-100 hover:text-smsg-700 focus:opacity-100 group-hover:opacity-100"
+                        >
+                          +→
+                        </button>
+                      </span>
+                    )}
                     {cols > 1 && (
                       <button
                         type="button"
@@ -349,6 +496,30 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
                   className="group relative border border-gray-200 bg-gray-50 px-2 py-1 text-center font-medium text-gray-500"
                 >
                   <span>{r + 1}</span>
+                  {rows < 200 && (
+                    <span className="absolute left-0 top-1/2 flex -translate-y-1/2 flex-col">
+                      <button
+                        type="button"
+                        onClick={() => insertRow(r)}
+                        aria-label={`행 ${r + 1} 위에 삽입`}
+                        title="위에 행 삽입"
+                        data-spreadsheet-insert-row-above={r + 1}
+                        className="rounded px-0.5 text-[9px] leading-none text-gray-400 opacity-0 hover:bg-smsg-100 hover:text-smsg-700 focus:opacity-100 group-hover:opacity-100"
+                      >
+                        +↑
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => insertRow(r + 1)}
+                        aria-label={`행 ${r + 1} 아래에 삽입`}
+                        title="아래에 행 삽입"
+                        data-spreadsheet-insert-row-below={r + 1}
+                        className="rounded px-0.5 text-[9px] leading-none text-gray-400 opacity-0 hover:bg-smsg-100 hover:text-smsg-700 focus:opacity-100 group-hover:opacity-100"
+                      >
+                        +↓
+                      </button>
+                    </span>
+                  )}
                   {rows > 1 && (
                     <button
                       type="button"
@@ -388,12 +559,21 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
                         value={display}
                         data-cell-ref={ref}
                         aria-label={`셀 ${ref}`}
-                        onFocus={() => setFocused(ref)}
+                        onFocus={() => {
+                          setFocused(ref)
+                          setAcIndex(0)
+                          setAcDismissed(false)
+                        }}
                         onBlur={() => {
                           setFocused((cur) => (cur === ref ? null : cur))
                         }}
-                        onChange={(e) => setCell(ref, e.target.value)}
+                        onChange={(e) => {
+                          setAcIndex(0)
+                          setAcDismissed(false)
+                          setCell(ref, e.target.value)
+                        }}
                         onKeyDown={(e) => onKeyDown(e, ref)}
+                        onPaste={(e) => onPaste(e, ref)}
                         className={`w-full bg-transparent px-2 py-1 text-xs focus:bg-white focus:outline focus:outline-2 focus:outline-smsg-500 ${
                           result?.error ? 'text-red-600 font-mono' : ''
                         } ${typeof result?.value === 'number' && !showRaw ? 'text-right tabular-nums' : ''}`}
@@ -406,6 +586,35 @@ export function SpreadsheetBlockEditor({ slug, block }: Props) {
           </tbody>
         </table>
       </div>
+
+      {acPos && acCandidates.length > 0 && (
+        <ul
+          role="listbox"
+          aria-label="함수 자동완성"
+          data-spreadsheet-fn-autocomplete
+          style={{ position: 'fixed', left: acPos.left, top: acPos.top, zIndex: 50 }}
+          className="max-h-48 w-44 overflow-y-auto rounded border border-gray-200 bg-white py-0.5 shadow-lg"
+        >
+          {acCandidates.map((name, i) => (
+            <li key={name} role="option" aria-selected={i === acSelected}>
+              <button
+                type="button"
+                // click 은 input blur 이후라 dropdown 이 먼저 닫힘 — mousedown
+                // 에서 preventDefault 로 focus 를 유지한 채 선택한다.
+                onMouseDown={(ev) => {
+                  ev.preventDefault()
+                  acceptCandidate(name)
+                }}
+                className={`block w-full px-2 py-0.5 text-left font-mono text-xs hover:bg-smsg-100 ${
+                  i === acSelected ? 'bg-smsg-100 text-smsg-700' : 'text-gray-700'
+                }`}
+              >
+                {name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {error && (
         <p role="status" aria-live="polite" className="text-[11px] text-red-600">

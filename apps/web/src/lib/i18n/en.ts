@@ -428,6 +428,7 @@ export const en: Record<LocaleKey, string> = {
   'editor.gantt.colEnd': 'End (YYYY-MM-DD)',
   'editor.gantt.colProgress': 'Progress %',
   'editor.gantt.newTaskName': 'Task {n}',
+  'editor.gantt.sortByDate': 'Sort by date',
   'editor.gantt.preview': 'Preview',
   'editor.gantt.changeLog': 'Edit gantt',
   'editor.gantt.barAriaLabel':

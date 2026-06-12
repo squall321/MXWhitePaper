@@ -1127,7 +1127,7 @@ class Options3(BaseModel):
     """
     task row 단위 zebra-striping (label 영역 포함 전체 행). SVG `<rect fill='#F9FAFB'>` 로 paint.
     """
-    axis_unit: AxisUnit | None = Field('month', alias='axisUnit')
+    axis_unit: AxisUnit | None = Field(AxisUnit.month, alias='axisUnit')
     """
     x-axis tick 단위. 미지정 시 'month'. tick 위치는 view 가 [minStart, maxEnd] 구간에서 해당 단위 경계마다 SVG `<line>` 으로 paint.
     """
@@ -1250,6 +1250,10 @@ class IframeBlock(RootModel[IframeBlock1 | IframeBlock2]):
     """
     Embed an external page (`src`) OR an inline self-contained HTML document (`html`). Exactly one MUST be set. The renderer wraps the iframe in a sandbox boundary so the embed can't reach the parent DOM, cookies, or storage; only `allow-scripts` is granted so interactive embeds (charts, calculators) still work.
     """
+
+    @property
+    def type(self) -> str:
+        return self.root.type
 
 
 class Provider(Enum):
@@ -1610,7 +1614,7 @@ class Value1(BaseModel):
     """
     표시 이름; default = '{agg}({field})' 또는 '{agg}({expr})'
     """
-    show_as: ShowAs | None = Field('value', alias='showAs')
+    show_as: ShowAs | None = Field(ShowAs.value, alias='showAs')
     """
     Sprint 3 — 값 표시 방식. value=raw, pct_row=row total 대비 %, pct_col=col total 대비 %, pct_total=grand total 대비 %, running=row 안 col 순서 누적 합.
     """
@@ -2682,7 +2686,7 @@ class Block(
     ]
     ]
 ):
-    root: (
+    root: Annotated[
         ParagraphBlock
         | Heading4Block
         | ListBlock
@@ -2721,7 +2725,9 @@ class Block(
         | PivotTableBlock
         | SlicerBlock
         | TimelineBlock
-    )
+        ,
+        Field(discriminator='type'),
+    ]
 
 
 OrgChartNode.model_rebuild()

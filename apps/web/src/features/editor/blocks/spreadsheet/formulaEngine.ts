@@ -22,7 +22,7 @@ export interface CellResult {
 const MAX_DEPTH = 50
 const MAX_COLS = 26
 
-const FN_NAMES = new Set([
+export const FN_NAMES = new Set([
   'SUM',
   'AVG',
   'AVERAGE',
@@ -67,7 +67,7 @@ const FN_NAMES = new Set([
  * inside identifiers, so we rewrite the source text before tokenizing. Map
  * each alias to its primary FN_NAMES entry.
  */
-const DOTTED_ALIASES: ReadonlyArray<[string, string]> = [
+export const DOTTED_ALIASES: ReadonlyArray<[string, string]> = [
   ['STDEV.S', 'STDEV'],
   ['STDEV.P', 'STDEVP'],
   ['VAR.S', 'VAR'],

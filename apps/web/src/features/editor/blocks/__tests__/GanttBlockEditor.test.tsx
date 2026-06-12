@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { GanttBlockEditor, ganttKeyToPatch, shiftDate } from '../GanttBlockEditor'
+import {
+  GanttBlockEditor,
+  ganttKeyToPatch,
+  shiftDate,
+  sortTasksByDate,
+  isSortedByDate,
+  clampProgress,
+} from '../GanttBlockEditor'
 import { useEditorStore } from '@/features/editor/state'
 import type { GanttBlock } from '@/types/document'
 
@@ -117,5 +124,91 @@ describe('ganttKeyToPatch', () => {
     expect(ganttKeyToPatch(base, { key: 'Tab', shiftKey: false })).toBeNull()
     expect(ganttKeyToPatch(base, { key: 'ArrowUp', shiftKey: false })).toBeNull()
     expect(ganttKeyToPatch(base, { key: 'ArrowDown', shiftKey: true })).toBeNull()
+  })
+})
+
+describe('sortTasksByDate / isSortedByDate', () => {
+  const mk = (start: string, end: string, name = 't') => ({ name, start, end, progress: 0 })
+
+  it('sorts by start asc, then end asc on ties, without mutating input', () => {
+    const tasks = [mk('2026-05-04', '2026-05-08', 'b'), mk('2026-05-01', '2026-05-03', 'a')]
+    const sorted = sortTasksByDate(tasks)
+    expect(sorted.map((t) => t.name)).toEqual(['a', 'b'])
+    expect(tasks.map((t) => t.name)).toEqual(['b', 'a']) // input untouched
+    const ties = [mk('2026-05-01', '2026-05-09', 'long'), mk('2026-05-01', '2026-05-02', 'short')]
+    expect(sortTasksByDate(ties).map((t) => t.name)).toEqual(['short', 'long'])
+  })
+
+  it('isSortedByDate detects sorted/unsorted lists (incl. end tiebreak)', () => {
+    expect(isSortedByDate([])).toBe(true)
+    expect(isSortedByDate([mk('2026-05-01', '2026-05-03')])).toBe(true)
+    expect(
+      isSortedByDate([mk('2026-05-01', '2026-05-03'), mk('2026-05-04', '2026-05-08')]),
+    ).toBe(true)
+    expect(
+      isSortedByDate([mk('2026-05-04', '2026-05-08'), mk('2026-05-01', '2026-05-03')]),
+    ).toBe(false)
+    expect(
+      isSortedByDate([mk('2026-05-01', '2026-05-09'), mk('2026-05-01', '2026-05-02')]),
+    ).toBe(false)
+  })
+})
+
+describe('clampProgress', () => {
+  it('clamps to [0, 100]', () => {
+    expect(clampProgress(-5)).toBe(0)
+    expect(clampProgress(50)).toBe(50)
+    expect(clampProgress(150)).toBe(100)
+  })
+})
+
+describe('<GanttBlockEditor /> sort button + progress slider', () => {
+  beforeEach(() => {
+    useEditorStore.getState().reset()
+    useEditorStore.setState({ slug: 'test', etag: 'etag-1' })
+  })
+
+  it('renders the sort button, disabled when tasks are already date-sorted', () => {
+    const html = renderToStaticMarkup(
+      <GanttBlockEditor slug="test" block={filled} />,
+    )
+    expect(html).toContain('날짜순 정렬')
+    const idx = html.indexOf('aria-label="날짜순 정렬"')
+    expect(idx).toBeGreaterThan(-1)
+    const snippet = html.slice(Math.max(0, idx - 200), idx + 200)
+    expect(snippet).toContain('disabled=""') // filled fixture is sorted
+  })
+
+  it('enables the sort button when tasks are out of date order', () => {
+    const unsorted: GanttBlock = {
+      ...filled,
+      tasks: [filled.tasks[1]!, filled.tasks[0]!],
+    }
+    const html = renderToStaticMarkup(
+      <GanttBlockEditor slug="test" block={unsorted} />,
+    )
+    const idx = html.indexOf('aria-label="날짜순 정렬"')
+    expect(idx).toBeGreaterThan(-1)
+    const snippet = html.slice(Math.max(0, idx - 200), idx + 200)
+    expect(snippet).not.toContain('disabled=""')
+  })
+
+  it('renders a range slider alongside the number input per task', () => {
+    const html = renderToStaticMarkup(
+      <GanttBlockEditor slug="test" block={filled} />,
+    )
+    expect(html).toContain('aria-label="task 0 progress slider"')
+    expect(html).toContain('aria-label="task 1 progress slider"')
+    expect(html).toContain('type="range"')
+    // number input is still there (existing contract)
+    expect(html).toContain('aria-label="task 0 progress"')
+  })
+
+  it('passes onTaskPatch to the preview so bars render the drag overlay', () => {
+    const html = renderToStaticMarkup(
+      <GanttBlockEditor slug="test" block={filled} />,
+    )
+    expect(html).toContain('data-gantt-drag-overlay="0"')
+    expect(html).toContain('data-gantt-drag-overlay="1"')
   })
 })

@@ -377,6 +377,14 @@ function FlowMermaidEditor({ slug, block }: Props) {
               )
             })}
           </ul>
+          <a
+            href="https://mermaid.js.org/intro/"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 block text-[11px] text-smsg-700 hover:underline"
+          >
+            Mermaid 공식 문서 ↗
+          </a>
         </aside>
       </div>
     </div>

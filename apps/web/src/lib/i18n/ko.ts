@@ -449,6 +449,7 @@ export const ko = {
   'editor.gantt.colEnd': '종료 (YYYY-MM-DD)',
   'editor.gantt.colProgress': '진행 %',
   'editor.gantt.newTaskName': '작업 {n}',
+  'editor.gantt.sortByDate': '날짜순 정렬',
   'editor.gantt.preview': '미리보기',
   'editor.gantt.changeLog': '간트 편집',
   'editor.gantt.barAriaLabel':

@@ -1,5 +1,13 @@
+import { useState } from 'react'
 import type { GanttBlock } from '@/types/document'
 import { axisTicks, type GanttAxisUnit } from './ganttAxis'
+import {
+  applyDragDays,
+  dragHitZone,
+  ganttDragPatch,
+  pxToDayDelta,
+  type GanttDragZone,
+} from './ganttDrag'
 import { WidgetExportMenu } from './WidgetExportMenu'
 import { ganttTasksToCsv } from '@/lib/widgetExport'
 import { useT } from '@/lib/i18n'
@@ -13,16 +21,30 @@ import { useT } from '@/lib/i18n'
  *
  * `options.axisUnit` (day | week | month | quarter, default 'month') 가
  * 주어지면 x-axis 에 해당 단위 경계마다 세로 tick 선과 label 을 그린다.
+ *
+ * `onTaskPatch` 는 에디터 프리뷰 전용 — 주어지면 bar 가 포인터 드래그 가능
+ * (가장자리 8px = 해당 날짜 resize, 몸통 = 전체 이동). 드래그 중에는 로컬
+ * state 로 미리보기만 하고 pointerup 에 1회 호출한다. 미지정 시 (일반 문서
+ * 뷰) 현행 read-only 그대로.
  */
 export function GanttBlockView({
   block,
   today,
+  onTaskPatch,
 }: {
   block: GanttBlock
   today?: string
+  onTaskPatch?: (idx: number, patch: { start?: string; end?: string }) => void
 }) {
   // shadow-safe alias — task callbacks below bind a parameter named `t`.
   const tr = useT()
+  const [drag, setDrag] = useState<{
+    idx: number
+    zone: GanttDragZone
+    originX: number
+    dayDelta: number
+  } | null>(null)
+  const [hover, setHover] = useState<{ idx: number; zone: GanttDragZone } | null>(null)
   if (block.tasks.length === 0) {
     return <p className="text-xs text-gray-500">{tr('block.gantt.noTasks')}</p>
   }
@@ -121,9 +143,13 @@ export function GanttBlockView({
           stroke="var(--smsg-gray-200)"
         />
         {tasks.map((t, idx) => {
+          const dragging = drag?.idx === idx ? drag : null
+          const previewed = dragging
+            ? applyDragDays(t.startMs, t.endMs, dragging.zone, dragging.dayDelta)
+            : { startMs: t.startMs, endMs: t.endMs }
           const x =
-            labelW + ((t.startMs - minMs) / span) * barAreaW
-          const w = Math.max(2, ((t.endMs - t.startMs) / span) * barAreaW)
+            labelW + ((previewed.startMs - minMs) / span) * barAreaW
+          const w = Math.max(2, ((previewed.endMs - previewed.startMs) / span) * barAreaW)
           const progressW = ((t.progress ?? 0) / 100) * w
           const y = idx * rowH + 8
           return (
@@ -134,6 +160,67 @@ export function GanttBlockView({
               <rect x={x} y={y} width={w} height={rowH - 8} fill="var(--smsg-blue-500)" rx={2} />
               {progressW > 0 && (
                 <rect x={x} y={y} width={progressW} height={rowH - 8} fill="var(--smsg-blue-700)" rx={2} />
+              )}
+              {onTaskPatch && (
+                <rect
+                  data-gantt-drag-overlay={idx}
+                  x={x}
+                  y={y}
+                  width={w}
+                  height={rowH - 8}
+                  fill="transparent"
+                  style={{
+                    cursor: dragging
+                      ? dragging.zone === 'body'
+                        ? 'grabbing'
+                        : 'ew-resize'
+                      : hover?.idx === idx
+                        ? hover.zone === 'body'
+                          ? 'grab'
+                          : 'ew-resize'
+                        : undefined,
+                  }}
+                  onPointerDown={(e) => {
+                    const offsetX =
+                      e.clientX - e.currentTarget.getBoundingClientRect().left
+                    e.currentTarget.setPointerCapture(e.pointerId)
+                    setDrag({
+                      idx,
+                      zone: dragHitZone(offsetX, w),
+                      originX: e.clientX,
+                      dayDelta: 0,
+                    })
+                    e.preventDefault()
+                  }}
+                  onPointerMove={(e) => {
+                    if (drag) {
+                      if (drag.idx !== idx) return
+                      const dayDelta = pxToDayDelta(
+                        e.clientX - drag.originX,
+                        barAreaW,
+                        span,
+                      )
+                      if (dayDelta !== drag.dayDelta) setDrag({ ...drag, dayDelta })
+                    } else {
+                      const offsetX =
+                        e.clientX - e.currentTarget.getBoundingClientRect().left
+                      const zone = dragHitZone(offsetX, w)
+                      if (hover?.idx !== idx || hover.zone !== zone) {
+                        setHover({ idx, zone })
+                      }
+                    }
+                  }}
+                  onPointerLeave={() => {
+                    if (!drag) setHover(null)
+                  }}
+                  onPointerUp={() => {
+                    if (!drag || drag.idx !== idx) return
+                    const patch = ganttDragPatch(t, drag.zone, drag.dayDelta)
+                    setDrag(null)
+                    if (patch) onTaskPatch(idx, patch)
+                  }}
+                  onPointerCancel={() => setDrag(null)}
+                />
               )}
             </g>
           )

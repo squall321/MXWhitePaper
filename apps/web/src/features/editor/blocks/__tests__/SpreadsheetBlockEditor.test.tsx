@@ -97,6 +97,18 @@ describe('<SpreadsheetBlockEditor /> smoke', () => {
     expect(html).toContain('data-spreadsheet-delete-col="A"')
   })
 
+  it('renders 중간 삽입 buttons in row + column headers (SSR)', () => {
+    const html = renderToStaticMarkup(
+      harness(<SpreadsheetBlockEditor slug={SLUG} block={baseBlock} />),
+    )
+    expect(html).toContain('aria-label="행 1 위에 삽입"')
+    expect(html).toContain('aria-label="행 5 아래에 삽입"')
+    expect(html).toContain('aria-label="열 A 왼쪽에 삽입"')
+    expect(html).toContain('aria-label="열 D 오른쪽에 삽입"')
+    expect(html).toContain('data-spreadsheet-insert-row-above="1"')
+    expect(html).toContain('data-spreadsheet-insert-col-left="A"')
+  })
+
   it('renders CSV/TSV export buttons in toolbar (SSR)', () => {
     const html = renderToStaticMarkup(
       harness(<SpreadsheetBlockEditor slug={SLUG} block={baseBlock} />),

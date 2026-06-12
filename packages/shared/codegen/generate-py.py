@@ -130,25 +130,13 @@ def _wrap_with_discriminator(match: re.Match[str]) -> str:
 # `        | ClassName\n` (subsequent). Match both shapes.
 _UNION_LINES = r"((?:        (?:\| )?[A-Za-z0-9_]+\n)+)"
 
-# Pattern 1: the RootModel[...] wrapper inside `class Block(...)`
-src = re.sub(
-    r"class Block\(\n    RootModel\[\n" + _UNION_LINES + r"    \]\n\):",
-    lambda m: (
-        "class Block(\n"
-        "    RootModel[\n"
-        f"        {_wrap_with_discriminator(m)}\n"
-        "    ]\n"
-        "):"
-    ),
-    src,
-    count=1,
-)
-
 # Pattern 2: the `root:` annotation that follows the class header.
 # 주의 — Block 클래스 *안* 의 root: 만 매칭해야 함. 다른 RootModel-기반 union
 # (예: AnnotationElement) 에 잘못 적용되면 그쪽은 'type' 이 아닌 'kind' 로
 # discriminate 하므로 PydanticUserError 발생. `class Block(...):` 블록 내부로
 # 컨텍스트를 한정한다.
+# pattern-1 이 class header 를 재작성하므로, 원형 header 를 anchor 로 쓰는
+# pattern-2 를 *먼저* 적용한다.
 def _wrap_with_discriminator_g2(match: re.Match[str]) -> str:
     """group(2) 가 union body — group(1) 은 class header 캡처."""
     union_body = match.group(2)
@@ -160,12 +148,31 @@ def _wrap_with_discriminator_g2(match: re.Match[str]) -> str:
         "    ]"
     )
 
-src = re.sub(
-    r"(class Block\(\n[^)]+\)\n\):\n)    root: \(\n" + _UNION_LINES + r"    \)\n",
+src, _n_root = re.subn(
+    r"(class Block\(\n    RootModel\[\n(?:        (?:\| )?[A-Za-z0-9_]+\n)+    \]\n\):\n)"
+    r"    root: \(\n" + _UNION_LINES + r"    \)\n",
     lambda m: f"{m.group(1)}    root: {_wrap_with_discriminator_g2(m)}\n",
     src,
     count=1,
 )
+if _n_root != 1:
+    print("WARN: Block root: discriminator patch did not apply (pattern-2)", file=sys.stderr)
+
+# Pattern 1: the RootModel[...] wrapper inside `class Block(...)`
+src, _n_rootmodel = re.subn(
+    r"class Block\(\n    RootModel\[\n" + _UNION_LINES + r"    \]\n\):",
+    lambda m: (
+        "class Block(\n"
+        "    RootModel[\n"
+        f"        {_wrap_with_discriminator(m)}\n"
+        "    ]\n"
+        "):"
+    ),
+    src,
+    count=1,
+)
+if _n_rootmodel != 1:
+    print("WARN: Block RootModel discriminator patch did not apply (pattern-1)", file=sys.stderr)
 
 # ── Post-process: enum-typed fields with string defaults.
 # datamodel-codegen emits things like `width: Width | None = 'md'` where
@@ -189,6 +196,19 @@ if enum_names:
         r": (" + "|".join(re.escape(n) for n in enum_names) + r")( \| None)? = '([^']+)'"
     )
     src = pattern.sub(_fix_enum_default, src)
+
+    # Same fix for the Field(...) form, e.g.
+    # `show_as: ShowAs | None = Field('value', alias='showAs')`.
+    def _fix_enum_field_default(match: re.Match[str]) -> str:
+        enum_name = match.group(1)
+        optional_part = match.group(2) or ""
+        value = match.group(3)
+        return f": {enum_name}{optional_part} = Field({enum_name}.{value}"
+
+    field_pattern = re.compile(
+        r": (" + "|".join(re.escape(n) for n in enum_names) + r")( \| None)? = Field\('([^']+)'"
+    )
+    src = field_pattern.sub(_fix_enum_field_default, src)
 
 # ── Post-process: inject iframe src XOR html validator.
 # JSON Schema's `oneOf` on IframeBlock splits into IframeBlock1 (src branch)
@@ -249,6 +269,28 @@ if not (ok1 and ok2):
         f"WARN: Iframe XOR validators only partially injected (src={ok1}, html={ok2})",
         file=sys.stderr,
     )
+
+# Block tagged-union 의 serializer 는 getattr(value, 'type') 로 variant tag 를
+# 추출한다. IframeBlock 은 RootModel wrapper 라 'type' attribute 가 없어
+# left-to-right fallback + PydanticSerializationUnexpectedValue 경고가 난다.
+# 내부 union (둘 다 type:'iframe') 은 그대로 두고, wrapper 가 tag 를 노출하는
+# read-only property 만 주입한다.
+_iframe_type_property = (
+    "\n"
+    "    @property\n"
+    "    def type(self) -> str:\n"
+    "        return self.root.type\n"
+)
+src, _n_iframe_type = re.subn(
+    r"(class IframeBlock\(RootModel\[IframeBlock1 \| IframeBlock2\]\):\n"
+    r"    root: IframeBlock1 \| IframeBlock2\n"
+    r'(?:    """[\s\S]*?"""\n)?)',
+    lambda m: m.group(1) + _iframe_type_property,
+    src,
+    count=1,
+)
+if _n_iframe_type != 1:
+    print("WARN: IframeBlock type property not injected", file=sys.stderr)
 
 # ── Post-process: add fileId/file_id alias to PdfBlock (PDF-02 from
 # block-audit cycle 2). JSON schema uses snake_case `file_id`, but FE /

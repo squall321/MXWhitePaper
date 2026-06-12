@@ -53,6 +53,26 @@ export function ganttKeyToPatch(
   return { end: shiftDate(task.end, delta) }
 }
 
+/** start asc (동률 시 end asc) — ISO 날짜라 문자열 비교로 충분. stable sort. */
+export function sortTasksByDate(tasks: readonly Task[]): Task[] {
+  return [...tasks].sort((a, b) =>
+    a.start < b.start ? -1 : a.start > b.start ? 1 : a.end < b.end ? -1 : a.end > b.end ? 1 : 0,
+  )
+}
+
+export function isSortedByDate(tasks: readonly Task[]): boolean {
+  for (let i = 1; i < tasks.length; i++) {
+    const p = tasks[i - 1]!
+    const c = tasks[i]!
+    if (p.start > c.start || (p.start === c.start && p.end > c.end)) return false
+  }
+  return true
+}
+
+export function clampProgress(v: number): number {
+  return Math.max(0, Math.min(100, v))
+}
+
 /**
  * Editable Gantt chart. Rows have name / start / end / progress. Live preview
  * uses the same SVG renderer used in read mode (no mermaid here — we already
@@ -84,6 +104,14 @@ export function GanttBlockEditor({ slug, block }: Props) {
       tasks: local.tasks.map((t, i) => (i === idx ? { ...t, ...patch } : t)),
     }
     void push(next)
+  }
+
+  // 슬라이더 드래그 중에는 로컬만 갱신, 손을 뗄 때 1회 push (PATCH 폭주 방지).
+  const updateLocal = (idx: number, patch: Partial<Task>) => {
+    setLocal({
+      ...local,
+      tasks: local.tasks.map((t, i) => (i === idx ? { ...t, ...patch } : t)),
+    })
   }
 
   const add = () => {
@@ -154,6 +182,15 @@ export function GanttBlockEditor({ slug, block }: Props) {
               void push({ ...local, options: { ...local.options, stripe } })
             }
           />
+          <button
+            type="button"
+            onClick={() => void push({ ...local, tasks: sortTasksByDate(local.tasks) })}
+            disabled={isSortedByDate(local.tasks)}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-40"
+            aria-label={t('editor.gantt.sortByDate')}
+          >
+            {t('editor.gantt.sortByDate')}
+          </button>
           <button
             type="button"
             onClick={add}
@@ -233,19 +270,34 @@ export function GanttBlockEditor({ slug, block }: Props) {
                     />
                   </td>
                   <td className="px-2 py-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={task.progress ?? 0}
-                      aria-label={`task ${i} progress`}
-                      onChange={(e) => {
-                        const v = Number(e.target.value)
-                        if (!Number.isFinite(v)) return
-                        update(i, { progress: Math.max(0, Math.min(100, v)) })
-                      }}
-                      className="w-20"
-                    />
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={task.progress ?? 0}
+                        aria-label={`task ${i} progress slider`}
+                        onChange={(e) =>
+                          updateLocal(i, { progress: clampProgress(Number(e.target.value)) })
+                        }
+                        onMouseUp={() => void push(local)}
+                        onTouchEnd={() => void push(local)}
+                        className="w-24"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={task.progress ?? 0}
+                        aria-label={`task ${i} progress`}
+                        onChange={(e) => {
+                          const v = Number(e.target.value)
+                          if (!Number.isFinite(v)) return
+                          update(i, { progress: clampProgress(v) })
+                        }}
+                        className="w-16"
+                      />
+                    </div>
                   </td>
                   <td className="px-2 py-1 text-right">
                     <button
@@ -272,7 +324,7 @@ export function GanttBlockEditor({ slug, block }: Props) {
 
       <Field label={t('editor.gantt.preview')}>
         <div className="rounded border border-gray-200 bg-white p-2">
-          <GanttBlockView block={local} />
+          <GanttBlockView block={local} onTaskPatch={update} />
         </div>
       </Field>
     </div>

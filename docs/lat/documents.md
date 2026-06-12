@@ -125,7 +125,16 @@
   [[src/features/editor/blocks/spreadsheet/csvExport.ts#spreadsheetToDelimited]]
   를 호출 — *평가된 값* (formula 결과) 으로 직렬화해 Excel/Google Sheets paste
   호환. CSV 는 RFC 4180, TSV 는 탭/CR/LF 를 공백으로 강제 escape. UTF-8 BOM
-  포함해 Excel mojibake 회피.
+  포함해 Excel mojibake 회피. 에디터 행/열 헤더 hover 시 ✕ 삭제 외에 중간
+  삽입 버튼 (+↑/+↓, +←/+→) — `insertRow(idx)`/`insertCol(idx)` 가
+  [[src/features/editor/blocks/spreadsheet/referenceShift.ts#remapCells]] 로
+  formula 참조를 자동 보정. 셀 input 에 Excel 멀티셀 paste 지원 —
+  [[src/features/editor/blocks/spreadsheet/pasteParse.ts#parseSpreadsheetPaste]]
+  가 탭/개행 포함 텍스트를 TSV 우선 / quote-aware CSV 로 파싱해 focused 셀
+  anchor 로 채움 (cap 26x200 내 rows/cols 자동 확장, 단일 토큰은 기본 paste
+  유지). '=' 입력 중 함수명 자동완성 dropdown (prefix 매치 최대 8개,
+  formulaEngine 의 `FN_NAMES`/`DOTTED_ALIASES` export 기반) — 열림 상태에선
+  ArrowUp/Down/Enter/Tab/Escape 가 기존 셀 이동 키보다 먼저 가로채진다.
 - `PivotTableBlock` — ★ 36번째 블록 (pivot-table-sprint1 47번 archive +
   pivot-table-sprint2-4 48번 archive + Sprint 5: date 그룹 + calculatedItems +
   Sprint 6: data-source 참조).
@@ -254,7 +263,16 @@
   자동 치환. figure 배경도 `dark:bg-gray-900 dark:border-gray-700`. 에디터
   task row 는 keyboard-focusable (`tabIndex=0`, `role="button"`) — ←/→ 로
   end ±1일, Shift+←/→ 로 start+end 동시 ±1일 (`ganttKeyToPatch` 순수 헬퍼,
-  widget-integrity-pass-4 G1). x-axis ticks 는
+  widget-integrity-pass-4 G1). 에디터 프리뷰에서는 GanttBlockView 의 optional
+  `onTaskPatch` prop 으로 bar 포인터 드래그 가능 (prop 미지정 = 일반 문서 뷰는
+  read-only 그대로): 가장자리 8px = 해당 날짜 resize, 몸통 = 전체 이동, 드래그
+  중 로컬 미리보기만 하고 pointerup 에 1회 patch. px→일 환산·hit-zone 판정은
+  [[src/components/blocks/ganttDrag.ts#ganttDragPatch]] 순수 헬퍼
+  (start ≤ end 클램프). progress 는 range 슬라이더 + number 입력 병행
+  (`clampProgress` 0-100 공유, 슬라이더는 mouseup/touchend 에 1회 push).
+  "날짜순 정렬" 버튼이 start asc (동률 시 end asc) 로 1회 push — 이미 정렬돼
+  있으면 disabled (자동 정렬은 export/round-trip 순서를 암묵 변경하므로 명시
+  버튼만, `sortTasksByDate`/`isSortedByDate` 순수 헬퍼). x-axis ticks 는
   [[src/components/blocks/ganttAxis.ts#axisTicks]] 가 `[minMs, maxMs]` 구간의
   단위 경계만 emit; tick 이 40개 초과면 자동으로 한 단계 큰 단위로 fallback.
 - `OrgChartBlock` — tidy-tree 레이아웃의 순수 SVG 조직도 (mermaid 아님).
@@ -644,6 +662,15 @@ materialized view refresh 도 스킵 가능.
     `@model_validator(mode='after')` 를 후처리 주입한다. IframeBlock 의 src/html
     XOR 가 첫 적용 사례 (widget-integrity-pass-2 M2); 향후 다른 oneOf 도 같은
     패턴 확장 가능.
+15. **Block union 의 `discriminator='type'` 은 codegen 후처리 정규식이 만든다 —
+    생성 코드 형태에 결합되어 있어 조용히 깨질 수 있다** —
+    [[packages/shared/codegen/generate-py.py]] 의 pattern-1 (RootModel 제네릭 인자) /
+    pattern-2 (`root:` 어노테이션) 둘 다 적용돼야 tagged union (명시적 `root:` 가
+    제네릭 인자를 override). 후처리는 전부 `subn` count 검사 + 0건 시 stderr WARN
+    (T3 — pattern-2 silent skip 으로 런타임이 smart union 으로 남았던 결함의 재발
+    방지). 또한 tagged union serializer 는 `getattr(value, 'type')` 로 tag 를
+    읽으므로 RootModel wrapper variant 인 IframeBlock 에는 `type` property 를
+    주입한다 — 없으면 dump 마다 PydanticSerializationUnexpectedValue 경고.
 
 ## Settings (`app.core.config`)
 

@@ -4,6 +4,16 @@
 > widget integrity 사이클 시리즈 (pass-1·2·3) 종료. 부팅 자동 시작 + 인프라 패치 완료.
 > 다음 사이클 시작 시 본 문서 먼저 보고 우선순위 결정.
 
+> **[2026-06-12 종결]** HIGH/MED 전 항목 처리 완료 — `docs/archive/2026-06/backlog-gap-closure/` 참조.
+>
+> - H2 Spreadsheet: Enter/Tab/방향키 (6월 초 선행 구현) + 중간 삽입 UI·엑셀 멀티셀 paste·formula 자동완성 (본 사이클)
+> - H3 Gantt: 행 추가/삭제 (선행) + bar 포인터 드래그·progress 슬라이더·날짜순 정렬 버튼 (본 사이클)
+> - M1 list check round-trip: H7 fix 로 이미 구현돼 있었음 (테스트 5종 통과) — 주석 drift 만 정정
+> - M2 flow Mermaid: 백로그 전제가 stale (템플릿 8종+치트시트+미리보기 5/8-9 기 구현, excalidraw 시각 에디터 5/31) — 공식 문서 링크만 추가
+> - M3 spacer xl safelist: non-issue 실증 (`h-32` 가 소스 리터럴 + dist CSS 에 존재) — 작업 불요
+> - M4 race condition 방법론: 4분할 flag 방식 자체를 Workflow 오케스트레이션으로 대체해 obsolete
+> - LOW 항목은 잔존 (기능 추가성 손질 — 필요 시 별도 사이클)
+
 ---
 
 ## 1. 완료 (어제~오늘 누적)

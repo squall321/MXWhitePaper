@@ -2,6 +2,7 @@
 
 > 하루 안에 끝낸 큰 작업 4건 (v1.0.4 릴리스 / widget-integrity-pass-1 / widget-integrity-pass-2 / 인프라 패치) 의 결과 + *지금 손 안 댄 것* 정리.
 > 다음 사이클 시작 시 본 문서 먼저 보고 우선순위 결정.
+> **[2026-06-12 종결]** 본 문서의 HIGH/MED 는 `2026-05-19-postpass-backlog.md` 로 승계되어 전부 종결 — 그 문서 상단 종결 공지 참조. M1 (IframeBlock discriminator) 은 경고 자체는 해소돼 있었으나 점검 중 codegen pattern-2 의 silent skip 결함을 발견해 본질 fix (tagged-union 적용 + WARN 가드) 완료. M3 (MD060) 은 archive _INDEX 가 RAG 소스로 승격되어 재포맷 위험 > 이득으로 보류 종결.
 
 ---
 

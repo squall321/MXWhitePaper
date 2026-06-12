@@ -11,10 +11,9 @@
   - footnote 인라인 표기 (`[^N]`) 는 export 측에서 ` (body)` 로 치환되어 본문에
     들어감 — 의도된 변환.
   - speaker note (`meta.note: speaker:…`) 는 drop.
-  - **list `style:"check"` → import 가 항상 `"bullet"` 로 복원** (pass-3 N2
-    확인). export 는 `☐ ` prefix 텍스트를 굽지만 import 가 numFmt 아닌
-    prefix 매칭 분기를 갖고 있지 않음. items 텍스트의 ☐ 도 별도 정리 안 됨.
-    별도 사이클로 (import 측 prefix detection 추가) — `test_list_check_roundtrip_known_limitation` 회귀 테스트가 현 동작을 명시.
+  - list `style:"check"` → import 가 모든 item 이 check prefix (☐/□/☑/■/✅)
+    로 시작하면 `"check"` 로 승격하고 glyph 를 제거 (☑/■/✅ 는 `[x] `,
+    나머지는 `[ ] ` 마킹). 혼합이면 bullet 유지 — `_flush_list` 의 H7 분기.
 
 따라서 본 테스트는 "block 타입의 1:1 일치" 가 아닌 "텍스트 콘텐츠 보존" 과
 "네이티브 표현으로 변환된 블록(table, list, image)의 type 일치" 를 검증한다.
