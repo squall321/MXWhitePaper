@@ -28,3 +28,10 @@ def _ensure_sdk_mcp() -> None:
 
 
 _ensure_sdk_mcp()
+
+
+def pytest_configure(config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "live: live MXWhitePaper API 가 필요한 통합 테스트 (도달 불가 시 skip)",
+    )

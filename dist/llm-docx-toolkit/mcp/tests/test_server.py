@@ -68,12 +68,24 @@ def server_mod(rag_dir_with_bm25):
 # ── primitives registered ───────────────────────────────────────────
 
 
-def test_registers_one_tool_one_resource_template_one_prompt(server_mod) -> None:
+def test_registers_tools_resource_template_and_prompt(server_mod) -> None:
     s = server_mod.build_server()
     tools = asyncio.run(s.list_tools())
     templates = asyncio.run(s.list_resource_templates())
     prompts = asyncio.run(s.list_prompts())
-    assert [t.name for t in tools] == ["query_rules"]
+    assert [t.name for t in tools] == [
+        "query_rules",
+        "list_documents",
+        "get_document_outline",
+        "get_section",
+        "get_block",
+        "create_document",
+        "insert_block",
+        "update_block",
+        "delete_block",
+        "move_block",
+        "validate_block",
+    ]
     assert len(templates) == 1
     assert templates[0].uriTemplate == "rag://chunks/{chunk_id}"
     assert [p.name for p in prompts] == ["mxwp_system_prompt"]

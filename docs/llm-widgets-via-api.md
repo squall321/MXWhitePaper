@@ -5,6 +5,10 @@
 > 만들어 넣어라**. 이 문서가 그 방법.
 >
 > 자매 문서: `docs/llm-document-formats.md` (docx/pptx 양식 가이드)
+>
+> **Claude Desktop/Code 사용자**: `mxwp-mcp` 의 쓰기 도구 (insert_block /
+> update_block 등) 가 본 문서의 REST 흐름 (ETag, 스키마 검증 포함) 을 대신
+> 처리해 준다 — 등록법은 `dist/llm-docx-toolkit/mcp/README.md`.
 
 ---
 

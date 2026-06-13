@@ -2,13 +2,17 @@
   "mcpServers": {
     "mxwp-rag": {
       "type": "stdio",
-      "command": "/absolute/path/to/llm-docx-toolkit/bin/mxwp-mcp",
+      "command": "/absolute/path/to/llm-docx-toolkit/bin/mxwp-mcp-linux",
       "args": [
         "--rag-dir",
         "/absolute/path/to/llm-docx-toolkit/rag",
         "--system-prompt",
         "/absolute/path/to/llm-docx-toolkit/llm-system-prompt.md"
-      ]
+      ],
+      "env": {
+        "MXWP_API_URL": "http://127.0.0.1:8800",
+        "MXWP_API_TOKEN": "mxwp_PASTE_YOUR_TOKEN_HERE"
+      }
     }
   }
 }

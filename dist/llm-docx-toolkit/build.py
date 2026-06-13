@@ -191,12 +191,16 @@ a = Analysis(
         ({lock}, 'rag'),
         ({bm25}, 'rag'),
         ({system_prompt}, '.'),
+        ({schema}, '.'),
     ] + collect_data_files('mcp'),
     hiddenimports=[
         'mcp.server.fastmcp',
         'rag._bm25',
         'rag.retriever',
         'numpy',
+        'api_client',
+        'schema_validate',
+        'jsonschema',
         # Variant-dependent: empty in 'lite' so torch / transformers stay
         # out of the binary; populated in 'full'.
         {extra_hiddenimports}
@@ -386,6 +390,11 @@ def _stage_mcp_entry(work_dir: Path) -> Path:
     launcher = stage / "_mxwp_mcp_launcher.py"
     server_src = (HERE / "mcp" / "server.py").read_text(encoding="utf-8")
     launcher.write_text(server_src, encoding="utf-8")
+    # Write-tool sibling modules — flat on the stage so PyInstaller collects
+    # them as top-level modules (server's _local_module falls back to bare
+    # import when frozen).
+    for sibling in ("api_client.py", "schema_validate.py"):
+        shutil.copy2(HERE / "mcp" / sibling, stage / sibling)
     return launcher
 
 
@@ -578,6 +587,7 @@ def _build_mcp(
             lock=repr(str(lock)),
             bm25=repr(str(bm25)),
             system_prompt=repr(str(HERE / "llm-system-prompt.md")),
+            schema=repr(str(SCHEMA)),
             onefile="True" if onefile else "False",
             toolkit_dir=repr(str(HERE)),
             extra_hiddenimports=extra_hidden,

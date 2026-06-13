@@ -292,6 +292,32 @@ uvicorn 가정).
 no_key 401 + happy 303 + replay 401 = 5 case (cycle 19 의 test_sso.py 와는
 별개 — 그건 SSO providers CRUD).
 
+## 7. mxwp-mcp write tools — API token 의 외부 소비자
+
+`dist/llm-docx-toolkit/mcp/server.py` 의 stdio MCP 서버가 RAG 검색
+(`query_rules`/`read_chunk`/`mxwp_system_prompt`) 에 더해 문서 read/write
+도구를 제공한다. Claude Desktop/Code 가 위키 REST API 를 이 도구로 대신
+호출하는 구조. 사용자 안내는 `dist/llm-docx-toolkit/mcp/README.md`.
+
+| 구분 | 도구 |
+|---|---|
+| read (토큰 선택) | `list_documents(q, limit)` · `get_document_outline(slug)` · `get_section(slug, section_id)` · `get_block(slug, block_id)` |
+| write (write scope 토큰 필수) | `create_document(title, slug?, part_slug?, summary?)` · `insert_block(slug, section_id, block, after_block_id?)` · `update_block(slug, block_id, block)` · `delete_block(slug, block_id)` · `move_block(slug, block_id, target_section_id, after_block_id?)` · `validate_block(block)` |
+
+- **인증**: env `MXWP_API_URL` (기본 `http://127.0.0.1:8800`) +
+  `MXWP_API_TOKEN` → `Authorization: Bearer`. 토큰은 위키 UI 프로필 메뉴
+  → "개인 API 토큰" (`/me/api-tokens`) 에서 개인별 발급. write 도구는
+  토큰 없으면 API 호출 없이 발급 안내 에러.
+- **ETag 자동**: write 도구가 내부에서 문서 ETag (`W/"<doc_id>-<version>"`)
+  를 확보해 `If-Match` 로 전송. 충돌 시 "outline 다시 읽고 재시도" 에러로
+  변환 — 호출자가 If-Match 를 직접 다룰 일 없음.
+- **로컬 선검증**: `insert_block`/`update_block` 은 전송 전 block 을
+  `packages/shared/schemas/document.json` 의 Block 정의로 jsonschema 검증.
+  실패 시 API 호출 없이 path 별 에러 반환 (LLM 이 고쳐 재시도하는 루프).
+  `validate_block` 은 이 검증만 단독 노출.
+- HTTP 는 stdlib urllib 만 사용 (바이너리 의존성 최소). 에러 envelope 은
+  사람이 읽을 메시지로 변환.
+
 ## 자주 묻는 것 / 함정
 
 1. **`get_settings()` 은 lru_cache** — 테스트에서 환경변수 바꿔도 재로드 안 됨.

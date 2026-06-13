@@ -35,7 +35,8 @@
 | POST | `/{slug}/view` | reader+ | 조회수 카운트 (analytics 용 ping. 핸들러명은 `ping_view`) |
 
 모든 mutation 엔드포인트는 **ETag + If-Match** 로 낙관적 잠금. 형식:
-`W/"<doc_id>-<version>"`. 클라이언트가 stale ETag 를 보내면 409.
+`W/"<doc_id>-<version>"`. 클라이언트가 stale ETag 를 보내면 **412**
+(PreconditionFailed — mcp write tools 는 이를 "outline 다시 읽고 재시도" 안내로 변환).
 
 ## DocumentJSON v1.0 schema
 
