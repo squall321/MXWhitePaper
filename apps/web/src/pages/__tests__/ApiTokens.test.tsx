@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -18,7 +18,11 @@ vi.mock('@/features/api-tokens/api', async () => {
 })
 
 import { ApiTokensPage } from '../ApiTokens'
-import { expiresInToISO } from '@/features/api-tokens/api'
+import {
+  buildMcpDesktopConfig,
+  expiresInToISO,
+  mcpApiBaseUrl,
+} from '@/features/api-tokens/api'
 
 function render(seed: ApiTokenRow[]): string {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -125,5 +129,46 @@ describe('expiresInToISO', () => {
     const oneYear = expiresInToISO('1y', NOW)
     expect(oneYear).not.toBeNull()
     expect(new Date(oneYear!).getUTCFullYear()).toBe(2027)
+  })
+})
+
+// 이 파일은 SSR (node) 환경이라 window 가 없다. 헬퍼는 브라우저용이므로
+// origin 만 stub 한다 (BASE_URL 은 빌드 시 '/' 로 주입됨).
+// MXWP_API_URL 은 origin (+ 서브경로) 까지만 — api_client 가 `/api/v1/...` 를 붙임.
+describe('mcpApiBaseUrl', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('returns origin without an /api/v1 suffix (api_client appends it)', () => {
+    vi.stubGlobal('window', {
+      location: { origin: 'https://hwax.sec.samsung.net' },
+    })
+    // BASE_URL is '/' in test → bare origin, no trailing slash.
+    expect(mcpApiBaseUrl()).toBe('https://hwax.sec.samsung.net')
+  })
+})
+
+describe('buildMcpDesktopConfig', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('embeds the token + origin-only API url under mcpServers."mxwp-rag"', () => {
+    vi.stubGlobal('window', {
+      location: { origin: 'https://hwax.sec.samsung.net' },
+    })
+    const json = buildMcpDesktopConfig('mxwp_SECRET123')
+    const parsed = JSON.parse(json)
+    const srv = parsed.mcpServers['mxwp-rag']
+    expect(srv.env.MXWP_API_TOKEN).toBe('mxwp_SECRET123')
+    // no /api/v1 — the MCP api_client adds full paths itself.
+    expect(srv.env.MXWP_API_URL).toBe('https://hwax.sec.samsung.net')
+    expect(srv.env.MXWP_API_URL).not.toMatch(/\/api\/v1/)
+    // command stays a placeholder the user edits to their unpacked binary.
+    expect(srv.command).toContain('mxwp-mcp')
+  })
+
+  it('is valid, pretty-printed JSON', () => {
+    vi.stubGlobal('window', { location: { origin: 'http://localhost' } })
+    const json = buildMcpDesktopConfig('t')
+    expect(() => JSON.parse(json)).not.toThrow()
+    expect(json).toContain('\n  ') // 2-space indented
   })
 })

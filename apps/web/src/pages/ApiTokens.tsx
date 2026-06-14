@@ -8,6 +8,7 @@ import { Modal } from '@/components/ui/Modal'
 import { toast } from '@/components/ui/Toast'
 import { ErrorState } from '@/components/ui/ErrorState'
 import {
+  buildMcpDesktopConfig,
   createApiToken,
   expiresInToISO,
   listApiTokens,
@@ -401,15 +402,18 @@ function RevealTokenModal({
   onClose: () => void
 }) {
   const open = !!token
-  const onCopy = async () => {
-    if (!token) return
+  // write/admin 토큰만 MCP 쓰기 도구를 쓸 수 있으므로 그때만 config 안내.
+  const canMcp = !!token?.scopes.some((s) => s === 'write' || s === 'admin')
+
+  const copy = async (text: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(token.token)
-      toast.success('클립보드에 복사했어요')
+      await navigator.clipboard.writeText(text)
+      toast.success(`${label}를 클립보드에 복사했어요`)
     } catch {
       toast.error('복사에 실패했어요 — 수동으로 선택해 주세요')
     }
   }
+
   return (
     <Modal
       open={open}
@@ -441,12 +445,79 @@ function RevealTokenModal({
           />
           <div className="flex items-center justify-between text-xs text-gray-500">
             <span>이름: {token.name}</span>
-            <Button variant="secondary" size="sm" onClick={onCopy}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => copy(token.token, '토큰')}
+            >
               복사
             </Button>
           </div>
+
+          {canMcp && (
+            <McpConfigSection
+              token={token.token}
+              onCopy={(t) => copy(t, 'MCP 설정')}
+            />
+          )}
         </div>
       )}
     </Modal>
+  )
+}
+
+/**
+ * write/admin 토큰 발급 직후 Claude Desktop 등록 블록을 통째로 보여준다.
+ * 사용자가 토큰을 직접 붙여넣지 않아도 되도록 이 배포의 API URL + 방금 만든
+ * 토큰이 채워진 config 를 그대로 복사하게 한다.
+ */
+function McpConfigSection({
+  token,
+  onCopy,
+}: {
+  token: string
+  onCopy: (text: string) => void
+}) {
+  const config = useMemo(() => buildMcpDesktopConfig(token), [token])
+  return (
+    <details
+      className="rounded border border-smsg-200 bg-smsg-50/40 px-3 py-2"
+      data-testid="mcp-config-section"
+    >
+      <summary className="cursor-pointer text-xs font-semibold text-smsg-800">
+        Claude Desktop / Code 에 바로 등록하기
+      </summary>
+      <div className="mt-2 space-y-2">
+        <p className="text-xs text-gray-600">
+          아래 설정을 Claude Desktop 의{' '}
+          <code className="rounded bg-white px-1">
+            claude_desktop_config.json
+          </code>{' '}
+          에 붙여넣으면 이 토큰으로 문서 작성·편집 도구가 연결됩니다.
+          <code className="rounded bg-white px-1">command</code> 경로는 내려받은
+          toolkit 의 <code className="rounded bg-white px-1">bin/mxwp-mcp</code>{' '}
+          (Windows 는 <code className="rounded bg-white px-1">mxwp-mcp.exe</code>)
+          위치로 바꿔 주세요.
+        </p>
+        <textarea
+          readOnly
+          value={config}
+          data-testid="mcp-config-textarea"
+          className="h-48 w-full resize-none rounded border border-gray-200 bg-gray-50 px-2 py-1 font-mono text-[11px] leading-relaxed"
+          onFocus={(e) => e.currentTarget.select()}
+        />
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <span>config 경로: macOS · Windows 는 README 참조</span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onCopy(config)}
+            data-testid="mcp-config-copy"
+          >
+            설정 전체 복사
+          </Button>
+        </div>
+      </div>
+    </details>
   )
 }

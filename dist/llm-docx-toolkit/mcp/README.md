@@ -58,8 +58,21 @@ block JSON 을 어떻게 짜야 하는지는 외우지 말고 `query_rules` 로 
 
 | env | 기본 | 설명 |
 |---|---|---|
-| `MXWP_API_URL` | `http://127.0.0.1:8800` | 위키 API 서버 주소 |
+| `MXWP_API_URL` | `http://127.0.0.1:8800` | 위키 API 서버 주소 (**origin 까지만 — `/api/v1` 은 붙이지 않는다**. 클라이언트가 경로를 추가함) |
 | `MXWP_API_TOKEN` | (없음) | `Authorization: Bearer` 로 전송되는 개인 API 토큰. **write scope** 필요 |
+
+`MXWP_API_URL` 은 배포 환경에 따라 다르다 — **`/api/v1` 없이** origin (+ 서브경로) 까지만:
+
+| 환경 | `MXWP_API_URL` |
+|---|---|
+| 로컬 dev | `http://127.0.0.1:8800` |
+| HWAX 포탈 (서브경로) | `https://hwax.sec.samsung.net/mx-white-paper` |
+| 단독 배포 (루트) | `https://<host>` |
+
+> **가장 쉬운 방법**: 위키 웹에서 **write scope 토큰을 발급하면**, 발급 직후 모달의
+> "Claude Desktop / Code 에 바로 등록하기" 를 열어 **이 배포에 맞는 `MXWP_API_URL` 과
+> 토큰이 채워진 config 블록을 통째로 복사**할 수 있다. `command` 경로만 내려받은
+> 바이너리 위치로 바꾸면 끝. ([API 토큰 발급](#api-토큰-발급) 참고.)
 
 ### Claude Desktop
 

@@ -66,6 +66,50 @@ export async function rotateApiToken(id: string): Promise<ApiTokenWithSecret> {
   return unwrap(res)
 }
 
+/**
+ * Absolute API base URL for the mxwp-mcp client (Claude Desktop / Code).
+ *
+ * The MCP `api_client` appends full paths like `/api/v1/documents`, so
+ * `MXWP_API_URL` must be the origin **without** the `/api/v1` suffix — for a
+ * portal sub-path deployment that means origin + BASE_URL with the trailing
+ * slash trimmed (`https://host/mx-white-paper`). An out-of-browser process
+ * has no page origin, hence the fully-qualified URL.
+ *
+ * `VITE_API_URL` override: the in-app client uses it as a `/api/v1` base, so
+ * we strip a trailing `/api/v1` (and any trailing slash) to get the bare
+ * origin the MCP server expects.
+ */
+export function mcpApiBaseUrl(): string {
+  const override = import.meta.env.VITE_API_URL as string | undefined
+  if (override && /^https?:\/\//i.test(override)) {
+    return override.replace(/\/?(api\/v1)?\/?$/i, '')
+  }
+  const base = import.meta.env.BASE_URL || '/'
+  // origin + sub-path, no trailing slash; api_client adds `/api/v1/...`.
+  return `${window.location.origin}${base}`.replace(/\/$/, '')
+}
+
+/**
+ * Ready-to-paste Claude Desktop `mcpServers` config block for the mxwp-mcp
+ * binary, wired to this deployment's API and the freshly-minted token.
+ * The binary path is left as a placeholder the user must edit — we cannot
+ * know where they unpacked the toolkit.
+ */
+export function buildMcpDesktopConfig(token: string): string {
+  const config = {
+    mcpServers: {
+      'mxwp-rag': {
+        command: '/absolute/path/to/llm-docx-toolkit/bin/mxwp-mcp',
+        env: {
+          MXWP_API_URL: mcpApiBaseUrl(),
+          MXWP_API_TOKEN: token,
+        },
+      },
+    },
+  }
+  return JSON.stringify(config, null, 2)
+}
+
 /** Map an `expires_in` UI choice to a concrete ISO-8601 (or null = forever). */
 export function expiresInToISO(
   choice: '1m' | '3m' | '1y' | 'never',
