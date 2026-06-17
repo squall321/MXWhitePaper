@@ -119,7 +119,8 @@ FE                              API                              MinIO
 ### Direct upload (FE 가 직접)
 [[src/app/routers/uploads.py#upload_image_init]] →
 [[src/app/routers/uploads.py#upload_image_finalize]]. FE 가 init 으로 URL 받고
-PUT 한 뒤 finalize. 일반적 패턴.
+PUT 한 뒤 finalize. 일반적 패턴. MCP 의 `upload_image` 도구도 같은 2-phase
+presigned 흐름 (init → presigned PUT → finalize) 을 그대로 호출한다.
 
 ### Server-side bulk (imports)
 [[imports]] 의 `_preprocess_zip_images()` 는 다른 경로 — staging 단계를

@@ -19,6 +19,7 @@ file path (not `import mcp.…`) because this local package shares the
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import importlib.util
 import json
@@ -170,6 +171,66 @@ def _slugify(title: str) -> str:
     while "--" in slug:
         slug = slug.replace("--", "-")
     return slug[:100]
+
+
+# import kind ↔ 확장자 ↔ multipart content-type.
+_IMPORT_KINDS: dict[str, tuple[str, str]] = {
+    "docx": ("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    "pptx": ("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+    "xlsx": ("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    "pdf": ("pdf", "application/pdf"),
+}
+
+_IMAGE_MIME: dict[str, str] = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    "svg": "image/svg+xml",
+}
+
+
+def _resolve_import_kind(path: str, kind: str) -> tuple[str, str]:
+    """(kind, content_type) — kind='auto' 면 확장자로 판정."""
+    if kind and kind != "auto":
+        if kind not in _IMPORT_KINDS:
+            raise RuntimeError(
+                f"지원하지 않는 kind {kind!r} — docx/pptx/xlsx/pdf 중 하나."
+            )
+        return _IMPORT_KINDS[kind]
+    ext = Path(path).suffix.lower().lstrip(".")
+    if ext not in _IMPORT_KINDS:
+        raise RuntimeError(
+            f"확장자로 형식을 판정할 수 없습니다 ({path!r}). "
+            "kind 를 docx/pptx/xlsx/pdf 중 하나로 지정하세요."
+        )
+    return _IMPORT_KINDS[ext]
+
+
+def _image_mime(path: str) -> str:
+    ext = Path(path).suffix.lower().lstrip(".")
+    if ext not in _IMAGE_MIME:
+        raise RuntimeError(
+            f"지원하지 않는 이미지 확장자 ({path!r}) — "
+            f"{'/'.join(_IMAGE_MIME)} 중 하나."
+        )
+    return _IMAGE_MIME[ext]
+
+
+def _summary_message(summary: dict[str, Any]) -> str:
+    """summary dict 를 Claude 가 사용자에게 설명할 한 줄로 요약."""
+    counts = ", ".join(
+        f"{k} {v}" for k, v in summary.items()
+        if k != "warnings" and isinstance(v, int)
+    )
+    warns = summary.get("warnings") or []
+    parts: list[str] = []
+    if counts:
+        parts.append(counts)
+    if warns:
+        parts.append(f"경고 {len(warns)}건: " + " / ".join(str(w) for w in warns))
+    return "; ".join(parts) if parts else "변환 완료"
 
 
 def _load_chunks() -> dict[str, Chunk]:
@@ -519,6 +580,118 @@ def build_server() -> FastMCP:
             block = {**block, "id": _api().new_ulid()}
         errors = _schema().validate_block(block)
         return {"valid": not errors, "errors": errors}
+
+    # ── file / image 도구 (MXWP_API_TOKEN 필수) ─────────────────────
+
+    @mcp.tool(
+        name="import_file",
+        description=(
+            "로컬 파일 (docx/pptx/xlsx/pdf) 을 위젯 포함 DocumentJSON 으로 변환. "
+            "kind='auto' 면 확장자로 판정. save=True (기본) 면 변환 결과를 위키 "
+            "문서로 저장해 slug 반환 ('파일 주면 백서 생성'). save=False 면 저장 "
+            "없이 구조 요약만 반환. message 로 분배/경고 결과 설명. "
+            "MXWP_API_TOKEN 필수. → {slug?, title, summary, sections, message}"
+        ),
+    )
+    def import_file(path: str, kind: str = "auto", save: bool = True) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        resolved_kind, content_type = _resolve_import_kind(path, kind)
+        p = Path(path)
+        if not p.is_file():
+            raise RuntimeError(f"파일을 찾을 수 없습니다: {path}")
+        content = p.read_bytes()
+        document, summary, _meta = client.import_file(
+            resolved_kind,
+            filename=p.name,
+            content=content,
+            content_type=content_type,
+        )
+        out: dict[str, Any] = {
+            "title": document.get("title"),
+            "summary": summary,
+            "sections": len(document.get("sections") or []),
+            "message": _summary_message(summary),
+        }
+        if save:
+            data, _etag = client.create_document(document)
+            out["slug"] = data.get("slug")
+        return out
+
+    @mcp.tool(
+        name="upload_image",
+        description=(
+            "로컬 이미지 (png/jpg/jpeg/gif/webp/svg) 를 MinIO 에 업로드 → image_id. "
+            "동일 내용이 이미 있으면 dedup (deduped=True). image_id 는 "
+            "insert_image_block 에 그대로 사용. MXWP_API_TOKEN 필수. "
+            "→ {image_id, image_url?, deduped}"
+        ),
+    )
+    def upload_image(path: str) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        p = Path(path)
+        if not p.is_file():
+            raise RuntimeError(f"파일을 찾을 수 없습니다: {path}")
+        mime_type = _image_mime(path)
+        content = p.read_bytes()
+        sha256 = hashlib.sha256(content).hexdigest()
+        init = client.init_upload(
+            filename=p.name, mime_type=mime_type, sha256=sha256, size=len(content)
+        )
+        urls = init.get("urls") or {}
+        if init.get("deduped"):
+            return {
+                "image_id": init.get("image_id"),
+                "image_url": urls.get("view") or urls.get("orig"),
+                "deduped": True,
+            }
+        upload_id = init.get("uploadId")
+        if not upload_id:
+            raise RuntimeError(f"init 응답에 uploadId 가 없습니다: {init}")
+        client.put_bytes(init["url"], content, mime_type)
+        fin = client.finalize_upload(upload_id)
+        fin_urls = fin.get("urls") or {}
+        return {
+            "image_id": fin.get("image_id"),
+            "image_url": fin_urls.get("view") or fin_urls.get("orig"),
+            "deduped": bool(fin.get("deduped")),
+        }
+
+    @mcp.tool(
+        name="insert_image_block",
+        description=(
+            "upload_image 로 얻은 image_id 로 ImageBlock 을 섹션에 삽입. "
+            "after_block_id 생략 시 맨 뒤. 전송 전 로컬 schema 검증. "
+            "MXWP_API_TOKEN 필수. → {block_id}"
+        ),
+    )
+    def insert_image_block(
+        slug: str,
+        section_id: str,
+        image_id: str,
+        alt: str = "",
+        caption: str = "",
+        after_block_id: str | None = None,
+    ) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        block: dict[str, Any] = {
+            "type": "image",
+            "id": _api().new_ulid(),
+            "imageId": image_id,
+            "alt": alt,
+        }
+        if caption:
+            block["caption"] = caption
+        errors = _schema().validate_block(block)
+        if errors:
+            _raise_block_errors(errors)
+        _data, etag = client.get_document(slug)
+        data, _new_etag = client.insert_block(
+            slug, section_id, block, after_block_id or None, etag
+        )
+        return {"block_id": data.get("block_id") or block.get("id")}
 
     return mcp
 

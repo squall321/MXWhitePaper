@@ -85,6 +85,9 @@ def test_registers_tools_resource_template_and_prompt(server_mod) -> None:
         "delete_block",
         "move_block",
         "validate_block",
+        "import_file",
+        "upload_image",
+        "insert_image_block",
     ]
     assert len(templates) == 1
     assert templates[0].uriTemplate == "rag://chunks/{chunk_id}"

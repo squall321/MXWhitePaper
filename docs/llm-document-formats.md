@@ -567,3 +567,41 @@ import 응답 (`/imports/docx` 또는 `/imports/pptx`) 의 `summary` 필드에
 - [ ] 절대 위치에 의존하지 않는 콘텐츠 (stack 변환 후에도 의미 유지)
 
 이 체크리스트를 통과하면 서버 import 가 거의 손실 없이 동작한다.
+
+---
+
+## 8. 파일 import (docx/pptx/xlsx/pdf)
+
+서버는 4종 파일을 import 엔드포인트로 받아 DocumentJSON 으로 변환한다
+(`/imports/docx`, `/imports/pptx`, `/imports/xlsx`, `/imports/pdf`). 넷 다
+`{document, summary}` 를 반환하고 **본문을 저장하지 않는다** — 호출자가 받은
+`document` 를 별도로 위키에 쓴다. 변환 직후 docx 와 동일한 위젯 마커/autodetect
+post-pass 를 태운다 — autodetect 는 callout/kpi-cards/gantt/gallery 4종만
+인식하므로, 일반 표는 표로 보존되고 label/value·name/start/end 형태만 kpi/gantt 로
+승격된다 (차트는 `Widget: chart` 마커나 embedded 엑셀 차트로). 4종 공통
+(위 "Phase 1 위젯 마커 룰" / autodetect 참고).
+
+### 포맷별 분배 방식
+
+| 포맷 | 위젯 분배 | 한계 |
+|---|---|---|
+| docx | 스타일/dotted-prefix 로 섹션 트리, 표/이미지/목록/코드/수식/각주 인식 + 위젯 마커/autodetect | SVG 건너뜀, 머리말/꼬리말은 callout 1개로 통합 |
+| pptx | 슬라이드=섹션, placeholder/textbox 텍스트 + 표, speaker note 분리 + 위젯 마커/autodetect | 셀 안 그림 불가, 절대위치 레이아웃은 stack 으로 평탄화 |
+| xlsx | 시트=섹션, 표→표 블록 (200행 초과는 spreadsheet 블록), embedded 차트→차트 블록, label/value·name/start/end 표는 kpi/gantt autodetect | 수식은 캐시된 계산값으로 읽음 (캐시 없으면 빈 셀). 일반 숫자 표는 표 유지 |
+| pdf | 폰트 크기 (>본문×1.15) 로 heading, `find_tables()` 로 표, dotted-prefix 단락을 섹션으로 승격 + autodetect | 구조 휴리스틱 — 정확도가 원본 PDF 구조 품질에 비례, 이미지는 placeholder + warning |
+
+### 분배 잘 되게 하는 작성 팁
+
+- **xlsx**: 표의 **첫 행을 헤더**로 두면 그 아래 데이터가 표 블록으로 잡힌다.
+  헤더가 `label`/`value` 면 KPI 카드, `name`/`start`/`end` 면 간트로 자동
+  승격된다. 차트로 만들고 싶으면 엑셀에 **실제 차트를 삽입**하면 ChartBlock
+  으로 변환된다 (일반 숫자 표만으로는 차트가 안 된다). 수식 결과는 저장 전
+  Excel 에서 한 번 재계산 (캐시 갱신) 해두면 `data_only` 로 값이 읽힌다.
+  시트 1개 = 섹션 1개이므로 의미 단위로 시트를 나눈다.
+- **pdf**: 구조가 명확할수록 정확하다. heading 은 본문보다 **확실히 큰
+  폰트**로, 섹션 번호는 `2.1 …` 같은 dotted-prefix 로 작성하면 섹션으로
+  승격된다. 표는 진짜 표 그리드로 (텍스트를 공백으로 정렬한 가짜 표는
+  `find_tables()` 가 못 잡는다). 한글 텍스트는 폰트가 **임베드**되어 있어야
+  추출된다.
+
+이 팁을 지키면 import 후 위젯 분배가 더 정확해진다.

@@ -42,8 +42,10 @@ from app.repos import document_repo
 from app.services import (
     document_service,
     docx_import,
+    pdf_import,
     pptx_import,
     upload_service,
+    xlsx_import,
 )
 from app.services.docx_roundtrip import roundtrip_docx
 
@@ -892,4 +894,169 @@ async def import_csv(
     return envelope(
         data={"created": created, "skipped": skipped, "errors": errors},
         meta={"total_rows": len(parsed_rows)},
+    )
+
+
+# ── xlsx import ──────────────────────────────────────────────────────
+
+
+def _xlsx_max_bytes() -> int:
+    return get_settings().xlsx_import_max_bytes
+
+
+async def _read_capped(file: UploadFile, limit: int) -> bytes:
+    """Stream-read an upload with a hard size cap (docx 패턴 공용화)."""
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(64 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise ValidationFailed(
+                f"file exceeds max size ({limit} bytes)",
+                details={"limit": limit},
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+@router.post("/xlsx")
+async def import_xlsx(
+    file: UploadFile = File(...),
+    slug: str | None = Form(default=None),
+    title: str | None = Form(default=None),
+    x_mxwp_user: str | None = Header(default=None, alias="X-MXWP-User"),
+    s: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_editor),
+) -> dict[str, Any]:
+    actor = await _resolve_actor(s, x_mxwp_user, user)
+    if not _check_rate_limit(actor):
+        raise _RateLimited()
+
+    fname = (file.filename or "").lower()
+    if not fname.endswith(".xlsx"):
+        raise ValidationFailed(
+            "filename must end with .xlsx", details={"got": file.filename}
+        )
+
+    buf = await _read_capped(file, _xlsx_max_bytes())
+    if not xlsx_import.is_xlsx_zip_magic(buf):
+        raise ValidationFailed("file is not a valid zip (.xlsx must be PK zip)")
+    if not xlsx_import.is_xlsx_content(buf):
+        raise ValidationFailed("zip does not contain xl/workbook.xml")
+
+    final_slug = slug or _derive_slug(file.filename or "imported.xlsx")
+    try:
+        result = await run_in_threadpool(
+            xlsx_import.xlsx_to_document,
+            buf,
+            slug=final_slug,
+            title=title or "",
+            owner_user_id=actor,
+        )
+    except ValueError as e:
+        raise ValidationFailed(str(e)) from e
+
+    document = result["document"]
+    summary = result["summary"]
+
+    try:
+        await document_repo.insert_audit(
+            s, user_id=actor, action="xlsx.import",
+            target=f"slug:{final_slug}",
+            payload={
+                "title": document.get("title"),
+                "tables": summary.tables,
+                "sections": len(document.get("sections", [])),
+            },
+        )
+        await s.commit()
+    except Exception:
+        await s.rollback()
+
+    summary_dict: dict[str, Any] = {
+        "tables": summary.tables,
+        "sections": len(document.get("sections", [])),
+        "warnings": list(summary.warnings),
+    }
+    return envelope(
+        data={"document": document, "summary": summary_dict},
+        meta={"slug": final_slug},
+    )
+
+
+# ── pdf import ───────────────────────────────────────────────────────
+
+
+def _pdf_max_bytes() -> int:
+    return get_settings().pdf_import_max_bytes
+
+
+@router.post("/pdf")
+async def import_pdf(
+    file: UploadFile = File(...),
+    slug: str | None = Form(default=None),
+    title: str | None = Form(default=None),
+    x_mxwp_user: str | None = Header(default=None, alias="X-MXWP-User"),
+    s: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_editor),
+) -> dict[str, Any]:
+    actor = await _resolve_actor(s, x_mxwp_user, user)
+    if not _check_rate_limit(actor):
+        raise _RateLimited()
+
+    fname = (file.filename or "").lower()
+    if not fname.endswith(".pdf"):
+        raise ValidationFailed(
+            "filename must end with .pdf", details={"got": file.filename}
+        )
+
+    buf = await _read_capped(file, _pdf_max_bytes())
+    if not pdf_import.is_pdf_magic(buf):
+        raise ValidationFailed("file is not a valid PDF (missing %PDF- signature)")
+
+    final_slug = slug or _derive_slug(file.filename or "imported.pdf")
+    try:
+        result = await run_in_threadpool(
+            pdf_import.pdf_to_document,
+            buf,
+            slug=final_slug,
+            title=title or "",
+            owner_user_id=actor,
+        )
+    except ValueError as e:
+        raise ValidationFailed(str(e)) from e
+
+    document = result["document"]
+    summary = result["summary"]
+
+    try:
+        await document_repo.insert_audit(
+            s, user_id=actor, action="pdf.import",
+            target=f"slug:{final_slug}",
+            payload={
+                "title": document.get("title"),
+                "paragraphs": summary.paragraphs,
+                "headings": summary.headings,
+                "tables": summary.tables,
+                "images": summary.images,
+            },
+        )
+        await s.commit()
+    except Exception:
+        await s.rollback()
+
+    summary_dict: dict[str, Any] = {
+        "paragraphs": summary.paragraphs,
+        "headings": summary.headings,
+        "tables": summary.tables,
+        "images": summary.images,
+        "sections": len(document.get("sections", [])),
+        "warnings": list(summary.warnings),
+    }
+    return envelope(
+        data={"document": document, "summary": summary_dict},
+        meta={"slug": final_slug},
     )

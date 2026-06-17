@@ -30,6 +30,13 @@ dependencies = [
   # 의존이 없어 apptainer 환경에서 추가 설정 없이 동작한다 (WeasyPrint 와
   # 달리 cairo/pango 같은 native lib 미요구).
   "python-pptx>=0.6",
+  # xlsx import (POST /imports/csv 및 향후 xlsx). api.def 에는 이미 baked 돼
+  # 있었으나 metadata 에서는 누락 — transitive 가 아니라 직접 의존이므로 명시화.
+  "openpyxl>=3.1",
+  # pdf import (POST /imports/pdf). fitz(=pymupdf) 로 페이지/이미지 추출 후
+  # 다른 import 와 동일한 DocumentJSON 으로 위젯 autodetect 를 태운다.
+  # 컨테이너 설치본 1.27.2.3 기준으로 핀.
+  "pymupdf>=1.27,<2",
 ]
 
 [project.optional-dependencies]

@@ -193,6 +193,42 @@
         "title": "Body_import_docx_api_v1_imports_docx_post",
         "type": "object"
       },
+      "Body_import_pdf_api_v1_imports_pdf_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_pdf_api_v1_imports_pdf_post",
+        "type": "object"
+      },
       "Body_import_pptx_api_v1_imports_pptx_post": {
         "properties": {
           "file": {
@@ -227,6 +263,42 @@
           "file"
         ],
         "title": "Body_import_pptx_api_v1_imports_pptx_post",
+        "type": "object"
+      },
+      "Body_import_xlsx_api_v1_imports_xlsx_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_xlsx_api_v1_imports_xlsx_post",
         "type": "object"
       },
       "Body_portal_callback_api_v1_auth_portal_callback_post": {
@@ -12740,6 +12812,67 @@
         ]
       }
     },
+    "/api/v1/imports/pdf": {
+      "post": {
+        "operationId": "import_pdf_api_v1_imports_pdf_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_pdf_api_v1_imports_pdf_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Import Pdf Api V1 Imports Pdf Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Pdf",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
     "/api/v1/imports/pptx": {
       "post": {
         "description": "Import a PowerPoint deck and convert it to DocumentJSON.\n\nEach slide becomes one section. Slide layout names are best-effort\nmapped to our `Section.layout` enum (`title-only` / `two-col` /\n`image-left` / `stack`). Speaker notes are preserved as paragraphs\nwith `meta.note: speaker:N`.\n\nSame rate-limit (5/min/user) and `actor` resolution as docx import.\nReturns `{document, summary}` so the FE can preview before committing\nvia `POST /documents`.",
@@ -12797,6 +12930,67 @@
           }
         },
         "summary": "Import Pptx",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/imports/xlsx": {
+      "post": {
+        "operationId": "import_xlsx_api_v1_imports_xlsx_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_xlsx_api_v1_imports_xlsx_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Import Xlsx Api V1 Imports Xlsx Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Xlsx",
         "tags": [
           "imports"
         ]

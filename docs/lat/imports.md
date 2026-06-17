@@ -14,10 +14,30 @@
 | POST | `/api/v1/imports/docx` | editor+ | DocumentJSON 반환 → FE 가 별도 `POST /documents` 호출해 저장 |
 | POST | `/api/v1/imports/docx/roundtrip` | editor+ | .docx 바이트 반환 (Content-Disposition: `<name>.normalized.docx`). 문서 본문/이미지 영속 없음 — MinIO/Meilisearch 미접근, DB 는 `audit_log` 한 줄만 best-effort insert |
 | POST | `/api/v1/imports/pptx` | editor+ | DocumentJSON 반환 |
+| POST | `/api/v1/imports/xlsx` | editor+ | DocumentJSON 반환 — 시트=섹션, 표를 widget autodetect 로 분배. 저장 안 함 |
+| POST | `/api/v1/imports/pdf` | editor+ | DocumentJSON 반환 — 폰트/표 휴리스틱 + widget autodetect. 저장 안 함 |
 | POST | `/api/v1/imports/csv` | admin | 즉시 일괄 영속화 — 행 1 개당 문서 1 개 |
 
 전부 [[src/app/routers/imports.py]] 에 정의. 라우터 모듈 자체에 rate-limit
 (5/min/user), 사이즈 캡, zip-magic 검증이 다 들어있다 — 서비스 레이어로 빠뜨리지 말 것.
+
+## 파일 포맷별 import 요약
+
+`docx`/`pptx`/`xlsx`/`pdf` 4종 모두 `{document, summary}` (DocumentJSON v1.0)
+를 반환하고 **본문은 저장하지 않는다** (FE 가 별도 `POST /documents` 호출).
+넷 다 본문 walk 직후 [[#widget-marker-post-pass]] + [[#widget-auto-detect-post-pass-phase-3]]
+(`apply_widget_markers` + `apply_widget_autodetect`) 를 동일하게 태운다. autodetect 의
+블록-레벨 인식기는 **callout / kpi-cards / gantt / gallery 4종뿐** (chart 인식기는
+없음) — 일반 숫자 표는 TableBlock 으로 보존되고, label/value 헤더는 KpiCards,
+name/start/end 헤더는 Gantt 로만 승격된다. 차트는 `Widget: chart` 마커나 (xlsx 의)
+embedded 차트로 생성.
+
+| 포맷 | 진입 함수 | 위젯 분배 방식 | 한계 |
+|---|---|---|---|
+| docx | [[src/app/services/docx_import.py#docx_to_document]] | 스타일/dotted-prefix 로 섹션 트리, 표/이미지/목록/코드/수식/각주 인식 + 위젯 마커 + autodetect | SVG skip, header/footer 는 callout 1개로 통합 |
+| pptx | [[src/app/services/pptx_import.py#pptx_to_document]] | 슬라이드=섹션, placeholder/textbox 텍스트 + 표, speaker note 분리 + 위젯 마커 + autodetect | 셀 안 picture 불허, 절대위치 레이아웃은 stack 으로 평탄화 |
+| xlsx | [[src/app/services/xlsx_import.py#xlsx_to_document]] | 시트=섹션, 표→TableBlock (200행 초과는 SpreadsheetBlock), embedded 차트→ChartBlock, label/value·name/start/end 표는 kpi/gantt 로 autodetect | `data_only=True` (수식 대신 캐시값) — 캐시 없으면 빈 셀. 일반 숫자 표는 차트 자동변환 안 함 (표 유지) |
+| pdf | [[src/app/services/pdf_import.py#pdf_to_document]] | 폰트크기>본문×1.15 면 heading, `find_tables()` 로 표, dotted-prefix 섹션 승격 + autodetect | 구조 휴리스틱 (정확도=원본 PDF 구조 품질), 이미지는 placeholder + warning |
 
 ## Pipeline overview
 
@@ -308,6 +328,8 @@ slug 중복은 `skipped` 로 카운트 (에러 아님).
 |---|---|---|
 | `docx_import_max_bytes` | 30 MB | docx 업로드 사이즈 캡 |
 | `pptx_import_max_bytes` | 50 MB | pptx 업로드 사이즈 캡 (pptx 가 docx 대비 2-3× 크기 → 별도 캡) |
+| `xlsx_import_max_bytes` | 20 MB | xlsx 업로드 사이즈 캡 |
+| `pdf_import_max_bytes` | 30 MB | pdf 업로드 사이즈 캡 |
 | `csv_import_max_bytes` | 5 MB | |
 | `csv_import_max_rows` | 500 | |
 | `import_rate_limit_per_minute` | 5 | rate-limit 한도 |
@@ -350,6 +372,10 @@ slug 중복은 `skipped` 로 카운트 (에러 아님).
    동적 필드는 텍스트 그대로 (재구성 안 함). round-trip export 측엔 별도
    header/footer 재구성 로직 없음 — 회수된 callout 은 일반 본문 callout 처럼
    다시 export 된다.
+9. **PDF 는 휴리스틱** — 폰트 크기 (>본문×1.15) 로 heading, `find_tables()` 로
+   표를 추정한다. fitz 의 builtin 폰트가 한글 글리프를 갖지 않아 **테스트
+   fixture 는 ASCII** 로 작성한다 — 실제 PDF 는 임베드 폰트로 한글 텍스트
+   추출이 정상 동작한다. 정확도는 원본 PDF 의 구조 품질에 비례.
 
 ## 테스트 지도
 

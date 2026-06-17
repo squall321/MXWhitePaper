@@ -71,6 +71,8 @@ class Settings(BaseSettings):
 
     docx_import_max_bytes: int = Field(default=30 * 1024 * 1024)
     pptx_import_max_bytes: int = Field(default=50 * 1024 * 1024)
+    xlsx_import_max_bytes: int = Field(default=20 * 1024 * 1024)
+    pdf_import_max_bytes: int = Field(default=30 * 1024 * 1024)
     csv_import_max_bytes: int = Field(default=5 * 1024 * 1024)
     csv_import_max_rows: int = Field(default=500)
     import_rate_limit_per_minute: int = Field(default=5)

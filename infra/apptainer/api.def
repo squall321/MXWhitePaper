@@ -24,7 +24,7 @@ From: python:3.12-slim
         "boto3>=1.35" "Pillow>=11.0" "meilisearch>=0.31" "slowapi>=0.1.9" \
         "structlog>=24.4" "httpx>=0.28" "ulid-py>=1.1" \
         "datamodel-code-generator>=0.26" \
-        "python-docx>=1.1" "python-pptx>=1.0" "openpyxl>=3.1" \
+        "python-docx>=1.1" "python-pptx>=1.0" "openpyxl>=3.1" "pymupdf>=1.27,<2" \
         "lxml>=5.3" "markdown>=3.7" "beautifulsoup4>=4.12"
 
 %environment

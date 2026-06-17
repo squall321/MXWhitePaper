@@ -64,6 +64,43 @@ def new_ulid() -> str:
     return "".join(reversed(head)) + tail
 
 
+def encode_multipart(
+    *,
+    file_field_name: str,
+    filename: str,
+    content: bytes,
+    content_type: str,
+    form_fields: dict[str, str],
+) -> tuple[bytes, str]:
+    """multipart/form-data body 를 stdlib 만으로 인코딩 → (body, boundary).
+
+    form_fields 각 항목 → text part, file_field_name → file part.
+    """
+    boundary = "----mxwpmcp" + secrets.token_hex(16)
+    crlf = b"\r\n"
+    out: list[bytes] = []
+    for name, value in form_fields.items():
+        out.append(b"--" + boundary.encode("ascii"))
+        out.append(
+            f'Content-Disposition: form-data; name="{name}"'.encode("utf-8")
+        )
+        out.append(b"")
+        out.append(str(value).encode("utf-8"))
+    out.append(b"--" + boundary.encode("ascii"))
+    out.append(
+        (
+            f'Content-Disposition: form-data; name="{file_field_name}"; '
+            f'filename="{filename}"'
+        ).encode("utf-8")
+    )
+    out.append(f"Content-Type: {content_type}".encode("ascii"))
+    out.append(b"")
+    out.append(content)
+    out.append(b"--" + boundary.encode("ascii") + b"--")
+    out.append(b"")
+    return crlf.join(out), boundary
+
+
 class ApiError(RuntimeError):
     """HTTP / transport 오류. 메시지는 이미 사람이 읽을 형태."""
 
@@ -153,6 +190,16 @@ class MxwpClient:
         if body is not None:
             data_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8")
             headers["Content-Type"] = "application/json"
+        return self._send(method, path, url, data_bytes, headers)
+
+    def _send(
+        self,
+        method: str,
+        path: str,
+        url: str,
+        data_bytes: bytes | None,
+        headers: dict[str, str],
+    ) -> tuple[Any, dict[str, Any], dict[str, str]]:
         req = urllib.request.Request(url, data=data_bytes, method=method)
         for k, v in headers.items():
             req.add_header(k, v)
@@ -184,6 +231,28 @@ class MxwpClient:
         if not isinstance(payload, dict):
             return payload, {}, out_headers
         return payload.get("data", payload), payload.get("meta") or {}, out_headers
+
+    def _post_multipart(
+        self,
+        path: str,
+        *,
+        file_field_name: str,
+        filename: str,
+        content: bytes,
+        content_type: str,
+        form_fields: dict[str, str] | None = None,
+    ) -> tuple[Any, dict[str, Any], dict[str, str]]:
+        """multipart/form-data POST (stdlib boundary 직접 인코딩) → (data, meta, headers)."""
+        body, boundary = encode_multipart(
+            file_field_name=file_field_name,
+            filename=filename,
+            content=content,
+            content_type=content_type,
+            form_fields=form_fields or {},
+        )
+        headers = self._headers(None)
+        headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+        return self._send("POST", path, f"{self.base_url}{path}", body, headers)
 
     @staticmethod
     def _etag(meta: dict[str, Any], headers: dict[str, str]) -> str:
@@ -217,6 +286,81 @@ class MxwpClient:
     def delete_document(self, slug: str) -> None:
         path = f"/api/v1/documents/{quote(slug, safe='')}"
         self._request("DELETE", path)
+
+    # ── imports ─────────────────────────────────────────────────────
+
+    def import_file(
+        self,
+        kind: str,
+        *,
+        filename: str,
+        content: bytes,
+        content_type: str,
+        slug: str = "",
+        title: str = "",
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+        """파일 바이트를 /api/v1/imports/<kind> 로 multipart POST.
+
+        → (document, summary, meta). document/summary 는 응답 data 의 동명 키,
+        meta 는 envelope meta (slug 포함).
+        """
+        fields: dict[str, str] = {}
+        if slug:
+            fields["slug"] = slug
+        if title:
+            fields["title"] = title
+        data, meta, _h = self._post_multipart(
+            f"/api/v1/imports/{kind}",
+            file_field_name="file",
+            filename=filename,
+            content=content,
+            content_type=content_type,
+            form_fields=fields,
+        )
+        data = data or {}
+        return data.get("document") or {}, data.get("summary") or {}, meta
+
+    # ── image upload (2-phase) ──────────────────────────────────────
+
+    def init_upload(
+        self, *, filename: str, mime_type: str, sha256: str, size: int
+    ) -> dict[str, Any]:
+        """POST /uploads/image/init → data dict (dedup 이면 deduped=True+image_id)."""
+        data, _meta, _h = self._request(
+            "POST",
+            "/api/v1/uploads/image/init",
+            body={
+                "filename": filename,
+                "mime_type": mime_type,
+                "sha256": sha256,
+                "size": size,
+            },
+        )
+        return data or {}
+
+    def put_bytes(self, url: str, content: bytes, content_type: str) -> None:
+        """presigned PUT URL 로 raw 바이트 업로드 (envelope 없음)."""
+        req = urllib.request.Request(
+            url, data=content, method="PUT",
+            headers={"Content-Type": content_type},
+        )
+        try:
+            self._opener(req, self.timeout)
+        except urllib.error.HTTPError as e:
+            raise ApiError(
+                f"presigned PUT 실패 (HTTP {e.code})", status=e.code
+            ) from e
+        except urllib.error.URLError as e:
+            raise ApiError(f"presigned PUT 연결 실패: {e.reason}") from e
+
+    def finalize_upload(self, upload_id: str) -> dict[str, Any]:
+        """POST /uploads/image/finalize → data dict (image_id 등)."""
+        data, _meta, _h = self._request(
+            "POST",
+            "/api/v1/uploads/image/finalize",
+            body={"uploadId": upload_id},
+        )
+        return data or {}
 
     # ── blocks ──────────────────────────────────────────────────────
 
@@ -268,4 +412,7 @@ class MxwpClient:
         return data, self._etag(meta, headers)
 
 
-__all__ = ["ApiError", "MxwpClient", "new_ulid", "DEFAULT_API_URL", "TOKEN_HELP", "CONFLICT_HELP"]
+__all__ = [
+    "ApiError", "MxwpClient", "new_ulid", "encode_multipart",
+    "DEFAULT_API_URL", "TOKEN_HELP", "CONFLICT_HELP",
+]
