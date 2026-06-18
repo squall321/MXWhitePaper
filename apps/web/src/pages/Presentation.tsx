@@ -22,6 +22,7 @@ import {
 } from '@/features/presentation/transitions.css'
 import { resolveLayout, type AutoLayoutKind } from '@/features/presentation/autoLayout'
 import { patchSection } from '@/features/editor/api'
+import { withBase } from '@/lib/basePath'
 import {
   useSettingsStore,
   type SlideTheme,
@@ -113,7 +114,7 @@ export function PresentationPage() {
   // notebook secondary screens; the user can resize freely.
   const openPresenter = useCallback(() => {
     if (!slug) return
-    const url = `/present/${encodeURIComponent(slug)}/notes${nested ? '?nested=1' : ''}`
+    const url = withBase(`/present/${encodeURIComponent(slug)}/notes${nested ? '?nested=1' : ''}`)
     window.open(url, 'mx-presenter', 'width=1280,height=720,popup=yes')
   }, [slug, nested])
 
@@ -213,7 +214,7 @@ export function PresentationPage() {
     return (
       <div style={{ color: 'white', padding: 24 }}>
         <p>슬러그가 지정되지 않았습니다.</p>
-        <a href="/" style={{ color: '#a5b4fc', textDecoration: 'underline' }}>
+        <a href={withBase('/')} style={{ color: '#a5b4fc', textDecoration: 'underline' }}>
           ← 돌아가기
         </a>
       </div>
@@ -236,7 +237,7 @@ export function PresentationPage() {
             : '문서를 불러오지 못했습니다.'}
         </p>
         <a
-          href="/"
+          href={withBase('/')}
           style={{ color: '#a5b4fc', textDecoration: 'underline' }}
         >
           ← 돌아가기
@@ -250,7 +251,7 @@ export function PresentationPage() {
       <div style={{ color: 'white', padding: 24 }}>
         <p>슬라이드를 만들 수 없는 문서입니다.</p>
         <a
-          href={`/docs/${encodeURIComponent(slug)}`}
+          href={withBase(`/docs/${encodeURIComponent(slug)}`)}
           style={{ color: '#a5b4fc', textDecoration: 'underline' }}
         >
           ← 돌아가기
@@ -266,7 +267,7 @@ export function PresentationPage() {
       <div style={{ color: 'white', padding: 24 }}>
         <p>렌더할 슬라이드가 없습니다.</p>
         <a
-          href={`/docs/${encodeURIComponent(slug)}`}
+          href={withBase(`/docs/${encodeURIComponent(slug)}`)}
           style={{ color: '#a5b4fc', textDecoration: 'underline' }}
         >
           ← 돌아가기

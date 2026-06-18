@@ -3,6 +3,7 @@ import type { GalleryBlock } from '@/types/document'
 import { useImage } from '@/features/upload/hooks/useImage'
 import { Lightbox, type LightboxItem } from '@/components/Lightbox'
 import { useT } from '@/lib/i18n'
+import { withBase } from '@/lib/basePath'
 
 /**
  * Read-mode gallery — grid (or horizontal carousel) of thumbnails. Each cell
@@ -27,7 +28,7 @@ export function GalleryBlockView({ block }: { block: GalleryBlock }) {
       block.items.map((it, i) => ({
         src:
           resolved[i]?.src ??
-          (it.imageId ? `/api/v1/images/${encodeURIComponent(it.imageId)}` : ''),
+          (it.imageId ? withBase(`/api/v1/images/${encodeURIComponent(it.imageId)}`) : ''),
         alt: it.alt,
         caption: it.caption,
       })),
@@ -80,7 +81,7 @@ function GalleryItem({
 }) {
   const t = useT()
   const { data: image } = useImage(item.imageId || undefined)
-  const thumb = image?.urls.thumb ?? `/api/v1/images/${encodeURIComponent(item.imageId)}`
+  const thumb = image?.urls.thumb ?? withBase(`/api/v1/images/${encodeURIComponent(item.imageId)}`)
   const bg = image?.dominant_color ?? '#f3f4f6'
 
   // Report the highest-quality URL we know up to the parent (for the

@@ -16,6 +16,7 @@ import { BookmarkButton } from '@/features/bookmarks/components/BookmarkButton'
 import { FollowButton } from '@/features/subscriptions/FollowButton'
 import { ReminderButton } from '@/features/reminders/ReminderButton'
 import { estimateReadingTimeMinutes } from '@/lib/readingTime'
+import { withBase } from '@/lib/basePath'
 import { Suspense, lazy } from 'react'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
 // BulkActionsBar only renders inside the editable surface and is rarely shown
@@ -286,7 +287,7 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
       <SeriesNav slug={document.slug} placement="top" />
       <div className="flex justify-end">
         <a
-          href={`/dep-graph?root=${encodeURIComponent(document.slug)}`}
+          href={withBase(`/dep-graph?root=${encodeURIComponent(document.slug)}`)}
           data-testid="open-dep-graph"
           className="text-xs text-smsg-700 hover:underline"
           title="이 문서를 중심으로 의존성 그래프 열기"
@@ -679,7 +680,7 @@ export function WikiArticle({ document, row, meta, editableSlug }: WikiArticlePr
           {isAdmin && (
             <p className="pt-1 text-xs">
               <a
-                href="/admin/archived"
+                href={withBase('/admin/archived')}
                 className="text-smsg-700 underline hover:text-smsg-900"
                 data-testid="archive-doc-link-archived-page"
               >

@@ -14,6 +14,7 @@ import { ExportMenu } from '@/features/export/ExportMenu'
 import { AiButton } from '@/features/ai/AiButton'
 import { ShareModal } from '@/features/sharing/ShareModal'
 import { useLocale } from '@/lib/i18n'
+import { withBase } from '@/lib/basePath'
 
 // Rarely-shown modals — keep them off the editor's critical path. Each one
 // only mounts when its toggle is true so the lazy chunk is fetched on demand.
@@ -371,7 +372,7 @@ export function EditorToolbar({
           <ExportMenu slug={slug} />
           <AiButton />
           <a
-            href={`/present/${encodeURIComponent(slug)}`}
+            href={withBase(`/present/${encodeURIComponent(slug)}`)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus"
@@ -436,7 +437,7 @@ export function EditorToolbar({
           </button>
           {isEditing && (
             <a
-              href={`/docs/${encodeURIComponent(slug)}/variables`}
+              href={withBase(`/docs/${encodeURIComponent(slug)}/variables`)}
               data-testid="open-variables"
               title={t('toolbar.variables.title')}
               className="inline-flex h-8 items-center rounded-md border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 transition-all hover:-translate-y-px hover:border-smsg-500 hover:text-smsg-900 hover:shadow-sm focus-visible:outline-none focus-visible:shadow-focus"

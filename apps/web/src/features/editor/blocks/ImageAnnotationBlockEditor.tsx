@@ -10,6 +10,7 @@ import type {
   ImageAnnotationBlock,
   Slug,
 } from '@/types/document'
+import { withBase } from '@/lib/basePath'
 import { useImage } from '@/features/upload/hooks/useImage'
 import {
   ImageDropzone,
@@ -325,7 +326,7 @@ export function ImageAnnotationBlockEditor({ slug, block }: Props) {
   const apply = useEditorStore((s) => s.applyServerSnapshot)
 
   const { data: image } = useImage(block.imageId || undefined)
-  const src = image?.urls.view ?? `/api/v1/images/${encodeURIComponent(block.imageId)}`
+  const src = image?.urls.view ?? withBase(`/api/v1/images/${encodeURIComponent(block.imageId)}`)
   const bg = image?.dominant_color ?? '#f3f4f6'
 
   const [annotations, setAnnotations] = useState<AnnotationElement[]>(block.annotations)

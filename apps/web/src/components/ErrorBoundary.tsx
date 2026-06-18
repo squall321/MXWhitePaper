@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { withBase } from '@/lib/basePath'
 
 interface Props {
   children: ReactNode
@@ -50,7 +51,7 @@ export class ErrorBoundary extends Component<Props, State> {
     } catch {
       /* private mode */
     }
-    location.assign('/')
+    location.assign(withBase('/'))
   }
 
   override render(): ReactNode {
@@ -84,13 +85,13 @@ export class ErrorBoundary extends Component<Props, State> {
                 전체 초기화 (스토리지 비우기)
               </button>
               <a
-                href="/diag"
+                href={withBase('/diag')}
                 className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
               >
                 진단 페이지
               </a>
               <a
-                href="/"
+                href={withBase('/')}
                 className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
               >
                 홈으로

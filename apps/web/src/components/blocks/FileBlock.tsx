@@ -1,4 +1,5 @@
 import type { FileBlock } from '@/types/document'
+import { withBase } from '@/lib/basePath'
 
 const MIB = 1024 * 1024
 const KIB = 1024
@@ -14,7 +15,7 @@ function formatSize(size: number | undefined): string {
  * to a fresh 1-day presigned MinIO GET URL (cookie auth carries through).
  */
 export function FileBlockView({ block }: { block: FileBlock }) {
-  const href = `/api/v1/files/${encodeURIComponent(block.fileId)}/download`
+  const href = withBase(`/api/v1/files/${encodeURIComponent(block.fileId)}/download`)
   return (
     <a
       href={href}

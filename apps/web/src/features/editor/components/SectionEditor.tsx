@@ -4,6 +4,7 @@ import { BlockNoteView } from '@blocknote/mantine'
 import '@blocknote/core/fonts/inter.css'
 import '@blocknote/mantine/style.css'
 import type { Block } from '@/types/document'
+import { withBase } from '@/lib/basePath'
 import { editorSchema } from '../blocknote-config'
 import {
   blockNoteToDocumentJson,
@@ -132,7 +133,7 @@ export function SectionEditor({
         const slug = insertText.slice('__create__'.length)
         // portal sub-path 안전: BASE_URL prefix 로 BrowserRouter basename
         // 과 일치시킴. standalone(BASE_URL='/') 과 portal 양쪽 모두 동작.
-        window.location.href = `${import.meta.env.BASE_URL}docs/new?slug=${encodeURIComponent(slug)}`
+        window.location.href = withBase(`/docs/new?slug=${encodeURIComponent(slug)}`)
         return
       }
       insertAtCaret(sel.match.consume, insertText)

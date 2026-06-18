@@ -7,6 +7,7 @@ import { toApiError } from '@/lib/api/envelope'
 import { useRecentPartsStore } from '../recentPartsStore'
 import { useFavoritesStore } from '@/features/favorites/store'
 import { cn } from '@/components/ui/cn'
+import { withBase } from '@/lib/basePath'
 import type { OrgDivision, OrgTeam, OrgGroup, OrgPart } from '../types'
 
 interface OrgTreeProps {
@@ -388,7 +389,7 @@ function PinnedSections({
             {favorites.map((f) => (
               <li key={f.slug}>
                 <a
-                  href={`/docs/${encodeURIComponent(f.slug)}`}
+                  href={withBase(`/docs/${encodeURIComponent(f.slug)}`)}
                   className="flex w-full items-center gap-1 rounded px-1.5 py-1 text-left text-xs text-smsg-900 hover:bg-smsg-50 hover:no-underline"
                 >
                   <span aria-hidden="true" className="text-amber-400">★</span>

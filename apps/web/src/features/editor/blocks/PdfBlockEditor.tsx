@@ -3,6 +3,7 @@ import type { PdfBlock, Slug } from '@/types/document'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
 import { useUploadFile } from '@/features/upload/hooks/useUploadFile'
+import { withBase } from '@/lib/basePath'
 import { useT } from '@/lib/i18n'
 
 interface Props {
@@ -117,9 +118,11 @@ export function PdfBlockEditor({ slug, block }: Props) {
   const page = local.page ?? 1
   const hasFile = Boolean(local.file_id)
   const previewSrc = hasFile
-    ? `/api/v1/files/${encodeURIComponent(local.file_id)}/download${
-        page > 1 ? `#page=${page}` : ''
-      }`
+    ? withBase(
+        `/api/v1/files/${encodeURIComponent(local.file_id)}/download${
+          page > 1 ? `#page=${page}` : ''
+        }`,
+      )
     : null
   const pct = Math.round(progress * 100)
 

@@ -11,6 +11,7 @@ import type {
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
 import { LinkPreview } from './LinkPreview'
 import { ProposeTermModal } from '@/features/glossary/components/ProposeTermModal'
+import { withBase } from '@/lib/basePath'
 
 // Long-press threshold (ms) on touch — matches the project's other
 // long-press affordances (BlockRenderer drag-handle, SectionRenderer).
@@ -97,8 +98,8 @@ export function WikiLink({ slug, anchor, display }: WikiLinkProps) {
   const href = sameDoc
     ? `#${anchorId}`
     : anchorId
-      ? `/docs/${encodeURIComponent(slug)}#${anchorId}`
-      : `/docs/${encodeURIComponent(slug)}`
+      ? withBase(`/docs/${encodeURIComponent(slug)}#${anchorId}`)
+      : withBase(`/docs/${encodeURIComponent(slug)}`)
 
   // While loading we render the blue variant — the cache is shared so most
   // links resolve instantly anyway. Same-doc anchors skip the existence check.
@@ -144,7 +145,7 @@ export function WikiLink({ slug, anchor, display }: WikiLinkProps) {
     return (
       <>
         <a
-          href={target}
+          href={withBase(target)}
           onClick={handleClick}
           onContextMenu={handleContextMenu}
           onTouchStart={handleTouchStart}

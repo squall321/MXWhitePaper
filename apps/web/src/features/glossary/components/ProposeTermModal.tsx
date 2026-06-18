@@ -12,6 +12,7 @@ import { Field, Input, Select, Textarea } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { toast } from '@/components/ui/Toast'
 import { ApiError } from '@/lib/api/envelope'
+import { withBase } from '@/lib/basePath'
 import {
   listDomains,
   proposeGlossaryTerm,
@@ -427,7 +428,7 @@ export function ProposeTermModal({
             </span>{' '}
             —{' '}
             <a
-              href={`/glossary?focus=${encodeURIComponent(duplicate.existingId)}`}
+              href={withBase(`/glossary?focus=${encodeURIComponent(duplicate.existingId)}`)}
               className="underline hover:text-amber-700"
               data-testid="propose-duplicate-link"
             >

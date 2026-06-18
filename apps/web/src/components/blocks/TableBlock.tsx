@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/Modal'
 import { ChartBlockEditor } from '@/features/editor/blocks/ChartBlockEditor'
 import { buildChartFromTable } from '@/features/editor/tableToChart'
 import { insertBlock, isPreconditionFailed } from '@/features/editor/api'
+import { withBase } from '@/lib/basePath'
 import { findParentSection } from '@/features/editor/findSection'
 import { useT } from '@/lib/i18n'
 import {
@@ -80,7 +81,7 @@ function renderCellContent(cell: SparseCell) {
             return (
               <img
                 key={idx}
-                src={`/api/v1/images/${b.imageId}/view`}
+                src={withBase(`/api/v1/images/${b.imageId}/view`)}
                 alt={b.alt ?? ''}
                 className="h-auto max-w-full"
               />

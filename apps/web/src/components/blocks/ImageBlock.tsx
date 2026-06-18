@@ -3,6 +3,7 @@ import type { ImageBlock } from '@/types/document'
 import { useImage } from '@/features/upload/hooks/useImage'
 import { Lightbox } from '@/components/Lightbox'
 import { useT } from '@/lib/i18n'
+import { withBase } from '@/lib/basePath'
 
 const WIDTH_CLASS: Record<NonNullable<ImageBlock['width']>, string> = {
   sm: 'w-full sm:w-1/3',
@@ -30,7 +31,7 @@ export function ImageBlockView({ block }: { block: ImageBlock }) {
   const { data: image } = useImage(block.imageId || undefined)
   const [open, setOpen] = useState(false)
 
-  const viewSrc = image?.urls.view ?? `/api/v1/images/${encodeURIComponent(block.imageId)}`
+  const viewSrc = image?.urls.view ?? withBase(`/api/v1/images/${encodeURIComponent(block.imageId)}`)
   const origSrc = image?.urls.orig ?? viewSrc
   const bg = image?.dominant_color ?? '#f3f4f6'
   const link = (block as { link?: string }).link

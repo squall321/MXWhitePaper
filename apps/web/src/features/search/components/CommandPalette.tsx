@@ -22,6 +22,7 @@ import type { DocSearchHit, WidgetRegistryEntry } from '../api'
 import { KnowledgeResults } from './KnowledgeResults'
 import { useAuthStore } from '@/features/auth/store'
 import { cn } from '@/components/ui/cn'
+import { withBase } from '@/lib/basePath'
 
 // KeyboardShortcutsModal is opened via the "?" shortcut from inside the
 // palette — defer the chunk download until that first open.
@@ -154,7 +155,7 @@ export function CommandPalette({ open, onClose, initialQuery = '' }: CommandPale
       const url = `/docs/${encodeURIComponent(hit.slug)}`
       if (newTab) {
         try {
-          window.open(url, '_blank', 'noopener,noreferrer')
+          window.open(withBase(url), '_blank', 'noopener,noreferrer')
         } catch {
           /* ignore */
         }

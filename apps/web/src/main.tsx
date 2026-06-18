@@ -10,6 +10,7 @@ import { RouteBoundary } from './components/RouteBoundary'
 import { BootBanner } from './components/BootBanner'
 import { ThemeProvider } from './features/theme/ThemeProvider'
 import { bootstrapAuth } from './bootstrap'
+import { withBase } from './lib/basePath'
 import './styles/tokens.css'
 
 /**
@@ -299,8 +300,8 @@ if (!maybeResetAndRedirect()) {
         '<div style="font:13px/1.5 system-ui;padding:24px;max-width:640px;margin:0 auto">' +
         '<h1 style="color:#b91c1c">화면을 그리지 못했습니다 (mount failed)</h1>' +
         `<pre style="white-space:pre-wrap;background:#fef2f2;border:1px solid #fecaca;padding:8px;border-radius:6px">${escapeHtml(e?.message ?? String(err))}\n\n${escapeHtml(e?.stack ?? '')}</pre>` +
-        '<p>· <a href="/diag">진단 페이지 열기</a></p>' +
-        '<p>· <a href="/?reset">스토리지 비우고 새로고침</a></p>' +
+        `<p>· <a href="${withBase('/diag')}">진단 페이지 열기</a></p>` +
+        `<p>· <a href="${withBase('/?reset')}">스토리지 비우고 새로고침</a></p>` +
         '</div>'
     }
   }

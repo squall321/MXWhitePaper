@@ -1,5 +1,6 @@
 import type { ImageAnnotationBlock, AnnotationElement } from '@/types/document'
 import { useImage } from '@/features/upload/hooks/useImage'
+import { withBase } from '@/lib/basePath'
 
 /**
  * `image-annotation` block — read-only renderer.
@@ -18,7 +19,7 @@ import { useImage } from '@/features/upload/hooks/useImage'
  */
 export function ImageAnnotationBlockView({ block }: { block: ImageAnnotationBlock }) {
   const { data: image } = useImage(block.imageId || undefined)
-  const src = image?.urls.view ?? `/api/v1/images/${encodeURIComponent(block.imageId)}`
+  const src = image?.urls.view ?? withBase(`/api/v1/images/${encodeURIComponent(block.imageId)}`)
   const bg = image?.dominant_color ?? '#f3f4f6'
 
   return (

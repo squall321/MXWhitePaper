@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
 } from 'react'
 import type { ImageBlock, Slug } from '@/types/document'
+import { withBase } from '@/lib/basePath'
 import { useImage } from '@/features/upload/hooks/useImage'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
@@ -217,7 +218,7 @@ export function ImageBlockEditor({
     ? SAMPLE_IMAGES.find((s) => `sample:${s.id}` === block.imageId)?.src
     : undefined
   const src =
-    sampleSrc ?? image?.urls.view ?? `/api/v1/images/${encodeURIComponent(block.imageId)}`
+    sampleSrc ?? image?.urls.view ?? withBase(`/api/v1/images/${encodeURIComponent(block.imageId)}`)
   const placeholderBg = image?.dominant_color ?? '#f3f4f6'
 
   const persist = useCallback(

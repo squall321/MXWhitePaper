@@ -6,6 +6,7 @@ import {
   downloadPptx,
   htmlExportUrl,
 } from './api'
+import { withBase } from '@/lib/basePath'
 
 interface ExportMenuProps {
   slug: string
@@ -104,7 +105,7 @@ export function ExportMenu({ slug }: ExportMenuProps) {
       const r = await downloadPdf(slug)
       if (r.kind === 'fallback') {
         // BE 가 PDF 변환 미지원 — 인쇄 페이지로 폴백.
-        window.open(r.hint.url, '_blank', 'noopener')
+        window.open(withBase(r.hint.url), '_blank', 'noopener')
         setStatusMsg('PDF 미지원 — 인쇄 미리보기를 새 창으로 띄웠습니다')
       } else {
         setStatusMsg('PDF 다운로드 시작')

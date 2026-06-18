@@ -15,6 +15,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { GalleryBlock, Slug } from '@/types/document'
+import { withBase } from '@/lib/basePath'
 import { useImage } from '@/features/upload/hooks/useImage'
 import { useEditorStore } from '../state'
 import { patchBlock, isPreconditionFailed } from '../api'
@@ -200,7 +201,7 @@ function SortableTile({ item, onCaption, onAlt, onRemove, disabled }: SortableTi
   const sortable = useSortable({ id: item.imageId })
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable
   const { data: image } = useImage(item.imageId || undefined)
-  const src = image?.urls.thumb ?? `/api/v1/images/${encodeURIComponent(item.imageId)}`
+  const src = image?.urls.thumb ?? withBase(`/api/v1/images/${encodeURIComponent(item.imageId)}`)
   const bg = image?.dominant_color ?? '#f3f4f6'
 
   return (

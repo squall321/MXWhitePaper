@@ -3,6 +3,7 @@ import { unwrap, type ApiEnvelope } from '@/lib/api/envelope'
 import type { Ulid } from '@/types/document'
 import { putToPresigned } from './api'
 import { pushNotification } from '@/features/notifications/store'
+import { withBase } from '@/lib/basePath'
 
 /**
  * Generic (non-image) file upload. Mirrors `uploadImage.ts`:
@@ -144,5 +145,5 @@ function normalizeUploadError(e: unknown, file: File): Error {
 
 /** GET /api/v1/files/:id/download — server 302's to a fresh presigned URL. */
 export function fileDownloadUrl(fileId: string): string {
-  return `/api/v1/files/${encodeURIComponent(fileId)}/download`
+  return withBase(`/api/v1/files/${encodeURIComponent(fileId)}/download`)
 }

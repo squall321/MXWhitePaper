@@ -23,6 +23,7 @@ import { ArticleDropSurface } from '@/features/upload/components/ArticleDropSurf
 import { OrgTree } from '@/features/org/components/OrgTree'
 import { Drawer } from '@/components/ui/Drawer'
 import { pushRecent } from '@/features/recent/store'
+import { withBase } from '@/lib/basePath'
 import { useReadingTimeTracker } from '@/features/bookmarks/hooks/useReadingTimeTracker'
 import type { AppOutletContext } from '@/App'
 import { useSectionCollapseStore } from '@/features/editor/sectionCollapseStore'
@@ -241,13 +242,13 @@ export function DocumentReaderPage() {
           </p>
           <div className="mt-3 flex gap-2">
             <a
-              href={`/docs/new?slug=${encodeURIComponent(slug)}`}
+              href={withBase(`/docs/new?slug=${encodeURIComponent(slug)}`)}
               className="rounded bg-smsg-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-smsg-900"
             >
               이 슬러그로 새 문서 작성
             </a>
             <a
-              href="/"
+              href={withBase('/')}
               className="rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
             >
               홈으로

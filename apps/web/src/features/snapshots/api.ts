@@ -8,6 +8,7 @@
  */
 import { apiClient } from '@/lib/api/client'
 import { unwrap, type ApiEnvelope } from '@/lib/api/envelope'
+import { withBase } from '@/lib/basePath'
 
 export interface SnapshotBucket {
   name: string
@@ -57,7 +58,7 @@ export async function getSnapshot(id: string): Promise<Snapshot> {
 /** Build a direct download URL — used as an `<a href>` so the browser
  *  handles the save dialog instead of buffering bytes in JS memory. */
 export function snapshotDownloadUrl(id: string): string {
-  return `/api/v1/snapshots/${encodeURIComponent(id)}/download`
+  return withBase(`/api/v1/snapshots/${encodeURIComponent(id)}/download`)
 }
 
 export async function deleteSnapshot(id: string): Promise<void> {

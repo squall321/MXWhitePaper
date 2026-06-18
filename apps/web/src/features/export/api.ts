@@ -10,6 +10,7 @@
  * 모든 다운로드는 Blob → object URL → anchor click → revoke 패턴으로 통일.
  */
 import { apiClient } from '@/lib/api/client'
+import { withBase } from '@/lib/basePath'
 
 export interface ExportOptions {
   /** 마크다운 메타데이터(slug/owners/tags) 표 포함 여부. 기본 true. */
@@ -110,5 +111,5 @@ export async function downloadDocx(slug: string): Promise<void> {
 
 /** HTML export 는 기존 GET 엔드포인트가 직접 다운로드 attachment 로 응답한다. */
 export function htmlExportUrl(slug: string): string {
-  return `/api/v1/documents/${encodeURIComponent(slug)}/export.html?style=namuwiki`
+  return withBase(`/api/v1/documents/${encodeURIComponent(slug)}/export.html?style=namuwiki`)
 }
