@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "MX White Paper — FastAPI backend"
 requires-python = ">=3.12"
 dependencies = [
-  "fastapi>=0.115",
+  # starlette 1.x (fastapi ≥0.128 대) 는 라우터 introspection 을 깨뜨린다 —
+  # known-good 으로 핀 고정 (infra/apptainer/api.def 주석 참조).
+  "fastapi==0.121.3",
   "uvicorn[standard]>=0.32",
   "sqlalchemy[asyncio]>=2.0.36",
   "alembic>=1.14",

@@ -53,6 +53,34 @@ def _pdf_with_table() -> bytes:
     return out
 
 
+def _tiny_png() -> bytes:
+    """10×10 빨강 PNG (테스트용 임베드 이미지)."""
+    from binascii import crc32
+    from struct import pack
+    from zlib import compress
+
+    def ch(name: bytes, data: bytes) -> bytes:
+        return pack(">I", len(data)) + name + data + pack(">I", crc32(name + data))
+
+    sig = b"\x89PNG\r\n\x1a\n"
+    ihdr = pack(">IIBBBBB", 10, 10, 8, 2, 0, 0, 0)  # 10x10 RGB
+    raw = b"".join(b"\x00" + b"\xff\x00\x00" * 10 for _ in range(10))
+    return sig + ch(b"IHDR", ihdr) + ch(b"IDAT", compress(raw)) + ch(b"IEND", b"")
+
+
+def _pdf_with_image() -> bytes:
+    """이미지가 임베드된 한 페이지 PDF."""
+    import fitz
+
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 80), "Report with image", fontsize=20)
+    page.insert_image(fitz.Rect(72, 120, 172, 220), stream=_tiny_png())
+    out = doc.tobytes()
+    doc.close()
+    return out
+
+
 @pytest.fixture(autouse=True)
 def _reset_rate_limit() -> Iterator[None]:
     imports_mod._reset_rate_limit_for_tests()
@@ -101,6 +129,44 @@ def test_is_pdf_magic_guard() -> None:
     assert pdf_import.is_pdf_magic(b"not a pdf") is False
 
 
+def test_extract_pdf_image_returns_bytes() -> None:
+    import fitz
+
+    doc = fitz.open(stream=_pdf_with_image(), filetype="pdf")
+    xrefs = [img[0] for page in doc for img in page.get_images(full=True)]
+    assert xrefs, "임베드 이미지가 있어야 함"
+    extracted = pdf_import.extract_pdf_image(doc, xrefs[0])
+    assert extracted is not None
+    data, ext = extracted
+    assert isinstance(data, bytes) and len(data) > 0
+    assert ext  # png/jpeg 등
+
+
+def test_pdf_image_uploader_wires_real_id() -> None:
+    # image_uploader 가 sha 로 id 를 돌려주면 ImageBlock.imageId 에 반영된다
+    # (placeholder 가 아니라). 라우터 없이 stub uploader 로 계약만 검증.
+    seen: dict[str, bytes] = {}
+
+    def stub(data: bytes, _name: str) -> dict[str, str]:
+        seen["data"] = data
+        return {"image_id": "01TESTIMAGEID000000000000"}
+
+    result = pdf_import.pdf_to_document(
+        _pdf_with_image(), slug="t", owner_user_id="u", image_uploader=stub
+    )
+    imgs = [
+        b
+        for s in result["document"]["sections"]
+        for b in s["blocks"]
+        if b["type"] == "image"
+    ]
+    assert imgs, "image 블록이 있어야 함"
+    assert imgs[0]["imageId"] == "01TESTIMAGEID000000000000"
+    assert "data" in seen  # uploader 가 실제 바이트로 호출됨
+    # placeholder warning 이 없어야 함 (업로드 성공)
+    assert not any("placeholder" in w for w in result["summary"].warnings)
+
+
 # ── HTTP-level tests ─────────────────────────────────────────────────
 async def test_import_pdf_happy_path() -> None:
     buf = _pdf_bytes(title="Quarterly Report", body="Sales increased.")
@@ -117,6 +183,34 @@ async def test_import_pdf_happy_path() -> None:
     doc = body["data"]["document"]
     assert doc["slug"] == "pdf-report"
     assert doc["title"] == "PDF 보고서"
+
+
+async def test_import_pdf_image_uploaded_and_resolvable() -> None:
+    # 임베드 이미지가 라우터의 _preprocess_pdf_images 로 실제 업로드되어
+    # ImageBlock 이 placeholder 가 아닌 resolvable image_id 를 갖는지.
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        r = await ac.post(
+            "/api/v1/imports/pdf",
+            files={"file": ("withimg.pdf", _pdf_with_image(), "application/pdf")},
+            data={"slug": "pdf-withimg"},
+        )
+        assert r.status_code == 200, r.text
+        doc = r.json()["data"]["document"]
+        imgs = [
+            b
+            for s in doc["sections"]
+            for b in s["blocks"]
+            if b["type"] == "image"
+        ]
+        assert imgs, "image 블록이 있어야 함"
+        image_id = imgs[0]["imageId"]
+        # 실제 업로드된 image 는 GET /images/{id} 로 resolvable (404 아님).
+        got = await ac.get(f"/api/v1/images/{image_id}")
+        assert got.status_code == 200, (
+            f"image_id {image_id} 가 resolvable 해야 함 (dangling placeholder 아님): "
+            f"{got.text}"
+        )
 
 
 async def test_import_pdf_rejects_non_pdf_extension() -> None:

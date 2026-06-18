@@ -88,6 +88,25 @@ def _estimate_body_size(doc: Any) -> float:
     return counter.most_common(1)[0][0]
 
 
+def extract_pdf_image(doc: Any, xref: int) -> tuple[bytes, str] | None:
+    """PDF 의 xref 이미지를 *원본 임베드 바이트* 로 추출 → (bytes, ext).
+
+    ``doc.extract_image`` 은 PDF 에 저장된 그대로의 바이트를 돌려주므로
+    결정적이다 (Pixmap 래스터화는 colorspace/alpha 에 따라 바이트가 달라져
+    sha 가 흔들린다). 라우터의 사전 업로드와 본 변환이 **동일 helper** 를 써야
+    같은 sha 로 매핑되므로 단일 진입점으로 둔다. 실패/빈 결과는 None.
+    """
+    try:
+        info = doc.extract_image(xref)
+    except Exception:  # noqa: BLE001
+        return None
+    data = info.get("image") if isinstance(info, dict) else None
+    ext = (info.get("ext") if isinstance(info, dict) else None) or "png"
+    if not data:
+        return None
+    return data, ext
+
+
 def _table_block_from_fitz(tbl: Any) -> dict[str, Any] | None:
     """fitz find_tables() 의 한 표 → TableBlock. 빈 표는 None."""
     try:
@@ -183,24 +202,26 @@ def pdf_to_document(
                 current["blocks"].append(_para_block(text))
                 summary.paragraphs += 1
 
-        # 3) 이미지 — image_uploader 없으면 placeholder + warning
+        # 3) 이미지 — image_uploader 가 sha 로 실제 image_id 를 돌려주면 연결,
+        #    아니면 (소실/미구성) placeholder + warning.
         try:
             imgs = page.get_images(full=True)
         except Exception:  # noqa: BLE001
             imgs = []
+        n_placeholder = 0
         for img in imgs:
             n_images += 1
+            xref = img[0]
             image_id: str | None = None
             if image_uploader is not None:
-                try:
-                    xref = img[0]
-                    pix = fitz.Pixmap(doc, xref)
-                    data = pix.tobytes("png")
-                    res = image_uploader(data, f"pdf-image-{xref}.png")
+                extracted = extract_pdf_image(doc, xref)
+                if extracted is not None:
+                    data, ext = extracted
+                    res = image_uploader(data, f"pdf-{xref}.{ext}")
                     if res:
-                        image_id = res.get("id") or res.get("ulid")
-                except Exception:  # noqa: BLE001
-                    image_id = None
+                        image_id = res.get("image_id")
+            if image_id is None:
+                n_placeholder += 1
             block = {
                 "type": "image",
                 "id": _new_id(),
@@ -209,10 +230,10 @@ def pdf_to_document(
             }
             current["blocks"].append(block)
             summary.images += 1
-        if imgs and image_uploader is None:
+        if n_placeholder:
             summary.warnings.append(
-                f"이미지 {len(imgs)}장은 placeholder 로만 삽입됨 — "
-                "에디터에서 다시 연결 필요 (PDF import 이미지 업로드 미구성)"
+                f"이미지 {n_placeholder}장은 placeholder 로 삽입됨 "
+                "(추출 실패 또는 업로드 미구성) — 에디터에서 다시 연결 필요"
             )
 
     # 빈 섹션 (heading 만 있고 본문 없음) 정리는 하지 않음 — 구조 보존.

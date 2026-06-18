@@ -146,7 +146,7 @@
       "Body_import_csv_api_v1_imports_csv_post": {
         "properties": {
           "file": {
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "File",
             "type": "string"
           }
@@ -160,7 +160,7 @@
       "Body_import_docx_api_v1_imports_docx_post": {
         "properties": {
           "file": {
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "File",
             "type": "string"
           },
@@ -196,7 +196,7 @@
       "Body_import_pdf_api_v1_imports_pdf_post": {
         "properties": {
           "file": {
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "File",
             "type": "string"
           },
@@ -232,7 +232,7 @@
       "Body_import_pptx_api_v1_imports_pptx_post": {
         "properties": {
           "file": {
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "File",
             "type": "string"
           },
@@ -268,7 +268,7 @@
       "Body_import_xlsx_api_v1_imports_xlsx_post": {
         "properties": {
           "file": {
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "File",
             "type": "string"
           },
@@ -328,8 +328,8 @@
             "title": "Aggressive Toc"
           },
           "file": {
-            "contentMediaType": "application/octet-stream",
             "description": "원본 .docx 파일",
+            "format": "binary",
             "title": "File",
             "type": "string"
           },
@@ -3326,13 +3326,6 @@
       },
       "ValidationError": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
           "loc": {
             "items": {
               "anyOf": [

@@ -994,6 +994,97 @@ def _pdf_max_bytes() -> int:
     return get_settings().pdf_import_max_bytes
 
 
+async def _preprocess_pdf_images(
+    s: AsyncSession, buf: bytes, actor_id: str
+) -> dict[str, str]:
+    """PDF 안의 모든 임베드 이미지를 추출해 docx/pptx 와 동일한 업로드
+    파이프라인 (sha256 dedup → Pillow → MinIO put → DB INSERT) 에 태우고
+    sha→ulid 맵을 반환한다.
+
+    [[#_preprocess_zip_images]] 의 PDF 판. converter (`pdf_to_document`) 가
+    같은 helper [[src/app/services/pdf_import.py#extract_pdf_image]] 로 같은
+    바이트를 추출해 sha 로 이 맵을 조회하므로 image_id 가 일치한다. 추출/처리
+    실패한 이미지는 맵에 없어 converter 가 placeholder 로 떨어뜨린다 (warning).
+    """
+    out: dict[str, str] = {}
+    try:
+        import fitz
+    except ImportError:
+        return out
+    try:
+        doc = fitz.open(stream=buf, filetype="pdf")
+    except Exception:
+        return out
+
+    bucket = get_settings().minio_bucket_images
+    seen_xrefs: set[int] = set()
+    for page in doc:
+        try:
+            imgs = page.get_images(full=True)
+        except Exception:
+            imgs = []
+        for img in imgs:
+            xref = img[0]
+            if xref in seen_xrefs:
+                continue
+            seen_xrefs.add(xref)
+            extracted = pdf_import.extract_pdf_image(doc, xref)
+            if extracted is None:
+                continue
+            raw, ext = extracted
+            sha = hashlib.sha256(raw).hexdigest()
+            if sha in out:
+                continue
+            try:
+                existing = await upload_service._find_image_by_sha256(s, sha)
+            except Exception:
+                existing = None
+            if existing:
+                out[sha] = existing["ulid"]
+                continue
+
+            mime = _MEDIA_EXT_TO_MIME.get(ext.lower())
+            if mime is None or mime == "image/svg+xml":
+                continue  # Pillow 가 raster 못하는 포맷 — converter 가 placeholder
+            try:
+                processed = await run_in_threadpool(
+                    upload_service._process_image_bytes, raw
+                )
+            except Exception:
+                continue
+            try:
+                storage_keys = upload_service._put_permanent_objects(
+                    bucket,
+                    sha,
+                    thumb_bytes=processed["thumb_bytes"],
+                    view_bytes=processed["view_bytes"],
+                    orig_bytes=processed["orig_bytes"],
+                )
+            except Exception:
+                continue
+            new_ulid = upload_service._new_ulid_str()
+            try:
+                await upload_service._insert_image(
+                    s,
+                    new_ulid=new_ulid,
+                    sha256=sha,
+                    original_name=f"pdf-{xref}.{ext}"[:200],
+                    mime_type=mime,
+                    size_bytes=len(raw),
+                    width=processed["width"],
+                    height=processed["height"],
+                    dominant_color=processed["dominant_color"],
+                    storage_keys=storage_keys,
+                    uploaded_by=actor_id,
+                )
+                await s.commit()
+            except Exception:
+                await s.rollback()
+                continue
+            out[sha] = new_ulid
+    return out
+
+
 @router.post("/pdf")
 async def import_pdf(
     file: UploadFile = File(...),
@@ -1018,6 +1109,11 @@ async def import_pdf(
         raise ValidationFailed("file is not a valid PDF (missing %PDF- signature)")
 
     final_slug = slug or _derive_slug(file.filename or "imported.pdf")
+    # docx/pptx 의 zip 사전추출(_preprocess_zip_images) 과 같은 역할 — PDF 는
+    # zip 이 아니므로 fitz 로 이미지를 미리 뽑아 MinIO 에 올리고 sha→ulid 맵을
+    # 만든 뒤, converter 의 sync uploader 가 sha 로 조회하게 한다.
+    sha_to_ulid = await _preprocess_pdf_images(s, buf, actor)
+    image_uploader = _build_image_uploader(sha_to_ulid)
     try:
         result = await run_in_threadpool(
             pdf_import.pdf_to_document,
@@ -1025,6 +1121,7 @@ async def import_pdf(
             slug=final_slug,
             title=title or "",
             owner_user_id=actor,
+            image_uploader=image_uploader,
         )
     except ValueError as e:
         raise ValidationFailed(str(e)) from e
