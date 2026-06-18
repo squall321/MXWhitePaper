@@ -37,7 +37,7 @@ embedded 차트로 생성.
 | docx | [[src/app/services/docx_import.py#docx_to_document]] | 스타일/dotted-prefix 로 섹션 트리, 표/이미지/목록/코드/수식/각주 인식 + 위젯 마커 + autodetect | SVG skip, header/footer 는 callout 1개로 통합 |
 | pptx | [[src/app/services/pptx_import.py#pptx_to_document]] | 슬라이드=섹션, placeholder/textbox 텍스트 + 표, speaker note 분리 + 위젯 마커 + autodetect | 셀 안 picture 불허, 절대위치 레이아웃은 stack 으로 평탄화 |
 | xlsx | [[src/app/services/xlsx_import.py#xlsx_to_document]] | 시트=섹션, 표→TableBlock (200행 초과는 SpreadsheetBlock), embedded 차트→ChartBlock, label/value·name/start/end 표는 kpi/gantt 로 autodetect | `data_only=True` (수식 대신 캐시값) — 캐시 없으면 빈 셀. 일반 숫자 표는 차트 자동변환 안 함 (표 유지) |
-| pdf | [[src/app/services/pdf_import.py#pdf_to_document]] | 폰트크기>본문×1.15 면 heading, `find_tables()` 로 표, dotted-prefix 섹션 승격 + autodetect | 구조 휴리스틱 (정확도=원본 PDF 구조 품질), 이미지는 placeholder + warning |
+| pdf | [[src/app/services/pdf_import.py#pdf_to_document]] | 폰트크기>본문×1.15 면 heading, `find_tables()` 로 표, dotted-prefix 섹션 승격 + autodetect, 이미지는 라우터 [[src/app/routers/imports.py#_preprocess_pdf_images]] 가 fitz 로 추출→MinIO 업로드 (docx 와 동일 dedup) | 구조 휴리스틱 (정확도=원본 PDF 구조 품질). 추출/Pillow 실패 이미지만 placeholder + warning |
 
 ## Pipeline overview
 
