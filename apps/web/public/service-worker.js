@@ -28,12 +28,26 @@ const RUNTIME_CACHE = 'mxwp-runtime-v1'
 const DOCS_CACHE = 'mxwp-docs-v1'
 const DOCS_LRU_LIMIT = 50
 
+// Deployment base path, derived at runtime from the SW's own URL: the worker
+// is served at `<base>service-worker.js`, so stripping that suffix yields the
+// base (always ends with '/'). This makes every cached path / route match
+// resolve under ANY sub-path — standalone ('/') or behind the HWAX portal
+// ('/mx-white-paper/') — without a build step. `relPath` maps a request URL
+// back to a base-relative path so the route patterns below stay simple.
+const BASE = self.location.pathname.replace(/service-worker\.js$/, '')
+
+function relPath(url) {
+  return url.pathname.startsWith(BASE)
+    ? '/' + url.pathname.slice(BASE.length)
+    : url.pathname
+}
+
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest',
-  '/icon.svg',
-  '/offline.html',
+  BASE,
+  BASE + 'index.html',
+  BASE + 'manifest.webmanifest',
+  BASE + 'icon.svg',
+  BASE + 'offline.html',
 ]
 
 self.addEventListener('install', (event) => {
@@ -82,16 +96,16 @@ async function trimDocCache() {
 }
 
 function isAssetRequest(url) {
-  return url.pathname.startsWith('/assets/')
+  return relPath(url).startsWith('/assets/')
 }
 
 function isDocApiRequest(url) {
   // /api/v1/documents/:slug  (GET only) — but NOT /api/v1/documents (list).
-  return /^\/api\/v1\/documents\/[^/]+$/.test(url.pathname)
+  return /^\/api\/v1\/documents\/[^/]+$/.test(relPath(url))
 }
 
 function isApiRequest(url) {
-  return url.pathname.startsWith('/api/')
+  return relPath(url).startsWith('/api/')
 }
 
 function isHtmlNavigation(request) {
@@ -177,9 +191,9 @@ async function navigationHandler(request) {
     return fresh
   } catch (_err) {
     const cache = await caches.open(STATIC_CACHE)
-    const shell = await cache.match('/index.html')
+    const shell = await cache.match(BASE + 'index.html')
     if (shell) return tagCachedResponse(shell)
-    const offline = await cache.match('/offline.html')
+    const offline = await cache.match(BASE + 'offline.html')
     if (offline) return tagCachedResponse(offline)
     return new Response('offline', { status: 503, statusText: 'Offline' })
   }

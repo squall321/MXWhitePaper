@@ -11,6 +11,7 @@
  * The helper is fire-and-forget. We log failures to the console but never
  * throw — a missing SW is a degraded mode, not a fatal error.
  */
+import { withBase } from '@/lib/basePath'
 export interface SwRegisterOptions {
   /** Override the dev flag — used by tests. Defaults to `import.meta.env.DEV`. */
   isDev?: boolean
@@ -36,7 +37,10 @@ export function registerServiceWorker(opts: SwRegisterOptions = {}): boolean {
   const win = opts.win ?? (typeof window !== 'undefined' ? window : undefined)
   if (!win) return false
 
-  const url = opts.scriptUrl ?? '/service-worker.js'
+  // Behind the portal sub-path the SW must be fetched (and scoped) under the
+  // base — '/service-worker.js' at root SPA-fallbacks to text/html and the
+  // registration fails. withBase keeps standalone ('/') working too.
+  const url = opts.scriptUrl ?? withBase('/service-worker.js')
 
   // Defer until `load` so the SW install doesn't compete with the initial
   // page render for bandwidth.

@@ -34,7 +34,12 @@ describe('public/service-worker.js', () => {
       addEventListener: (evt: string) => events.push(evt),
       skipWaiting: () => {},
       clients: { claim: async () => {} },
-      location: { origin: 'http://localhost' },
+      // The SW derives its deployment base from `location.pathname`
+      // (`<base>service-worker.js`), so the stub must provide one.
+      location: {
+        origin: 'http://localhost',
+        pathname: '/mx-white-paper/service-worker.js',
+      },
     }
     const sandbox = {
       self: swGlobal,
@@ -88,9 +93,15 @@ describe('public/manifest.webmanifest', () => {
     }
     expect(m.name).toBe('MX White Paper')
     expect(m.short_name).toBe('MX WP')
-    expect(m.start_url).toBe('/')
+    // Relative start_url/scope so the PWA installs correctly under ANY base
+    // (standalone '/' or the portal sub-path) — resolved against the manifest
+    // URL, not the origin root.
+    expect(m.start_url).toBe('./')
+    expect((m as { scope?: string }).scope).toBe('./')
     expect(m.display).toBe('standalone')
     expect(m.icons.length).toBeGreaterThanOrEqual(1)
+    // Icon srcs must be relative (no leading '/') for the same reason.
+    expect(m.icons.every((i) => !i.src.startsWith('/'))).toBe(true)
     // At least one entry should be SVG OR a 192px PNG, satisfying the
     // documented icon fallback.
     const hasUsableIcon = m.icons.some(
