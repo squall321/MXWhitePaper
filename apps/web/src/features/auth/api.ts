@@ -104,6 +104,31 @@ export async function login(email: string, password: string): Promise<AuthUser> 
 }
 
 /**
+ * POST /api/v1/auth/register → { access_token, expires_in, user }.
+ * Self-signup fallback: creates the account AND logs the user in (the
+ * server sets the httpOnly refresh cookie + returns the access token), so
+ * there is no second login step. Never returns TOTP_REQUIRED, so unlike
+ * login() there is no partial-token catch.
+ */
+export async function register(
+  email: string,
+  name: string,
+  password: string,
+): Promise<AuthUser> {
+  const res = await apiClient.post<ApiEnvelope<LoginResponse>>('/auth/register', {
+    email,
+    name,
+    password,
+  })
+  applyTokenResponse(res.data?.data)
+  const user = res.data?.data?.user
+  if (!user) {
+    throw new Error('가입 응답에 사용자 정보가 없습니다.')
+  }
+  return user
+}
+
+/**
  * POST /api/v1/auth/login/totp — exchange a partial token + 6-digit code
  * (or a single-use backup code) for a real session.
  */

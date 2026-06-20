@@ -216,6 +216,9 @@ const EmailVerifyPage = lazyLogged('EmailVerify', () =>
 const ForgotPasswordPage = lazyLogged('ForgotPassword', () =>
   import('./pages/ForgotPassword').then((m) => ({ default: m.ForgotPasswordPage })),
 )
+const SignupPage = lazyLogged('Signup', () =>
+  import('./pages/Signup').then((m) => ({ default: m.SignupPage })),
+)
 const ResetPasswordPage = lazyLogged('ResetPassword', () =>
   import('./pages/ResetPassword').then((m) => ({ default: m.ResetPasswordPage })),
 )
@@ -344,6 +347,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route
                 path="/auth/reset"
                 element={<Boundaried name="auth/reset"><ResetPasswordPage /></Boundaried>}
+              />
+              {/* Standalone self-signup fallback (used when portal SSO is
+                  unavailable). Public — lives outside AuthGuard. */}
+              <Route
+                path="/signup"
+                element={<Boundaried name="signup"><SignupPage /></Boundaried>}
               />
               <Route
                 path="/diag"

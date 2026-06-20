@@ -19,8 +19,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.errors import Conflict, ValidationFailed
+from app.core.errors import APIError, Conflict, ValidationFailed
 from app.core.security import hash_password
+
+
+class NoTeamError(APIError):
+    http_status = 503
+    code = "no_team"
 
 _PW_MIN = 12
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -184,3 +189,29 @@ async def create_user_account(
         "team_id": str(team_id),
         "group_id": str(group_id) if group_id else None,
     }
+
+
+async def create_user_account_self_team(
+    s: AsyncSession,
+    *,
+    email: str,
+    name: str,
+    password: str,
+    request_ip: str | None,
+) -> dict[str, Any]:
+    """Self-signup variant: auto-attach the user to the default team
+    (first team, the SSO way) instead of requiring a caller-supplied
+    team_id. All validation/collision/insert/audit is inherited from
+    create_user_account."""
+    team = (await s.execute(text("SELECT id FROM teams LIMIT 1"))).scalar()
+    if team is None:
+        raise NoTeamError("no team configured — run seed first")
+    return await create_user_account(
+        s,
+        email=email,
+        name=name,
+        password=password,
+        team_id=team,
+        group_id=None,
+        request_ip=request_ip,
+    )

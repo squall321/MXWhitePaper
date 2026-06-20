@@ -5,6 +5,7 @@ POST /api/v1/auth/login/totp   body: {partial_token, code}  (Cycle 17)
 POST /api/v1/auth/refresh      cookie: mxwp_refresh
 POST /api/v1/auth/logout
 POST /api/v1/auth/signup       body: {email, name, password, team_id, group_id?}
+POST /api/v1/auth/register     body: {email, name, password}  (self-signup + auto-login)
 GET  /api/v1/me
 """
 from __future__ import annotations
@@ -33,7 +34,10 @@ from app.core.security import (
     verify_password,
 )
 from app.routers.two_factor import verify_totp_for_user
-from app.services.signup_service import create_user_account
+from app.services.signup_service import (
+    create_user_account,
+    create_user_account_self_team,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["auth"])
 
@@ -404,3 +408,31 @@ async def signup(
         request_ip=request.client.host if request.client else None,
     )
     return envelope(data={"user": user})
+
+
+class RegisterBody(BaseModel):
+    # Self-signup body — no team_id/group_id (auto-attached to the default
+    # team). Keeps the same length bounds as SignupBody so the pydantic 422
+    # stays in sync with the service-side validation.
+    email: str = Field(min_length=3, max_length=320)
+    name: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=12, max_length=200)
+
+
+@router.post("/auth/register")
+async def register(
+    body: RegisterBody,
+    request: Request,
+    response: Response,
+    s: AsyncSession = Depends(get_db),
+) -> Any:
+    if not _signup_rate_ok(_signup_ip_key(request)):
+        raise _SignupRateLimited()
+    user = await create_user_account_self_team(
+        s,
+        email=str(body.email),
+        name=body.name,
+        password=body.password,
+        request_ip=request.client.host if request.client else None,
+    )
+    return await _issue_session(response, user, s)

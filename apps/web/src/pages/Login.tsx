@@ -357,13 +357,22 @@ export function LoginPage() {
                 />
                 {t('login.remember')}
               </label>
-              <Link
-                to="/auth/forgot"
-                data-testid="login-forgot"
-                className="text-xs text-link hover:underline"
-              >
-                {t('login.forgot')}
-              </Link>
+              <div className="flex items-center gap-3">
+                <Link
+                  to="/signup"
+                  data-testid="login-signup"
+                  className="text-xs text-link hover:underline"
+                >
+                  계정 만들기
+                </Link>
+                <Link
+                  to="/auth/forgot"
+                  data-testid="login-forgot"
+                  className="text-xs text-link hover:underline"
+                >
+                  {t('login.forgot')}
+                </Link>
+              </div>
             </div>
 
             {submitError && (

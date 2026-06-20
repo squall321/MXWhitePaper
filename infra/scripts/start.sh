@@ -190,6 +190,10 @@ start_instance "$INST_API" "$API_SIF" \
   --env "JWT_SECRET=${JWT_SECRET}" \
   --env "CORS_ORIGINS=${CORS_ORIGINS}" \
   --env "APP_ENV=${APP_ENV}" \
+  --env "PORTAL_JWKS_URL=${PORTAL_JWKS_URL:-}" \
+  --env "PORTAL_AUDIENCE=${PORTAL_AUDIENCE:-mx-white-paper}" \
+  --env "REFRESH_COOKIE_PATH=${REFRESH_COOKIE_PATH:-/api/v1/auth}" \
+  --env "PORTAL_SSO_LANDING=${PORTAL_SSO_LANDING:-/mx-white-paper/}" \
   --env "HTTP_PROXY=${MXWP_PROXY}" \
   --env "HTTPS_PROXY=${MXWP_PROXY}" \
   --env "NO_PROXY=localhost,127.0.0.1,::1"
