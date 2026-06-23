@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs status migrate seed schema-gen schema-validate openapi-dump codegen test lint clean pyinstaller-smoke glossary-dump build-web ship-web pull-web ship
+.PHONY: help build up down restart logs status migrate seed schema-gen schema-validate openapi-dump codegen test lint clean pyinstaller-smoke glossary-dump build-web ship-web pull-web ship ship-toolkit pull-toolkit
 
 help:
 	@echo "MX White Paper — Apptainer-based stack"
@@ -25,6 +25,8 @@ help:
 	@echo "  make ship-web        Push web.sif to Drive (rclone, sha256-verified)"
 	@echo "  make ship            build-web + ship-web (one-shot online-side release)"
 	@echo "  make pull-web        Pull web.sif from Drive into infra/apptainer/ (run on cae00)"
+	@echo "  make ship-toolkit    Push llm-docx-toolkit tarball to Drive (rclone, sha256)"
+	@echo "  make pull-toolkit    Pull + extract toolkit tarball from Drive (run on cae00)"
 
 SCRIPTS := ./infra/scripts
 
@@ -138,3 +140,14 @@ ship: build-web ship-web
 
 pull-web:
 	@$(SCRIPTS)/images-from-drive.sh
+
+# 툴킷 바이너리(llm-docx-toolkit tarball) 도 같은 Drive 메커니즘으로 ship — MCP/RAG
+# 변경마다 sif 보다 자주 바뀌므로 별도 타겟/경로(/toolkit). .env MXWP_TOOLKIT_REMOTE
+# (미설정 시 MXWP_IMAGES_REMOTE 의 /images→/toolkit).
+#   [online host]  make ship-toolkit   # 빌드된 tarball 을 Drive 로 push
+#   [cae00]        make pull-toolkit   # Drive 에서 받아 추출
+ship-toolkit:
+	@$(SCRIPTS)/toolkit-to-drive.sh
+
+pull-toolkit:
+	@$(SCRIPTS)/toolkit-from-drive.sh
