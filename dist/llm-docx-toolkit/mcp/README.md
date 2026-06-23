@@ -41,8 +41,11 @@ stdio MCP 서버. 두 가지를 한다:
 | `move_block(slug, block_id, target_section_id, after_block_id?)` | `{ok}` |
 | `validate_block(block)` | `{valid, errors:[{path, message}]}` — 로컬 jsonschema 만, API 호출 없음 |
 | `import_file(path, kind="auto", save=True)` | docx/pptx/xlsx/pdf 를 서버 import 엔드포인트로 보내 위젯 분배된 DocumentJSON 으로 변환. `save=True` (기본) 면 바로 새 문서로 저장하고 `{slug, title, sections, message, summary}` 반환. `save=False` 면 저장 없이 요약만 (`slug` 없음). `kind` 는 확장자 자동판정 |
-| `upload_image(path)` | `{image_id, image_url?, deduped}` — 로컬 이미지 (png/jpg/jpeg/gif/webp/svg) 를 2-phase presigned 흐름 (init → PUT → finalize) 으로 업로드. 같은 sha256 은 dedup |
-| `insert_image_block(slug, section_id, image_id, alt?, caption?, after_block_id?)` | `{block_id}` — `upload_image` 가 준 `image_id` 로 ImageBlock 삽입 |
+| `upload_image(path)` | `{image_id, image_url?, deduped}` — **로컬 파일** 이미지 (png/jpg/jpeg/gif/webp/svg) 를 2-phase presigned 흐름 (init → PUT → finalize) 으로 업로드. 셸/로컬 접근 가능한 환경 (Claude Code) 용. 같은 sha256 은 dedup |
+| `upload_image_from_url(url, filename?)` | `{image_id, image_url?, deduped}` — **웹 URL** 이미지를 **서버가 직접 받아** 업로드 (바이트가 모델/클라이언트를 안 거쳐 **크기·화질 제약 없음**). 공개 http/https 만 (사설·내부 주소 차단). **권장 경로** |
+| `upload_image_base64(filename, data_base64, mime_type?)` | `{image_id, image_url?, deduped}` — **작은 로컬 이미지** 를 base64 로 업로드 (Claude Desktop 처럼 로컬 경로를 못 주는 환경). base64 가 모델 출력 토큰을 소모하므로 **≈256KB 이하 전용** (큰 파일 거부) |
+| `extract_pptx_images(path)` | `{source, images:[{image_id, ...}], extracted, ...}` — **.pptx 속 그림들** 을 각각 별도 이미지로 추출해 여러 `image_id` 반환. 각 id 를 `insert_image_block` 에 차례로 삽입 |
+| `insert_image_block(slug, section_id, image_id, alt?, caption?, after_block_id?)` | `{block_id}` — 위 업로드 도구가 준 `image_id` 로 ImageBlock 삽입 |
 
 block JSON 을 어떻게 짜야 하는지는 외우지 말고 `query_rules` 로 검색하거나
 `mxwp_system_prompt` 를 읽는다 (예: `query_rules("callout 블록 형식")`).
@@ -232,12 +235,26 @@ import_file("doc.pdf")                → {slug, title, sections, message, summa
 import_file("doc.pdf", save=False)    → {title, sections, message, summary}  (slug 없음)
 ```
 
-**(c) "이 이미지 넣어줘"**
+**(c) "이 이미지 넣어줘" — 환경에 맞는 3경로 + PPT 추출**
+
+이미지는 **(1) 업로드해 `image_id` 를 얻고 → (2) `insert_image_block`** 하는 2단계다.
+업로드 도구는 이미지 출처/실행 환경에 따라 고른다 (전부 sha256 dedup):
+
+| 상황 | 도구 | 왜 / 한계 |
+|---|---|---|
+| **웹 URL** 의 이미지 | `upload_image_from_url(url)` | **권장.** 서버가 직접 받아 바이트가 모델/클라이언트를 안 거쳐 **크기·화질 제약 없음**. 공개 http/https 만 (사설·내부 주소 차단) |
+| **작은 로컬 이미지** (Claude Desktop) | `upload_image_base64(filename, data_base64)` | 로컬 경로를 못 주는 환경용. base64 가 모델 출력 토큰을 소모해 **≈256KB 이하 전용** (큰 파일 거부) |
+| **큰 로컬 이미지 / 다수** (Claude Code) | `upload_image(path)` | 셸/로컬 파일 접근 가능 환경. 경로를 직접 읽어 2-phase presigned (init → PUT → finalize). 크기 제약 사실상 없음 |
+| **PPT 속 그림** | `extract_pptx_images(path)` | .pptx 를 풀어 슬라이드 그림을 각각 별도 이미지로 추출 → 여러 `image_id`. 각각 삽입 |
 
 ```text
-upload_image("diagram.png")           → {image_id, image_url?, deduped}
-   ↑ 2-phase presigned (init → PUT → finalize). 같은 그림은 dedup.
+# 웹 이미지 (권장)
+upload_image_from_url("https://example.com/diagram.png")  → {image_id, image_url?, deduped}
 insert_image_block(slug, section_id, image_id, caption="...", after_block_id=...)
+
+# PPT 속 그림 여러 장
+extract_pptx_images("deck.pptx")      → {images:[{image_id, ...}, ...]}
+for img in images: insert_image_block(slug, section_id, img.image_id, ...)
 ```
 
 ### 지원 포맷

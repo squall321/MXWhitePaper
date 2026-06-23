@@ -19,11 +19,13 @@ file path (not `import mcp.…`) because this local package shares the
 from __future__ import annotations
 
 import argparse
-import hashlib
+import base64
+import binascii
 import importlib
 import importlib.util
 import json
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -189,6 +191,10 @@ _IMAGE_MIME: dict[str, str] = {
     "webp": "image/webp",
     "svg": "image/svg+xml",
 }
+
+# base64 업로드 캡 — base64 바이트가 모델 출력 토큰을 그대로 소모하므로
+# 작은 이미지로 제한 (초과 시 upload_image_from_url / upload_image 로 유도).
+_IMAGE_BASE64_MAX_BYTES = 256 * 1024
 
 
 def _resolve_import_kind(path: str, kind: str) -> tuple[str, str]:
@@ -634,29 +640,97 @@ def build_server() -> FastMCP:
         if not p.is_file():
             raise RuntimeError(f"파일을 찾을 수 없습니다: {path}")
         mime_type = _image_mime(path)
-        content = p.read_bytes()
-        sha256 = hashlib.sha256(content).hexdigest()
-        init = client.init_upload(
-            filename=p.name, mime_type=mime_type, sha256=sha256, size=len(content)
+        return client.upload_bytes(
+            filename=p.name, content=p.read_bytes(), mime_type=mime_type
         )
-        urls = init.get("urls") or {}
-        if init.get("deduped"):
-            return {
-                "image_id": init.get("image_id"),
-                "image_url": urls.get("view") or urls.get("orig"),
-                "deduped": True,
-            }
-        upload_id = init.get("uploadId")
-        if not upload_id:
-            raise RuntimeError(f"init 응답에 uploadId 가 없습니다: {init}")
-        client.put_bytes(init["url"], content, mime_type)
-        fin = client.finalize_upload(upload_id)
-        fin_urls = fin.get("urls") or {}
-        return {
-            "image_id": fin.get("image_id"),
-            "image_url": fin_urls.get("view") or fin_urls.get("orig"),
-            "deduped": bool(fin.get("deduped")),
-        }
+
+    @mcp.tool(
+        name="upload_image_from_url",
+        description=(
+            "웹 URL 의 이미지를 서버가 직접 fetch 해 MinIO 에 저장 → image_id. "
+            "바이트가 모델을 안 거치므로 크기무제한. 공개 http/https URL 전용 — "
+            "사설/내부 주소는 서버가 차단. 로컬 파일은 upload_image (셸 경로) 또는 "
+            "upload_image_base64 (Desktop) 사용. 동일 내용은 dedup. image_id 는 "
+            "insert_image_block 에 그대로 사용. MXWP_API_TOKEN 필수. "
+            "→ {image_id, image_url?, deduped}"
+        ),
+    )
+    def upload_image_from_url(url: str) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        return client.upload_image_from_url(url)
+
+    @mcp.tool(
+        name="upload_image_base64",
+        description=(
+            "로컬 이미지를 base64 로 받아 MinIO 에 업로드 → image_id. Claude Desktop "
+            "처럼 로컬 경로를 못 읽는 클라이언트가 PC 의 작은 이미지를 올릴 때 사용 "
+            "(data_base64 = 로컬 이미지 파일 바이트의 base64). 작은 이미지 전용 "
+            "(≤256KB) — base64 가 모델 출력 토큰을 소모하므로 초과 시 거부하고 "
+            "upload_image_from_url 로 안내. 동일 내용은 dedup. MXWP_API_TOKEN 필수. "
+            "→ {image_id, image_url?, deduped}"
+        ),
+    )
+    def upload_image_base64(filename: str, data_base64: str) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        try:
+            content = base64.b64decode(data_base64, validate=True)
+        except (binascii.Error, ValueError) as e:
+            raise RuntimeError("data_base64 가 올바른 base64 가 아닙니다.") from e
+        if not content:
+            raise RuntimeError("빈 이미지입니다.")
+        if len(content) > _IMAGE_BASE64_MAX_BYTES:
+            raise RuntimeError(
+                f"이미지가 너무 큽니다 ({len(content) // 1024}KB). base64 업로드는 "
+                f"{_IMAGE_BASE64_MAX_BYTES // 1024}KB 이하만 됩니다 — 큰 이미지는 "
+                "웹 URL 이면 upload_image_from_url (서버가 직접 받음, 크기무제한), "
+                "셸 접근 가능하면 upload_image (로컬 경로) 를 쓰세요."
+            )
+        mime_type = _image_mime(filename)
+        return client.upload_bytes(
+            filename=Path(filename).name, content=content, mime_type=mime_type
+        )
+
+    @mcp.tool(
+        name="extract_pptx_images",
+        description=(
+            "로컬 .pptx 를 zip 으로 열어 ppt/media/ 의 그림들을 각각 MinIO 에 업로드 "
+            "→ image_id 목록. 바이트가 모델을 안 거치고 직접 2-phase 업로드된다 "
+            "(base64 미사용). svg/비이미지는 skip. 각 image_id 를 insert_image_block "
+            "에 차례로 넣어 슬라이드 그림을 붙인다. MXWP_API_TOKEN 필수. "
+            "→ {images:[{image_id, filename}], extracted, skipped}"
+        ),
+    )
+    def extract_pptx_images(path: str) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        p = Path(path)
+        if not p.is_file():
+            raise RuntimeError(f"파일을 찾을 수 없습니다: {path}")
+        images: list[dict[str, Any]] = []
+        skipped = 0
+        with zipfile.ZipFile(p) as zf:
+            for name in sorted(zf.namelist()):
+                if not name.startswith("ppt/media/"):
+                    continue
+                ext = Path(name).suffix.lower().lstrip(".")
+                if ext not in _IMAGE_MIME or ext == "svg":
+                    skipped += 1
+                    continue
+                content = zf.read(name)
+                if not content:
+                    skipped += 1
+                    continue
+                result = client.upload_bytes(
+                    filename=Path(name).name,
+                    content=content,
+                    mime_type=_IMAGE_MIME[ext],
+                )
+                images.append(
+                    {"image_id": result.get("image_id"), "filename": Path(name).name}
+                )
+        return {"images": images, "extracted": len(images), "skipped": skipped}
 
     @mcp.tool(
         name="insert_image_block",

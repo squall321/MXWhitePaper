@@ -362,6 +362,58 @@ class MxwpClient:
         )
         return data or {}
 
+    def upload_bytes(
+        self, *, filename: str, content: bytes, mime_type: str
+    ) -> dict[str, Any]:
+        """raw 바이트를 2-phase (init→presigned PUT→finalize) 로 업로드.
+
+        upload_image / upload_image_base64 / extract_pptx_images 가 공유하는
+        공통 경로 — sha256 dedup 이면 PUT/finalize 를 생략한다.
+        → {image_id, image_url?, deduped}
+        """
+        import hashlib
+
+        sha256 = hashlib.sha256(content).hexdigest()
+        init = self.init_upload(
+            filename=filename, mime_type=mime_type, sha256=sha256, size=len(content)
+        )
+        urls = init.get("urls") or {}
+        if init.get("deduped"):
+            return {
+                "image_id": init.get("image_id"),
+                "image_url": urls.get("view") or urls.get("orig"),
+                "deduped": True,
+            }
+        upload_id = init.get("uploadId")
+        if not upload_id:
+            raise ApiError(f"init 응답에 uploadId 가 없습니다: {init}")
+        self.put_bytes(init["url"], content, mime_type)
+        fin = self.finalize_upload(upload_id)
+        fin_urls = fin.get("urls") or {}
+        return {
+            "image_id": fin.get("image_id"),
+            "image_url": fin_urls.get("view") or fin_urls.get("orig"),
+            "deduped": bool(fin.get("deduped")),
+        }
+
+    def upload_image_from_url(self, url: str) -> dict[str, Any]:
+        """POST /uploads/image/from-url → 서버가 URL 을 직접 fetch (바이트가 모델 안 거침).
+
+        → {image_id, image_url?, deduped}. 서버가 sha256 dedup 까지 끝낸 결과를 그대로 매핑.
+        """
+        data, _meta, _h = self._request(
+            "POST",
+            "/api/v1/uploads/image/from-url",
+            body={"url": url},
+        )
+        data = data or {}
+        urls = data.get("urls") or {}
+        return {
+            "image_id": data.get("image_id"),
+            "image_url": urls.get("view") or urls.get("orig"),
+            "deduped": bool(data.get("deduped")),
+        }
+
     # ── blocks ──────────────────────────────────────────────────────
 
     def insert_block(

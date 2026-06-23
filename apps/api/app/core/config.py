@@ -58,6 +58,7 @@ class Settings(BaseSettings):
 
     # Limits
     image_max_bytes: int = Field(default=20 * 1024 * 1024)
+    image_from_url_max_bytes: int = Field(default=20 * 1024 * 1024)
     gallery_max_bytes: int = Field(default=100 * 1024 * 1024)
     file_max_bytes: int = Field(default=25 * 1024 * 1024)
     rate_limit_per_minute: int = Field(default=120)

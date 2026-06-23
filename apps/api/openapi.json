@@ -17492,6 +17492,69 @@
         ]
       }
     },
+    "/api/v1/uploads/image/from-url": {
+      "post": {
+        "operationId": "upload_image_from_url_api_v1_uploads_image_from_url_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-MXWP-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Mxwp-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upload Image From Url Api V1 Uploads Image From Url Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Image From Url",
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
     "/api/v1/uploads/image/init": {
       "post": {
         "operationId": "upload_image_init_api_v1_uploads_image_init_post",

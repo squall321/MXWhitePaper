@@ -13,6 +13,7 @@
 |---|---|---|---|
 | POST | `/api/v1/uploads/image/init` | editor+ | presigned PUT URL 발급 (단수 `image`) |
 | POST | `/api/v1/uploads/image/finalize` | editor+ | upload 완료 → 이미지로 등록 |
+| POST | `/api/v1/uploads/image/from-url` | editor+ | 서버가 원격 URL 을 SSRF-가드 후 직접 fetch → dedup → WebP 3종 저장 (init/finalize 우회) |
 | GET | `/api/v1/images/{identifier}` | reader+ | 이미지 메타 + URL 3개 (uploads 가 아니라 별도 `images` 라우터) |
 | POST | `/api/v1/files/presign-put` | editor+ | 일반 파일 업로드용 presigned PUT |
 | POST | `/api/v1/files/finalize` | editor+ | 일반 파일 완료 |

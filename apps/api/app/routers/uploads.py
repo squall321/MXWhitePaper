@@ -3,6 +3,7 @@
 엔드포인트:
   POST /api/v1/uploads/image/init      (editor+)
   POST /api/v1/uploads/image/finalize  (editor+)
+  POST /api/v1/uploads/image/from-url  (editor+, SSRF-가드 원격 fetch)
   GET  /api/v1/images/{identifier}     (reader+, UUID/ULID 둘 다 허용)
 """
 from __future__ import annotations
@@ -59,6 +60,24 @@ async def upload_image_finalize(
     actor = await _resolve_actor(s, x_mxwp_user, user)
     result = await upload_service.finalize_upload(
         s, upload_id=upload_id, actor_id=actor
+    )
+    return envelope(data=result)
+
+
+@uploads_router.post("/image/from-url")
+async def upload_image_from_url(
+    payload: dict[str, Any],
+    x_mxwp_user: str | None = Header(default=None, alias="X-MXWP-User"),
+    s: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_editor),
+) -> dict[str, Any]:
+    url = payload.get("url") if isinstance(payload, dict) else None
+    if not url:
+        raise ValidationFailed("url required")
+    filename = payload.get("filename") if isinstance(payload, dict) else None
+    actor = await _resolve_actor(s, x_mxwp_user, user)
+    result = await upload_service.fetch_and_store_image_from_url(
+        s, url=url, actor_id=actor, filename=filename
     )
     return envelope(data=result)
 

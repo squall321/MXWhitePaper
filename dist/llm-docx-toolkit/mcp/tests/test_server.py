@@ -87,6 +87,9 @@ def test_registers_tools_resource_template_and_prompt(server_mod) -> None:
         "validate_block",
         "import_file",
         "upload_image",
+        "upload_image_from_url",
+        "upload_image_base64",
+        "extract_pptx_images",
         "insert_image_block",
     ]
     assert len(templates) == 1
