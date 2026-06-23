@@ -145,6 +145,70 @@ claude mcp add mxwp-rag \
 
 `example-claude-code.json` 참고.
 
+## HTTP transport (register-once)
+
+위의 stdio 방식은 **각 사용자가 toolkit 바이너리를 내려받아** 로컬에서
+실행한다 (Claude Desktop 권장). 배포 환경이 MCP 서버를 **HTTP 로
+호스팅**하면, 바이너리 없이 한 줄로 등록할 수 있다 (register-once):
+
+```bash
+claude mcp add --transport http mxwp \
+  https://hwax.sec.samsung.net/mx-white-paper/mcp \
+  --header "Authorization: Bearer mxwp_PASTE_YOUR_TOKEN_HERE"
+```
+
+- URL 은 `${origin}${BASE_URL}mcp` — 포탈 서브경로면
+  `https://hwax.sec.samsung.net/mx-white-paper/mcp`, 루트 단독 배포면
+  `https://<host>/mcp`. (stdio 의 `MXWP_API_URL` 과 달리 끝에 `/mcp` 가 붙는다.)
+- 토큰은 `Authorization: Bearer` 헤더로 전송되고, 호스팅 서버가 요청마다
+  백엔드로 그대로 forward 한다 — env 파일에 토큰을 남기지 않는다.
+- 호스팅 서버에서 동작하므로 RAG 인덱스/바이너리를 각자 받지 않아도 된다.
+
+> **stdio vs http 언제?**
+> - **stdio** — 로컬 Claude Desktop. 각자 toolkit 을 내려받아 자기 머신에서
+>   실행. 오프라인 RAG 가능, env 에 `MXWP_API_TOKEN` 보관.
+> - **http** — 배포가 서버를 호스팅하는 경우. 바이너리·인덱스 없이 URL +
+>   토큰 한 줄로 register-once. 토큰은 헤더로만 전달.
+
+가장 쉬운 방법: write scope 토큰 발급 직후 모달의 "Claude Desktop / Code 에
+바로 등록하기" 를 열면, stdio config 블록 아래에 **이 배포에 맞는 HTTP
+register-once 명령**이 토큰까지 채워져 나온다 — 복사해 실행하면 끝.
+([API 토큰 발급](#api-토큰-발급) 참고.)
+
+### 호스팅 (서버 운영자용)
+
+frozen 바이너리에는 HTTP 스택을 넣지 않는다 — HTTP transport 는 **컨테이너
+Python** (`instance://mxwp_api`) 으로 호스팅한다. 한 줄 실행:
+
+```bash
+apptainer exec instance://mxwp_api bash -lc \
+  'cd /workspace/dist/llm-docx-toolkit && \
+   MXWP_API_URL=http://127.0.0.1:8800 \
+   python3 -m mcp --http --host 127.0.0.1 --port 8765'
+```
+
+- `--http` 가 transport 를 streamable-http 로 바꾼다 (없으면 stdio — 기존 동작).
+  `--host`/`--port` 로 바인드 주소 지정 (기본 `127.0.0.1:8765`). 엔드포인트는
+  `/mcp` 에 마운트된다.
+- 서버는 API 와 **같은 인스턴스** 안에 떠서 `MXWP_API_URL=http://127.0.0.1:8800`
+  으로 백엔드에 접근한다. 요청마다 클라이언트의 `Authorization: Bearer` 를
+  백엔드로 forward 하므로 env 에 토큰을 둘 필요가 없다.
+
+**상시 구동 (user systemd):**
+
+```bash
+infra/scripts/install-mcp-http.sh --install     # 유닛 설치 + enable + start
+infra/scripts/install-mcp-http.sh --status      # 상태 + 최근 로그
+infra/scripts/install-mcp-http.sh --uninstall   # 중지 + 제거
+```
+
+유닛 템플릿: `infra/systemd/mxwp-mcp-http.service` (bind host/port·`MXWP_API_URL`
+은 유닛의 `Environment=` 로 조정). 로그: `journalctl --user -u mxwp-mcp-http -f`.
+
+**포탈 nginx 라우트 예시** (실배포는 포탈 front layer 가 담당 — 예시만):
+`infra/nginx/mcp-http.conf.example` — `/mx-white-paper/mcp` → `127.0.0.1:8765`
+(SSE 이므로 `proxy_buffering off` 필수, `Authorization` 헤더 통과).
+
 ## API 토큰 발급
 
 쓰기 도구를 쓰려면 위키 UI 에서 본인 토큰을 발급한다:

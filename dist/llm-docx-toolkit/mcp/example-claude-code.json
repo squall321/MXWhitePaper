@@ -1,4 +1,5 @@
 {
+  "_comment": "두 가지 예시: 'mxwp-rag' = 로컬 stdio 바이너리, 'mxwp' = 호스팅 HTTP transport (register-once). 둘 중 하나만 쓰면 됨. HTTP 는 셸에서 `claude mcp add --transport http mxwp <URL> --header \"Authorization: Bearer <token>\"` 로 등록하는 게 더 쉽다.",
   "mcpServers": {
     "mxwp-rag": {
       "type": "stdio",
@@ -12,6 +13,13 @@
       "env": {
         "MXWP_API_URL": "http://127.0.0.1:8800",
         "MXWP_API_TOKEN": "mxwp_PASTE_YOUR_TOKEN_HERE"
+      }
+    },
+    "mxwp": {
+      "type": "http",
+      "url": "https://hwax.sec.samsung.net/mx-white-paper/mcp",
+      "headers": {
+        "Authorization": "Bearer mxwp_PASTE_YOUR_TOKEN_HERE"
       }
     }
   }

@@ -110,6 +110,21 @@ export function buildMcpDesktopConfig(token: string): string {
   return JSON.stringify(config, null, 2)
 }
 
+/**
+ * `claude mcp add` one-liner that registers the **HTTP-transport** mxwp-mcp
+ * (hosted, register-once) instead of the local stdio binary. The container
+ * Python hosts the streamable-http server at `${origin}${BASE_URL}mcp` (portal
+ * → `/mx-white-paper/mcp`), and the token rides as an `Authorization: Bearer`
+ * header the server forwards to the backend per request.
+ *
+ * Unlike the stdio config there is no binary path to edit — the URL + token are
+ * everything, so this is the simplest path once a deployment hosts the server.
+ */
+export function buildMcpHttpCommand(token: string): string {
+  const url = `${mcpApiBaseUrl()}/mcp`
+  return `claude mcp add --transport http mxwp ${url} --header "Authorization: Bearer ${token}"`
+}
+
 /** Map an `expires_in` UI choice to a concrete ISO-8601 (or null = forever). */
 export function expiresInToISO(
   choice: '1m' | '3m' | '1y' | 'never',

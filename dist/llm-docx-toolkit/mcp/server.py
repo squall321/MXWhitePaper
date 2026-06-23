@@ -1,4 +1,14 @@
-"""MCP stdio server exposing the RAG toolkit + MXWhitePaper API to MCP clients.
+"""MCP server exposing the RAG toolkit + MXWhitePaper API to MCP clients.
+
+Runs in two modes:
+  * stdio (default, also what the frozen PyInstaller binary ships) — token
+    comes from env `MXWP_API_TOKEN`.
+  * streamable-http (`--http`, hosted by the container Python only — the
+    frozen binary does not bundle the HTTP stack) — token comes from each
+    request's `Authorization: Bearer …` header, falling back to env.
+    Launch from the toolkit root via `python3 -m mcp --http` so `rag` is
+    importable (running `server.py` directly omits the toolkit dir from
+    sys.path).
 
 RAG primitives: `query_rules` tool, `rag://chunks/{id}` resource template,
 `mxwp_system_prompt` prompt. Backends load lazily and are cached so the
@@ -24,6 +34,7 @@ import binascii
 import importlib
 import importlib.util
 import json
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -34,6 +45,10 @@ from mcp.server.fastmcp import FastMCP
 from rag._bm25 import BM25Retriever
 from rag.retriever import Chunk, Retriever
 
+
+# The FastMCP instance, stashed by build_server() so per-request helpers can
+# reach the active request context (http mode). None until build_server runs.
+_MCP: FastMCP | None = None
 
 # Resolved on startup; refers to the directory holding chunks.jsonl + index files.
 _rag_dir: Path | None = None
@@ -82,9 +97,40 @@ def _schema() -> Any:
     return _local_module("schema_validate")
 
 
+def _request_bearer_token() -> str | None:
+    """현재 HTTP 요청의 `Authorization: Bearer …` 에서 토큰 추출.
+
+    stdio 모드(활성 요청 컨텍스트 없음)에서는 예외가 나므로 None 을 돌려
+    env 토큰 경로로 떨어뜨린다. RA `_forward_headers` 의 stdio-안전 미러.
+    """
+    if _MCP is None:
+        return None
+    try:
+        req = _MCP.get_context().request_context.request
+    except Exception:
+        return None
+    if req is None:
+        return None
+    auth = req.headers.get("authorization")
+    if not auth:
+        return None
+    scheme, _, value = auth.partition(" ")
+    if scheme.lower() != "bearer" or not value.strip():
+        return None
+    return value.strip()
+
+
 def _make_client() -> Any:
-    """Tests monkeypatch this to inject a fake-transport client."""
-    return _api().MxwpClient.from_env()
+    """Tests monkeypatch this to inject a fake-transport client.
+
+    http 모드면 요청별 Bearer 토큰을, 없으면 env MXWP_API_TOKEN 을 쓴다
+    (stdio 경로는 요청 컨텍스트가 없어 항상 env 토큰 — 기존 동작 불변).
+    """
+    api = _api()
+    token = _request_bearer_token() or os.environ.get("MXWP_API_TOKEN", "")
+    return api.MxwpClient(
+        os.environ.get("MXWP_API_URL", api.DEFAULT_API_URL), token
+    )
 
 
 def _require_token(client: Any) -> None:
@@ -301,7 +347,9 @@ def build_server() -> FastMCP:
 
     Factored out so tests can instantiate without touching argparse / stdio.
     """
+    global _MCP
     mcp = FastMCP("mxwp-rag")
+    _MCP = mcp
 
     @mcp.tool(
         name="query_rules",
@@ -789,11 +837,33 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Path to llm-system-prompt.md (default: sibling to binary).",
     )
+    p.add_argument(
+        "--http",
+        action="store_true",
+        help="Serve over streamable-http instead of stdio (container Python only; "
+        "per-request Authorization: Bearer token). Default: stdio.",
+    )
+    p.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Bind host for --http (default: 127.0.0.1).",
+    )
+    p.add_argument(
+        "--port",
+        type=int,
+        default=8765,
+        help="Bind port for --http (default: 8765).",
+    )
     args = p.parse_args(argv)
     _rag_dir = (args.rag_dir or _default_rag_dir()).resolve()
     _system_prompt_path = (args.system_prompt or _default_system_prompt()).resolve()
     server = build_server()
-    server.run("stdio")
+    if args.http:
+        server.settings.host = args.host
+        server.settings.port = args.port
+        server.run(transport="streamable-http")
+    else:
+        server.run("stdio")
 
 
 if __name__ == "__main__":

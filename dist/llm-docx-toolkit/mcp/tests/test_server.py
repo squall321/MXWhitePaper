@@ -175,3 +175,78 @@ def test_missing_index_returns_helpful_error(server_mod, tmp_path) -> None:
             s.call_tool("query_rules", {"query": "x", "k": 1, "backend": "bm25"})
         )
     assert "no index" in str(exc.value) and "bm25" in str(exc.value)
+
+
+# ── per-request bearer auth (http mode) ─────────────────────────────
+
+
+class _FakeReq:
+    def __init__(self, headers: dict[str, str]) -> None:
+        self.headers = headers
+
+
+class _FakeReqCtx:
+    def __init__(self, headers: dict[str, str] | None) -> None:
+        self.request = _FakeReq(headers) if headers is not None else None
+
+
+class _FakeCtx:
+    def __init__(self, headers: dict[str, str] | None) -> None:
+        self.request_context = _FakeReqCtx(headers)
+
+
+def _install_ctx(server_mod, headers: dict[str, str] | None):
+    """build_server() 가 세팅한 _MCP.get_context() 를 가짜 컨텍스트로 교체."""
+    server_mod.build_server()  # sets _MCP
+
+    def _get_context():
+        return _FakeCtx(headers)
+
+    server_mod._MCP.get_context = _get_context
+
+
+def test_request_bearer_token_extracts_bearer(server_mod) -> None:
+    _install_ctx(server_mod, {"authorization": "Bearer mxwp_REQTOKEN"})
+    assert server_mod._request_bearer_token() == "mxwp_REQTOKEN"
+
+
+def test_request_bearer_token_none_without_header(server_mod) -> None:
+    _install_ctx(server_mod, {})
+    assert server_mod._request_bearer_token() is None
+
+
+def test_request_bearer_token_none_for_non_bearer(server_mod) -> None:
+    _install_ctx(server_mod, {"authorization": "Basic abc"})
+    assert server_mod._request_bearer_token() is None
+
+
+def test_request_bearer_token_none_when_no_request_context(server_mod) -> None:
+    # stdio: get_context() raises (no active request) → None, env path used.
+    server_mod.build_server()
+
+    def _raise():
+        raise LookupError("no active request context")
+
+    server_mod._MCP.get_context = _raise
+    assert server_mod._request_bearer_token() is None
+
+
+def test_make_client_prefers_request_bearer_over_env(server_mod, monkeypatch) -> None:
+    monkeypatch.setenv("MXWP_API_TOKEN", "mxwp_ENVTOKEN")
+    monkeypatch.setenv("MXWP_API_URL", "http://example:9999")
+    _install_ctx(server_mod, {"authorization": "Bearer mxwp_REQTOKEN"})
+    client = server_mod._make_client()
+    assert client.token == "mxwp_REQTOKEN"
+    assert client.base_url == "http://example:9999"
+
+
+def test_make_client_falls_back_to_env_in_stdio(server_mod, monkeypatch) -> None:
+    monkeypatch.setenv("MXWP_API_TOKEN", "mxwp_ENVTOKEN")
+    server_mod.build_server()
+
+    def _raise():
+        raise LookupError("no active request context")
+
+    server_mod._MCP.get_context = _raise
+    client = server_mod._make_client()
+    assert client.token == "mxwp_ENVTOKEN"

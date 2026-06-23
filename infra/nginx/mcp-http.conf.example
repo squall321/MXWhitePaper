@@ -1,0 +1,42 @@
+# EXAMPLE ONLY — portal nginx route for the MXWP MCP streamable-http endpoint.
+#
+# Not deployed by this repo. The real route lives in the HWAX portal's front
+# layer (cf. docs/HWAX-PORTAL-INTEGRATION.md, HWAXPortal/backend/config/routes.env).
+# This file mirrors the RA nginx pattern (ReportArchive/nginx/nginx.conf.example)
+# so an operator can lift the relevant location{} block into the portal config.
+#
+# Topology: portal passes the /mx-white-paper/ prefix through (does NOT strip it).
+# The MCP server (hosted in instance://mxwp_api, see infra/systemd/mxwp-mcp-http.service)
+# listens on 127.0.0.1:8765 and mounts its endpoint at /mcp. So the portal must
+# rewrite /mx-white-paper/mcp → /mcp before proxying.
+#
+# Auth: MCP clients send `Authorization: Bearer <mxwp_… token>`; the server
+# forwards it per-request to the API. nginx must NOT strip Authorization.
+
+upstream mxwp_mcp_http {
+    server 127.0.0.1:8765;
+    keepalive 16;
+}
+
+# Drop this block into the portal server { } that already serves /mx-white-paper/.
+location = /mx-white-paper/mcp {
+    # Portal passes the prefix through; the MCP server mounts at /mcp.
+    rewrite ^/mx-white-paper/mcp$ /mcp break;
+
+    proxy_pass http://mxwp_mcp_http;
+    proxy_http_version 1.1;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    # Pass the client's Bearer token through unchanged (server forwards it to the API).
+    proxy_set_header Authorization $http_authorization;
+
+    # streamable-http is SSE — buffering would break the event stream.
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    chunked_transfer_encoding on;
+}

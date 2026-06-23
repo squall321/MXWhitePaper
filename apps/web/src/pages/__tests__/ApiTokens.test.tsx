@@ -20,6 +20,7 @@ vi.mock('@/features/api-tokens/api', async () => {
 import { ApiTokensPage } from '../ApiTokens'
 import {
   buildMcpDesktopConfig,
+  buildMcpHttpCommand,
   expiresInToISO,
   mcpApiBaseUrl,
 } from '@/features/api-tokens/api'
@@ -170,5 +171,21 @@ describe('buildMcpDesktopConfig', () => {
     const json = buildMcpDesktopConfig('t')
     expect(() => JSON.parse(json)).not.toThrow()
     expect(json).toContain('\n  ') // 2-space indented
+  })
+})
+
+describe('buildMcpHttpCommand', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('builds a register-once command with the token + MCP_URL prefix', () => {
+    vi.stubGlobal('window', {
+      location: { origin: 'https://hwax.sec.samsung.net' },
+    })
+    const cmd = buildMcpHttpCommand('mxwp_SECRET123')
+    expect(cmd).toContain('claude mcp add --transport http mxwp')
+    // MCP_URL = origin (+ sub-path) + /mcp; BASE_URL is '/' in test → /mcp.
+    expect(cmd).toContain('https://hwax.sec.samsung.net/mcp')
+    // token is carried as an Authorization: Bearer header.
+    expect(cmd).toContain('--header "Authorization: Bearer mxwp_SECRET123"')
   })
 })

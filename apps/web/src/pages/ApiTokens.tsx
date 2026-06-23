@@ -9,6 +9,7 @@ import { toast } from '@/components/ui/Toast'
 import { ErrorState } from '@/components/ui/ErrorState'
 import {
   buildMcpDesktopConfig,
+  buildMcpHttpCommand,
   createApiToken,
   expiresInToISO,
   listApiTokens,
@@ -479,6 +480,7 @@ function McpConfigSection({
   onCopy: (text: string) => void
 }) {
   const config = useMemo(() => buildMcpDesktopConfig(token), [token])
+  const httpCommand = useMemo(() => buildMcpHttpCommand(token), [token])
   return (
     <details
       className="rounded border border-smsg-200 bg-smsg-50/40 px-3 py-2"
@@ -516,6 +518,34 @@ function McpConfigSection({
           >
             설정 전체 복사
           </Button>
+        </div>
+
+        <div className="mt-3 border-t border-smsg-200 pt-2">
+          <p className="text-xs text-gray-600">
+            또는 <strong>HTTP 로 등록 (register-once)</strong> — 이 배포가
+            MCP 서버를 호스팅하면 바이너리 없이 한 줄로 등록됩니다. 아래
+            명령을 셸에서 실행하세요 (토큰이 <code className="rounded bg-white px-1">
+              Authorization
+            </code>{' '}
+            헤더로 들어갑니다).
+          </p>
+          <textarea
+            readOnly
+            value={httpCommand}
+            data-testid="mcp-http-command-textarea"
+            className="mt-2 h-20 w-full resize-none rounded border border-gray-200 bg-gray-50 px-2 py-1 font-mono text-[11px] leading-relaxed"
+            onFocus={(e) => e.currentTarget.select()}
+          />
+          <div className="flex items-center justify-end text-xs text-gray-500">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onCopy(httpCommand)}
+              data-testid="mcp-http-command-copy"
+            >
+              명령 복사
+            </Button>
+          </div>
         </div>
       </div>
     </details>

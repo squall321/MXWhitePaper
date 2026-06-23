@@ -1,0 +1,37 @@
+[Unit]
+Description=MX White Paper MCP server over streamable-http (register-once, per-request Bearer)
+# The MCP HTTP server is hosted by the container Python inside instance://mxwp_api
+# and forwards each request's Authorization: Bearer to the API on 127.0.0.1:8800
+# (same instance). Require the stack so we don't start while the api instance is
+# down. Soft dependency — the apptainer exec itself fails loudly if the instance
+# is missing.
+Wants=mxwp-stack.service
+After=mxwp-stack.service
+
+[Service]
+Type=simple
+# Same PATH override rationale as mxwp-stack.service — user-systemd's default
+# PATH can omit apptainer's install dir.
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Where the MCP server reaches the MXWP REST API. Hosted inside instance://mxwp_api,
+# so the API is on the same instance's loopback. Override here if the topology
+# changes. MXWP_BIND_HOST/MXWP_BIND_PORT control the streamable-http listener.
+Environment=MXWP_API_URL=http://127.0.0.1:8800
+Environment=MXWP_BIND_HOST=127.0.0.1
+Environment=MXWP_BIND_PORT=8765
+# install-mcp-http.sh runs `sed s|__REPO_ROOT__|<repo>|` on this file at install
+# time (same convention as mxwp-snapshot.service). This unit doesn't need the repo
+# path in ExecStart — the host repo is mounted at /workspace inside the instance,
+# so the in-container toolkit path (/workspace/dist/llm-docx-toolkit) is fixed
+# wherever the repo was checked out. The placeholder below keeps the install
+# script's sed self-documenting and ready if a host-side path is ever needed:
+#   __REPO_ROOT__
+ExecStart=/usr/bin/env bash -c 'apptainer exec instance://mxwp_api bash -lc "cd /workspace/dist/llm-docx-toolkit && MXWP_API_URL=$MXWP_API_URL python3 -m mcp --http --host $MXWP_BIND_HOST --port $MXWP_BIND_PORT"'
+# Long-lived HTTP server — restart if it crashes (port conflict, instance
+# restart). Unlike the snapshot oneshot, this is a daemon, so on-failure is right.
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

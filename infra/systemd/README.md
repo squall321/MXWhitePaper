@@ -67,6 +67,22 @@ bash infra/scripts/start.sh
 | postgres `/dev/shm` flaky | 별개 이슈 — mmap 패치 (deployment-playbook §6 하) | conf 두 줄 수정 |
 | API healthz 404 | uvicorn 워밍업 중 | 10~20초 더 기다리고 재시도 |
 
+## MCP streamable-http 서버 (선택)
+
+MCP HTTP transport (register-once) 를 호스팅하려면 별도 user service 를 설치한다.
+컨테이너 Python 으로 `instance://mxwp_api` 안에서 `python3 -m mcp --http` 를 띄운다.
+
+```bash
+infra/scripts/install-mcp-http.sh --install     # 유닛 설치 + enable + start
+infra/scripts/install-mcp-http.sh --status      # 상태 + 최근 로그
+infra/scripts/install-mcp-http.sh --uninstall   # 중지 + 제거
+```
+
+- 유닛 템플릿: `mxwp-mcp-http.service` (기본 bind `127.0.0.1:8765`, `MXWP_API_URL=http://127.0.0.1:8800`).
+- 로그: `journalctl --user -u mxwp-mcp-http -f`.
+- 포탈 nginx 라우트 예시: `infra/nginx/mcp-http.conf.example`.
+- 클라이언트 등록·동작은 `dist/llm-docx-toolkit/mcp/README.md` 의 "HTTP transport" 참고.
+
 ## 관련 파일
 
 - `infra/scripts/boot.sh` — 부팅용 wrapper (start.sh + 로깅)
