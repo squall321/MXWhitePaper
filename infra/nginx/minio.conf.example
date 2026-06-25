@@ -1,0 +1,34 @@
+# EXAMPLE ONLY — 포탈에서 이미지(MinIO 객체)를 서브경로로 서빙하는 nginx 라우트.
+#
+# 왜 필요한가
+#   이미지 <img src> 는 인증 헤더를 못 실으므로, 백서 이미지는 MinIO 의 공개(anonymous-read)
+#   버킷 URL 에서 직접 로드된다. 이 URL 은 .env 의 MINIO_PUBLIC_ENDPOINT 로 만들어진다
+#   (apps/api/app/services/upload_service.py::_public_urls_for_sha).
+#   dev 는 http://127.0.0.1:9000 (로컬에서만 닿음). 포탈/원격에서 이미지가 뜨려면
+#   브라우저가 닿는 경로여야 한다.
+#
+# 이식성 있는 설정 (어느 서브경로에 올려도 그대로)
+#   1) cae00 .env:  MINIO_PUBLIC_ENDPOINT=/mx-white-paper/minio
+#      → urls.view 가 '/mx-white-paper/minio/mxwp-images/<sha>/view.webp' (origin-상대) 로 생성됨.
+#   2) 포탈 nginx 에 아래 블록 추가 → 그 경로를 MinIO 로 프록시 (prefix strip).
+#   이러면 브라우저는 포탈만 보고, MinIO 는 외부에 직접 노출 안 된다.
+#
+# 버킷은 이미 anonymous-read (public_url 이 비인증) 이라 별도 인증 불필요.
+
+# /mx-white-paper/ 를 서빙하는 server { } 안에 추가.
+location /mx-white-paper/minio/ {
+    # prefix strip → MinIO 는 /mxwp-images/<sha>/view.webp 로 받는다.
+    proxy_pass http://127.0.0.1:9000/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # 이미지는 immutable (sha 기반 경로) — 길게 캐시.
+    proxy_cache_valid 200 30d;
+    add_header Cache-Control "public, max-age=2592000, immutable";
+
+    # 큰 원본 이미지 대비.
+    proxy_buffering on;
+    client_max_body_size 100M;
+}
