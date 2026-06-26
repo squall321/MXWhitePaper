@@ -174,6 +174,13 @@ presigned 흐름 (init → presigned PUT → finalize) 을 그대로 호출한�
    삭제 시 ON DELETE 정책이 없어 row 가 남는 게 아니라 *사용자 삭제 자체가
    실패한다.* 사용자 정리 전에 images.uploaded_by 를 다른 사용자로 reassign
    해야 함.
+8. **바이트 검증은 Pillow 가 한다, Content-Type/선언 mime 이 아니다** —
+   `_process_image_bytes()` 의 `Image.open`+`load` 는 try/except 로 감싸 비-이미지/
+   손상 바이트를 `ValidationFailed`(422) 로 거부한다 (예전엔 uncaught → 500).
+   `_verify_is_image()`(from-url) 도 Content-Type 헤더를 *신뢰하지 않고* 항상
+   바이트를 열어 검증한다 — 원격 서버가 `image/*` 로 거짓말해도 막힌다
+   (adversarial-verify 에서 발견된 두 500 구멍). finalize 는 size+sha 만 보고
+   bytes 를 sniff 하지 않으므로 실질 게이트는 이 두 함수다.
 
 ## Settings
 

@@ -326,8 +326,16 @@ def _process_image_bytes(raw: bytes) -> dict[str, Any]:
     Returns dict with keys: thumb_bytes, view_bytes, orig_bytes,
     width, height, dominant_color.
     """
-    src = Image.open(io.BytesIO(raw))
-    src.load()
+    try:
+        src = Image.open(io.BytesIO(raw))
+        src.load()
+    except Exception as e:
+        # base64 가 디코드는 되지만 실제 이미지가 아니거나(텍스트/손상 PNG),
+        # truncated 인 경우. uncaught 면 FastAPI 가 500 을 냈다 — 깔끔한 422 로.
+        raise ValidationFailed(
+            "업로드한 파일이 유효한 이미지가 아닙니다.",
+            details={"reason": str(e)[:200]},
+        ) from e
     # EXIF 제거를 위해 새 이미지로 복사 (메타데이터 미보존)
     base = Image.new(src.mode if src.mode in ("RGB", "RGBA", "L") else "RGB", src.size)
     base.paste(src.convert(base.mode))
@@ -636,12 +644,13 @@ def _fetch_remote_bytes(url: str, *, max_bytes: int) -> tuple[bytes, str]:
 
 
 def _verify_is_image(raw: bytes, content_type: str) -> str:
-    """Content-Type 또는 Pillow 로 이미지 검증 → mime_type 반환.
+    """Pillow 로 실제 바이트가 이미지인지 검증 → mime_type 반환.
 
-    Content-Type 이 image/* 면 그대로, 아니면 Pillow 로 열어 포맷을 확인한다.
+    Content-Type 헤더는 신뢰하지 않는다 — 원격 서버가 `image/*` 로 거짓말하고
+    비-이미지 바디를 주면 이후 `_process_image_bytes` 가 500 나던 구멍이 있었다
+    (adversarial-verify). 항상 바이트를 열어 검증하고, mime 은 탐지한 실제 포맷
+    우선 → 선언 Content-Type → octet-stream 순으로 결정한다.
     """
-    if content_type.startswith("image/"):
-        return content_type
     try:
         img = Image.open(io.BytesIO(raw))
         img.verify()
@@ -651,7 +660,11 @@ def _verify_is_image(raw: bytes, content_type: str) -> str:
             details={"content_type": content_type},
         ) from e
     fmt = (img.format or "").lower()
-    return f"image/{fmt}" if fmt else "application/octet-stream"
+    if fmt:
+        return f"image/{fmt}"
+    if content_type.startswith("image/"):
+        return content_type
+    return "application/octet-stream"
 
 
 async def fetch_and_store_image_from_url(
