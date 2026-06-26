@@ -1,7 +1,7 @@
 """xlsx (Excel) → DocumentJSON v1.0.
 
 docx/pptx import 와 같은 계약: ``{document, summary}`` 반환. 시트 1개를
-섹션 1개로 만들고, 시트의 표를 TableBlock 으로 (큰 표는 SpreadsheetBlock),
+섹션 1개로 만들고, 시트의 표를 (크기 무관) TableBlock 으로,
 embedded 차트는 ChartBlock 으로 분배한다. 본문 walk 가 끝나면 docx/pptx 와
 동일하게 ``apply_widget_markers`` + ``apply_widget_autodetect`` 를 태운다.
 표는 기본적으로 TableBlock 으로 보존되며, autodetect 가 모양을 보고
@@ -23,9 +23,6 @@ import ulid
 
 from .docx_import import ImportSummary
 
-# 표가 이보다 크면 TableBlock(headers/rows) 대신 SpreadsheetBlock 으로 — 큰
-# 표는 chart/kpi autodetect 의미가 없고, 스프레드시트 편집기가 더 적합.
-_SPREADSHEET_ROW_THRESHOLD = 200
 # 셀 텍스트 캡 — 비정상적으로 긴 셀로 문서가 비대해지는 것 방지.
 _CELL_MAX = 2000
 
@@ -104,39 +101,6 @@ def _table_block_from_rows(rows: list[list[str]]) -> dict[str, Any]:
         "headers": rows[0],
         "rows": rows[1:],
     }
-
-
-def _spreadsheet_block_from_rows(
-    rows: list[list[str]], title: str
-) -> dict[str, Any]:
-    """큰 표 → SpreadsheetBlock. cells 는 ``"A1"`` 스타일 좌표 → 값 맵."""
-    cells: dict[str, str] = {}
-    n_cols = max((len(r) for r in rows), default=0)
-    for r_idx, row in enumerate(rows):
-        for c_idx, val in enumerate(row):
-            if val == "":
-                continue
-            cells[f"{_col_letter(c_idx)}{r_idx + 1}"] = val
-    return {
-        "type": "spreadsheet",
-        "id": _new_id(),
-        "title": title[:200],
-        "rows": len(rows),
-        "cols": n_cols,
-        "cells": cells,
-    }
-
-
-def _col_letter(idx: int) -> str:
-    """0-based 열 인덱스 → 엑셀 열 문자 (0→A, 26→AA)."""
-    out = ""
-    n = idx
-    while True:
-        out = chr(ord("A") + n % 26) + out
-        n = n // 26 - 1
-        if n < 0:
-            break
-    return out
 
 
 # openpyxl chart 타입 → ChartBlock.chartType. 미지원은 bar fallback.
@@ -225,15 +189,13 @@ def xlsx_to_document(
 
         blocks: list[dict[str, Any]] = []
         if rows:
-            if len(rows) > _SPREADSHEET_ROW_THRESHOLD:
-                blocks.append(_spreadsheet_block_from_rows(rows, ws.title))
-                summary.warnings.append(
-                    f"시트 '{ws.title}' 는 {len(rows)}행으로 커서 "
-                    f"SpreadsheetBlock 으로 변환 (표 autodetect 비활성)"
-                )
-            else:
-                blocks.append(_table_block_from_rows(rows))
-                summary.tables += 1
+            # 표는 크기와 무관하게 TableBlock(무제한 정적 표)으로 보존한다.
+            # SpreadsheetBlock 은 에디터 cap(200행/26열)이 있어 큰 시트는 담을 수
+            # 없고, import 가 SpreadsheetBlock 을 만들지 않는다는 컨벤션과도 일치
+            # (lat storage gotcha 9). label/value·name/start/end 모양이면 아래
+            # autodetect 가 kpi/gantt 로 승격한다.
+            blocks.append(_table_block_from_rows(rows))
+            summary.tables += 1
         for chart in charts:
             cb = _chart_block_from_ws_chart(chart, summary)
             if cb is not None:

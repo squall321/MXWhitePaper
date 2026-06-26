@@ -2,7 +2,7 @@
 
 Fixture .xlsx 는 openpyxl 으로 매 테스트마다 in-memory 생성. 시나리오:
   - 시트 → 섹션, 숫자 헤더 표 → table + chart/kpi autodetect
-  - 큰 표 → SpreadsheetBlock
+  - 큰 표(200행 초과) → 저장 가능한 TableBlock
   - 비-xlsx 확장자 → 422
   - zip 이지만 xl/workbook.xml 없음 → 422
 """
@@ -83,12 +83,20 @@ def test_xlsx_label_value_table_autodetects_kpi() -> None:
     assert types & {"kpi-cards", "table"}
 
 
-def test_xlsx_large_table_becomes_spreadsheet() -> None:
+def test_xlsx_large_table_becomes_saveable_table() -> None:
+    # 200행을 넘는 시트도 저장 가능한 TableBlock 으로 변환되어야 한다.
+    # (예전엔 SpreadsheetBlock(rows le=200)로 만들어 201행부터 저장 시 422 —
+    # adversarial-verify 에서 발견된 HIGH 결함의 회귀 가드.)
+    from app.services.document_service import validate_documentjson
+
     rows = [["c1", "c2"]] + [[i, i * 2] for i in range(250)]
     buf = _xlsx_bytes({"big": rows})
     result = xlsx_import.xlsx_to_document(buf, slug="t", owner_user_id="u")
     blocks = result["document"]["sections"][0]["blocks"]
-    assert any(b["type"] == "spreadsheet" for b in blocks)
+    assert any(b["type"] == "table" for b in blocks)
+    assert not any(b["type"] == "spreadsheet" for b in blocks)
+    # 핵심: 251행 문서가 schema 검증(=저장 경로)을 통과해야 한다.
+    validate_documentjson(result["document"])
 
 
 def test_xlsx_empty_sheet_warns() -> None:
