@@ -389,6 +389,7 @@ def validate_documentjson(payload: dict[str, Any]) -> dict[str, Any]:
     renumber_sections(dumped)
     _normalise_columns_widths(dumped)
     _normalise_table_cells(dumped)
+    _assert_unique_ids(dumped)
     return dumped
 
 
@@ -499,6 +500,59 @@ def _normalise_table_cells(content: dict[str, Any]) -> None:
             _walk_block(blk)
         for sub in sec.get("subsections") or []:
             _walk_section(sub)
+
+    for sec in content.get("sections") or []:
+        if isinstance(sec, dict):
+            _walk_section(sec)
+
+
+def _assert_unique_ids(content: dict[str, Any]) -> None:
+    """문서 전역에서 section id 와 block id (중첩 컨테이너 child 포함) 의 유일성을 강제.
+
+    중복 id 는 get/update/delete/move_block 이 first-match 만 처리하게 만들어
+    둘째 노드를 영영 도달 불가능한 orphan 으로 남긴다 (delete 1회는 생존자를,
+    update 는 엉뚱한 노드를 건드림 — 데이터 무결성 결함). 섹션 outline 에는
+    이미 dup 가드가 있었지만 블록 insert 경로엔 없어 조용히 통과되던 것을 막는다.
+    write 경로(create/replace/patch)에서만 호출되므로 기존 문서 read 는 영향 없음.
+    """
+    seen: set[str] = set()
+
+    def _check(node_id: Any) -> None:
+        if not isinstance(node_id, str):
+            return
+        if node_id in seen:
+            raise ValidationFailed(
+                f"duplicate id in document: {node_id}",
+                details={"id": node_id},
+            )
+        seen.add(node_id)
+
+    def _walk_block(blk: Any) -> None:
+        if not isinstance(blk, dict):
+            return
+        _check(blk.get("id"))
+        t = blk.get("type")
+        if t == "columns":
+            for col in blk.get("columns") or []:
+                if isinstance(col, list):
+                    for child in col:
+                        _walk_block(child)
+        elif t == "tabs":
+            for tab in blk.get("tabs") or []:
+                for child in (tab or {}).get("blocks") or []:
+                    _walk_block(child)
+        elif t == "accordion":
+            for item in blk.get("items") or []:
+                for child in (item or {}).get("blocks") or []:
+                    _walk_block(child)
+
+    def _walk_section(sec: dict[str, Any]) -> None:
+        _check(sec.get("id"))
+        for blk in sec.get("blocks") or []:
+            _walk_block(blk)
+        for sub in sec.get("subsections") or []:
+            if isinstance(sub, dict):
+                _walk_section(sub)
 
     for sec in content.get("sections") or []:
         if isinstance(sec, dict):

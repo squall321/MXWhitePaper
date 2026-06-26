@@ -412,7 +412,7 @@
 | `create_document()` | [[src/app/services/document_service.py#create_document]] | POST `/` 의 본체 |
 | `replace_document()` | [[src/app/services/document_service.py#replace_document]] | PUT `/{slug}` — 새 버전 INSERT |
 | `archive_document()` | [[src/app/services/document_service.py#archive_document]] | soft-delete |
-| `validate_documentjson()` | [[src/app/services/document_service.py#validate_documentjson]] | 스키마 + 정규화 (renumber, columns widths) |
+| `validate_documentjson()` | [[src/app/services/document_service.py#validate_documentjson]] | 스키마 + 정규화 (renumber, columns widths) + **전역 unique-id 검사** ([[#gotchas]] 16) |
 | `make_etag()` / `parse_if_match()` | [[src/app/services/document_service.py#make_etag]] | ETag 발급/검증 |
 | `scrub_for_response()` | [[src/app/services/document_service.py#scrub_for_response]] | 응답 직전 role-기반 redaction |
 | `patch_section()`, `patch_block()`, … | [[src/app/services/document_service.py#patch_section]] 부근 | 부분 수정 패밀리 |
@@ -672,6 +672,16 @@ materialized view refresh 도 스킵 가능.
     방지). 또한 tagged union serializer 는 `getattr(value, 'type')` 로 tag 를
     읽으므로 RootModel wrapper variant 인 IframeBlock 에는 `type` property 를
     주입한다 — 없으면 dump 마다 PydanticSerializationUnexpectedValue 경고.
+
+16. **block id / section id 는 문서 전역에서 유일해야 한다** —
+    [[src/app/services/document_service.py#_assert_unique_ids]] 가
+    `validate_documentjson` 끝에서 모든 section id + block id (columns/tabs/accordion
+    중첩 child 포함) 를 한 namespace 로 모아 중복을 422 로 거부한다. write 경로
+    (create/replace/`_persist_content_change` → insert/patch/move/delete_block) 전용
+    이라 read (scrub_for_response) 는 영향 없음. 막지 않으면 중복 id 블록이 조용히
+    저장되고 get/update/delete_block 이 first-match 만 처리해 둘째 노드가 도달 불가
+    orphan 이 된다 (adversarial-verify 에서 발견된 HIGH 결함). 따라서 이미 손상된
+    legacy 문서는 *다음 편집 시* 이 검사에 걸려 거부될 수 있다 — 의도된 노출.
 
 ## Settings (`app.core.config`)
 
