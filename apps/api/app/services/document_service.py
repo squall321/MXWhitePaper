@@ -1145,7 +1145,17 @@ async def replace_document(
         title=validated["title"],
         summary=validated.get("summary"),
         content_json=validated,
+        expected_version=existing["version"],
     )
+    if new_version is None:
+        # if_match 검증과 UPDATE 사이에 다른 PUT 이 먼저 커밋함 — lost-update 차단.
+        raise PreconditionFailed(
+            "ETag mismatch — refresh and retry",
+            details={
+                "expected": make_etag(existing["id"], existing["version"]),
+                "got": if_match,
+            },
+        )
     # part_id 변경 반영 (replace 의미상 매번 재할당)
     await s.execute(
         text("UPDATE documents SET part_id = :p WHERE id = :id"),
@@ -1385,7 +1395,14 @@ async def _persist_content_change(
         title=validated["title"],
         summary=validated.get("summary"),
         content_json=validated,
+        expected_version=existing["version"],
     )
+    if new_version is None:
+        # _check_etag 이후 다른 요청이 먼저 커밋함 — 동시성 lost-update 차단.
+        raise PreconditionFailed(
+            "문서가 그 사이 변경되었습니다 — 최신 상태를 다시 읽고 재시도하세요.",
+            details={"expected": make_etag(existing["id"], existing["version"])},
+        )
     await document_repo.insert_version(
         s,
         doc_id=existing["id"],

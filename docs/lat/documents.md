@@ -38,6 +38,12 @@
 `W/"<doc_id>-<version>"`. 클라이언트가 stale ETag 를 보내면 **412**
 (PreconditionFailed — mcp write tools 는 이를 "outline 다시 읽고 재시도" 안내로 변환).
 
+★ if_match 검증과 DB UPDATE 사이의 TOCTOU 경쟁은
+[[src/app/repos/document_repo.py#update_document]] 의 **version-CAS**
+(`WHERE id=:id AND version=:expected`) 가 원자적으로 막는다 — 동시 PUT /
+insert_block 이 둘 다 체크를 통과해도 영향행 0 인 쪽은 None → 412 로 거부되어
+lost-update 가 발생하지 않는다 ([[#gotchas]] 17, adversarial-verify).
+
 ## DocumentJSON v1.0 schema
 
 [[src/app/schemas/document.py]] 에 pydantic 모델 정의. 필수 키:
@@ -682,6 +688,16 @@ materialized view refresh 도 스킵 가능.
     저장되고 get/update/delete_block 이 first-match 만 처리해 둘째 노드가 도달 불가
     orphan 이 된다 (adversarial-verify 에서 발견된 HIGH 결함). 따라서 이미 손상된
     legacy 문서는 *다음 편집 시* 이 검사에 걸려 거부될 수 있다 — 의도된 노출.
+
+17. **낙관적 잠금은 version-CAS 로 원자화돼 있다** —
+    [[src/app/repos/document_repo.py#update_document]] 에 `expected_version` 인자가
+    있고, 주어지면 `WHERE id=:id AND version=:expected` 로만 UPDATE 한다. 영향행 0
+    (그 사이 다른 트랜잭션이 version 을 올림) 이면 None 을 반환하고
+    `replace_document` / `_persist_content_change` 가 412 로 변환한다. if_match
+    검증과 UPDATE 사이의 TOCTOU 윈도우를 닫아, 동시 PUT / insert_block 이 둘 다
+    체크를 통과해도 한쪽만 성공한다 (예전엔 last-writer-wins 로 조용히 lost-update +
+    insert_block 이 LLM 에 거짓 성공 — adversarial-verify). `expected_version=None`
+    호출은 CAS 없이 기존대로 동작 (하위호환).
 
 ## Settings (`app.core.config`)
 

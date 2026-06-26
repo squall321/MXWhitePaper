@@ -347,26 +347,43 @@ async def update_document(
     title: str,
     summary: str | None,
     content_json: dict[str, Any],
-) -> int:
-    """version 을 +1 하여 UPDATE. 새 version 반환."""
+    expected_version: int | None = None,
+) -> int | None:
+    """version 을 +1 하여 UPDATE. 새 version 반환.
+
+    expected_version 가 주어지면 optimistic-lock CAS — `WHERE version = expected`
+    로만 갱신하고, 그 사이 다른 트랜잭션이 version 을 올렸으면(영향행 0) None 을
+    반환한다 (호출자가 412 로 변환). 호출자의 _check_etag 와 이 UPDATE 사이의
+    TOCTOU 경쟁을 원자적으로 닫는다 — 안 막으면 동시 PUT/insert_block 이
+    last-writer-wins lost-update 를 일으킨다 (adversarial-verify). PostgreSQL 은
+    READ COMMITTED 에서도 UPDATE 의 WHERE 를 최신 커밋 버전으로 재평가하므로
+    CAS 가 정확히 동작한다.
+    """
+    where = "id = :id"
+    params: dict[str, Any] = {
+        "id": doc_id,
+        "title": title,
+        "summary": summary,
+        "body": json.dumps(content_json, ensure_ascii=False),
+    }
+    if expected_version is not None:
+        where += " AND version = :expected"
+        params["expected"] = expected_version
     row = (await s.execute(
-        text("""
+        text(f"""
             UPDATE documents
             SET title = :title,
                 summary = :summary,
                 content_json = CAST(:body AS JSONB),
                 version = version + 1,
                 updated_at = NOW()
-            WHERE id = :id
+            WHERE {where}
             RETURNING version
         """),
-        {
-            "id": doc_id,
-            "title": title,
-            "summary": summary,
-            "body": json.dumps(content_json, ensure_ascii=False),
-        },
+        params,
     )).first()
+    if expected_version is not None and row is None:
+        return None  # 동시 변경으로 CAS 실패 — 호출자가 412
     assert row is not None
     return int(row[0])
 
