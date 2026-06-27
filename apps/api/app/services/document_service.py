@@ -390,6 +390,7 @@ def validate_documentjson(payload: dict[str, Any]) -> dict[str, Any]:
     _normalise_columns_widths(dumped)
     _normalise_table_cells(dumped)
     _assert_unique_ids(dumped)
+    _assert_renderable_shapes(dumped)
     return dumped
 
 
@@ -550,6 +551,87 @@ def _assert_unique_ids(content: dict[str, Any]) -> None:
         _check(sec.get("id"))
         for blk in sec.get("blocks") or []:
             _walk_block(blk)
+        for sub in sec.get("subsections") or []:
+            if isinstance(sub, dict):
+                _walk_section(sub)
+
+    for sec in content.get("sections") or []:
+        if isinstance(sec, dict):
+            _walk_section(sec)
+
+
+def _assert_renderable_shapes(content: dict[str, Any]) -> None:
+    """렌더 불가능한 구조를 write 경로에서 거부 — adversarial-verify 의 구조검증 부재.
+
+    - TableBlock(flat headers/rows): 행의 셀 수가 headers 수를 초과하면 거부.
+      초과 셀은 헤더(열)가 없어 misalign/유실된다. 짧은 행은 허용(trailing 빈칸).
+    - ChartBlock: ``source``(런타임 hydration)가 없고 xy-line(points 사용)/
+      boxplot(분포) 이 아닌 차트는 (a) labels·series 가 모두 비면 거부(그릴 게 없음),
+      (b) 어떤 series.values 길이가 labels 길이와 다르면 거부(스키마 계약 = 동일 길이).
+
+    dangling boundSlicers / source.dataSourceId 는 viewer 가 의도적으로 silent
+    no-op 하도록 설계돼 있어(lat documents/chart) 검증 대상이 아니다.
+    """
+    _SKIP_CHART = {"xy-line", "boxplot"}
+
+    def _check_block(blk: Any) -> None:
+        if not isinstance(blk, dict):
+            return
+        t = blk.get("type")
+        if t == "table":
+            headers = blk.get("headers")
+            rows = blk.get("rows")
+            if isinstance(headers, list) and isinstance(rows, list):
+                hn = len(headers)
+                for i, row in enumerate(rows):
+                    if isinstance(row, list) and len(row) > hn:
+                        raise ValidationFailed(
+                            "table row has more cells than headers",
+                            details={"row_index": i, "headers": hn, "row_len": len(row)},
+                        )
+        elif t == "chart":
+            if blk.get("source") is not None:
+                return  # 런타임 hydration — data 가 비어 있어도 정상
+            if blk.get("chartType") in _SKIP_CHART:
+                return
+            data = blk.get("data") or {}
+            labels = data.get("labels") or []
+            series = data.get("series") or []
+            if not labels and not series:
+                raise ValidationFailed(
+                    "chart has no labels and no series — nothing to render",
+                    details={"chartType": blk.get("chartType")},
+                )
+            n = len(labels)
+            for s in series:
+                if isinstance(s, dict) and isinstance(s.get("values"), list):
+                    if len(s["values"]) != n:
+                        raise ValidationFailed(
+                            "chart series.values length must match labels length",
+                            details={
+                                "series": s.get("name"),
+                                "labels": n,
+                                "values": len(s["values"]),
+                            },
+                        )
+        # 컨테이너 재귀
+        if t == "columns":
+            for col in blk.get("columns") or []:
+                if isinstance(col, list):
+                    for child in col:
+                        _check_block(child)
+        elif t == "tabs":
+            for tab in blk.get("tabs") or []:
+                for child in (tab or {}).get("blocks") or []:
+                    _check_block(child)
+        elif t == "accordion":
+            for item in blk.get("items") or []:
+                for child in (item or {}).get("blocks") or []:
+                    _check_block(child)
+
+    def _walk_section(sec: dict[str, Any]) -> None:
+        for blk in sec.get("blocks") or []:
+            _check_block(blk)
         for sub in sec.get("subsections") or []:
             if isinstance(sub, dict):
                 _walk_section(sub)

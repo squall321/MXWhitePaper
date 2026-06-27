@@ -699,6 +699,15 @@ materialized view refresh 도 스킵 가능.
     insert_block 이 LLM 에 거짓 성공 — adversarial-verify). `expected_version=None`
     호출은 CAS 없이 기존대로 동작 (하위호환).
 
+18. **렌더 불가능한 구조는 거부된다** —
+    [[src/app/services/document_service.py#_assert_renderable_shapes]] 가
+    `validate_documentjson` 끝(write 전용)에서: ① TableBlock flat 의 행 셀 수가
+    headers 수 초과 시 거부(짧은 행은 허용), ② ChartBlock 이 `source` 없고
+    xy-line/boxplot 가 아닐 때 labels·series 가 모두 비거나 series.values 길이가
+    labels 와 다르면 거부(스키마 계약 = 동일 길이). **dangling boundSlicers /
+    source.dataSourceId 는 viewer 가 의도적으로 silent no-op** 하므로(설계) 검증
+    대상이 *아니다* — 거부하면 문서화된 동작을 깨뜨린다 (adversarial-verify).
+
 ## Settings (`app.core.config`)
 
 | 키 | 기본 | 의미 |
