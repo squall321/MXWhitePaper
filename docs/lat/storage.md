@@ -204,3 +204,5 @@ presigned 흐름 (init → presigned PUT → finalize) 을 그대로 호출한�
 | [[src/tests/test_uploads.py]] | init/finalize 2-step 흐름 |
 | [[src/tests/test_files.py]] | 일반 파일 |
 | [[src/tests/test_imports.py]] | docx 안 이미지 → MinIO pre-pass |
+| [[apps/api/tests/test_image_validation.py]] | 비-이미지 바이트 → 422 (base64/from-url, gotcha 8) |
+| [[apps/api/tests/test_ssrf_redirect.py]] | from-url redirect → 내부주소 per-hop 차단 (SSRF) |
