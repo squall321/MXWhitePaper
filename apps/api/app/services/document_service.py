@@ -391,6 +391,7 @@ def validate_documentjson(payload: dict[str, Any]) -> dict[str, Any]:
     _normalise_table_cells(dumped)
     _assert_unique_ids(dumped)
     _assert_renderable_shapes(dumped)
+    _assert_nesting_depth(dumped)
     return dumped
 
 
@@ -632,6 +633,51 @@ def _assert_renderable_shapes(content: dict[str, Any]) -> None:
     def _walk_section(sec: dict[str, Any]) -> None:
         for blk in sec.get("blocks") or []:
             _check_block(blk)
+        for sub in sec.get("subsections") or []:
+            if isinstance(sub, dict):
+                _walk_section(sub)
+
+    for sec in content.get("sections") or []:
+        if isinstance(sec, dict):
+            _walk_section(sec)
+
+
+# 컨테이너(columns/tabs/accordion) 중첩 깊이 캡. 실문서는 3~4단을 넘지 않는다.
+# 비상식적 깊이는 FE 렌더 부담 + MCP 의 JSON-RPC 봉투 파서(pydantic-core Rust
+# JSON 파서) 재귀 한도(~50, sys.setrecursionlimit 무관)를 건드린다 — 캡으로 그
+# 전에 깔끔한 422 를 보장한다 (adversarial-verify 의 deep-nesting silent-fail).
+_MAX_BLOCK_NEST_DEPTH = 32
+
+
+def _assert_nesting_depth(content: dict[str, Any]) -> None:
+    """컨테이너 중첩이 _MAX_BLOCK_NEST_DEPTH 를 넘으면 거부 (write 전용)."""
+
+    def _depth(blk: Any, depth: int) -> None:
+        if not isinstance(blk, dict):
+            return
+        if depth > _MAX_BLOCK_NEST_DEPTH:
+            raise ValidationFailed(
+                f"block nesting too deep (max={_MAX_BLOCK_NEST_DEPTH})",
+                details={"depth": depth},
+            )
+        t = blk.get("type")
+        if t == "columns":
+            for col in blk.get("columns") or []:
+                if isinstance(col, list):
+                    for child in col:
+                        _depth(child, depth + 1)
+        elif t == "tabs":
+            for tab in blk.get("tabs") or []:
+                for child in (tab or {}).get("blocks") or []:
+                    _depth(child, depth + 1)
+        elif t == "accordion":
+            for item in blk.get("items") or []:
+                for child in (item or {}).get("blocks") or []:
+                    _depth(child, depth + 1)
+
+    def _walk_section(sec: dict[str, Any]) -> None:
+        for blk in sec.get("blocks") or []:
+            _depth(blk, 1)
         for sub in sec.get("subsections") or []:
             if isinstance(sub, dict):
                 _walk_section(sub)

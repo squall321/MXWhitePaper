@@ -716,6 +716,15 @@ materialized view refresh 도 스킵 가능.
 | `max_sections_per_document` | 500 | 섹션 수 캡 |
 | `archive_default_days` | 90 | soft-delete TTL 안내값 |
 
+컨테이너(columns/tabs/accordion) 중첩 깊이는
+[[src/app/services/document_service.py#_assert_nesting_depth]] 가 `32` 로 캡한다
+(모듈 상수 `_MAX_BLOCK_NEST_DEPTH`, write 전용). 비상식적 깊이는 FE 렌더 부담 +
+MCP 의 JSON-RPC 봉투 파서(pydantic-core Rust JSON 파서) 재귀 한도(~50,
+`sys.setrecursionlimit` 무관)를 건드려 *조용히 실패*하던 것을, 캡 전에 깔끔한
+422 로 거부한다 (adversarial-verify). ★ 캡(32)을 넘되 SDK 가 전달 가능한 깊이는
+MCP 경유로도 깔끔한 422; SDK 가 파싱조차 못 하는 ~50+ 절대-비상식 깊이는
+서드파티(pydantic-core) 한계라 여전히 silent — 실문서는 절대 도달 안 함.
+
 ## 테스트 지도
 
 | 파일 | 무엇 |

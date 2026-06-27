@@ -84,3 +84,21 @@ def test_short_table_row_passes() -> None:
     blk = {"type": "table", "id": _u(), "headers": ["A", "B", "C"],
            "rows": [["1"], ["1", "2"]]}
     validate_documentjson(_doc([blk]))
+
+
+# ── 컨테이너 중첩 깊이 캡 ──
+def _nest(depth: int) -> dict:
+    node: dict = {"type": "paragraph", "id": _u(), "text": "x"}
+    for _ in range(depth):
+        node = {"type": "accordion", "id": _u(),
+                "items": [{"label": "t", "blocks": [node]}]}
+    return node
+
+
+def test_reasonable_nesting_passes() -> None:
+    validate_documentjson(_doc([_nest(5)]))
+
+
+def test_excessive_nesting_rejected() -> None:
+    with pytest.raises(ValidationFailed):
+        validate_documentjson(_doc([_nest(40)]))
