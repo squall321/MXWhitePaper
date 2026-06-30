@@ -42,12 +42,13 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
         "confidence": row[5],
         "created_by": str(row[6]) if row[6] else None,
         "created_at": row[7].isoformat() if row[7] else None,
+        "inverse_predicate": row[8],
     }
 
 
 _SELECT_COLS = (
     "id, subject_slug, predicate, object_slug, source, confidence, "
-    "created_by, created_at"
+    "created_by, created_at, inverse_predicate"
 )
 
 
@@ -94,6 +95,8 @@ class TripleCreate(BaseModel):
     object_slug: str = Field(min_length=1, max_length=100)
     source: str = Field(default="manual")
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    # 역방향 자연어 설명 (object 쪽에서 읽는 관계). 미지정 시 표시 측이 fallback.
+    inverse_predicate: str | None = Field(default=None, max_length=_PREDICATE_MAX)
 
 
 @router.post("")
@@ -114,10 +117,10 @@ async def create_triple(
             text(f"""
                 INSERT INTO doc_triples
                     (id, subject_slug, predicate, object_slug, source,
-                     confidence, created_by)
+                     confidence, created_by, inverse_predicate)
                 VALUES
                     (:id, :subject, :predicate, :object, :source,
-                     :confidence, :created_by)
+                     :confidence, :created_by, :inverse)
                 RETURNING {_SELECT_COLS}
             """),
             {
@@ -128,6 +131,7 @@ async def create_triple(
                 "source": body.source,
                 "confidence": body.confidence,
                 "created_by": created_by,
+                "inverse": body.inverse_predicate,
             },
         )).first()
         await s.commit()
@@ -189,10 +193,10 @@ async def _replace_llm_triples(
                 text("""
                     INSERT INTO doc_triples
                         (id, subject_slug, predicate, object_slug, source,
-                         confidence, created_by)
+                         confidence, created_by, inverse_predicate)
                     VALUES
                         (:id, :subj, :predicate, :object, 'llm',
-                         :confidence, NULL)
+                         :confidence, NULL, :inverse)
                 """),
                 {
                     "id": str(ulid.new()),
@@ -200,6 +204,7 @@ async def _replace_llm_triples(
                     "predicate": t.predicate,
                     "object": t.object_slug,
                     "confidence": t.confidence,
+                    "inverse": getattr(t, "inverse_predicate", None),
                 },
             )
             stored += 1
@@ -229,7 +234,8 @@ async def extract_triple(
         "subject_slug": body.subject_slug,
         "extracted": [
             {"predicate": t.predicate, "object_slug": t.object_slug,
-             "confidence": t.confidence}
+             "confidence": t.confidence,
+             "inverse_predicate": t.inverse_predicate}
             for t in extracted
         ],
         "stored": stored,

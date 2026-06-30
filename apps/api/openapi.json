@@ -3292,6 +3292,18 @@
             ],
             "title": "Confidence"
           },
+          "inverse_predicate": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inverse Predicate"
+          },
           "object_slug": {
             "maxLength": 100,
             "minLength": 1,

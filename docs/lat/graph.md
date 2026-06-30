@@ -86,7 +86,8 @@ links_graph 와 달리 `content_json` 을 매 요청 walk 하므로 새로 추�
 | --- | --- |
 | `id` | ULID (TEXT PK) |
 | `subject_slug` / `object_slug` | doc.slug. **FK 강제 안 함** — 문서 삭제 시 orphan 으로 남김 |
-| `predicate` | 자연어 술어, max 200자 |
+| `predicate` | 자연어 술어 (subject→object), max 200자 |
+| `inverse_predicate` | 역방향 자연어 술어 (object→subject), nullable. manual 은 선택 입력, llm 은 추출 시 함께 생성, 없으면 표시 측 fallback (0049_triple_inverse_predicate) |
 | `source` | `'llm'` 또는 `'manual'` (CHECK) |
 | `confidence` | LLM 만 사용 (0~1), manual 은 NULL |
 | `created_by` | manual 만 보관, llm 은 NULL |
@@ -111,7 +112,9 @@ links_graph 와 달리 `content_json` 을 매 요청 walk 하므로 새로 추�
 - [[src/app/routers/triples.py#extract_triple]] / `#extract_bulk`
 - [[src/app/routers/triples.py#_replace_llm_triples]] — extract 의 idempotent 교체 로직
 - [[src/app/services/triple_extractor.py#TripleExtractor]] — LLM 추출기.
-  `extract_for_doc(slug)` → `list[ExtractedTriple{predicate, object_slug, confidence}]`
+  `extract_for_doc(slug)` → `list[ExtractedTriple{predicate, object_slug, confidence,
+  inverse_predicate}]`. mock 은 `inverse='와_관련있다'`, LLM 프롬프트는 predicate +
+  inverse_predicate 양방향을 함께 요청 (예: '인용한다' ↔ '에 인용된다').
 
 ### LLM provider
 

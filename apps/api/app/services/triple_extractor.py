@@ -35,10 +35,15 @@ _LLM_TIMEOUT_SECONDS = 8.0
 
 @dataclass
 class ExtractedTriple:
-    """LLM 이 뽑은 단일 triple. subject 는 호출 측이 이미 알고 있으므로 제외."""
+    """LLM 이 뽑은 단일 triple. subject 는 호출 측이 이미 알고 있으므로 제외.
+
+    inverse_predicate 는 object 쪽에서 읽는 역방향 자연어 설명 (없으면 None →
+    표시 측 fallback).
+    """
     predicate: str
     object_slug: str
     confidence: float
+    inverse_predicate: str | None = None
 
 
 class TripleExtractor:
@@ -80,6 +85,7 @@ class TripleExtractor:
                 predicate=f"는_{obj}_와_관련있다",
                 object_slug=obj,
                 confidence=0.7,
+                inverse_predicate="와_관련있다",
             ))
         return out
 
@@ -145,8 +151,12 @@ class TripleExtractor:
             "(목록 밖 slug 는 무시된다).\n"
             f"후보 목록: {cand_list}\n\n"
             "결과는 JSON 배열로만 응답하라. 각 원소는 다음 형식:\n"
-            '{"predicate": "관계 술어 (한국어)", "object_slug": "후보 중 하나", '
+            '{"predicate": "관계 술어 (subject→object, 한국어)", '
+            '"inverse_predicate": "역방향 술어 (object→subject, 한국어)", '
+            '"object_slug": "후보 중 하나", '
             '"confidence": 0.0~1.0 의 신뢰도}\n\n'
+            "예: subject 가 object 를 인용하면 predicate='인용한다', "
+            "inverse_predicate='에 인용된다'.\n\n"
             f"본문:\n{body_text}\n"
         )
 
@@ -179,10 +189,13 @@ class TripleExtractor:
                 continue
             if conf_f < self._min_confidence:
                 continue
+            inv = item.get("inverse_predicate")
+            inv = inv.strip()[:200] if isinstance(inv, str) and inv.strip() else None
             out.append(ExtractedTriple(
                 predicate=predicate.strip()[:200],
                 object_slug=obj,
                 confidence=conf_f,
+                inverse_predicate=inv,
             ))
         return out
 
