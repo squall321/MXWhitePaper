@@ -157,7 +157,9 @@ triple 은 런타임 제외.
 
 | 파일 | 책임 |
 | --- | --- |
-| [[src/features/graph/triplesApi.ts]] | triples API 클라이언트 — `fetchTriples` / `createTriple` / `deleteTriple` / `extractBulk` |
+| [[src/features/graph/triplesApi.ts]] | triples API 클라이언트 — `fetchTriples` / `createTriple` / `deleteTriple` / `extractBulk`. `Triple`/`TripleCreate` 에 `inverse_predicate` |
+| [[src/features/graph/useRelationships.ts]] | 문서의 양방향 관계 훅 — `subject=`(나가는)/`object=`(들어오는) 병렬 fetch, best-effort degrade |
+| [[src/components/Relationships.tsx]] | 우측 레일 "관계" 패널 — 나가는=predicate / 들어오는=inverse_predicate(없으면 '의 관련 문서' fallback), llm 관계 ✨ 배지, 관계 없으면 숨김. [[src/components/layout/RightRail.tsx]] 의 Backlinks 아래 |
 | [[src/features/graph/components/KnowledgeGraph.tsx]] | `kind="triple"` 엣지를 predicate 라벨 + 출처별 스타일로 렌더 (`renderEdgeLabels`) |
 | [[src/pages/Graph.tsx]] | "🔗 triple" 표시 토글, 우클릭 "엣지 추가" dialog → `createTriple` |
 | [[src/pages/AdminDashboard.tsx]] | triple 탭 — `extractBulk` 일괄 추출 버튼 |
