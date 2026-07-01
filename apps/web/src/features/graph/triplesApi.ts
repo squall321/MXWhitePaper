@@ -17,6 +17,8 @@ export interface Triple {
   confidence: number | null
   created_by: string | null
   created_at: string | null
+  /** object 쪽에서 읽는 역방향 자연어 설명 (없으면 null → 표시 측 fallback). */
+  inverse_predicate: string | null
 }
 
 export interface TripleCreate {
@@ -26,6 +28,8 @@ export interface TripleCreate {
   /** 기본 'manual'. */
   source?: 'llm' | 'manual'
   confidence?: number | null
+  /** 역방향 자연어 설명 (선택). */
+  inverse_predicate?: string | null
 }
 
 export interface TripleListParams {

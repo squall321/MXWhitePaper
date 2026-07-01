@@ -4,6 +4,7 @@ import type { DocumentJSONV10, GlossaryItem } from '@/types/document'
 import { TableOfContents } from '../TableOfContents'
 import { RelatedDocs } from '../RelatedDocs'
 import { Backlinks } from '../Backlinks'
+import { Relationships } from '../Relationships'
 import { RailBoundary } from '../blocks/BlockBoundary'
 import { CommentsThread } from '@/features/comments/components/CommentsThread'
 import { useComments } from '@/features/comments/hooks/useComments'
@@ -100,6 +101,9 @@ export function RightRail({ document }: RightRailProps) {
                 </Link>
               </div>
             </div>
+          </RailBoundary>
+          <RailBoundary name="관계">
+            <Relationships slug={document.slug} />
           </RailBoundary>
           {glossary.length > 0 && (
             <RailBoundary name="용어집">
