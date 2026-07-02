@@ -10,22 +10,33 @@ export interface DocRelationships {
   incoming: Triple[]
 }
 
+/** fetchTriples 시그니처 — 테스트에서 주입 가능하게 최소 타입만. */
+type FetchTriplesFn = (p: { subject?: string; object?: string }) => Promise<Triple[]>
+
 /**
- * 문서의 양방향 관계를 한 번에 가져온다. BE 의 `/triples?subject=` (나가는) 와
- * `/triples?object=` (들어오는) 를 병렬 호출해 합친다. best-effort — 실패 시
- * 빈 목록으로 degrade (관계 패널이 문서 보기를 막지 않게).
+ * subject=(나가는)/object=(들어오는) 를 병렬 조회해 합친다. 한쪽 fetch 가
+ * 실패해도 다른 방향은 살리는 best-effort degrade (관계 패널이 문서 보기를
+ * 막지 않게). 순수 async — 훅과 분리해 방향분리/degrade 를 직접 테스트한다.
+ */
+export async function loadRelationships(
+  slug: string,
+  fetch: FetchTriplesFn = fetchTriples,
+): Promise<DocRelationships> {
+  const [outgoing, incoming] = await Promise.all([
+    fetch({ subject: slug }).catch(() => [] as Triple[]),
+    fetch({ object: slug }).catch(() => [] as Triple[]),
+  ])
+  return { outgoing, incoming }
+}
+
+/**
+ * 문서의 양방향 관계를 한 번에 가져오는 query 훅. 데이터 로딩은
+ * {@link loadRelationships} 에 위임.
  */
 export function useRelationships(slug: Slug | undefined) {
   return useQuery<DocRelationships>({
     queryKey: ['relationships', slug],
     enabled: !!slug,
-    queryFn: async () => {
-      if (!slug) return { outgoing: [], incoming: [] }
-      const [outgoing, incoming] = await Promise.all([
-        fetchTriples({ subject: slug }).catch(() => [] as Triple[]),
-        fetchTriples({ object: slug }).catch(() => [] as Triple[]),
-      ])
-      return { outgoing, incoming }
-    },
+    queryFn: () => loadRelationships(slug as string),
   })
 }
