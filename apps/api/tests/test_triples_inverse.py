@@ -86,6 +86,25 @@ async def test_manual_inverse_optional_defaults_null() -> None:
 
 
 @pytest.mark.asyncio
+async def test_blank_inverse_normalized_to_null() -> None:
+    # 공백-only/빈 문자열 inverse 는 NULL 로 정규화되어야 (표시 측 fallback).
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        editor = await _ensure_user("editor-triples@mx.local", "editor")
+        h = {"Authorization": f"Bearer {editor}"}
+        for i, blank in enumerate(("", "   ", "\t\n")):
+            subj = f"trip-blank-{uuid.uuid4().hex[:8]}-{i}"
+            try:
+                r = await ac.post("/api/v1/triples", headers=h, json={
+                    "subject_slug": subj, "predicate": "p", "object_slug": "o",
+                    "source": "manual", "inverse_predicate": blank,
+                })
+                assert r.status_code == 200, r.text
+                assert r.json()["data"]["inverse_predicate"] is None, f"blank={blank!r}"
+            finally:
+                await _delete_triples_by_subject(subj)
+
+
+@pytest.mark.asyncio
 async def test_mock_extract_generates_inverse() -> None:
     from app.services.triple_extractor import TripleExtractor
 

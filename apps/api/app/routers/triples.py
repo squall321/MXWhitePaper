@@ -16,7 +16,7 @@ from typing import Any
 
 import ulid
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,6 +97,16 @@ class TripleCreate(BaseModel):
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     # 역방향 자연어 설명 (object 쪽에서 읽는 관계). 미지정 시 표시 측이 fallback.
     inverse_predicate: str | None = Field(default=None, max_length=_PREDICATE_MAX)
+
+    @field_validator("inverse_predicate")
+    @classmethod
+    def _blank_inverse_to_none(cls, v: str | None) -> str | None:
+        # 공백-only/빈 문자열은 의미 없는 값 — NULL 로 정규화해 표시 측 fallback 을
+        # 타게 한다 (DB 에 '   ' 같은 값이 남지 않게).
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
 
 
 @router.post("")
