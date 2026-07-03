@@ -234,4 +234,25 @@ color?, yAxisIndex?}]` *셋 다* 지정하면 viewer 가 rows 를 그룹·집계
 - 룰 lookup: `mxwp-rules query "<질문>"`.
 - 정확한 chart/annotation 등은 DocumentJSON 직접 POST 가 더 안전 — `docs/llm-widgets-via-api.md`.
 
+---
+
+## 7. 의미 관계 (MCP relationship 도구)
+
+문서 사이에는 단순 하이퍼링크(`[[slug]]`)를 넘어 **typed 의미 엣지**를 걸 수
+있다 — "왜 연결됐는지"(predicate)가 붙은 양방향 관계. MCP 도구로 읽고 쓴다.
+
+- **`get_relationships(slug)`** — 문서를 이해할 때 `get_document_outline`(본문
+  구조)과 **함께** 호출하라. 나가는 관계(이 문서 → 상대, predicate)와 들어오는
+  관계(상대 → 이 문서, inverse_predicate)를 문장으로 돌려준다. 백서를 요약/
+  설명하기 전에 읽으면 "이 문서가 무엇의 전제인지, 무엇에 인용되는지"를 안다.
+- **`create_relationship(subject_slug, predicate, object_slug, inverse_predicate?)`**
+  — 관계를 저술한다. `predicate` 는 subject→object 방향(예: '전제로 한다'),
+  `inverse_predicate` 는 object→subject 역방향(예: '의 전제가 된다'). **둘 다
+  주라** — 그래야 관계가 양쪽 문서에서 자연어로 읽힌다.
+- **`extract_relationships(slug)`** — 본문에서 관계를 자동 추출(LLM/mock). 기존
+  자동관계만 교체하고 사람이 만든 관계는 보존.
+- **`delete_relationship(triple_id)`** — id 는 `get_relationships` 결과에 있다.
+
+관계는 문서 본문(DocumentJSON)과 별개 저장이라 ETag 무관이고 즉시 반영된다.
+
 위 룰을 어기면 위젯 손실이다. 응답 전 5장 체크리스트로 *반드시* 자기-검증하라.

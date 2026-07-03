@@ -91,6 +91,10 @@ def test_registers_tools_resource_template_and_prompt(server_mod) -> None:
         "upload_image_base64",
         "extract_pptx_images",
         "insert_image_block",
+        "get_relationships",
+        "create_relationship",
+        "delete_relationship",
+        "extract_relationships",
     ]
     assert len(templates) == 1
     assert templates[0].uriTemplate == "rag://chunks/{chunk_id}"

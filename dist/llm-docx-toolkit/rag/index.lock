@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-18T07:42:14.202491+00:00",
+  "generated_at": "2026-07-03T08:56:07.699977+00:00",
   "source_hashes": {
     "packages/shared/schemas/document.json": "f0f49355cd0997075a2d6b268e2c8d254d5d40d3e10abbf84b6528a364f5d582",
     "apps/api/app/services/widget_markers.py": "29b9da045c859288c6bcb1195176ee9ebb9b50c2c5376c419d5c293632a5658e",
     "apps/api/app/services/docx_import.py": "d94c9ff2c7460aad728531dd574675e35170e718ae69681f4434593daf63fc47",
     "docs/llm-input-rules.md": "e4b2d92f34c656e8a3020bad217e81fe557aab1229e1454124878e4066eac1d4",
     "docs/llm-viewer-guide.md": "bfd549f95dc44bb31496d7a98dd87b38f22a5e0c373307cf08191929aef89ee1",
-    "dist/llm-docx-toolkit/llm-system-prompt.md": "7fedca117ce66c85735b49e73e7be9f609fef5e4674a1e786111a72192d002b5",
+    "dist/llm-docx-toolkit/llm-system-prompt.md": "501d54990bb2d00924b41ecf7ee9c50e9afccdc79a53780553137210ba62b332",
     "dist/llm-docx-toolkit/rag/glossary.json": "3a65ad0072d7747f18b9a533bf1153f6f7c1c76d184603188777e732d06388f2",
     "docs/archive/2026-05/_INDEX.md": "cb303c81d16c64c0ba4f9a275b11cfa7a3b1fbef718fefb43b7bd27d4d863dd4",
     "docs/archive/2026-06/_INDEX.md": "ddb5f8e92d7372e009dd150401113f22f6f574b5f9b8a80efefd913c7772cf86"
@@ -32,7 +32,19 @@
     "video",
     "whiteboard"
   ],
-  "chunk_count": 295,
-  "embedding_backend_fingerprint": "bm25:v1",
-  "chunks_sha256": "3a5013d3e42df59742e10fd6de9fb7f2594d512ac9744c92a2f949713ceaf321"
+  "chunk_count": 297,
+  "embedding_backend_fingerprint": "chunks-only:v1",
+  "chunks_sha256": "6d95ece4195c1eea3de919ee50195226dada7dd8ba0d6030850a4d99c449ee67",
+  "sources": [
+    "archive",
+    "document.json",
+    "example:all",
+    "example:bad",
+    "example:good",
+    "glossary",
+    "llm-input-rules.md",
+    "llm-system-prompt.md",
+    "llm-viewer-guide.md",
+    "widget_markers.py"
+  ]
 }

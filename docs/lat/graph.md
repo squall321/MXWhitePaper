@@ -170,5 +170,23 @@ triple 은 런타임 제외.
   triple on/off 가능.
 - `/dep-graph` 는 BE endpoint 가 triple 미지원 → 토글이 disabled 로 노출만.
 
+## MCP — LLM 이 관계를 읽고 쓴다 (graph-triple-mcp)
+
+외부 LLM(Claude Desktop 등)이 mxwp-mcp 로 의미 관계를 다룬다. FE 패널의 LLM 판.
+
+| 도구 | 책임 |
+| --- | --- |
+| [[dist/llm-docx-toolkit/mcp/server.py#get_relationships]] | 문서의 양방향 관계 읽기 — outgoing(predicate)/incoming(inverse) + **LLM-legible sentence**(`me --[전제로 한다]--> b`, 역방향 포함) + id + summary. read (토큰 있으면 사용) |
+| [[dist/llm-docx-toolkit/mcp/server.py#create_relationship]] | 관계 저술 — subject/predicate/object + inverse_predicate. write(토큰), 409 는 관계-특화 메시지로 변환 |
+| [[dist/llm-docx-toolkit/mcp/server.py#delete_relationship]] | id 로 삭제. write |
+| [[dist/llm-docx-toolkit/mcp/server.py#extract_relationships]] | 서버 LLM/mock 추출 트리거 (`/triples/extract`). write |
+
+- API 래퍼: [[dist/llm-docx-toolkit/mcp/api_client.py]] 의 `list_triples` /
+  `create_triple` / `delete_triple` / `extract_triples` (ETag 무관 — 본문 아님).
+- LLM 지침: `llm-system-prompt.md` §7 (mxwp_system_prompt 프롬프트로 노출).
+- 테스트: [[dist/llm-docx-toolkit/mcp/tests/test_relationship_tools.py]] (6). ★ 도구
+  추가 시 **바이너리 재빌드**(`python build.py --target mcp`) 필요 — stdio 는 frozen,
+  HTTP transport 는 소스 즉시 반영.
+
 계획: [`docs/01-plan/features/graph-edge-predicates.plan.md`](../01-plan/features/graph-edge-predicates.plan.md) (1차 DB+API),
 [`docs/01-plan/features/graph-triple-fe.plan.md`](../01-plan/features/graph-triple-fe.plan.md) (2차 FE)

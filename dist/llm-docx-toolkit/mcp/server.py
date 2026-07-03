@@ -17,6 +17,12 @@ model only pays the bootstrap cost on the first query.
 Document tools (T1): read — `list_documents` / `get_document_outline` /
 `get_section` / `get_block`; write — `create_document` / `insert_block` /
 `update_block` / `delete_block` / `move_block`; local — `validate_block`.
+
+Relationship tools (semantic edges — graph-triple-mcp): read —
+`get_relationships` (문서의 양방향 typed 엣지 + LLM-legible 문장); write —
+`create_relationship` / `delete_relationship` / `extract_relationships`.
+단순 링크가 아니라 predicate/inverse_predicate 로 '왜 연결됐는지' 를 설명한다.
+
 Write tools require env `MXWP_API_TOKEN` (write scope) and talk to
 `MXWP_API_URL` (default http://127.0.0.1:8800). Blocks are validated
 locally against packages/shared/schemas/document.json *before* any HTTP
@@ -814,6 +820,127 @@ def build_server() -> FastMCP:
             slug, section_id, block, after_block_id or None, etag
         )
         return {"block_id": data.get("block_id") or block.get("id")}
+
+    # ── relationship (semantic edge) tools ──────────────────────────
+    # 단순 하이퍼링크가 아니라 문서 사이의 typed 의미 엣지. LLM 이 "이 문서가
+    # 무엇의 전제인지 / 무엇에 인용되는지" 를 읽고, 직접 관계를 저술한다.
+
+    @mcp.tool(
+        name="get_relationships",
+        description=(
+            "문서의 의미 관계(양방향 typed 엣지)를 읽는다. 단순 링크가 아니라 "
+            "'왜 연결됐는지'(predicate) 가 붙은 관계다. 문서를 깊이 이해할 때 "
+            "get_document_outline(본문 구조)과 함께 호출하면 문맥이 풍부해진다. → "
+            "{slug, outgoing:[{id,predicate,object,source,sentence}], "
+            "incoming:[{id,predicate,inverse,subject,source,sentence}], summary}"
+        ),
+    )
+    def get_relationships(slug: str) -> dict[str, Any]:
+        client = _make_client()
+        outgoing = [
+            {
+                "id": t.get("id"),
+                "predicate": t.get("predicate"),
+                "object": t.get("object_slug"),
+                "source": t.get("source"),
+                "sentence": f"{slug} --[{t.get('predicate')}]--> {t.get('object_slug')}",
+            }
+            for t in client.list_triples(subject=slug)
+        ]
+        incoming = []
+        for t in client.list_triples(object=slug):
+            subj = t.get("subject_slug")
+            inv = t.get("inverse_predicate")
+            sentence = f"{subj} --[{t.get('predicate')}]--> {slug}"
+            if inv:
+                sentence += f"  (역방향: {slug} {inv} {subj})"
+            incoming.append(
+                {
+                    "id": t.get("id"),
+                    "predicate": t.get("predicate"),
+                    "inverse": inv,
+                    "subject": subj,
+                    "source": t.get("source"),
+                    "sentence": sentence,
+                }
+            )
+        return {
+            "slug": slug,
+            "outgoing": outgoing,
+            "incoming": incoming,
+            "summary": f"나가는 관계 {len(outgoing)}개, 들어오는 관계 {len(incoming)}개",
+        }
+
+    @mcp.tool(
+        name="create_relationship",
+        description=(
+            "문서 사이에 의미 관계(typed 엣지)를 만든다: subject --predicate--> object. "
+            "inverse_predicate 는 object 쪽에서 읽는 역방향 설명(예: predicate='인용한다' "
+            "→ inverse_predicate='에 인용된다'). 양방향을 함께 주면 관계가 양쪽 문서에서 "
+            "자연어로 설명된다. slug 는 실재 문서여야 의미 있다(FK 강제는 안 함). → "
+            "{id, subject_slug, predicate, object_slug, inverse_predicate, source}"
+        ),
+    )
+    def create_relationship(
+        subject_slug: str,
+        predicate: str,
+        object_slug: str,
+        inverse_predicate: str = "",
+    ) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        try:
+            return client.create_triple(
+                subject_slug=subject_slug,
+                predicate=predicate,
+                object_slug=object_slug,
+                inverse_predicate=inverse_predicate or None,
+            )
+        except Exception as e:  # noqa: BLE001 — 409 를 관계-특화 메시지로 변환
+            if getattr(e, "status", 0) == 409:
+                raise RuntimeError(
+                    f"이미 같은 관계가 존재합니다: {subject_slug} '{predicate}' "
+                    f"{object_slug}. (inverse 만 바꾸려면 삭제 후 재생성)"
+                ) from e
+            raise
+
+    @mcp.tool(
+        name="delete_relationship",
+        description=(
+            "관계(triple) 1개를 삭제한다. triple_id 는 get_relationships 결과의 id. "
+            "본인이 만든 manual 관계 또는 admin 만 삭제 가능(서버가 강제). → {id, deleted}"
+        ),
+    )
+    def delete_relationship(triple_id: str) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        client.delete_triple(triple_id)
+        return {"id": triple_id, "deleted": True}
+
+    @mcp.tool(
+        name="extract_relationships",
+        description=(
+            "문서 본문에서 관계를 자동 추출해 저장한다(LLM provider 있으면 실추출, "
+            "없으면 mock). 기존 source='llm' 관계를 교체하고 사람이 만든 manual 관계는 "
+            "보존한다. → {stored, replaced, extracted:[{predicate, object, inverse}]}"
+        ),
+    )
+    def extract_relationships(slug: str) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        data = client.extract_triples(slug)
+        return {
+            "stored": data.get("stored"),
+            "replaced": data.get("replaced"),
+            "extracted": [
+                {
+                    "predicate": t.get("predicate"),
+                    "object": t.get("object_slug"),
+                    "inverse": t.get("inverse_predicate"),
+                }
+                for t in (data.get("extracted") or [])
+            ],
+        }
 
     return mcp
 

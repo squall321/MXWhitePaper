@@ -463,6 +463,62 @@ class MxwpClient:
         data, meta, headers = self._request("POST", path, body=body, if_match=etag)
         return data, self._etag(meta, headers)
 
+    # ── triples (semantic relationships) ────────────────────────────
+    # 문서 사이의 typed 의미 엣지 (subject --predicate--> object). ETag 무관
+    # (문서 본문이 아니라 별도 doc_triples 테이블). inverse_predicate 는 object
+    # 쪽에서 읽는 역방향 설명.
+
+    def list_triples(
+        self,
+        *,
+        subject: str | None = None,
+        object: str | None = None,
+        predicate: str | None = None,
+        source: str | None = None,
+    ) -> list[dict[str, Any]]:
+        data, _meta, _h = self._request(
+            "GET",
+            "/api/v1/triples",
+            query={
+                "subject": subject,
+                "object": object,
+                "predicate": predicate,
+                "source": source,
+            },
+        )
+        return data if isinstance(data, list) else []
+
+    def create_triple(
+        self,
+        *,
+        subject_slug: str,
+        predicate: str,
+        object_slug: str,
+        inverse_predicate: str | None = None,
+        source: str = "manual",
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "subject_slug": subject_slug,
+            "predicate": predicate,
+            "object_slug": object_slug,
+            "source": source,
+        }
+        if inverse_predicate:
+            body["inverse_predicate"] = inverse_predicate
+        data, _meta, _h = self._request("POST", "/api/v1/triples", body=body)
+        return data or {}
+
+    def delete_triple(self, triple_id: str) -> None:
+        self._request(
+            "DELETE", f"/api/v1/triples/{quote(triple_id, safe='')}"
+        )
+
+    def extract_triples(self, subject_slug: str) -> dict[str, Any]:
+        data, _meta, _h = self._request(
+            "POST", "/api/v1/triples/extract", body={"subject_slug": subject_slug}
+        )
+        return data or {}
+
 
 __all__ = [
     "ApiError", "MxwpClient", "new_ulid", "encode_multipart",
