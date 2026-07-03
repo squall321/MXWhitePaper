@@ -875,10 +875,11 @@ def build_server() -> FastMCP:
         name="create_relationship",
         description=(
             "문서 사이에 의미 관계(typed 엣지)를 만든다: subject --predicate--> object. "
-            "inverse_predicate 는 object 쪽에서 읽는 역방향 설명(예: predicate='인용한다' "
-            "→ inverse_predicate='에 인용된다'). 양방향을 함께 주면 관계가 양쪽 문서에서 "
-            "자연어로 설명된다. slug 는 실재 문서여야 의미 있다(FK 강제는 안 함). → "
-            "{id, subject_slug, predicate, object_slug, inverse_predicate, source}"
+            "predicate 는 list_relationship_types 의 캐논에서 고르면 inverse 가 자동 "
+            "채워지고 그래프가 일관돼진다(자유텍스트도 허용). inverse_predicate 를 직접 "
+            "주면 그 값이 우선(object 쪽에서 읽는 역방향, 예: '에 인용된다'). slug 는 "
+            "실재 문서여야 의미 있다(FK 강제는 안 함). → {id, subject_slug, predicate, "
+            "object_slug, inverse_predicate, source}"
         ),
     )
     def create_relationship(
@@ -940,6 +941,45 @@ def build_server() -> FastMCP:
                 }
                 for t in (data.get("extracted") or [])
             ],
+        }
+
+    @mcp.tool(
+        name="list_relationship_types",
+        description=(
+            "정제된 관계 유형 캐논 목록. create_relationship 의 predicate 를 여기서 "
+            "고르면 그래프가 일관되고 inverse_predicate 가 자동 채워진다. → "
+            "[{key, predicate, inverse, symmetric, description}]"
+        ),
+    )
+    def list_relationship_types() -> list[dict[str, Any]]:
+        return _make_client().list_predicate_types()
+
+    @mcp.tool(
+        name="get_related_subgraph",
+        description=(
+            "문서의 '지식 이웃'을 depth 홉까지 확장한 관계 서브그래프 — 직접 연결을 "
+            "넘어 문서가 속한 클러스터를 한 번에 파악한다(get_relationships 의 다중홉 판). "
+            "depth 1~4(기본 2). → {root, depth, nodes:[slug], edges:[{...,hop}], "
+            "sentences:[LLM-legible], summary}"
+        ),
+    )
+    def get_related_subgraph(slug: str, depth: int = 2) -> dict[str, Any]:
+        client = _make_client()
+        data = client.get_subgraph(slug, depth)
+        edges = data.get("edges") or []
+        sentences = [
+            f"[{e.get('hop')}홉] {e.get('subject_slug')} --[{e.get('predicate')}]--> "
+            f"{e.get('object_slug')}"
+            for e in edges
+        ]
+        nodes = data.get("nodes") or []
+        return {
+            "root": data.get("root"),
+            "depth": data.get("depth"),
+            "nodes": nodes,
+            "edges": edges,
+            "sentences": sentences,
+            "summary": f"{len(nodes)}개 문서, {len(edges)}개 관계 (최대 {depth}홉)",
         }
 
     return mcp

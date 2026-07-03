@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import require_admin, require_editor, require_reader
 from app.core.db import get_db
 from app.core.errors import Conflict, Forbidden, NotFound, ValidationFailed, envelope
+from app.lib import relationship_types
 from app.lib.super_domains import by_id
 from app.services.triple_extractor import TripleExtractor
 
@@ -50,6 +51,75 @@ _SELECT_COLS = (
     "id, subject_slug, predicate, object_slug, source, confidence, "
     "created_by, created_at, inverse_predicate"
 )
+
+
+@router.get("/predicates")
+async def list_predicate_types(
+    _user: dict[str, Any] = Depends(require_reader),
+) -> dict[str, Any]:
+    """정제된 관계 유형 캐논 — {key, predicate, inverse, symmetric, description}[].
+
+    자유텍스트 predicate 대신 이 목록에서 고르면 그래프가 유형별 질의 가능해지고
+    inverse 가 자동 채워진다 (graph-triple-ontology).
+    """
+    return envelope(data=relationship_types.as_dicts())
+
+
+_SUBGRAPH_MAX_NODES = 200
+
+
+@router.get("/subgraph")
+async def get_subgraph(
+    root: str = Query(min_length=1, max_length=100),
+    depth: int = Query(default=2, ge=1, le=4),
+    s: AsyncSession = Depends(get_db),
+    _user: dict[str, Any] = Depends(require_reader),
+) -> dict[str, Any]:
+    """root 문서에서 관계 엣지를 depth 홉 BFS(양방향)로 확장한 서브그래프.
+
+    LLM/FE 가 문서의 '지식 이웃'(직접 연결을 넘는 클러스터)을 한 번에 이해하게
+    한다 (graph-triple-subgraph). 노드는 _SUBGRAPH_MAX_NODES 로 상한.
+    → {root, depth, nodes:[slug], edges:[{id,subject_slug,predicate,object_slug,
+       inverse_predicate,source,hop}]}
+    """
+    seen_nodes: set[str] = {root}
+    seen_edges: set[str] = set()
+    edges: list[dict[str, Any]] = []
+    frontier: list[str] = [root]
+
+    for hop in range(1, depth + 1):
+        if not frontier:
+            break
+        rows = (await s.execute(
+            text(f"""
+                SELECT {_SELECT_COLS}
+                FROM doc_triples
+                WHERE subject_slug = ANY(:frontier) OR object_slug = ANY(:frontier)
+            """),
+            {"frontier": frontier},
+        )).all()
+        next_frontier: set[str] = set()
+        for r in rows:
+            d = _row_to_dict(r)
+            if d["id"] in seen_edges:
+                continue
+            seen_edges.add(d["id"])
+            d["hop"] = hop
+            edges.append(d)
+            for slug in (d["subject_slug"], d["object_slug"]):
+                if slug not in seen_nodes:
+                    if len(seen_nodes) >= _SUBGRAPH_MAX_NODES:
+                        continue
+                    seen_nodes.add(slug)
+                    next_frontier.add(slug)
+        frontier = list(next_frontier)
+
+    return envelope(data={
+        "root": root,
+        "depth": depth,
+        "nodes": sorted(seen_nodes),
+        "edges": edges,
+    })
 
 
 @router.get("")
@@ -122,6 +192,9 @@ async def create_triple(
     tid = str(ulid.new())
     # manual 은 created_by 보관, llm 은 NULL.
     created_by = user["id"] if body.source == "manual" else None
+    # inverse 미지정이고 predicate 가 캐논 유형이면 표준 inverse 자동 채움
+    # (graph-triple-ontology — 양방향 설명이 빠짐없이 붙게).
+    inverse = body.inverse_predicate or relationship_types.inverse_for(body.predicate)
     try:
         row = (await s.execute(
             text(f"""
@@ -141,7 +214,7 @@ async def create_triple(
                 "source": body.source,
                 "confidence": body.confidence,
                 "created_by": created_by,
-                "inverse": body.inverse_predicate,
+                "inverse": inverse,
             },
         )).first()
         await s.commit()

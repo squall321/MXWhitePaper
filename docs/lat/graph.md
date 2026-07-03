@@ -98,7 +98,9 @@ links_graph 와 달리 `content_json` 을 매 요청 walk 하므로 새로 추�
 | Method | Path | 권한 | 역할 |
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/triples` | reader | 필터 조회 (`subject`/`object`/`predicate`/`source`) |
-| `POST` | `/api/v1/triples` | editor | 단건 생성. UNIQUE 위반 시 409 |
+| `GET` | `/api/v1/triples/predicates` | reader | 정제된 관계 유형 캐논 ([[src/app/lib/relationship_types.py]]) — 온톨로지 |
+| `GET` | `/api/v1/triples/subgraph?root=&depth=` | reader | root 에서 depth(1~4)홉 BFS 서브그래프 (양방향, 노드 200 cap) |
+| `POST` | `/api/v1/triples` | editor | 단건 생성. UNIQUE 위반 시 409. **캐논 predicate 면 inverse 자동채움** (명시 inverse 우선) |
 | `DELETE` | `/api/v1/triples/{id}` | editor/admin | 작성자 본인 또는 admin. `created_by=NULL`(=llm) 은 admin 전용 |
 | `POST` | `/api/v1/triples/extract` | editor | 문서 단건 LLM 추출 (body `{subject_slug}`) |
 | `POST` | `/api/v1/triples/extract/bulk` | admin | 일괄 추출 (`{slugs?}` / `{domain?}` / 미지정시 published 전체) |
@@ -180,6 +182,8 @@ triple 은 런타임 제외.
 | [[dist/llm-docx-toolkit/mcp/server.py#create_relationship]] | 관계 저술 — subject/predicate/object + inverse_predicate. write(토큰), 409 는 관계-특화 메시지로 변환 |
 | [[dist/llm-docx-toolkit/mcp/server.py#delete_relationship]] | id 로 삭제. write |
 | [[dist/llm-docx-toolkit/mcp/server.py#extract_relationships]] | 서버 LLM/mock 추출 트리거 (`/triples/extract`). write |
+| [[dist/llm-docx-toolkit/mcp/server.py#list_relationship_types]] | 관계 유형 캐논 목록 (온톨로지) — predicate 고르면 inverse 자동. read |
+| [[dist/llm-docx-toolkit/mcp/server.py#get_related_subgraph]] | depth 홉 서브그래프 + hop별 LLM-legible sentence + summary. read |
 
 - API 래퍼: [[dist/llm-docx-toolkit/mcp/api_client.py]] 의 `list_triples` /
   `create_triple` / `delete_triple` / `extract_triples` (ETag 무관 — 본문 아님).

@@ -468,6 +468,17 @@ class MxwpClient:
     # (문서 본문이 아니라 별도 doc_triples 테이블). inverse_predicate 는 object
     # 쪽에서 읽는 역방향 설명.
 
+    def list_predicate_types(self) -> list[dict[str, Any]]:
+        data, _meta, _h = self._request("GET", "/api/v1/triples/predicates")
+        return data if isinstance(data, list) else []
+
+    def get_subgraph(self, root: str, depth: int) -> dict[str, Any]:
+        data, _meta, _h = self._request(
+            "GET", "/api/v1/triples/subgraph",
+            query={"root": root, "depth": depth},
+        )
+        return data or {}
+
     def list_triples(
         self,
         *,

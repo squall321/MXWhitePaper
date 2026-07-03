@@ -181,6 +181,48 @@ def test_delete_relationship(server_mod) -> None:
     assert res == {"id": "t1", "deleted": True}
 
 
+def test_list_relationship_types(server_mod) -> None:
+    def predicates(req):
+        return _Resp({"data": [
+            {"key": "premise", "predicate": "전제로 한다", "inverse": "의 전제가 된다",
+             "symmetric": False, "description": "..."},
+        ], "meta": {}, "error": None})
+
+    opener = ScriptedOpener({("GET", "/api/v1/triples/predicates"): predicates})
+    _use_client(server_mod, opener)
+    s = server_mod.build_server()
+    res = _call(s, "list_relationship_types", {})
+    assert res[0]["key"] == "premise"
+    assert res[0]["inverse"] == "의 전제가 된다"
+
+
+def test_get_related_subgraph_renders_sentences(server_mod) -> None:
+    def subgraph(req):
+        q = parse_qs(urlsplit(req.full_url).query)
+        assert q["root"] == ["a"] and q["depth"] == ["2"]
+        return _Resp({"data": {
+            "root": "a", "depth": 2,
+            "nodes": ["a", "b", "c"],
+            "edges": [
+                {"id": "e1", "subject_slug": "a", "predicate": "전제로 한다",
+                 "object_slug": "b", "inverse_predicate": "의 전제가 된다",
+                 "source": "manual", "hop": 1},
+                {"id": "e2", "subject_slug": "b", "predicate": "인용한다",
+                 "object_slug": "c", "inverse_predicate": "에 인용된다",
+                 "source": "llm", "hop": 2},
+            ],
+        }, "meta": {}, "error": None})
+
+    opener = ScriptedOpener({("GET", "/api/v1/triples/subgraph"): subgraph})
+    _use_client(server_mod, opener)
+    s = server_mod.build_server()
+    res = _call(s, "get_related_subgraph", {"slug": "a", "depth": 2})
+    assert set(res["nodes"]) == {"a", "b", "c"}
+    assert res["summary"] == "3개 문서, 2개 관계 (최대 2홉)"
+    assert res["sentences"][0] == "[1홉] a --[전제로 한다]--> b"
+    assert res["sentences"][1] == "[2홉] b --[인용한다]--> c"
+
+
 def test_extract_relationships(server_mod) -> None:
     def extract(req):
         return _Resp({"data": {"stored": 1, "replaced": 0, "extracted": [

@@ -17396,6 +17396,89 @@
         ]
       }
     },
+    "/api/v1/triples/predicates": {
+      "get": {
+        "description": "정제된 관계 유형 캐논 — {key, predicate, inverse, symmetric, description}[].\n\n자유텍스트 predicate 대신 이 목록에서 고르면 그래프가 유형별 질의 가능해지고\ninverse 가 자동 채워진다 (graph-triple-ontology).",
+        "operationId": "list_predicate_types_api_v1_triples_predicates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Predicate Types Api V1 Triples Predicates Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Predicate Types",
+        "tags": [
+          "triples"
+        ]
+      }
+    },
+    "/api/v1/triples/subgraph": {
+      "get": {
+        "description": "root 문서에서 관계 엣지를 depth 홉 BFS(양방향)로 확장한 서브그래프.\n\nLLM/FE 가 문서의 '지식 이웃'(직접 연결을 넘는 클러스터)을 한 번에 이해하게\n한다 (graph-triple-subgraph). 노드는 _SUBGRAPH_MAX_NODES 로 상한.\n→ {root, depth, nodes:[slug], edges:[{id,subject_slug,predicate,object_slug,\n   inverse_predicate,source,hop}]}",
+        "operationId": "get_subgraph_api_v1_triples_subgraph_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "root",
+            "required": true,
+            "schema": {
+              "maxLength": 100,
+              "minLength": 1,
+              "title": "Root",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "depth",
+            "required": false,
+            "schema": {
+              "default": 2,
+              "maximum": 4,
+              "minimum": 1,
+              "title": "Depth",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Subgraph Api V1 Triples Subgraph Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Subgraph",
+        "tags": [
+          "triples"
+        ]
+      }
+    },
     "/api/v1/triples/{triple_id}": {
       "delete": {
         "description": "단건 삭제. created_by 가 본인이거나 admin 이면 허용.\n\ncreated_by 가 NULL (=llm) 인 triple 은 admin 만 삭제 가능.",
