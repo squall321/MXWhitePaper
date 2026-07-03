@@ -47,6 +47,20 @@ export interface BulkExtractResult {
   source: 'llm'
 }
 
+/** 정제된 관계 유형 캐논 (온톨로지). predicate 고르면 BE 가 inverse 자동채움. */
+export interface RelationType {
+  key: string
+  predicate: string
+  inverse: string
+  symmetric: boolean
+  description: string
+}
+
+export async function fetchRelationshipTypes(): Promise<RelationType[]> {
+  const res = await apiClient.get<ApiEnvelope<RelationType[]>>('/triples/predicates')
+  return unwrap<RelationType[]>(res)
+}
+
 /** 필터 조회. 인자 미지정 시 전체. */
 export async function fetchTriples(params: TripleListParams = {}): Promise<Triple[]> {
   const res = await apiClient.get<ApiEnvelope<Triple[]>>('/triples', { params })

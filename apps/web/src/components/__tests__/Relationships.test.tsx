@@ -15,6 +15,16 @@ vi.mock('@/features/graph/triplesApi', () => ({
     if (p.object) return rels.current.incoming
     return []
   }),
+  createTriple: vi.fn(async () => ({})),
+  deleteTriple: vi.fn(async () => undefined),
+  fetchRelationshipTypes: vi.fn(async () => []),
+}))
+
+// 역할 게이팅 — 테스트별로 role 을 바꾼다 (기본 null = viewer, 편집 불가).
+const authState = { current: { user: null as null | { role: string } } }
+vi.mock('@/features/auth/store', () => ({
+  useAuthStore: (selector: (s: { user: { role: string } | null }) => unknown) =>
+    selector({ user: authState.current.user }),
 }))
 
 import { Relationships } from '../Relationships'
@@ -46,6 +56,7 @@ async function render(): Promise<string> {
 
 beforeEach(() => {
   rels.current = { outgoing: [], incoming: [] }
+  authState.current.user = null
 })
 
 describe('Relationships 패널', () => {
@@ -74,5 +85,19 @@ describe('Relationships 패널', () => {
     rels.current.incoming = [mk({ subject_slug: 'src2', object_slug: 'doc-x', inverse_predicate: null })]
     const html = await render()
     expect(html).toContain('의 관련 문서')
+  })
+
+  it('viewer 는 관계가 없으면 패널 자체가 숨겨진다 (편집 UI 없음)', async () => {
+    authState.current.user = { role: 'viewer' }
+    const html = await render()
+    expect(html).not.toContain('+ 관계 추가')
+    expect(html).not.toContain('관계')
+  })
+
+  it('editor 는 관계가 없어도 패널 + 관계 추가 버튼이 보인다', async () => {
+    authState.current.user = { role: 'editor' }
+    const html = await render()
+    expect(html).toContain('+ 관계 추가')
+    expect(html).toContain('관계 없음')
   })
 })
