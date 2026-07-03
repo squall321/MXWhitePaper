@@ -109,6 +109,13 @@ pyinstaller-smoke:
 glossary-dump:
 	apptainer exec instance://mxwp_api bash -lc 'cd /workspace && set -a && . ./.env && set +a && python3 dist/llm-docx-toolkit/rag/chunker.py --dump-glossary'
 
+# 관계(doc_triples) offline dump — DB 의 관계를 rag/relationships.json 으로 저장해
+# DB 없는 toolkit 빌드에서도 chunker 가 관계 chunk 를 만들어 query_rules 로
+# 관계 지식이 검색되게 한다. 운영 관계를 RAG 에 실으려면 빌드 전 실행:
+#   make relationships-dump && (재빌드) — glossary-dump 와 동일 패턴.
+relationships-dump:
+	apptainer exec instance://mxwp_api bash -lc 'cd /workspace && set -a && . ./.env && set +a && python3 dist/llm-docx-toolkit/rag/chunker.py --dump-relationships'
+
 # ── Portal ship pipeline (D) ─────────────────────────────────────────
 # 3-zone 아키텍처를 자동화 — online build host → Drive → cae00.
 #

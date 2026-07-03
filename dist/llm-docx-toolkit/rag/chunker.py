@@ -950,6 +950,134 @@ def _chunks_from_glossary(*, verbose: bool = False) -> list[Chunk]:
     return out
 
 
+# ── relationships (의미 엣지 → 검색 가능한 지식) ────────────────────────
+# glossary 와 같은 DB/dump 이중 소스 패턴. 관계를 RAG 코퍼스에 실어 query_rules
+# 로 "이 문서는 무엇의 전제인지" 같은 관계 지식이 검색되게 한다.
+_RELATIONSHIPS_DUMP_PATH = Path(__file__).resolve().parent / "relationships.json"
+
+
+def _fetch_relationship_rows(dsn: str) -> list[dict[str, Any]]:
+    import asyncio
+
+    import asyncpg  # type: ignore[import-not-found]
+
+    async def _go() -> list[dict[str, Any]]:
+        conn = await asyncpg.connect(dsn)
+        try:
+            cols = await conn.fetch(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'doc_triples'"
+            )
+            colset = {r["column_name"] for r in cols}
+            if not {"subject_slug", "predicate", "object_slug"}.issubset(colset):
+                return []
+            inv_sql = "inverse_predicate" if "inverse_predicate" in colset else "NULL"
+            rows = await conn.fetch(
+                f"""
+                SELECT subject_slug, predicate, object_slug,
+                       {inv_sql} AS inverse_predicate, source
+                FROM doc_triples
+                ORDER BY subject_slug, predicate, object_slug
+                """
+            )
+            return [dict(r) for r in rows]
+        finally:
+            await conn.close()
+
+    try:
+        return asyncio.run(_go())
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(_go())
+        finally:
+            loop.close()
+
+
+def _relationship_rows_from_dump() -> list[dict[str, Any]]:
+    payload = json.loads(_RELATIONSHIPS_DUMP_PATH.read_text(encoding="utf-8"))
+    rows = payload.get("rows") or []
+    return [r for r in rows if isinstance(r, dict)]
+
+
+def _relationships_source_mode() -> str | None:
+    if _glossary_database_url():
+        return "db"
+    if _RELATIONSHIPS_DUMP_PATH.exists():
+        return "dump"
+    return None
+
+
+def _dump_relationships() -> int:
+    """--dump-relationships: DB 의 doc_triples 를 relationships.json 으로 덤프
+    (DB 없는 빌드용). DB 없으면 실패."""
+    from datetime import datetime, timezone
+
+    dsn = _glossary_database_url()
+    if not dsn:
+        print("✗ --dump-relationships requires DATABASE_URL (or MXWP_DATABASE_URL)",
+              file=sys.stderr)
+        return 1
+    rows = _fetch_relationship_rows(dsn)
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "rows": rows,
+    }
+    _RELATIONSHIPS_DUMP_PATH.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
+    print(f"wrote {len(rows)} relationship rows to {_RELATIONSHIPS_DUMP_PATH}")
+    return 0
+
+
+def _chunks_from_relationships(*, verbose: bool = False) -> list[Chunk]:
+    """관계 1건 → chunk 1개. DB 우선, 없으면 relationships.json dump, 둘 다
+    없으면 조용히 skip (glossary 와 동일 정책)."""
+    mode = _relationships_source_mode()
+    if mode is None:
+        if verbose:
+            print("  relationships: DATABASE_URL not set, no relationships.json — skipping")
+        return []
+    if mode == "db":
+        try:
+            rows = _fetch_relationship_rows(_glossary_database_url())
+        except Exception as e:  # noqa: BLE001 — DB unreachable is non-fatal
+            if verbose:
+                print(f"  relationships: skipped ({type(e).__name__}: {e})")
+            return []
+    else:
+        rows = _relationship_rows_from_dump()
+
+    out: list[Chunk] = []
+    for r in rows:
+        subj = r.get("subject_slug")
+        pred = r.get("predicate")
+        obj = r.get("object_slug")
+        if not (subj and pred and obj):
+            continue
+        inv = r.get("inverse_predicate")
+        source = r.get("source") or "manual"
+        lines = [f"관계: {subj} 는(은) {obj} 를(을) '{pred}'"]
+        if inv:
+            lines.append(f"역방향: {obj} 는(은) {subj} 를(을) '{inv}'")
+        text = "\n".join(lines)
+        out.append(Chunk(
+            id=f"relationship:{_slugify(subj)}--{_slugify(pred)}--{_slugify(obj)}--{source}",
+            source="relationships",
+            heading=f"relationship: {subj} → {obj} ({pred})",
+            text=text,
+            metadata={
+                "subject_slug": subj,
+                "predicate": pred,
+                "object_slug": obj,
+                "inverse_predicate": inv,
+                "source": source,
+            },
+        ))
+    return out
+
+
 # ── public API ────────────────────────────────────────────────────────
 
 
@@ -965,6 +1093,7 @@ def build_chunks(repo_root: Path) -> list[Chunk]:
     chunks.extend(_chunks_from_archive(repo_root))
     chunks.extend(_chunks_from_examples(repo_root))
     chunks.extend(_chunks_from_glossary())
+    chunks.extend(_chunks_from_relationships())
     chunks.sort(key=lambda c: c.id)
     return chunks
 
@@ -1042,6 +1171,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Fetch approved terms via DATABASE_URL and write rag/glossary.json "
              "(offline dump for DB-less builds), then exit.",
     )
+    p.add_argument(
+        "--dump-relationships", action="store_true",
+        help="Fetch doc_triples via DATABASE_URL and write rag/relationships.json "
+             "(offline dump for DB-less builds), then exit.",
+    )
     args = p.parse_args(argv)
 
     repo_root = args.repo or _autodetect_repo_root()
@@ -1050,6 +1184,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dump_glossary:
         return _dump_glossary()
+
+    if args.dump_relationships:
+        return _dump_relationships()
 
     if args.check:
         return _check_lock(repo_root, out_path, lock_path)
@@ -1108,6 +1245,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  llm-viewer-guide.md: {viewer_n}")
     print(f"  archive: {archive_n}")
     print(f"  {glossary_line}")
+    rel_mode = _relationships_source_mode()
+    rel_n = by_source.get("relationships", 0)
+    if rel_mode:
+        print(f"  relationships ({rel_mode}): {rel_n}")
+    else:
+        print("  relationships: skipped — DATABASE_URL unset, no relationships.json")
     print(f"  examples: {examples_n}")
     print(f"sha256: {sha}")
     return 0

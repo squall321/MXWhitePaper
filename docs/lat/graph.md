@@ -189,9 +189,22 @@ triple 은 런타임 제외.
 - API 래퍼: [[dist/llm-docx-toolkit/mcp/api_client.py]] 의 `list_triples` /
   `create_triple` / `delete_triple` / `extract_triples` (ETag 무관 — 본문 아님).
 - LLM 지침: `llm-system-prompt.md` §7 (mxwp_system_prompt 프롬프트로 노출).
-- 테스트: [[dist/llm-docx-toolkit/mcp/tests/test_relationship_tools.py]] (6). ★ 도구
+- 테스트: [[dist/llm-docx-toolkit/mcp/tests/test_relationship_tools.py]] (8). ★ 도구
   추가 시 **바이너리 재빌드**(`python build.py --target mcp`) 필요 — stdio 는 frozen,
   HTTP transport 는 소스 즉시 반영.
+
+## RAG — 관계를 검색 가능한 지식으로 (graph-triple-rag)
+
+관계를 RAG 코퍼스에 실어 `query_rules` 로 "이 문서는 무엇의 전제인지" 같은 관계
+지식이 검색된다. glossary 와 동일한 DB/dump 이중소스 패턴.
+
+- [[dist/llm-docx-toolkit/rag/chunker.py#_chunks_from_relationships]] — 관계 1건 →
+  chunk 1개 (양방향 문장). source=`relationships`, id=`relationship:{subj}--{pred}--{obj}--{source}`.
+- `python chunker.py --dump-relationships` (또는 `make relationships-dump`) → DB 의
+  doc_triples 를 `rag/relationships.json` 으로 덤프 (DB 없는 빌드용).
+- ★ **커밋된 chunks.jsonl 엔 dev 관계를 굽지 않는다** — DB/dump 없으면 skip 이라
+  `--check` 무drift. 운영 관계를 RAG 에 실으려면 빌드 전 `relationships-dump` 후 재빌드.
+- 테스트: [[dist/llm-docx-toolkit/rag/tests/test_chunker_relationships.py]] (5).
 
 계획: [`docs/01-plan/features/graph-edge-predicates.plan.md`](../01-plan/features/graph-edge-predicates.plan.md) (1차 DB+API),
 [`docs/01-plan/features/graph-triple-fe.plan.md`](../01-plan/features/graph-triple-fe.plan.md) (2차 FE)
