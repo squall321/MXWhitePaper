@@ -23,6 +23,12 @@ Relationship tools (semantic edges — graph-triple-mcp): read —
 `create_relationship` / `delete_relationship` / `extract_relationships`.
 단순 링크가 아니라 predicate/inverse_predicate 로 '왜 연결됐는지' 를 설명한다.
 
+Report tools (위키→분석 보고서→Word): 데이터 증강 read — `search_documents`
+(전문검색) / `search_knowledge` (시스템지식) / `get_glossary_term` /
+`list_glossary` / `get_backlinks`; export — `export_document` (문서를
+docx/pptx/pdf/markdown 파일로 저장, raw-bytes). LLM 이 근거를 검색으로 끌어와
+보고서를 쓰고 Word 로 받는 흐름을 완성한다.
+
 Write tools require env `MXWP_API_TOKEN` (write scope) and talk to
 `MXWP_API_URL` (default http://127.0.0.1:8800). Blocks are validated
 locally against packages/shared/schemas/document.json *before* any HTTP
@@ -981,6 +987,83 @@ def build_server() -> FastMCP:
             "sentences": sentences,
             "summary": f"{len(nodes)}개 문서, {len(edges)}개 관계 (최대 {depth}홉)",
         }
+
+    # ── 데이터 증강 (보고서 근거: 검색 / 시스템지식 / 용어 / 백링크) ────
+    # 보고서를 쓸 때 자기 지식만이 아니라 위키의 실제 데이터를 근거로 끌어온다.
+
+    @mcp.tool(
+        name="search_documents",
+        description=(
+            "위키 문서를 전문(full-text) 검색한다. 주제어로 관련 문서를 찾는 1차 진입점 "
+            "— 결과 slug 를 get_document_outline / get_relationships 로 이어 읽는다. "
+            "→ [{slug, title, snippet, highlights, updated_at, tags, author}]"
+        ),
+    )
+    def search_documents(
+        q: str, limit: int = 20, part: str = "", tag: str = "", author: str = "",
+    ) -> list[dict[str, Any]]:
+        return _make_client().search_documents(
+            q, limit=limit, part=part or None, tag=tag or None, author=author or None,
+        )
+
+    @mcp.tool(
+        name="search_knowledge",
+        description=(
+            "시스템 지식(docs/lat 코드지도 · 가이드 · archive)을 검색한다. 위키 본문이 "
+            "아니라 플랫폼/설계 지식이 필요할 때. kind: lat|guide|doc|archive(선택). "
+            "→ [{id, kind, area, doc_path, heading, snippet}]"
+        ),
+    )
+    def search_knowledge(q: str, kind: str = "", limit: int = 20) -> list[dict[str, Any]]:
+        return _make_client().search_knowledge(q, kind=kind or None, limit=limit)
+
+    @mcp.tool(
+        name="get_glossary_term",
+        description=(
+            "승인된 용어집에서 용어 1개의 정의를 조회한다. 보고서에서 용어를 정확한 승인 "
+            "정의로 서술할 때. → {term, definition, domain, term_en, aliases, related_doc_count}"
+        ),
+    )
+    def get_glossary_term(term: str, domain: str = "") -> dict[str, Any]:
+        return _make_client().get_glossary_term(term, domain=domain or None)
+
+    @mcp.tool(
+        name="list_glossary",
+        description=(
+            "승인된 용어 목록/검색(q, domain 선택). 보고서 용어 근거 확보. "
+            "→ {items:[{term, definition, domain, ...}], total}"
+        ),
+    )
+    def list_glossary(q: str = "", domain: str = "", size: int = 30) -> dict[str, Any]:
+        return _make_client().list_glossary(q=q or None, domain=domain or None, size=size)
+
+    @mcp.tool(
+        name="get_backlinks",
+        description=(
+            "이 문서를 참조하는(가리키는) 문서 목록. 주제의 영향 범위·연관 문서 근거. "
+            "→ [{slug, title, sections_referenced, anchor}]"
+        ),
+    )
+    def get_backlinks(slug: str) -> list[dict[str, Any]]:
+        return _make_client().get_backlinks(slug)
+
+    # ── export (문서 → Word/PPT/PDF/MD 파일로 저장) ────────────────────
+
+    @mcp.tool(
+        name="export_document",
+        description=(
+            "위키 문서를 파일로 렌더해 로컬 경로에 저장한다. format: docx(Word) | pptx | "
+            "pdf | markdown. AI 가 위키를 읽고 작성한 보고서를 Word 파일로 받을 때 사용 "
+            "(먼저 create_document 로 저장해 slug 확보 후 호출). 표·리스트·이미지·콜아웃·"
+            "코드는 고품질, 차트/수식은 데이터 표/텍스트로 폴백. → {path, size, format, "
+            "download_url}"
+        ),
+    )
+    def export_document(slug: str, format: str = "docx", out_path: str = "") -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        out = out_path or f"{slug}.{format}"
+        return client.export_document(slug, format, out)
 
     return mcp
 

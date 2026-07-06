@@ -530,6 +530,94 @@ class MxwpClient:
         )
         return data or {}
 
+    # ── 데이터 증강 (보고서 근거: 검색 / 용어 / 백링크) ─────────────────
+    # 전부 read GET. 서버가 per-request Bearer 로 role-기반 redaction 강제.
+
+    def search_documents(
+        self, q: str, *, limit: int = 20, part: str | None = None,
+        tag: str | None = None, author: str | None = None,
+    ) -> list[dict[str, Any]]:
+        data, _meta, _h = self._request(
+            "GET", "/api/v1/search",
+            query={"q": q, "limit": limit, "part": part, "tag": tag, "author": author},
+        )
+        return data if isinstance(data, list) else []
+
+    def search_knowledge(
+        self, q: str, *, kind: str | None = None, limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        data, _meta, _h = self._request(
+            "GET", "/api/v1/search/knowledge",
+            query={"q": q, "kind": kind, "limit": limit},
+        )
+        return data if isinstance(data, list) else []
+
+    def get_glossary_term(self, term: str, *, domain: str | None = None) -> dict[str, Any]:
+        data, _meta, _h = self._request(
+            "GET", f"/api/v1/glossary/term/{quote(term, safe='')}",
+            query={"domain": domain},
+        )
+        return data or {}
+
+    def list_glossary(
+        self, *, q: str | None = None, domain: str | None = None, size: int = 30,
+    ) -> dict[str, Any]:
+        data, _meta, _h = self._request(
+            "GET", "/api/v1/glossary",
+            query={"q": q, "domain": domain, "size": size},
+        )
+        return data or {}
+
+    def get_backlinks(self, slug: str) -> list[dict[str, Any]]:
+        data, _meta, _h = self._request(
+            "GET", f"/api/v1/documents/{quote(slug, safe='')}/backlinks"
+        )
+        return data if isinstance(data, list) else []
+
+    # ── export (문서 → docx/pptx/pdf/markdown 파일 바이트) ──────────────
+    # ★ _request/_send 는 응답을 json.loads 하므로 바이너리(docx zip)에서 깨진다.
+    # 전용 raw-bytes 경로 — 응답을 파싱하지 않고 그대로 파일로 쓴다.
+
+    def export_document(
+        self, slug: str, fmt: str, out_path: str,
+    ) -> dict[str, Any]:
+        """POST /api/v1/exports/{fmt} {slug} → 바이너리 응답을 out_path 로 저장.
+
+        fmt: docx | pptx | pdf | markdown. 응답 헤더의 X-Export-Download-Url /
+        X-Export-Artifact-Id 도 반환. write scope 토큰 필요(POST 라서).
+        """
+        url = f"{self.base_url}/api/v1/exports/{fmt}"
+        body = json.dumps({"slug": slug}, ensure_ascii=False).encode("utf-8")
+        headers = self._headers(None)
+        headers["Content-Type"] = "application/json"
+        req = urllib.request.Request(url, data=body, method="POST")
+        for k, v in headers.items():
+            req.add_header(k, v)
+        try:
+            resp = self._opener(req, self.timeout)
+        except urllib.error.HTTPError as e:
+            try:
+                raw = e.read().decode("utf-8", "replace")
+            except Exception:
+                raw = ""
+            msg, code = self._error_message(e.code, raw)
+            raise ApiError(msg, status=e.code, code=code) from e
+        except urllib.error.URLError as e:
+            raise ApiError(
+                f"API 서버에 연결할 수 없습니다: {self.base_url} ({e.reason})"
+            ) from e
+        data = resp.read()  # ★ json 파싱 금지 — 바이너리
+        with open(out_path, "wb") as f:
+            f.write(data)
+        h = resp.headers
+        return {
+            "path": out_path,
+            "size": len(data),
+            "format": fmt,
+            "artifact_id": h.get("X-Export-Artifact-Id"),
+            "download_url": h.get("X-Export-Download-Url"),
+        }
+
 
 __all__ = [
     "ApiError", "MxwpClient", "new_ulid", "encode_multipart",

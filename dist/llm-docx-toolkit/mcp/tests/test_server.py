@@ -97,6 +97,12 @@ def test_registers_tools_resource_template_and_prompt(server_mod) -> None:
         "extract_relationships",
         "list_relationship_types",
         "get_related_subgraph",
+        "search_documents",
+        "search_knowledge",
+        "get_glossary_term",
+        "list_glossary",
+        "get_backlinks",
+        "export_document",
     ]
     assert len(templates) == 1
     assert templates[0].uriTemplate == "rag://chunks/{chunk_id}"
