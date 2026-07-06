@@ -285,3 +285,19 @@ docx/pptx/pdf 응답은 **동기 + persist 병행**:
 | [[src/tests/test_pptx_export.py]] | pptx 렌더 |
 | [[src/tests/test_html_export.py]] | html 렌더 + TOC |
 | [[src/tests/test_markdown_export.py]] | markdown 렌더 |
+
+## MCP — LLM 이 문서를 파일로 받는다 (report-mcp)
+
+외부 LLM(Claude)이 위키를 읽고 보고서를 써서 Word/PDF 로 받는 흐름.
+
+- [[dist/llm-docx-toolkit/mcp/server.py#export_document]] — `export_document(slug,
+  format=docx|pptx|pdf|markdown, out_path)` → `POST /api/v1/exports/{fmt}` 의 **바이너리
+  응답을 로컬 파일로 저장**. ★ `api_client._send` 는 응답을 json.loads 하므로 바이너리에서
+  깨진다 → [[dist/llm-docx-toolkit/mcp/api_client.py#export_document]] 는 `_send` 를 우회하는
+  raw-bytes 전용 메서드(응답 미파싱, `open(...,'wb')`). write scope 필요(POST).
+- 데이터 증강 도구(보고서 근거): `search_documents` / `search_knowledge` /
+  `get_glossary_term` / `list_glossary` / `get_backlinks` — 검색/용어/백링크를 MCP 로 노출
+  ([[dist/llm-docx-toolkit/mcp/api_client.py]] 얇은 GET 래퍼).
+- openapi 함정: `POST /exports/docx` 200 이 application/json 으로 오선언 — 실제는 zip(PK)
+  바이너리. openapi 기반 자동 클라이언트는 json 디코드하면 깨진다.
+- 테스트: [[dist/llm-docx-toolkit/mcp/tests/test_report_tools.py]] (7).
