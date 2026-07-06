@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs status migrate seed schema-gen schema-validate openapi-dump codegen test lint clean pyinstaller-smoke glossary-dump build-web ship-web pull-web ship ship-toolkit pull-toolkit
+.PHONY: help build up down restart refresh logs status migrate seed schema-gen schema-validate openapi-dump codegen test lint clean pyinstaller-smoke glossary-dump build-web ship-web pull-web ship ship-toolkit pull-toolkit
 
 help:
 	@echo "MX White Paper — Apptainer-based stack"
@@ -7,6 +7,7 @@ help:
 	@echo "  make up              Start all 5 service instances (host network)"
 	@echo "  make down            Stop all instances (data preserved in infra/data/)"
 	@echo "  make restart         down + up"
+	@echo "  make refresh         down + up + migrate (최신화 원클릭 복구)"
 	@echo "  make status          Show instances + healthchecks"
 	@echo "  make logs SVC=api    Tail logs for one service (api|web|postgres|meili|minio)"
 	@echo "  make migrate         alembic upgrade head"
@@ -40,6 +41,9 @@ down:
 	$(SCRIPTS)/stop.sh
 
 restart: down up
+
+refresh:
+	$(SCRIPTS)/refresh.sh
 
 status:
 	$(SCRIPTS)/status.sh
