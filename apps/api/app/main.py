@@ -19,6 +19,7 @@ from .middleware.security import RateLimitMiddleware, SecurityHeadersMiddleware
 from .routers.activity import router as activity_router
 from .routers.admin import router as admin_router
 from .routers.ai import router as ai_router
+from .routers.chat import router as chat_router
 from .routers.analytics import router as analytics_router
 from .routers.api_tokens import router as api_tokens_router
 from .routers.approvals import router as approvals_router
@@ -580,6 +581,8 @@ def create_app() -> FastAPI:
     app.include_router(tags_router)
     # AI 보조 훅 — placeholder 응답 (실제 LLM 호출은 추후 작업)
     app.include_router(ai_router)
+    # 대화형 채팅 — agentic 저작+검색 (SSE). LLM 미설정 시 mock 폴백.
+    app.include_router(chat_router)
     # 재사용 블록 라이브러리 (스니펫)
     app.include_router(snippets_router)
     # 조직 공유 문서 템플릿 (per-doc, 0020)

@@ -41,6 +41,7 @@ Read 하는 패턴을 피한다.
 | [storage](storage.md) | 이미지 업로드 파이프라인, MinIO, sha256 dedup | `app/services/upload_service.py`, `app/routers/uploads.py`, `app/routers/files.py` |
 | [snapshots](snapshots.md) | PostgreSQL + MinIO 시점 백업/복원 | `app/services/snapshots.py`, `app/routers/snapshots.py`, `infra/scripts/snapshot.sh`, `infra/scripts/restore-snapshot.sh` |
 | [core](core.md) | 인증 (`require_role`), 에러 envelope, 설정 (pydantic-settings) | `app/core/auth.py`, `app/core/errors.py`, `app/core/config.py`, `app/core/db.py` |
+| [chat](chat.md) | 대화형 저작+검색 (메인 페이지, SSE, vLLM/mock 폴백, 도구 4종) | `app/routers/chat.py`, `app/services/chat_agent.py`, `app/services/llm_client.py`, `src/features/chat/*`, `src/pages/Chat.tsx` |
 | [graph](graph.md) | 위키 링크 그래프, 의존성 그래프, 의미 triple (subject/predicate/object) | `app/routers/links_graph.py`, `app/routers/dep_graph.py`, `app/routers/triples.py`, `app/services/triple_extractor.py` |
 | [glossary](glossary.md) | 분야별 어휘 사전 (propose → admin approve), term 그래프, CSV bulk import | `app/routers/glossary.py`, `app/services/glossary_service.py`, `app/repos/glossary_repo.py` |
 | [charts](charts.md) | ChartBlock — xy-line/paste/toolbar/fit/derived/annotation/dual-y, EChartsView 렌더 | `src/components/blocks/EChartsView.tsx`, `src/features/editor/blocks/ChartBlockEditor.tsx`, `_fits.ts`, `_chartPaste.ts`, `_derived.ts`, `app/services/pptx_export.py#_b_chart` |

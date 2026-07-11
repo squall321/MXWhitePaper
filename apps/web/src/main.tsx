@@ -49,6 +49,12 @@ function Boundaried({ name, children }: { name: string; children: React.ReactNod
 const HomePage = lazyLogged('Home', () =>
   import('./pages/Home').then((m) => ({ default: m.HomePage })),
 )
+const ChatPage = lazyLogged('Chat', () =>
+  import('./pages/Chat').then((m) => ({ default: m.ChatPage })),
+)
+const HelpPage = lazyLogged('Help', () =>
+  import('./pages/Help').then((m) => ({ default: m.HelpPage })),
+)
 const DocumentReaderPage = lazyLogged('DocumentReader', () =>
   import('./pages/DocumentReader').then((m) => ({ default: m.DocumentReaderPage })),
 )
@@ -387,7 +393,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                   </AuthGuard>
                 }
               >
-                <Route index element={<Boundaried name="home"><HomePage /></Boundaried>} />
+                <Route index element={<Boundaried name="chat"><ChatPage /></Boundaried>} />
+                <Route path="home" element={<Boundaried name="home"><HomePage /></Boundaried>} />
+                <Route path="help" element={<Boundaried name="help"><HelpPage /></Boundaried>} />
                 <Route path="docs/new" element={<Boundaried name="docs/new"><DocumentNewPage /></Boundaried>} />
                 <Route path="docs/import" element={<Boundaried name="docs/import"><DocumentImportPage /></Boundaried>} />
                 <Route path="docs/:slug" element={<Boundaried name="docs/:slug"><DocumentReaderPage /></Boundaried>} />

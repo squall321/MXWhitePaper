@@ -90,6 +90,16 @@ class Settings(BaseSettings):
     # 추후 OPENAI_API_KEY / ANTHROPIC_API_KEY 가 잡혀야 의미가 있다.
     ai_enabled: bool = Field(default=False)
 
+    # 대화형 채팅 (agentic 저작 + 코퍼스 검색) — 메인 페이지 백엔드.
+    # LLM 은 config/env 로 주소만 잡고 미설정/도달 실패 시 mock 폴백한다
+    # (HWAX 포털 플레이북 §8 + triple_extractor 와 동일 정책). vLLM 은 OpenAI
+    # 호환 엔드포인트이므로 llm_backend=openai + base_url + model 로 연결한다.
+    chat_enabled: bool = Field(default=True)
+    llm_backend: str = Field(default="mock")  # mock | openai(=vLLM)
+    llm_base_url: str = Field(default="")     # 예: http://<ip>:<port>/v1
+    llm_model: str = Field(default="")        # served-model 이름
+    llm_api_key: str = Field(default="")      # vLLM 은 보통 불필요(더미 허용)
+
     # 0015 — Scheduled backups (asyncio in-process ticker).
     # 끄면 lifespan 에서 ticker 가 시작되지 않고 tick_once() 도 즉시 0 을 반환.
     # 라우터는 켜둔 채로 남겨도 무방 — run-now 호출은 여전히 동작.

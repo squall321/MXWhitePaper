@@ -138,10 +138,12 @@ export function TopBar({
 
           {/* Secondary group — visible on lg+, collapsed into overflow on md/sm */}
           <div className="hidden items-center gap-1.5 lg:flex">
+            <NavLinkPill to="/home" label="위키" active={isActive('/home')} />
             <NavLinkPill to="/orgs" label={t('topbar.org')} active={isActive('/orgs')} />
             <NavLinkPill to="/glossary" label="용어집" active={isActive('/glossary')} />
             <NavLinkPill to="/recent" label={t('topbar.recent')} active={isActive('/recent')} />
             <NavLinkPill to="/reads" label={t('topbar.reads')} active={isActive('/reads')} />
+            <NavLinkPill to="/help" label="사용법" active={isActive('/help')} />
             {canSeeAnalytics && (
               <NavLinkPill
                 to="/analytics"
@@ -186,6 +188,12 @@ export function TopBar({
                 className="absolute right-0 top-11 z-popover w-48 overflow-hidden rounded-lg border border-gray-200 bg-white text-smsg-900 shadow-lg animate-slide-up dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
               >
                 <OverflowItem
+                  to="/home"
+                  label="위키"
+                  current={isActive('/home')}
+                  onClick={() => setOverflowOpen(false)}
+                />
+                <OverflowItem
                   to="/orgs"
                   label={t('topbar.orgFull')}
                   current={isActive('/orgs')}
@@ -201,6 +209,12 @@ export function TopBar({
                   to="/recent"
                   label={t('topbar.recentFull')}
                   current={isActive('/recent')}
+                  onClick={() => setOverflowOpen(false)}
+                />
+                <OverflowItem
+                  to="/help"
+                  label="사용법"
+                  current={isActive('/help')}
                   onClick={() => setOverflowOpen(false)}
                 />
                 {canSeeAnalytics && (
