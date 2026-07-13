@@ -15,6 +15,7 @@ Read 하면 토큰이 빠르게 소진된다. **AI agent (= 당신) 이 코드�
 | docx/pptx/md/html/pdf 내보내기 | `docs/lat/export.md` |
 | 이미지 업로드, MinIO, sha256 dedup | `docs/lat/storage.md` |
 | 백업/복원 (PostgreSQL + MinIO 시점) | `docs/lat/snapshots.md` |
+| 대화형 채팅 (메인 페이지), vLLM/mock, SSE, 도구 4종 | `docs/lat/chat.md` |
 | 인증 / role / API token / 에러 envelope / 설정 | `docs/lat/core.md` |
 | 위 분류가 헷갈리면 | `docs/lat/README.md` (인덱스 + 컨벤션) |
 
