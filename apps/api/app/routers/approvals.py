@@ -470,18 +470,6 @@ async def transition_status(
         ),
         {"st": target, "id": doc["id"]},
     )
-    # ── Sync Meilisearch (CRITICAL — without this, draft→published
-    # leaves the doc out of search even though it's in the DB).
-    # `documents_flat_v` filters by status='published', so:
-    #   - target=published    → upsert (doc now visible in flat view)
-    #   - target=archived     → delete from index
-    #   - other targets       → upsert (no-op if not in flat view yet)
-    from app.services.document_service import reindex_meili
-    await reindex_meili(
-        s,
-        doc_id=str(doc["id"]),
-        archived=(target == "archived"),
-    )
     await document_repo.insert_audit(
         s,
         user_id=user["id"],
@@ -490,6 +478,21 @@ async def transition_status(
         payload={"from": current, "to": target},
     )
     await s.commit()
+
+    # ── Sync Meilisearch (CRITICAL — without this, draft→published
+    # leaves the doc out of search even though it's in the DB).
+    # `documents_flat_v` (status='published' 필터) 를 **먼저 refresh** 해야
+    # upsert_document 가 방금 발행된 문서를 본다. create_document 와 동일하게
+    # commit 이후에 실행한다 (CONCURRENTLY refresh 는 트랜잭션 밖이어야 함).
+    #   - target=published → matview 에 등장 → upsert
+    #   - target=archived  → 인덱스에서 delete
+    from app.services.document_service import refresh_search_view, reindex_meili
+    await refresh_search_view(s)
+    await reindex_meili(
+        s,
+        doc_id=str(doc["id"]),
+        archived=(target == "archived"),
+    )
 
     if target == "published":
         await fire_webhook(

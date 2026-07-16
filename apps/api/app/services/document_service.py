@@ -930,8 +930,11 @@ async def run_post_save_hooks(
                 webhook_event, webhook_payload, target_part_id=target_part_id,
             )
 
-    await _run_with_retry("reindex_meili", _reindex)
+    # ★ 순서 중요: reindex_meili 는 documents_flat_v(matview) 를 읽으므로,
+    # 갱신된 내용을 인덱싱하려면 refresh 를 **먼저** 해야 한다. 이 문서의 commit
+    # 은 이미 끝난 상태라 (debounced) refresh 의 첫 REFRESH 에 포함된다.
     await _run_with_retry("refresh_search_view", _refresh)
+    await _run_with_retry("reindex_meili", _reindex)
     await _run_with_retry("fire_webhook", _webhook)
 
     # tag_added events (replace_document 의 tag diff fanout)
