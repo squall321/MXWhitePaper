@@ -48,8 +48,10 @@ body: `{messages: [{role:'user'\|'assistant', content}]}` (1~50개).
   append=`replace_document`(ETag=`make_etag(id,version)`), 검색=`meili_indexer.search`(role 필터).
 - **create_document 는 status='draft' 로 생성**된다 ([[documents]] insert_document). 검색·위키 목록에
   뜨려면 발행 필요 — `POST /api/v1/documents/{slug}/transition {"status":"published"}`.
-  ⚠️ 발행 경로는 matview(`documents_flat_v`) refresh 없이 reindex 하므로, 대량 발행 후엔
-  `python -m app.scripts.reindex` (컨테이너 안, .env source) 로 전체 재색인해야 검색에 반영된다.
+  발행/편집 후 검색 반영은 이제 자동이다 (transition·run_post_save_hooks 가 reindex 전에
+  `documents_flat_v` matview 를 refresh — 2026-07 fix). **다만 대량 백필**(예: 이미 draft 로
+  쌓인 수십~수백 건을 한꺼번에 발행)은 `python -m app.scripts.reindex` (컨테이너 안, `.env` source)
+  로 전체 재색인하는 게 빠르고 확실하다.
 - **mock 폴백은 "출력 시작 전"에만** — `_run_llm` 이 프레임을 낸 뒤 실패하면 `started` 플래그로
   mock 재실행 대신 error+done 으로 닫는다 (이중 생성 방지).
 - FE `renderText` 는 링크 스킴을 화이트리스트(내부 `/` · http/https)한다 — LLM 토큰의 `javascript:` 방어.
