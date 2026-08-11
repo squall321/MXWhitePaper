@@ -43,10 +43,19 @@ echo "→ uploading $(ls "$STAGE"/*.sif | wc -l) image(s) to $REMOTE/images-$TS/
 
 if [ "$RETAIN" -gt 0 ]; then
   echo "→ retention: keep last $RETAIN image set(s)"
-  "$RCLONE" lsf --dirs-only "$REMOTE/" 2>/dev/null | sed 's#/$##' | grep -E '^images-' \
-    | sort | head -n -"$RETAIN" | while read -r old; do
-        echo "  · deleting $old/"; "$RCLONE" purge "$REMOTE/$old" 2>/dev/null || true
-      done
+  # 최초 publish 때는 images-* 디렉터리가 하나도 없어 grep 이 rc=1 을 낸다. set -e 라
+  # 그 자리에서 스크립트가 출력 없이 종료됐다 — 업로드는 끝났는데 exit 1 이라 호출자는
+  # 실패로 본다. 파이프 전체를 `|| true` 로 감싸 '지울 게 없음'을 정상으로 취급한다.
+  _old_sets="$("$RCLONE" lsf --dirs-only "$REMOTE/" 2>/dev/null | sed 's#/$##' \
+                | grep -E '^images-' | sort | head -n -"$RETAIN" || true)"
+  if [ -n "$_old_sets" ]; then
+    printf '%s\n' "$_old_sets" | while read -r old; do
+      [ -n "$old" ] || continue
+      echo "  · deleting $old/"; "$RCLONE" purge "$REMOTE/$old" 2>/dev/null || true
+    done
+  else
+    echo "  · 지울 이전 이미지 세트 없음"
+  fi
 fi
 
 echo

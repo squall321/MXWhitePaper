@@ -157,9 +157,17 @@ rebuild_sif() {
   local sif="$APPT_DIR/${name}.sif"
   local def="$APPT_DIR/${name}.def"
   echo "  → rebuild $name"
-  apptainer instance stop "mxwp_${name}" >/dev/null 2>&1
-  apptainer build --force "$sif" "$def" 2>&1 | tail -3
-  REBUILT_ANY=1
+  # bare apptainer 를 쓰면 안 된다 — 이 레포는 추출본($APPTAINER)을 쓰는 박스가 있고
+  # 거기선 PATH 에 apptainer 가 없거나 다른 버전이 잡힌다. 나머지 코드는 이미 "$APPTAINER" 다.
+  "$APPTAINER" instance stop "mxwp_${name}" >/dev/null 2>&1
+  # 빌드 실패해도 REBUILT_ANY=1 을 세워 '재빌드했다'로 보고했다. tail -3 로 원인도 잘렸다.
+  if "$APPTAINER" build --force "$sif" "$def" > "/tmp/mxwp-build-${name}.log" 2>&1; then
+    REBUILT_ANY=1
+  else
+    echo "    ✗ $name 빌드 실패 — /tmp/mxwp-build-${name}.log" >&2
+    tail -8 "/tmp/mxwp-build-${name}.log" | sed 's/^/      /' >&2
+    return 1
+  fi
 }
 
 if [ "$NEED_REBUILD_API" = 1 ]; then

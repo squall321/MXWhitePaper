@@ -93,13 +93,17 @@ start_instance "$INST_MINIO" "$MINIO_SIF" \
 
 # Wait for postgres to accept connections, then minio
 echo "→ waiting for services to become ready…"
+PG_READY=0
 for i in $(seq 1 40); do
   if "$APPTAINER" exec instance://"$INST_POSTGRES" pg_isready -h 127.0.0.1 -p "$POSTGRES_PORT" -U "$POSTGRES_USER" >/dev/null 2>&1; then
-    echo "✓ postgres ready"
+    echo "✓ postgres ready"; PG_READY=1
     break
   fi
   sleep 1
 done
+# 실패 분기가 없어서 40초를 통째로 실패해도 아무 말 없이 다음 단계(alembic·seed)로 갔다.
+# 뒤 단계가 DB 를 못 잡으면 그쪽에서 엉뚱한 에러가 나므로 원인 추적이 어렵다.
+[ "$PG_READY" = 1 ] || echo "  ✗ postgres 40초 대기 실패 — 이후 단계(alembic/seed)가 실패할 것이다. 인스턴스 로그를 확인하라." >&2
 
 # Idempotent shared_memory patch — deployment-playbook §6.하 (apptainer
 # rootless + postgres /dev/shm flaky). Default `dynamic_shared_memory_type
@@ -157,18 +161,25 @@ done
 # ── minio-init (one-shot bucket creation) ───────────────────────────
 echo "→ ensuring MinIO buckets exist"
 for i in $(seq 1 5); do
+  # `mc alias set … && mb || true` 로 이어 붙이면 alias(=인증) 실패까지 `|| true` 에 먹혀
+  # 셸 전체가 0 으로 끝난다. 그래서 자격증명이 틀려도 '✓ minio buckets ready' 가 찍혔다.
+  # alias 는 판정에 쓰고(실패하면 재시도), 버킷 생성은 '이미 있음'이 정상이라 관대하게 둔다.
   if "$APPTAINER" exec "$MC_SIF" /bin/sh -c "
-        mc alias set local http://127.0.0.1:${MINIO_API_PORT} '${MINIO_ACCESS_KEY}' '${MINIO_SECRET_KEY}' >/dev/null 2>&1 &&
+        set -e
+        mc alias set local http://127.0.0.1:${MINIO_API_PORT} '${MINIO_ACCESS_KEY}' '${MINIO_SECRET_KEY}' >/dev/null 2>&1
         mc mb -p local/${MINIO_BUCKET_IMAGES} >/dev/null 2>&1 || true
         mc mb -p local/${MINIO_BUCKET_FILES}  >/dev/null 2>&1 || true
         mc mb -p local/${MINIO_BUCKET_BACKUPS:-mxwp-backups} >/dev/null 2>&1 || true
         mc anonymous set download local/${MINIO_BUCKET_IMAGES} >/dev/null 2>&1 || true
+        mc ls local/${MINIO_BUCKET_IMAGES} >/dev/null 2>&1
       " 2>&1; then
     echo "  ✓ minio buckets ready"
+    MINIO_OK=1
     break
   fi
   echo "  retry $i/5…"; sleep 3
 done
+[ "${MINIO_OK:-0}" = 1 ] || echo "  ✗ minio 버킷 준비 실패 — 자격증명(MINIO_ACCESS_KEY/SECRET) 또는 :${MINIO_API_PORT} 확인" >&2
 
 # ── api ─────────────────────────────────────────────────────────────
 # Same proxy passthrough as the web instance — the API container may
@@ -266,17 +277,24 @@ if curl -fsS -m 2 "http://127.0.0.1:${WEB_PORT}/" >/dev/null 2>&1; then
   # 지우고 instance restart 한 경우의 backup guard). index.html 의
   # `<script type="module"` 존재로 *진짜 SPA build* 인지 검증.
   if curl -fsS -m 2 "http://127.0.0.1:${WEB_PORT}/" 2>/dev/null | grep -q 'script type="module"'; then
-    echo "  ✓ web serving on ${WEB_PORT}"
+    echo "  ✓ web serving on ${WEB_PORT}"; WEB_OK=1
   else
+    WEB_OK=0
     echo "  ⚠ web responds on ${WEB_PORT} but index.html missing SPA script tags — dist 가 비어있을 수 있다"
     echo "    재빌드: make build-web 또는 pnpm --filter @mx/web build"
   fi
 else
+  WEB_OK=0
   echo "  ! web NOT serving on ${WEB_PORT} — check: $APPTAINER exec instance://$INST_WEB cat /tmp/serve.log"
 fi
 
 echo
-echo "✓ stack started"
+# web 이 안 떠도 '✓ stack started' 를 찍고 0 으로 끝났다. 위에서 잡은 상태를 반영한다.
+if [ "${WEB_OK:-0}" = 1 ] && [ "${MINIO_OK:-0}" = 1 ] && [ "${PG_READY:-0}" = 1 ]; then
+  echo "✓ stack started"
+else
+  echo "✗ stack started (일부 구성요소 실패 — 위 ✗ 줄 확인)" >&2
+fi
 echo "  postgres : 127.0.0.1:${POSTGRES_PORT}"
 echo "  meili    : http://127.0.0.1:${MEILI_PORT}"
 echo "  minio    : http://127.0.0.1:${MINIO_API_PORT} (console: ${MINIO_CONSOLE_PORT})"
