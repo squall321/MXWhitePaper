@@ -6076,6 +6076,7 @@
     },
     "/api/v1/auth/logout": {
       "post": {
+        "description": "세션 쿠키만 만료시킨다 — 인가는 요구하지 않되 교차 출처는 막는다.\n\n포털 로그아웃이 이 경로를 호출한다. 인가가 없다는 것과 아무 출처나 받는다는 것은\n다른 문제다 — 남의 페이지가 임의로 사용자를 로그아웃시키는 것(로그아웃 CSRF)은 막는다.\n브라우저가 자동으로 보내는 Sec-Fetch-Site 를 본다. 헤더가 없으면(curl 등) 통과 —\n그 경우 지울 브라우저 쿠키도 없다.\n(같은 조치를 HEAXHub·SignalForge 에도 적용했다. 세 곳이 전부다 — 포털이\n downstream_logout 으로 내려주는 목록과 일치한다.)",
         "operationId": "logout_api_v1_auth_logout_post",
         "responses": {
           "204": {

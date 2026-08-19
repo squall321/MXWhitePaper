@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
@@ -336,7 +336,19 @@ async def refresh(
 
 
 @router.post("/auth/logout", status_code=204)
-async def logout(response: Response) -> None:
+async def logout(request: Request, response: Response) -> None:
+    """세션 쿠키만 만료시킨다 — 인가는 요구하지 않되 교차 출처는 막는다.
+
+    포털 로그아웃이 이 경로를 호출한다. 인가가 없다는 것과 아무 출처나 받는다는 것은
+    다른 문제다 — 남의 페이지가 임의로 사용자를 로그아웃시키는 것(로그아웃 CSRF)은 막는다.
+    브라우저가 자동으로 보내는 Sec-Fetch-Site 를 본다. 헤더가 없으면(curl 등) 통과 —
+    그 경우 지울 브라우저 쿠키도 없다.
+    (같은 조치를 HEAXHub·SignalForge 에도 적용했다. 세 곳이 전부다 — 포털이
+     downstream_logout 으로 내려주는 목록과 일치한다.)
+    """
+    site = request.headers.get("sec-fetch-site", "")
+    if site and site not in ("same-origin", "same-site", "none"):
+        raise HTTPException(status_code=403, detail="cross-site logout is not allowed")
     response.delete_cookie(REFRESH_COOKIE, path=REFRESH_COOKIE_PATH)
 
 
