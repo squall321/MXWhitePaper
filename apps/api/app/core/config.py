@@ -12,6 +12,14 @@ class Settings(BaseSettings):
 
     # App
     app_env: str = Field(default="development")
+    # 토큰 없는 요청을 admin 으로 통과시키는 폴백(core/auth.py get_current_user)의 스위치.
+    # ⚠ app_env 하나에 매달아 두면 안 된다. app_env 기본값이 "development" 이고
+    # .env.example 도 development 를 그대로 배포하므로, .env 를 예제에서 복사한 운영 박스는
+    # 아무도 실수하지 않아도 인증이 열린 상태로 뜬다 — 실측으로 포털 공개 오리진
+    # /mx-white-paper/api/v1/documents 가 로그인 없이 200 에 실데이터였다.
+    # env-kit(apply-envs.sh)은 "없는 키만 추가" 라 이미 들어 있는 APP_ENV 를 고치지 못한다.
+    # 그래서 스위치를 따로 두고 기본을 닫는다 — 열려면 명시적으로 켜야 한다.
+    allow_dev_admin_fallback: bool = Field(default=False)
     log_level: str = Field(default="info")
 
     # Database

@@ -216,8 +216,9 @@ async def get_current_user(
             raise Unauthorized("User not found or inactive")
         return user
 
-    # No token — dev fallback (Sprint 5 호환). prod 에선 401.
-    if settings.app_env != "development":
+    # No token — dev fallback (Sprint 5 호환). 기본은 닫혀 있고, 켜야만 열린다.
+    # app_env 만 보던 때는 기본값이 development 라 '설정 안 한 박스'가 곧 '인증 없는 박스'였다.
+    if settings.app_env != "development" or not settings.allow_dev_admin_fallback:
         raise Unauthorized("Authentication required")
     admin = await _fetch_admin(s)
     if not admin:
