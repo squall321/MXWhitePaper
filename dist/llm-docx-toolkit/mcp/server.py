@@ -464,7 +464,11 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="get_section",
-        description="섹션 1개의 블록 전체 JSON. section_id 는 get_document_outline 에서.",
+        description=(
+            "**문서 편집 앱**의 섹션 1개 블록 전체 JSON. 첫 인자는 문서 `slug` 다. "
+            "AIDataHub 레코드(record_id)의 섹션이 아니다 — 그건 `get_record_sections` 를 쓴다. "
+            "section_id 는 get_document_outline 에서 얻는다."
+        ),
     )
     def get_section(slug: str, section_id: str) -> dict[str, Any]:
         data, _etag = _make_client().get_document(slug)
