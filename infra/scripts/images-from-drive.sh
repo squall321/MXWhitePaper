@@ -25,10 +25,10 @@ echo "→ source: $SRC"
 
 # 같은 내용이면 손대지 않는다 — 살아 있는 apptainer 인스턴스 밑의 SIF 를 덮어쓰면 squashfs 가 깨지고, cp 는 mtime 을 리셋해 포털 update-all 의
 # 재기동 판정(지문: 이름·크기·mtime)이 매번 달라진다. 영구 캐시(rclone 이 안 바뀐 파일을 건너뛴다)와 짝이다. HWAXPortal docs/update-all-skip-unchanged.
-_install_if_changed() { if [ -f "$2" ] && cmp -s "$1" "$2"; then echo "  · $(basename "$2") 같음 — 그대로"; return 0; fi; cp -p "$1" "$2"; return 0; }
+_install_if_changed() { if [ -f "$2" ] && cmp -s "$1" "$2"; then echo "  · $(basename "$2") 같음 — 그대로"; return 0; fi; cp -p "$1" "$2" || { echo "  ✗ $(basename "$2") 설치 실패 — $2 에 쓸 수 없다(권한·소유자·디스크). 옛 파일이 그대로다" >&2; return 2; }; }
 # 영구 캐시 — 임시 디렉터리면 rclone 이 비교할 것이 없어 매번 전량 전송이다(Drive ~2MB/s). 캐시에 받으면 안 바뀐 파일은 전송 0.
 STAGE="${MXWP_DRIVE_CACHE:-$APPT_DIR/.drive-cache}"; mkdir -p "$STAGE"
-"$RCLONE" copy --progress "$SRC/" "$STAGE/"
+"$RCLONE" sync --progress "$SRC/" "$STAGE/"    # sync — 원격에서 뺀 파일이 캐시에 남아 옛 SIF 가 되살아나지 않게
 
 if [ -f "$STAGE/SHA256SUMS" ]; then
   ( cd "$STAGE" && sha256sum -c SHA256SUMS ) || { echo "✗ checksum verification failed — not staging"; exit 1; }
