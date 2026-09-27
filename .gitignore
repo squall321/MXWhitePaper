@@ -112,3 +112,5 @@ infra/apptainer/bin-1.3.6/
 infra/data
 /data.ms
 infra/backups
+# Drive 이미지 영구 캐시(images-from-drive)
+infra/apptainer/.drive-cache/
