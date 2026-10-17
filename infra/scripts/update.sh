@@ -185,7 +185,12 @@ if [ "$RESTART" = 1 ]; then
     echo "▶ 6/8  restart stack"
     # Force restart — apptainer instance start skips already-running
     # instances and that's exactly what we want to avoid when env changed.
-    "$APPTAINER" instance stop --all >/dev/null 2>&1 || true
+    # 이 스택의 인스턴스만 내린다 — `instance stop --all` 은 이 계정의 apptainer 인스턴스 전부(dev 40여 개 — 포털 · HEAX 앱 · 다른
+    # DB 까지)를 내렸다(10-17 결정 16 · 포털 데이터 이관 D8). 떠 있는지 묻지 않고 다섯 이름을 그냥 내린다 — 없으면 오류를 버린다.
+    # stop.sh 의 instance_running 은 pipefail 아래 `instance list | grep -q` 라 떠 있는 것을 '없다' 로 읽을 수 있어 쓰지 않는다.
+    for _inst in "$INST_WEB" "$INST_API" "$INST_MINIO" "$INST_MEILI" "$INST_POSTGRES"; do
+      "$APPTAINER" instance stop "$_inst" >/dev/null 2>&1 || true
+    done
     "$REPO_ROOT/infra/scripts/start.sh" 2>&1 | sed 's/^/  /' | tail -10
     date +%s > "$ENV_MARK"
   else
