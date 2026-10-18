@@ -284,12 +284,18 @@ TypeError 로 떨어졌음. 정정 후 각 분기마다 dedicated subclass + cla
 attribute (`http_status`/`code`) 패턴 적용 — 다른 라우터들의 `*ValidationError`
 와 동일 컨벤션. 신규 SSO 라우터 추가 시 *반드시* 이 패턴 따를 것.
 
+**jose require 함정**: `jwt.decode(options={"require": [...]})` 는 PyJWT 꼴이라 python-jose 가
+말없이 버린다 — aud 없는 토큰이 청중 확인을 건너뛰고 jti · exp 가 없으면 아래 replay guard 에서
+KeyError 500 이었다. 필수 클레임은 `require_exp` · `require_aud` · `require_sub` · `require_jti` 를
+칸마다 준다(`c164dda`).
+
 In-process replay guard: `_seen_jti` dict 가 max `exp` 까지 보유. 다중
 worker / 멀티 replica 시점에는 Redis 로 backed 해야 일관성 유지 (현재는 단일
 uvicorn 가정).
 
 테스트 [[apps/api/tests/test_portal_sso.py]] — disabled 404 + malformed 401 +
-no_key 401 + happy 303 + replay 401 = 5 case (cycle 19 의 test_sso.py 와는
+no_key 401 + happy 303 + replay 401 + 필수 클레임(실제 RS256 서명 — aud · jti · exp · sub 가 빠지면
+invalid_token 401) = 6 묶음 (cycle 19 의 test_sso.py 와는
 별개 — 그건 SSO providers CRUD).
 
 ## 7. mxwp-mcp write tools — API token 의 외부 소비자
