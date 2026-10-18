@@ -41,8 +41,9 @@ chain 의 최상위. 우선순위:
    사용자 + scopes 반환. 스코프가 verb 와 안 맞으면 `ScopeInsufficient` (403).
 2. **JWT** (`Authorization: Bearer <jwt>`) → `security.decode_jwt()` → user id →
    `_fetch_user_by_id()`.
-3. **개발 환경 폴백** — 미인증이면 `_fetch_admin()` 으로 첫 admin 반환 — 운영
-   환경 (`app_env=production`) 에선 비활성.
+3. **개발 환경 폴백** — 미인증이면 `_fetch_admin()` 으로 첫 admin 반환. `app_env=development`
+   **와** `ALLOW_DEV_ADMIN_FALLBACK=1` 이 둘 다일 때만 열린다 — 스위치 기본은 꺼짐(`b5b199c`, 예제
+   `.env` 를 복사한 운영 박스가 인증 없이 뜨던 것을 막음). 시험은 conftest 가 시험 프로세스에서만 켠다.
 
 > `X-MXWP-User` 헤더는 `get_current_user` 의 우선순위에는 포함되지 않는다.
 > 일부 라우터 (예: bulk import) 가 author override 용으로 *직접* 읽어
@@ -169,7 +170,8 @@ MAX = get_settings().docx_import_max_bytes
 - `get_db()` — FastAPI dependency. 라우터에서 `s: AsyncSession = Depends(get_db)`
 
 테스트는 매 함수마다 engine 을 재생성한다 ([[src/tests/conftest.py]] 의
-`_reset_engine_per_test`) — asyncpg 의 event-loop affinity 때문.
+`_reset_engine_per_test`) — asyncpg 의 event-loop affinity 때문. 같은 conftest 가 dev admin 폴백
+(`ALLOW_DEV_ADMIN_FALLBACK=1`)을 시험 프로세스에서만 켠다 — 시험 대부분이 토큰 없이 부른다(`051acc3`).
 운영 코드는 신경 쓸 필요 없음.
 
 ## 5. Security — JWT + 패스워드
