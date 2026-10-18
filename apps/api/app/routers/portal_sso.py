@@ -109,9 +109,11 @@ async def _verify_portal_token(token: str) -> dict[str, Any]:
     if key is None:
         raise _NoKeyError("portal JWKS has no usable key")
     try:
+        # python-jose silently ignores a PyJWT-style "require": [...] list — each claim needs its own
+        # require_* flag (the list form let a token without aud skip the audience check).
         claims = jwt.decode(
             token, key, algorithms=["RS256"], audience=s.portal_audience,
-            options={"require": ["exp", "aud", "sub", "jti"]},
+            options={"require_exp": True, "require_aud": True, "require_sub": True, "require_jti": True},
         )
     except Exception as e:  # noqa: BLE001
         raise _InvalidTokenError("launch token rejected") from e

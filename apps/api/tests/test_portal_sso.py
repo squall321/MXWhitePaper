@@ -8,6 +8,9 @@ Coverage:
   4. wrong scope → 401 wrong_scope.
   5. replay (same jti used twice) → 401 replay on second attempt.
   6. happy path → 303 redirect with refresh cookie set, user upserted.
+  7. required claims — a token missing aud / jti / exp / sub is 401 invalid_token,
+     signed for real with a generated RS256 key (python-jose ignores a PyJWT-style
+     "require" list; with it a token without aud skipped the audience check).
 
 We mock the JWKS HTTP fetch + bypass JWT signature validation via
 monkeypatched ``portal_sso._verify_portal_token`` for the happy/replay paths,
@@ -206,3 +209,49 @@ async def test_replay_second_use_returns_401(
     finally:
         async with session_scope() as s:
             await s.execute(text("DELETE FROM users WHERE email = :e"), {"e": test_email})
+
+
+# ── 7) required claims ─────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("missing", [None, "aud", "jti", "exp", "sub"])
+async def test_required_claims_are_enforced(
+    _enable_sso, monkeypatch: pytest.MonkeyPatch, missing: str | None
+) -> None:
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from jose import jwk, jwt
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    priv = key.private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    ).decode()
+    pub = key.public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+    ).decode()
+
+    async def _jwks() -> list[dict[str, Any]]:
+        return [{**jwk.construct(pub, "RS256").to_dict(), "kid": "k1"}]
+
+    monkeypatch.setattr(sso_mod, "_portal_jwks", _jwks)
+    now = int(time.time())
+    claims: dict[str, Any] = {
+        "sub": "portal-user-7",
+        "email": "sso-claims@mx.local",
+        "aud": "mx-white-paper",
+        "scope": "launch",
+        "jti": f"jti-claims-{missing}",
+        "iat": now,
+        "nbf": now,
+        "exp": now + 60,
+    }
+    if missing:
+        del claims[missing]
+    token = jwt.encode(claims, priv, algorithm="RS256", headers={"kid": "k1"})
+
+    if missing is None:
+        assert (await sso_mod._verify_portal_token(token))["sub"] == "portal-user-7"
+    else:
+        with pytest.raises(sso_mod._InvalidTokenError):
+            await sso_mod._verify_portal_token(token)
