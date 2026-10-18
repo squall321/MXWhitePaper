@@ -73,12 +73,34 @@ async def test_protected_route_requires_token_in_production(monkeypatch) -> None
 
 @pytest.mark.asyncio
 async def test_dev_fallback_allows_request_without_token() -> None:
-    """APP_ENV=development 가 디폴트 — bearer 없이도 GET /me 가 admin 으로 동작."""
+    """APP_ENV=development 이고 ALLOW_DEV_ADMIN_FALLBACK 을 켜면(conftest 가 시험 프로세스에서 켠다) bearer 없이도 GET /me 가 admin."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         r = await ac.get("/api/v1/me")
     assert r.status_code == 200, r.text
     assert r.json()["data"]["role"] == "admin"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("app_env, switch", [("development", False), ("production", True)])
+async def test_dev_fallback_is_closed_unless_both_set(monkeypatch: pytest.MonkeyPatch, app_env: str, switch: bool) -> None:
+    """b5b199c — 스위치(allow_dev_admin_fallback)의 기본은 꺼짐이고, development 와 스위치가 둘 다일 때만 열린다.
+    .env 를 예제에서 복사한 운영 박스가 아무 실수 없이도 인증 없이 뜨던 것을 막는 성질이다."""
+    from app.core.config import get_settings
+
+    s = get_settings()
+    monkeypatch.setattr(s, "app_env", app_env)
+    monkeypatch.setattr(s, "allow_dev_admin_fallback", switch)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        r = await ac.get("/api/v1/me")
+    assert r.status_code == 401, r.text
+
+
+def test_dev_fallback_switch_defaults_off() -> None:
+    from app.core.config import Settings
+
+    assert Settings.model_fields["allow_dev_admin_fallback"].default is False
 
 
 @pytest.mark.asyncio

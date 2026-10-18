@@ -1,6 +1,7 @@
 """테스트 공통 설정.
 
 1) `.env` 자동 로드 — apptainer 가 --env-file 없이 호출되어도 DB URL 이 잡히도록.
+   dev admin 폴백은 시험 프로세스에서만 켠다(아래 — b5b199c 가 기본을 닫았다).
 2) 매 테스트마다 SQLAlchemy async engine 을 폐기/재생성. pytest-asyncio 는 함수마다
    새 event loop 를 만들고 asyncpg connection 은 자기를 만든 loop 에만 bind 되므로,
    캐시된 engine 을 재사용하면 'Event loop is closed' 가 난다.
@@ -42,6 +43,12 @@ for candidate in (
     Path(__file__).resolve().parents[3] / ".env",
 ):
     _load_env_file(candidate)
+
+# 토큰 없는 요청을 admin 으로 통과시키는 dev 폴백을 시험 프로세스에서만 켠다. 시험 대부분이 토큰 없이 부른다.
+# b5b199c(2026-08-19)가 운영 박스의 '인증 없는 기본값' 을 막으려고 기본을 닫은 뒤로 켜는 곳이 없어 dev 에서
+# 시험 380여 건이 401 로 깨져 있었다(10-19 확인). 시험은 ASGITransport 로 프로세스 안에서만 돌아 밖으로 열리지 않는다.
+# .env 가 끄더라도 시험은 켠다(setdefault 가 아니다). 닫힌 기본값 자체는 test_auth 가 따로 본다.
+os.environ["ALLOW_DEV_ADMIN_FALLBACK"] = "1"
 
 # 검색용 materialized view refresh 는 단위 테스트에서 비활성화한다.
 # (동시성 commit 흐름이 conftest 의 engine reset 과 부딪히면 timeout 발생)
