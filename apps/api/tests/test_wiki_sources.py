@@ -150,6 +150,7 @@ async def test_audience_and_owner_rules(world: dict[str, Any]) -> None:
     assert (await _post(plain, _env(audience=["org"], owner=None))).status_code == 403  # 전사는 관리자만
     denied = await _post(plain, _env(owner=None))  # 갖지 않은 소속
     assert denied.status_code == 403 and denied.json()["error"]["details"]["missing"] == [f"aff:{AFF}"]
+    assert "잠시 뒤 다시" in denied.json()["error"]["message"]  # 권한이 막 바뀐 때(게이트웨이 캐시)를 알려 준다
     assert (await _post(aff, _env())).status_code == 403  # 남을 주인으로(봉투의 owner 는 다른 사람)
     mine = await _post(aff, _env(owner=None))
     assert mine.status_code == 201, mine.text

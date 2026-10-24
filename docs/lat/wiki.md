@@ -127,7 +127,7 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 
 | 무엇 | 어떻게 |
 | --- | --- |
-| 범위 | 보낸 사람이 토큰을 모두 가져야 한다(admin · 시스템은 다). `["org"]` 는 admin 만(되쌓기의 근거가 있고 모두 전사 문서면 예외 — `org_ok`). 위임 호출은 admin 이 owner 로 깎여 늘 일반 규칙 |
+| 범위 | 보낸 사람이 토큰을 모두 가져야 한다(admin · 시스템은 다). `["org"]` 는 admin 만(되쌓기의 근거가 있고 모두 전사 문서면 예외 — `org_ok`). 위임 호출은 admin 이 owner 로 깎여 늘 일반 규칙. 빠진 토큰이 `aff:` · `plat:` 이면 403 메시지가 '잠시 뒤 다시' 를 덧붙인다 — 관리자가 막 바꾼 소속을 게이트웨이 권한 조회 캐시가 늦게 따라온다(포털 세션 확인, 10-24) |
 | 주인 | 비면 보낸 사람. 남의 이메일은 admin(연결기)만. `owner_email`(불변 · 0053) + `owner_user_id`(그 이메일의 사람 — 나중에 이을 수 있게 바꿀 수 있는 칸) |
 | via | 위임 `gateway` → `gateway` · `hwax-portal` → `portal-chat` · API 토큰 → `connector:<origin.system>`(인증이 `auth_via='api_token'` 을 단다) · 웹 세션 → `upload` |
 | 멱등 | 먼저 찾고(같으면 200 `dedup`), INSERT 는 `ON CONFLICT DO NOTHING` — 동시에 같은 것 둘이 와도 한 줄 |
