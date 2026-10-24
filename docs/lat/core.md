@@ -395,6 +395,12 @@ invalid_token 401) + 스냅숏 덮어쓰기 + 소속→팀 = 8 묶음 (cycle 19 
    `http://` prefix 가 포함된 `localhost:5173/80` URL 두 개.
 7. **JWT 알고리즘은 HS256 (대칭키)** — `jwt_secret` 만 갖고 있으면 누구나
    발급 가능. 운영에서 RS256 으로 전환 검토 시 발급/검증 양쪽 모두 코드 수정.
+8. **시험은 dev 와 같은 DB 를 쓴다** — 고정물이 표를 통째로 `DELETE` · `UPDATE` 하면
+   dev 의 진짜 행이 사라진다(10-24 — 토큰 시험이 `api_tokens` 를 비워 게이트웨이 서비스
+   토큰 · 개인 토큰이 날아갔다). 시험마다 전용 사용자를 두고 그 사람 행만 지운다
+   ([[src/tests/test_api_tokens.py#pat_user]]). 통째로 비우는 시험이 아직 남아 있다
+   (webhooks · subscriptions · sso_providers · backup_schedules 등 —
+   `grep -rnE 'DELETE FROM [a-z_]+"\)' apps/api/tests/`).
 
 ## Notifications 흐름 — BE INSERT → FE poll → store → drawer
 

@@ -16,11 +16,14 @@ Two layers of coverage:
 """
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
 from app.core.db import session_scope
+from app.core.security import hash_password, make_access_token
 from app.main import app
 from app.services.api_token_scopes import check_scope, required_scope_for
 
@@ -115,18 +118,30 @@ def test_admin_path_works_without_api_v1_prefix():
 # ── integration tests ───────────────────────────────────────────────────
 
 
+_AUTH: dict[str, str] = {}
+
+
 async def _client() -> AsyncClient:
     transport = ASGITransport(app=app)
-    return AsyncClient(transport=transport, base_url="http://test")
+    return AsyncClient(transport=transport, base_url="http://test", headers=_AUTH)
 
 
 @pytest.fixture(autouse=True)
-async def _wipe_api_tokens():
+async def pat_user():
+    # 시험마다 전용 사용자를 두고 그 사람 것만 지운다 — api_tokens 를 통째 비우던 때는 dev 의 게이트웨이 서비스 토큰 · 개인 토큰까지 사라졌다.
+    uid = str(uuid4())
     async with session_scope() as s:
-        await s.execute(text("DELETE FROM api_tokens"))
-    yield
+        await s.execute(text("""
+            INSERT INTO users (id, email, name, password_hash, role)
+            VALUES (CAST(:id AS uuid), :e, 'PAT test', :pw, 'admin')
+        """), {"id": uid, "e": f"pat-scope-test-{uid[:8]}@example.com", "pw": hash_password("x" * 16)})
+    _AUTH["Authorization"] = f"Bearer {make_access_token(uid)}"
+    yield uid
+    _AUTH.clear()
     async with session_scope() as s:
-        await s.execute(text("DELETE FROM api_tokens"))
+        for table in ("api_tokens", "audit_logs"):
+            await s.execute(text(f"DELETE FROM {table} WHERE user_id = CAST(:u AS uuid)"), {"u": uid})
+        await s.execute(text("DELETE FROM users WHERE id = CAST(:u AS uuid)"), {"u": uid})
 
 
 async def _mint_token(ac: AsyncClient, scopes: list[str], name: str = "scope-test") -> str:
@@ -206,7 +221,7 @@ async def test_read_token_allowed_on_me_endpoints() -> None:
 
 
 @pytest.mark.asyncio
-async def test_legacy_empty_scopes_acts_as_read() -> None:
+async def test_legacy_empty_scopes_acts_as_read(pat_user: str) -> None:
     """Tokens predating Cycle 0024 may have scopes=[] in the column. Those
     should authenticate but be limited to safe verbs."""
     async with await _client() as ac:
@@ -214,7 +229,8 @@ async def test_legacy_empty_scopes_acts_as_read() -> None:
 
     # Force-clear scopes column to simulate a pre-0024 row.
     async with session_scope() as s:
-        await s.execute(text("UPDATE api_tokens SET scopes = '[]'::jsonb"))
+        await s.execute(text("UPDATE api_tokens SET scopes = '[]'::jsonb WHERE user_id = CAST(:u AS uuid)"),
+                        {"u": pat_user})
         await s.commit()
 
     async with await _client() as ac:

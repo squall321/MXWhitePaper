@@ -2,38 +2,52 @@
 
 Coverage targets:
   - POST /me/api-tokens 201, returns plaintext exactly once + masked prefix
-  - GET /me/api-tokens lists rows for the dev-fallback admin
+  - GET /me/api-tokens lists the caller's rows
   - bearer auth path: `mxwp_<token>` is accepted as the user
   - DELETE soft-revokes (revoked_at NOT NULL); revoked tokens reject auth
   - POST /rotate revokes old + mints new with same name/scopes
   - expired tokens reject auth
   - garbage tokens / wrong prefixes return 401
 
-Tests share the dev-fallback admin user (seeded by the test DB) — same approach
-the subscriptions tests use.
+Each test runs as its own throwaway admin user (`pat_user`) and cleans up only
+that user's rows — the dev DB is shared, so a table-wide wipe takes real tokens.
 """
 from __future__ import annotations
+
+from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
 from app.core.db import session_scope
+from app.core.security import hash_password, make_access_token
 from app.main import app
+
+_AUTH: dict[str, str] = {}
 
 
 async def _client() -> AsyncClient:
     transport = ASGITransport(app=app)
-    return AsyncClient(transport=transport, base_url="http://test")
+    return AsyncClient(transport=transport, base_url="http://test", headers=_AUTH)
 
 
 @pytest.fixture(autouse=True)
-async def _wipe_api_tokens():
+async def pat_user():
+    # 시험마다 전용 사용자를 두고 그 사람 것만 지운다 — api_tokens 를 통째 비우던 때는 dev 의 게이트웨이 서비스 토큰 · 개인 토큰까지 사라졌다.
+    uid = str(uuid4())
     async with session_scope() as s:
-        await s.execute(text("DELETE FROM api_tokens"))
-    yield
+        await s.execute(text("""
+            INSERT INTO users (id, email, name, password_hash, role)
+            VALUES (CAST(:id AS uuid), :e, 'PAT test', :pw, 'admin')
+        """), {"id": uid, "e": f"pat-test-{uid[:8]}@example.com", "pw": hash_password("x" * 16)})
+    _AUTH["Authorization"] = f"Bearer {make_access_token(uid)}"
+    yield uid
+    _AUTH.clear()
     async with session_scope() as s:
-        await s.execute(text("DELETE FROM api_tokens"))
+        for table in ("api_tokens", "audit_logs"):
+            await s.execute(text(f"DELETE FROM {table} WHERE user_id = CAST(:u AS uuid)"), {"u": uid})
+        await s.execute(text("DELETE FROM users WHERE id = CAST(:u AS uuid)"), {"u": uid})
 
 
 # ── create + list ────────────────────────────────────────────────────────
@@ -148,7 +162,7 @@ async def test_revoked_token_rejects_subsequent_requests() -> None:
         )
         assert r_ok.status_code == 200, r_ok.text
 
-        # Revoke (uses dev-fallback admin auth — owner == admin).
+        # Revoke (uses the test user's JWT — owner == caller).
         r_del = await ac.delete(f"/api/v1/me/api-tokens/{token_id}")
         assert r_del.status_code == 204, r_del.text
 
