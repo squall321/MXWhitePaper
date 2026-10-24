@@ -13,7 +13,7 @@
   "audience": [
     "plat:plmdefect"
   ],
-  "sensitivity": "restricted",
+  "sensitivity": "internal",
   "subject_hints": [
     {
       "type": "product-model",

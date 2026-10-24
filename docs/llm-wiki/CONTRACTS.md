@@ -93,6 +93,7 @@ DocumentJSON v1.0(`packages/shared/schemas/document.json` → datamodel-codegen)
 | `trigger` | jsonb | `{source_ids:[…]}` · `{question_id}` · `{finding_ids:[…]}` · `{user_id, request}` |
 | `job_id` | uuid null | |
 | `schema_version` · `model` · `prompt_hash` | int · text · text | 재현용 |
+| `plan` | jsonb | 계획 단계의 출력 — 건드릴 문서 · 까닭 · 그 문서를 읽은 판(V6 · 반영 때 CAS 가 본다). 0054 에서 더함 |
 | `ops` | jsonb | §4 연산 목록 |
 | `validation` | jsonb | §5 결과 `[{rule, verdict:'pass'|'warn'|'fail', detail}]` |
 | `status` | text | `proposed` → `validating` → (`auto_applied` \| `pending_review` \| `failed`) · `pending_review` → (`approved` → `applied`) \| `rejected` · `applied`/`auto_applied` → `reverted` |
@@ -100,7 +101,7 @@ DocumentJSON v1.0(`packages/shared/schemas/document.json` → datamodel-codegen)
 | `decided_by` · `decided_at` · `decision_note` | | 검토자 |
 | `applied` | jsonb | `{<doc_id>: [from_version, to_version]}` — 되돌리기는 이 판으로 `restore` |
 | `usage` | jsonb | `{prompt_tokens, completion_tokens, calls, seconds}` |
-| `created_at` | timestamptz | |
+| `created_by` · `created_at` · `finished_at` · `error` | | 묶음을 부른 사람(들이기면 원천을 보낸 사람) · 실패 까닭 한 줄 |
 
 반영은 **기존 document_service 경로**로 한다(ETag · 버전 CAS · 저장 훅 · 재색인). 판의 `change_log` 에는 `wiki cs_xxxxxxxx`
 (X-MXWP-Change-Log 허용 문자 안 — document_service.py `_CHANGE_LOG_RE`).
@@ -130,8 +131,10 @@ DocumentJSON v1.0(`packages/shared/schemas/document.json` → datamodel-codegen)
 (그 열 가지는 문서 사이 관계 — 전제 · 인용 · 대체 …, 이 표는 공학 개체 사이 관계).
 
 **`wiki_entities`** — `id` uuid PK · `type_key` FK · `canonical_name` · `aliases` text[] · `ext_ids` jsonb(`{ra_entity, sp_model, sp_project, bom_code,
-fmea_item, mt_material, …}`) · `attrs` jsonb · `page_doc_id` uuid null · `audience` text[] · `status`(`active` · `merged` · `retired`) · `merged_into` ·
-`created_by_changeset`. UNIQUE(`type_key`, lower(`canonical_name`)). 별칭은 GIN 색인.
+fmea_item, mt_material, …}`) · `attrs` jsonb · `audience` text[] · `status`(`active` · `merged` · `retired`) · `merged_into` ·
+`created_by_changeset`. UNIQUE(`type_key`, lower(`canonical_name`)) — active 끼리만. 별칭 · 외부 id 는 GIN 색인.
+엔티티 하나의 문서는 범위마다 한 장일 수 있어(§2-11) 문서 연결은 `wiki_pages.entity_id` 로 한다 — `page_doc_id` 는 두지 않았다(0054).
+`wiki_entity_types` 에는 slug 약어 `abbr`(SCHEMA-DRAFT §3)를 더했다. 첫 판 14 가지는 0054 가 approved 로 넣는다.
 
 **`doc_triples` 확장** — 컬럼을 **더한다**(기존 기능은 그대로) — `predicate_key` FK `wiki_predicates` null · `source_ids` uuid[] · `changeset_id` ·
 `confidence` real · `wiki_status`(`proposed` · `accepted` · `retired`). 주어 · 목적어는 지금처럼 문서 slug(엔티티 문서). 문서가 지워지면 남는
@@ -226,6 +229,8 @@ DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
 - 서버가 `schema` · `kind` 별 꼴을 검증하고(pydantic), 모르는 칸은 거부한다(조용히 버리지 않는다).
 - `audience` 는 보낸 사람이 볼 수 있는 범위보다 넓을 수 없다(`org` 는 서비스 계정 또는 관리자만, 또는 원천 시스템이 원래 전사 공개인 자료).
 - 위임 호출(게이트웨이 · 포털)은 `owner.email` 이 호출자와 같아야 한다. 서비스 연결기는 원천 시스템이 준 주인을 그대로 싣는다.
+- `sensitivity: restricted` 는 '주인 무리만'(문서 confidentiality 와 같은 뜻 — Q4)이라 **들이지 않는다** — 원천 문서만 남는다(WK-D37).
+  범위로 거르는 자료(PLM 결함 등)는 `internal` + 범위 토큰(`plat:plmdefect`)으로 보낸다 — 보이기는 범위가 정한다.
 - 첨부는 기존 업로드 파이프라인(init · put · finalize, sha256 중복 제거)으로 먼저 올리고 id 만 싣는다. 원천 블롭은 `mxwp-wiki-sources` 버킷에 따로 둔다.
 
 ## 4. 변경 묶음 연산(`ops`)

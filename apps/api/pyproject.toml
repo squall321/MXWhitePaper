@@ -24,6 +24,8 @@ dependencies = [
   "structlog>=24.4",
   "httpx>=0.28",
   "ulid-py>=1.1",
+  # 위키 규칙서 YAML(app/wiki/schema.py). 이미지에는 uvicorn[standard] 가 함께 들여온다(api.def 를 바꾸지 않는다)
+  "pyyaml>=6.0,<7",
   # docx import (POST /imports/docx). 우리 파서는 zipfile+ElementTree 로
   # 직접 OOXML/OMML 을 파싱하므로 python-docx 자체에 강결합되진 않지만,
   # 향후 idiomatic 표준화 + sub-dep 호환을 위해 명시적으로 의존성 선언.

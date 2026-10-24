@@ -35,6 +35,7 @@ from app.services.section_numbering import renumber_sections
 from app.services.wiki_link_alias import resolve_term_aliases
 from app.services.wiki_link_extractor import extract_wiki_links
 from app.wiki import audience
+from app.wiki import schema as wiki_schema
 
 logger = logging.getLogger(__name__)
 
@@ -393,6 +394,12 @@ def validate_documentjson(payload: dict[str, Any]) -> dict[str, Any]:
     _assert_unique_ids(dumped)
     _assert_renderable_shapes(dumped)
     _assert_nesting_depth(dumped)
+    if dumped.get("slug") == wiki_schema.SLUG:
+        # 위키 규칙서 — 기계용 YAML 이 틀리면 저장하지 않는다(새 판은 검증된 것만, request §5-3).
+        try:
+            wiki_schema.parse_document(dumped)
+        except wiki_schema.RuleBookError as e:
+            raise ValidationFailed(f"위키 규칙서가 틀렸다 — {e}", details={"errors": e.errors}) from None
     return dumped
 
 

@@ -151,7 +151,7 @@ return envelope(data={...}, meta={"page": 1})
 | AI | `ai_enabled` | `False` |
 | 위임 | `mxwp_sso_secret` | `""` — 비면 `/auth/sso` 404 · 위임 토큰 거부 · 소속 증명 무시 |
 | | `mxwp_sso_jit_create` | `True` — 끄면 위임으로 처음 보는 사람은 403 |
-| 위키 | `wiki_enabled` · `wiki_llm_*` · `wiki_query_llm_*` | 끔 · 빈 값 — [[wiki]] |
+| 위키 | `wiki_enabled` · `wiki_llm_*`(구조화 출력 꼴 `wiki_llm_structured` 포함) · `wiki_query_llm_*` | 끔 · 빈 값 · json_schema — [[wiki]] |
 | Backup | `backup_enabled` | `True` |
 | Subscription | `subscription_digest_enabled` | `True` |
 

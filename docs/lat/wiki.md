@@ -16,7 +16,8 @@
 | W1 연결 · 신원 | 위임 창구 · 위임 토큰(세대) · 소속 · 플랫폼 증명 · 진입 토큰 스냅숏 · jti 원장 · 소속→팀 표(API · 화면 `/admin/aff-team-map`) | [[core#게이트웨이 · 포털 위임]] |
 | W2 보이기 범위 | 읽기 길 전수(아래 표) · 길마다 시험 · admin 범위 밖 읽기 감사. 남은 것 — cae00 배포 · 재색인 | [[#Audience]] |
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
-| W4 들이기 ~ W8 cae00 | (아직) | — |
+| W4 들이기 · 검토 · 근거 | (짓는 중) 표 — 변경 묶음 · 근거 · 엔티티 유형(첫 판 14) · 엔티티(0054) · 규칙서(YAML 검증) · LLM 클라이언트 | [[#Rule book]] · [[#LLM]] |
+| W5 온톨로지 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
 
@@ -39,7 +40,9 @@
 | 범위 계산 · 저장소 층 필터 · 읽는 사람 문맥 | [[src/app/wiki/audience.py]] · 표 `wiki_pages`(0051) | W2 |
 | DB 큐 · 워커(처리기 등록부) | [[src/app/wiki/jobs.py]] · [[src/app/wiki/worker.py#run_once]] · 표 `wiki_sources` · `wiki_jobs` · `wiki_log` · `wiki_workers`(0052) | W3 |
 | 받기 · 멱등 · 철회 · 원천 문서 · 기록 | [[src/app/wiki/sources.py#receive]] · 문서 만들기 `document_service.create_document(wiki=…)` | W3 |
-| LLM(구조화 출력) · 해석 · 계획 · 쓰기 · 검증 · 반영 | `app/wiki/{llm,resolve,plan,write,validate,apply}.py` | W4 |
+| 규칙서(YAML 검증 · 판) | [[src/app/wiki/schema.py#RuleBook]] · 저장 검사 `document_service.validate_documentjson` | W4 |
+| LLM(구조화 출력) | [[src/app/wiki/llm.py#structured]] | W4 |
+| 해석 · 계획 · 쓰기 · 검증 · 반영 | `app/wiki/{resolve,ingest,validate,apply}.py` | W4 |
 | REST | [[src/app/routers/wiki.py]](`/api/v1/wiki/*`) | W3~ |
 | 위임 창구 · 회수 · 소속→팀 표 | [[src/app/routers/auth_sso.py]] · 검증 `core/auth._resolve_delegated` · 증명 `core/portal_identity.py` | W1 |
 
@@ -130,6 +133,26 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | `GET /log` · `GET /log.md` | reader | 범위 토큰을 모두 가진 줄. md 는 옛것부터 `## [YYYY-MM-DD HH:MM] op \| 제목`(KST) + detail 한 줄 |
 | `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(W7). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
 
+## Rule book
+
+[[src/app/wiki/schema.py]] — 규칙서 = 문서 `wiki-schema` 안의 YAML 코드 블록 **하나**(둘이면 거부). 판 = 그 문서의 판, 문서가 없으면
+첫 판 `DEFAULT`(판 0 — SCHEMA-DRAFT 의 규칙 열 문장 그대로 · 절 꼴 · 정책). 이 판에서 코드가 읽는 칸 — `rules` · `sections` ·
+`policy.auto_apply` · `policy.always_review_kinds` · `budget.ingest_tokens` · `ingest.*`(나머지는 W6 · W7 이 잇는다).
+절 이름 끝 `(자동)` = 코드가 짓는 절, `(사람)` = 사람만 쓰는 절 — AI 쓰기는 나머지 절에만(V5). 저장 때 `validate_documentjson` 이
+slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 싣는다).
+
+## LLM
+
+[[src/app/wiki/llm.py#structured]] — `structured(ep, messages, Model, name=…)` 가 pydantic 모델 하나를 돌려준다.
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 자리 | `background()`(WIKI_LLM_*) · `interactive()`(WIKI_QUERY_LLM_*, 비면 배경). 비면 None — mock 으로 대신하지 않는다 |
+| 꼴 | `WIKI_LLM_STRUCTURED` = `json_schema`(기본, `response_format`) · `tools`(도구 호출). 스키마는 `Model.model_json_schema()` |
+| 다시 묻기 | 받은 글을 pydantic 으로 검사 — 틀리면 무엇이 틀렸는지 붙여 한 번 다시, 또 틀리면 `LLMFormatError` |
+| 오류 | 429 · 5xx · 연결 · 끊김 · 시간 초과(연결 10초) → `LLMUnavailable`, 그 밖 4xx → `LLMError`. 오류 본문 셋(OpenAI · 옛 vLLM · `--api-key`)을 다 읽는다 |
+| 쓴 양 | `Usage`(prompt · completion 토큰 · 부른 수 · 초) — 부를 때마다 더한다 |
+
 ## Test bundle
 
 `apps/api/tests/fixtures/wiki/` — 합성 원천 20 장(해석 6 · 사례 4 · 집계 2 · 문답 5 · 심의 2 · 정정 1)과 일부러 심은 결함(모순 · 낡음 ·
@@ -150,13 +173,15 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 ## Settings
 
 [[src/app/core/config.py#Settings]] — `WIKI_ENABLED`(기본 끔 → `/api/v1/wiki/*` 404) · 배경 `WIKI_LLM_{BASE_URL,MODEL,API_KEY}` ·
+구조화 출력 꼴 `WIKI_LLM_STRUCTURED`(json_schema · tools) ·
 묻기 `WIKI_QUERY_LLM_*`(비면 배경과 같게) · 위임 `MXWP_SSO_SECRET`(비면 위임 창구 404) · `MXWP_SSO_JIT_CREATE`(기본 켬).
 API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 — 새 키에 start.sh `--env` 를 더할 필요가 없다.
 
 ## Gotchas
 
 - **시험의 pytest · jsonschema 는 api.sif 안이 아니라 호스트 `~/.local` 에서 온다**(홈 마운트). `--no-mount home` 으로 sif 만 띄우면
-  둘 다 없다. jsonschema 는 pyproject `dev` 에 적어 두었다.
+  둘 다 없다. jsonschema 는 pyproject `dev` 에 적어 두었다. **그래서 운영 코드는 jsonschema 를 쓰지 않는다** — LLM 출력은 pydantic
+  모델로 검사한다(가짜 LLM 의 `conform` 만 시험 쪽에서 jsonschema 를 쓴다). PyYAML 은 이미지에 있다(uvicorn[standard]).
 - 이 리포의 시험은 **dev DB 를 그대로 쓴다** — 위키 시험이 만든 줄은 시험이 지운다(conftest 의 `sup-*` 정리와 같은 자세).
 - `pytest -q` 는 addopts 의 `-q` 와 겹쳐 요약 줄이 숨는다 — 결과 줄을 남기려면 `-q` 없이 돌린다.
 - **요청 밖에서 서비스 · 저장소를 직접 부르는 코드(시험 · CLI · 배경 작업)는 읽는 사람을 골라야 한다** — 안 고르면 `ViewerMissing`.

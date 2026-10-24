@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -77,6 +78,8 @@ class Settings(BaseSettings):
     wiki_llm_base_url: str = Field(default="")     # OpenAI 호환 base, 예 http://<ip>:<port>/v1
     wiki_llm_model: str = Field(default="")
     wiki_llm_api_key: str = Field(default="")
+    # 구조화 출력 꼴 — json_schema(response_format) 또는 tools(도구 호출 — json_schema 를 못 받는 서버). 묻기 자리도 같이 쓴다
+    wiki_llm_structured: Literal["json_schema", "tools"] = Field(default="json_schema")
     # 대화형(묻기) LLM — 비면 배경과 같게.
     wiki_query_llm_base_url: str = Field(default="")
     wiki_query_llm_model: str = Field(default="")
