@@ -237,7 +237,7 @@ async def get_current_user(
 ) -> dict[str, Any]:
     """사람을 해소하고, 이 요청의 '읽는 사람'(보이기 범위 문맥 — app/wiki/audience.py)으로 둔다."""
     user = await _resolve_current_user(request, s)
-    audience.set_viewer(audience.viewer_from_user(user))
+    audience.set_viewer(audience.SERVICE if audience.is_service_call(user) else audience.viewer_from_user(user))
     return user
 
 

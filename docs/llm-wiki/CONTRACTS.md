@@ -176,6 +176,9 @@ DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
   (admin 의 범위 밖 읽기는 감사에 남긴다).
 - 원천 여럿을 인용한 문서의 **최소 범위** = 인용한 원천 범위 토큰을 모두 더한 것(그리고 조건이 늘수록 좁다). 문서 범위는 그 토큰을 다 담아야
   한다(V4). 서로 다른 `aff:` 둘 · 서로 다른 `user:` 둘이 섞이면 만족하는 사람이 없으므로 반영을 거부하고 사람에게 넘긴다.
+- **서비스 계정은 `["org"]` 만** — `MXWP_SERVICE_ACCOUNTS`(기본 `admin@mx.local`)의 API 토큰 호출(게이트웨이의 신원 없는 내부 호출)은
+  admin 이어도 익명과 같은 시야다(restricted 도 못 본다). admin 우회는 사람 admin 에게만(사용자 결정 10-24 · WK-D43). 같은 계정의
+  웹 세션 · 위임 호출은 사람이다.
 - **넓히지 않는다** — 넓히기(예 — 소속 문서를 `["org"]` 로)는 **사람만** 한다. 원천 주인 또는 그 범위의 검토자가 `POST /wiki/pages/{slug}/audience` 로,
   기록에 남긴다. `plat:` 토큰을 빼는 넓히기는 admin 만(포털 권한표가 막는 자료를 위키가 풀어 주는 길이 되기 때문).
 - **restricted(사용자 결정 Q4 — WK-D15 · D27)** — 위키든 아니든 `confidentiality=restricted` 는 작성자(`owner_id`) · `document_reviewers` ·

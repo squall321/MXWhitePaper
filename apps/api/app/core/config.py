@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     # ── LLM 위키(docs/llm-wiki) ──────────────────────────────────────────────────────────────────
     # 끄면(기본) /api/v1/wiki/* 가 404. 위키 쓰기는 mock 으로 대신하지 않는다 — LLM 이 없으면 작업이 줄에서 기다린다.
     wiki_enabled: bool = Field(default=False)
+    # 서비스 계정(쉼표로 이은 이메일) — 그 API 토큰 호출(게이트웨이의 신원 없는 내부 호출)은 위키 시야가 org 만이다(WK-D43)
+    mxwp_service_accounts: str = Field(default="admin@mx.local")
     # 배경(들이기 · 점검 · 지속 질의) LLM — 챗의 LLM_* 와 따로 둔다(박스마다 고른다, request §7).
     wiki_llm_base_url: str = Field(default="")     # OpenAI 호환 base, 예 http://<ip>:<port>/v1
     wiki_llm_model: str = Field(default="")

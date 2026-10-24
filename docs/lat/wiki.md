@@ -77,6 +77,7 @@
 | 토큰 | `org` · `user:<id>` 늘, `aff:` · `plat:` 은 `portal_access_at` 이 `ACCESS_MAX_AGE_H`(24) 안일 때만(위임 호출은 그 호출의 증명값) |
 | 술어 | `visible_sql(alias)` + `sql_params()` — `documents` 별칭 하나에 붙인다. admin · system 은 `_aud_all` 로 통과 |
 | 빠뜨림 | 문맥이 비면 `ViewerMissing`(조용히 새지 않고 깨진다). 배경 작업 `acting_as(SYSTEM)`, 공개 길 `acting_as(ANONYMOUS)`(`["org"]` · restricted 아님) |
+| 서비스 계정 | `MXWP_SERVICE_ACCOUNTS`(기본 `admin@mx.local`)의 **API 토큰** 호출 — 게이트웨이의 신원 없는 내부 호출 — 은 `SERVICE`(익명과 같은 시야 — `["org"]` · restricted 아님, 지은이여도). 사용자 결정 10-24 · WK-D43. `get_current_user` 가 `is_service_call` 로 고른다. 같은 계정의 웹 세션 · 위임 호출은 사람 admin 그대로. 역할은 admin 그대로라 관리 창구 · 원천 받기 규칙(연결기가 남의 범위 · 주인으로 보낸다 — `receive` 는 호출자의 `viewer_from_user` 를 따로 쓴다)은 바뀌지 않는다 |
 
 거르는 자리(지금) — `document_repo.find_by_slug` · `find_by_id` · `list_documents` · `list_backlinks`(→ GET · 목록 · 판 · 내보내기 · 패치가 모두
 `get_document_or_404` 로 지난다) · 공유 링크(만들기 403 · 열기 410) · oEmbed(좁은 위키 404) · 홈 히어로(전역 캐시라 익명 기준) · 오늘의

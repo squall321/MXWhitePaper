@@ -41,6 +41,9 @@ class Viewer:
 SYSTEM = Viewer(kind="system")
 # 공유 링크 · oEmbed 처럼 로그인 없이 보는 길 — `["org"]` 문서만, restricted 는 못 본다.
 ANONYMOUS = Viewer(kind="anonymous", tokens=("org",))
+# 서비스 계정의 API 토큰 호출(게이트웨이의 신원 없는 내부 호출) — 익명과 같은 시야(`["org"]` · restricted 아님). admin 우회는 사람
+# admin 에게만(사용자 결정 10-24 · WK-D43). 역할(admin)은 그대로라 관리 창구 · 위키 원천 받기 규칙은 바뀌지 않는다.
+SERVICE = Viewer(kind="service", tokens=("org",))
 
 
 class ViewerMissing(RuntimeError):
@@ -75,6 +78,16 @@ def viewer_from_user(user: dict[str, Any], *, now: datetime | None = None) -> Vi
         tokens.extend(p for p in (user.get("portal_plat") or []) if isinstance(p, str) and p.startswith("plat:"))
     return Viewer(kind="user", user_id=uid, email=(user.get("email") or "").lower() or None,
                   is_admin=user.get("role") == "admin", tokens=tuple(sorted(set(tokens))))
+
+
+def is_service_call(user: dict[str, Any]) -> bool:
+    """서비스 계정(`MXWP_SERVICE_ACCOUNTS`)의 API 토큰 호출인가 — 같은 계정이라도 웹 세션 · 위임 호출은 아니다."""
+    from app.core.config import get_settings
+
+    if user.get("auth_via") != "api_token":
+        return False
+    accounts = {e.strip().lower() for e in get_settings().mxwp_service_accounts.split(",") if e.strip()}
+    return str(user.get("email") or "").lower() in accounts
 
 
 def set_viewer(viewer: Viewer | None) -> None:

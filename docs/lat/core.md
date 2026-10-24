@@ -338,8 +338,9 @@ invalid_token 401) + 스냅숏 덮어쓰기 + 소속→팀 = 8 묶음 (cycle 19 
 - 위임 호출의 헤더를 저장하지 않는 까닭 — 헤더가 없는 것이 '권한 없음' 인지 '게이트웨이 `MXWP_SEND_PLAT` 꺼짐' 인지 모른다. 저장하면
   옛 `plat:` 이 새 시각으로 살아난다. 저장값은 서명된 전체 스냅숏인 진입 토큰에서만.
 - 비밀을 바꾸면(`sk`) · 비우면 그 전에 나간 위임 토큰이 바로 죽는다 — 게이트웨이는 401 을 보고 한 번 다시 받는다.
-- **게이트웨이의 신원 없는 내부 호출은 위임이 아니라 서비스 계정(`admin@mx.local`, admin)으로 온다**(게이트웨이 감사 `mode=service
-  note=no-identity`, 10-24 끝에서 끝) — MXWP 에서는 admin 이라 모든 범위를 본다. 사람에게 묻는 중(WK-D43).
+- **게이트웨이의 신원 없는 내부 호출은 위임이 아니라 서비스 계정(`admin@mx.local`, admin)의 API 토큰으로 온다**(게이트웨이 감사
+  `mode=service note=no-identity`, 10-24 끝에서 끝). 그 호출의 읽는 사람은 `audience.SERVICE` — admin 이어도 `["org"]` 만 · restricted
+  못 봄(사용자 결정 10-24 · WK-D43, 설정 `MXWP_SERVICE_ACCOUNTS`). 같은 계정의 웹 세션 · 위임 호출은 사람 admin 그대로다.
 - plat 은 `X-Heax-User-Plat` + `X-Heax-Plat-Proof` 로만 받는다 — 포털이 게이트웨이에 싣는 `x-hwax-groups` 는 MXWP 가 읽지 않는다
   (게이트웨이가 `MXWP_SEND_PLAT=1` 일 때 증명 머리글로 바꿔 싣는다). 받은 머리글은 기록하지 않는다.
 
