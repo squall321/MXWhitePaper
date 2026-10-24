@@ -413,6 +413,31 @@ async def post_propose(
     return envelope(data=await propose.propose(s, body, user=user))
 
 
+@router.get("/search")
+async def get_wiki_search(
+    q: str = Query(min_length=1, max_length=500), user: dict[str, Any] = Depends(require_reader),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """묻기의 찾기 단계만 — 물음 속 엔티티의 문서 · 검색이 찾은 위키 문서(볼 수 있는 것) · 엔티티."""
+    return envelope(data=await query.find(s, q, user.get("role")))
+
+
+class _AskBody(BaseModel):
+    question: str = Field(min_length=2, max_length=2000)
+
+
+@router.post("/ask")
+async def post_ask(body: _AskBody, user: dict[str, Any] = Depends(require_reader),
+                   s: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """묻기 한 번을 JSON 으로(스트리밍 없이 — MCP `wiki_ask`). 답이 없으면 물은 사람만 보는 질문으로 남긴다."""
+    now = time.monotonic()
+    hist = [t for t in _query_hist.get(str(user["id"]), []) if t >= now - _QUERY_WINDOW_S]
+    if len(hist) >= _QUERY_LIMIT:
+        raise _QueryRateLimited(details={"window_seconds": int(_QUERY_WINDOW_S), "limit": _QUERY_LIMIT})
+    _query_hist[str(user["id"])] = [*hist, now]
+    return envelope(data=await query.ask(s, user=user, question=body.question))
+
+
 @router.get("/questions")
 async def get_questions(
     status: str | None = None,

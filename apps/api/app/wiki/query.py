@@ -239,6 +239,41 @@ async def run(s: AsyncSession, *, user: dict[str, Any], messages: list[dict[str,
                        "usage": usage.as_dict()})
 
 
+async def find(s: AsyncSession, question: str, role: str | None) -> dict[str, Any]:
+    """묻기의 찾기 단계만 — MCP `wiki_search`. 엔티티 길이 찾은 문서 · 검색이 찾은 문서(둘 다 볼 수 있는 위키 문서만) · 엔티티."""
+    by_entity = await entity_pages(s, question)
+    by_search = await search_pages(s, question, role)
+    slugs = list(dict.fromkeys([*by_entity, *by_search]))
+    rows = {r[0]: r for r in (await s.execute(text("""
+        SELECT d.slug, d.title, wp.kind, e.id, e.canonical_name, e.type_key FROM documents d JOIN wiki_pages wp ON wp.doc_id = d.id
+          LEFT JOIN wiki_entities e ON e.id = wp.entity_id WHERE d.slug = ANY(:s)
+    """), {"s": slugs})).all()}
+    pages = [{"slug": x, "title": rows[x][1], "kind": rows[x][2], "via": "entity" if x in by_entity else "search"}
+             for x in slugs if x in rows]
+    ents = {str(rows[x][3]): {"id": str(rows[x][3]), "name": rows[x][4], "type_key": rows[x][5]}
+            for x in by_entity if x in rows and rows[x][3]}
+    return {"pages": pages, "entities": list(ents.values())}
+
+
+async def ask(s: AsyncSession, *, user: dict[str, Any], question: str) -> dict[str, Any]:
+    """묻기 한 번을 JSON 으로 — MCP `wiki_ask`. 답이 없으면 물은 사람만 보는 질문으로 남기고 `question_id`."""
+    answer, citations, done = "", [], {}
+    async for frame in run(s, user=user, messages=[{"role": "user", "content": question}], file_question=True):
+        event, _, data = frame.partition("\ndata: ")
+        payload = json.loads(data.strip())
+        kind = event.removeprefix("event: ")
+        if kind == "token":
+            answer += payload["text"]
+        elif kind == "citation":
+            citations.append(payload)
+        elif kind == "done":
+            done = payload
+        elif kind == "error":
+            done = {**done, "error": payload["message"]}
+    return {"answer": answer, "citations": citations, "miss": bool(done.get("miss")),
+            "question_id": done.get("question_id"), "pages": done.get("pages", []), "error": done.get("error")}
+
+
 async def _miss(s: AsyncSession, user: dict[str, Any], question: str, file_question: bool,
                 detail: dict[str, Any]) -> AsyncIterator[str]:
     filed = None

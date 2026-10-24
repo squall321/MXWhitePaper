@@ -18,7 +18,7 @@
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
 | W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
 | W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지 · 엔티티 등록부(보이기 · 별칭 · 외부 id · 중복 후보 · 합치기 — 늘 검토 · 되돌리기). 엔티티 후보 해석(열쇠 · 후보 · `wiki_resolve`) · 정답표 초안 · 평가 스크립트. 화면(온톨로지 · 엔티티 목록 · 한 건 · 합치기 카드). 남은 것 — 사람의 정답표 확인 · LLM 을 낀 정확도(진짜 LLM 이 있는 박스) | [[#Ontology]] · [[#Relations]] · [[#Entities]] · [[#Resolution]] |
-| W6 묻기 · 되쌓기 · MCP | 묻기(`/query` SSE · 근거 각주 · MISS) · 질문 대기열(0057 · `/questions`) · 되쌓기(`/fileback` → qa 원천 → 문답 문서 · 비슷한 물음은 같은 문서에) · 후보(주인만 보는 held 원천 · `/candidates` · 화면 '내 후보' · 0058) · 제안(`/propose` — 늘 검토) · 기계 호출의 위키 문서 직접 쓰기 막음. 남은 것 — MCP · 챗 위키 모드 | [[#Query]] · [[#Fileback]] · [[#Candidates]] · [[#Propose]] |
+| W6 묻기 · 되쌓기 · MCP | 묻기(`/query` SSE · 근거 각주 · MISS) · 질문 대기열(0057 · `/questions`) · 되쌓기(`/fileback` → qa 원천 → 문답 문서 · 비슷한 물음은 같은 문서에) · 후보(주인만 보는 held 원천 · `/candidates` · 화면 '내 후보' · 0058) · 제안(`/propose` — 늘 검토) · 기계 호출의 위키 문서 직접 쓰기 막음 · MCP `wiki_*` 열넷(`/search` · `/ask`). 남은 것 — 챗 위키 모드 · 게이트웨이 `tools/list` · 포털 P6~P8 | [[#Query]] · [[#Fileback]] · [[#Candidates]] · [[#Propose]] · [[#MCP]] |
 | W7 점검 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -167,6 +167,8 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | `POST /fileback` | reader | `{question, answer, citations[{slug, block_id?}], outcome, audience?, model?}` → 201(새것) · 200(멱등) `{id, short, dedup, doc_slug, ingest_state, audience}` — [[#Fileback]]. 볼 수 없는 근거 422 · 근거보다 넓은 범위 422(`details.required`) · 가진 토큰 밖 403 |
 | `GET /candidates` · `POST /candidates/{id}/approve` · `/discard` | 주인(reader) | 내 후보(기한이 지난 것은 이때 철회) · 승인 `{audience?}`(비면 보낸 범위 → 그 범위의 새 원천을 들이고 후보는 superseded, 나만이면 그 줄을 들인다 → `{id, short, candidate, audience, dedup}`) · 버림(철회). 남의 후보 404 |
 | `POST /propose` | editor | `{summary, ops[block.insert · block.update · block.delete], relations[]}` → 201 `{id, short, status, validation}` — 늘 `pending_review`(실패가 있으면 `failed`). 고칠 문서는 이미 있고 볼 수 있는 위키 문서(아니면 422) — [[#Propose]] |
+| `GET /search?q=` | reader | 묻기의 찾기만 — `{pages[{slug, title, kind, via: entity · search}], entities[{id, name, type_key}]}`(볼 수 있는 위키 문서) |
+| `POST /ask` | reader(묻기와 같은 분에 20) | `{question}` → 묻기 한 번을 JSON 으로 `{answer, citations, miss, question_id, pages, error}` — 답이 없으면 물은 사람만 보는 질문을 바로 남긴다(MCP `wiki_ask`) |
 | `GET /questions` · `POST /questions` | reader | 볼 수 있는 물음(범위 토큰 ⊆ 내 토큰) · `mine` / 남기기 `{text, audience?, priority, origin: user · query_miss}` → 201 `{id, asked_count, created, audience}`. 범위는 비면 나만(`user:<id>`), 가진 토큰 밖은 403. 같은 물음(문장 부호 · 공백 무시) · 범위면 한 줄에 `asked_count` 만 |
 | `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(W7). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
 
@@ -259,6 +261,23 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 **계획 밖 문서의 연산은 승인해도 반영되지 않는다**(그 문서의 판도 꼴도 계획에 없다 — V6 로 사람에게 보일 뿐).
 한 건 상세의 `relations` — 주어 · 술어 이름 · 목적어(제목) · 까닭 · `origin`(code · llm) · 근거, `relations_dropped` — 끝이 후보 밖이라 버린 것.
 `merges` — 두 엔티티의 제안 때 모습 · 까닭 · (반영했으면) 다시 이은 문서 · 낡음 · 다시 들일 원천. 목록에서는 합치기 묶음의 문서 칸에 요약 한 줄.
+
+## MCP
+
+`dist/llm-docx-toolkit/mcp/server.py` 의 `wiki_*` 열넷(CONTRACTS §7) — `MxwpClient.wiki(method, path, …)` 한 길로 `/api/v1/wiki/*` 를 부른다.
+
+| 도구 | 창구 |
+| --- | --- |
+| `wiki_index(kind?)` | `GET /index` → 목록 마크다운(갈래 하나로 거르기) |
+| `wiki_search(query)` · `wiki_ask(question)` | `GET /search` · `POST /ask` |
+| `wiki_read(slug)` | `GET /pages/{slug}` + `GET /documents/{slug}?with=citations` → 절 · 블록(id · 글 1500자) · 블록별 근거 |
+| `wiki_source(id)` · `wiki_entity(name \| id, type?)` · `wiki_graph(slug, depth≤2, predicates?)` | 원천 한 건 · 엔티티 + 위키 관계(깊이 1) · 서브그래프에서 위키 관계만 |
+| `wiki_log(n)` · `wiki_lint_report()` · `wiki_questions(status?)` | 기록 꼬리 · `/health`(점검은 W7) · 질문 대기열 |
+| `wiki_submit_source` · `wiki_fileback` · `wiki_propose` · `wiki_add_question` | 쓰기(토큰 필요) — `/sources` · `/fileback` · `/propose` · `/questions` |
+
+기존 쓰기 도구의 위키 문서 거부는 서버가 한다([[#Propose]]). 시스템 프롬프트(`llm-system-prompt.md` §8)에 위키 규칙 요약. 붙인 뒤에는
+**게이트웨이 `tools/list`** 로 뜨는지 본다 — MCP http 서버(`python -m mcp --http`, :8765)는 다시 띄워야 새 도구를 안다.
+시험 `dist/llm-docx-toolkit/mcp/tests/test_wiki_tools.py`.
 
 ## Screens
 

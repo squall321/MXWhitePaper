@@ -51,6 +51,7 @@ import sys
 import zipfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from mcp.server.fastmcp import FastMCP
 
@@ -1087,6 +1088,208 @@ def build_server() -> FastMCP:
         _require_token(client)
         out = out_path or f"{slug}.{format}"
         return client.export_document(slug, format, out)
+
+    # ── AI 위키(wiki_* — docs/llm-wiki W6, CONTRACTS §7) ───────────────
+    # 위키 문서(AI 가 원천으로 짓는 문서)는 create_document · insert_block … 으로 고치지 못한다(서버가 409 WIKI_USE_PROPOSE) —
+    # 읽기는 wiki_*, 쓰기는 원천(wiki_submit_source · wiki_fileback)이나 제안(wiki_propose — 늘 사람이 검토)으로.
+
+    @mcp.tool(
+        name="wiki_index",
+        description=(
+            "AI 위키 목록(Karpathy index) — 내가 볼 수 있는 위키 문서를 갈래(엔티티 유형 · 사례 · 문답)별로. 위키로 답하기 전에 "
+            "가장 먼저 읽는다. kind 로 갈래 key(part · failure-mode · sim-case · qa …)를 고른다. → 목록 마크다운"
+        ),
+    )
+    def wiki_index(kind: str = "") -> str:
+        idx, _ = _make_client().wiki("GET", "/index")
+        out = [f"# 위키 목록 (규칙서 v{idx.get('version')} · {idx.get('at')} KST · 문서 {idx.get('docs')} · 원천 {idx.get('sources')})"]
+        for sec in idx.get("sections") or []:
+            if kind and sec.get("key") != kind:
+                continue
+            out.append(f"\n## {sec.get('label')}({sec.get('key')}) — {sec.get('count')}")
+            out += [f"- [[{it['slug']}|{it['title']}]]" + (f" — {it['summary']}" if it.get("summary") else "")
+                    for it in sec.get("items") or []]
+            if sec.get("more"):
+                out.append(f"- … 그 밖 {sec['more']}")
+        return "\n".join(out)
+
+    @mcp.tool(
+        name="wiki_search",
+        description=(
+            "물음으로 위키 문서를 찾는다 — 물음에 이름 · 별칭이 든 엔티티의 문서(via entity)와 검색이 찾은 문서(via search). "
+            "→ {pages:[{slug, title, kind, via}], entities:[{id, name, type_key}]}"
+        ),
+    )
+    def wiki_search(query: str) -> dict[str, Any]:
+        data, _ = _make_client().wiki("GET", "/search", query={"q": query})
+        return data or {"pages": [], "entities": []}
+
+    @mcp.tool(
+        name="wiki_read",
+        description=(
+            "위키 문서 한 장 — 절 · 블록(id · 글)과 블록마다 근거(원천 짧은 id · 위치 · 인용). 답에 쓰려면 근거를 함께 옮긴다. "
+            "→ {slug, title, kind, managed, audience, entity, sections:[{title, blocks:[{id, type, text, cites}]}]}"
+        ),
+    )
+    def wiki_read(slug: str, with_citations: bool = True) -> dict[str, Any]:
+        client = _make_client()
+        info, _ = client.wiki("GET", f"/pages/{quote(slug, safe='')}")
+        doc, _meta, _h = client._request("GET", f"/api/v1/documents/{quote(slug, safe='')}",
+                                         query={"with": "citations"} if with_citations else None)
+        cites = (doc or {}).get("citations") or {}
+        sections = []
+        for sec in _walk_sections(((doc or {}).get("content") or {}).get("sections") or []):
+            blocks = [{"id": b.get("id"), "type": b.get("type"), "text": _block_hint(b) if b.get("type") not in ("paragraph", "callout")
+                       else (b.get("text") or "")[:1500],
+                       "cites": [{"short": c.get("short"), "title": c.get("title"), "locator": c.get("locator"),
+                                  "quote": c.get("quote")} for c in cites.get(b.get("id") or "", [])]}
+                      for b in _iter_blocks(sec.get("blocks") or [])]
+            sections.append({"title": sec.get("title"), "blocks": blocks})
+        return {"slug": slug, "title": ((doc or {}).get("content") or {}).get("title"), "kind": (info or {}).get("kind"),
+                "managed": (info or {}).get("managed"), "audience": (info or {}).get("audience"),
+                "entity": (info or {}).get("entity"), "sections": sections}
+
+    @mcp.tool(
+        name="wiki_source",
+        description="위키 원천 한 건(볼 수 있을 때만) — 종류 · 출처 · 생긴 때 · 본문(payload) · 첨부. → 원천 JSON",
+    )
+    def wiki_source(id: str) -> dict[str, Any]:
+        data, _ = _make_client().wiki("GET", f"/sources/{quote(id, safe='')}")
+        return data or {}
+
+    @mcp.tool(
+        name="wiki_entity",
+        description=(
+            "엔티티(부품 · 모델 · 불량 유형 …) 한 개 — id 또는 이름(+유형)으로. 이름 · 별칭 · 외부 id(만든 범위의 사람만) · "
+            "문서 · 위키 관계(깊이 1). → {entity, relations:[{subject, predicate, object}]}"
+        ),
+    )
+    def wiki_entity(name: str = "", id: str = "", type: str = "") -> dict[str, Any]:
+        client = _make_client()
+        if not id:
+            rows, _ = client.wiki("GET", "/entities", query={"q": name, "type": type or None, "limit": 5})
+            if not rows:
+                return {"entity": None, "relations": [], "note": f"엔티티 '{name}' 을 찾지 못했다"}
+            id = rows[0]["id"]
+        ent, _ = client.wiki("GET", f"/entities/{quote(id, safe='')}")
+        relations = []
+        for page in (ent or {}).get("pages") or []:
+            for side in ("subject", "object"):
+                for t in client.list_triples(**{side: page["slug"]}):
+                    if t.get("source") == "wiki":
+                        relations.append({"subject": t.get("subject_slug"), "predicate": t.get("predicate"),
+                                          "predicate_key": t.get("predicate_key"), "object": t.get("object_slug")})
+        return {"entity": ent, "relations": [dict(x) for x in {tuple(sorted(r.items())): r for r in relations}.values()]}
+
+    @mcp.tool(
+        name="wiki_graph",
+        description=(
+            "위키 문서에서 위키 관계를 따라간 이웃(깊이 1~2). predicates 로 술어 key 를 고른다(비면 모두). "
+            "→ {root, nodes, edges:[{subject, predicate, predicate_key, object}]}"
+        ),
+    )
+    def wiki_graph(slug: str, depth: int = 1, predicates: list[str] | None = None) -> dict[str, Any]:
+        sub = _make_client().get_subgraph(slug, max(1, min(depth, 2)))
+        edges = [{"subject": e.get("subject_slug"), "predicate": e.get("predicate"), "predicate_key": e.get("predicate_key"),
+                  "object": e.get("object_slug")} for e in sub.get("edges") or []
+                 if e.get("source") == "wiki" and (not predicates or e.get("predicate_key") in predicates)]
+        nodes = sorted({slug, *(e["subject"] for e in edges), *(e["object"] for e in edges)})
+        return {"root": slug, "nodes": nodes, "edges": edges}
+
+    @mcp.tool(
+        name="wiki_ask",
+        description=(
+            "위키로 답한다(서버의 묻기 — 목록 · 엔티티 · 검색 · 문서 · 원천 순으로 근거를 모아 답에 [n] 각주). 답이 없으면 "
+            "'위키에 아직 없다' 와 질문 id(나만 보는 질문으로 남긴다). → {answer, citations:[{n, slug, title, section, block_id, "
+            "sources}], miss, question_id, pages}"
+        ),
+    )
+    def wiki_ask(question: str) -> dict[str, Any]:
+        data, _ = _make_client().wiki("POST", "/ask", body={"question": question})
+        return data or {}
+
+    @mcp.tool(
+        name="wiki_log",
+        description="위키 기록(덧붙이기만 — 들이기 · 묻기 · 검토 · 되돌림 …)의 최근 n 줄. → ['[YYYY-MM-DD HH:MM] op | 제목']",
+    )
+    def wiki_log(n: int = 20) -> list[str]:
+        rows, _ = _make_client().wiki("GET", "/log", query={"limit": max(1, min(n, 200))})
+        return [f"[{(r.get('at') or '')[:16].replace('T', ' ')}] {r.get('op')} | {r.get('title')}" for r in rows or []]
+
+    @mcp.tool(
+        name="wiki_lint_report",
+        description="위키 점검(lint) 요약과 작업 큐 상태. 점검 보고서는 W7 에 온다 — 지금은 마지막 점검 시각 · 큐 · LLM 닿음만.",
+    )
+    def wiki_lint_report() -> dict[str, Any]:
+        data, _ = _make_client().wiki("GET", "/health")
+        return {"last_lint": (data or {}).get("last_lint"), "jobs": (data or {}).get("jobs"), "llm": (data or {}).get("llm")}
+
+    @mcp.tool(
+        name="wiki_questions",
+        description="위키 질문 대기열(내가 볼 수 있는 것) — 위키가 아직 답하지 못한 물음. → [{id, text, status, asked_count, mine}]",
+    )
+    def wiki_questions(status: str = "open", limit: int = 50) -> list[dict[str, Any]]:
+        rows, _ = _make_client().wiki("GET", "/questions", query={"status": status or None, "limit": max(1, min(limit, 200))})
+        return rows or []
+
+    @mcp.tool(
+        name="wiki_submit_source",
+        description=(
+            "원천 봉투(mxwp-source/1 — docs/llm-wiki CONTRACTS §3)를 보낸다. 위키에 새 사실을 들이는 길(근거가 원천에 남는다). "
+            "범위는 내가 가진 토큰 안에서, 주인은 나. → {id, short, dedup, doc_slug, ingest_state}"
+        ),
+    )
+    def wiki_submit_source(envelope: dict[str, Any], ingest: bool = True) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        data, _ = client.wiki("POST", "/sources", body=envelope, query={"ingest": "true" if ingest else "false"})
+        return data or {}
+
+    @mcp.tool(
+        name="wiki_fileback",
+        description=(
+            "wiki_ask 의 답을 위키에 남긴다(qa 원천 → 들이기 → 문답 문서). citations 는 wiki_ask 가 준 각주의 {slug, block_id}. "
+            "범위는 비면 근거 문서들의 범위 — 근거보다 넓게는 못 남긴다. → {id, short, dedup, audience, ingest_state}"
+        ),
+    )
+    def wiki_fileback(question: str, answer: str, citations: list[dict[str, Any]], outcome: str = "solved",
+                      audience: list[str] | None = None) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        body = {"question": question, "answer": answer, "outcome": outcome,
+                "citations": [{"slug": c.get("slug"), "block_id": c.get("block_id")} for c in citations],
+                **({"audience": audience} if audience else {})}
+        data, _ = client.wiki("POST", "/fileback", body=body)
+        return data or {}
+
+    @mcp.tool(
+        name="wiki_propose",
+        description=(
+            "위키 문서를 고치는 제안 — 늘 사람이 검토한다(검토 큐). ops: [{op:'block.insert', doc, section, block, cites, why} | "
+            "{op:'block.update', doc, block_id, block, cites, why} | {op:'block.delete', doc, block_id, why}], relations: "
+            "[{subject, predicate, object, cites, why}]. block 은 {type: paragraph|list|table|callout, text|items|headers+rows}, "
+            "cites 는 [{sid: 'src_…', loc, quote?}] — 숫자는 원천 값 그대로. → {id, short, status, validation}"
+        ),
+    )
+    def wiki_propose(summary: str, ops: list[dict[str, Any]] | None = None,
+                     relations: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        data, _ = client.wiki("POST", "/propose", body={"summary": summary, "ops": ops or [], "relations": relations or []})
+        return data or {}
+
+    @mcp.tool(
+        name="wiki_add_question",
+        description=(
+            "위키 질문 대기열에 물음을 남긴다(같은 물음이면 물은 수만 오른다). 범위는 비면 나만. → {id, asked_count, created, audience}"
+        ),
+    )
+    def wiki_add_question(text: str, priority: int = 3, audience: list[str] | None = None) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        data, _ = client.wiki("POST", "/questions", body={"text": text, "priority": priority,
+                                                          **({"audience": audience} if audience else {})})
+        return data or {}
 
     return mcp
 

@@ -192,3 +192,15 @@ async def test_llm_error_closes_the_stream(world: dict[str, Any]) -> None:
     world["llm"].load({"rules": [{"match": {"contains": "물음:"}, "reply": {"error": {"status": 503, "message": "busy"}}}]})
     frames = await _ask(world["reader"], f"{NAME} 균열은 어디서 시작하나")
     assert [k for k, _ in frames][-2:] == ["error", "done"] and "503" in frames[-2][1]["message"]
+
+
+async def test_search_and_ask_json(world: dict[str, Any]) -> None:
+    async with _client() as c:
+        found = (await c.get(f"{API}/search", headers=world["reader"]["headers"], params={"q": f"{NAME} 균열"})).json()["data"]
+        asked = (await c.post(f"{API}/ask", headers=world["reader"]["headers"], json={"question": f"{NAME} 균열은 어디서 시작하나"})).json()["data"]
+        world["llm"].load({"rules": [{"match": {"contains": "물음:"}, "reply": {"text": query.MISS}}]})
+        missed = (await c.post(f"{API}/ask", headers=world["reader"]["headers"], json={"question": f"{NAME} 무게는?"})).json()["data"]
+    assert [(p["slug"], p["via"]) for p in found["pages"]] == [(f"ent-part-q{RUN}", "entity")]  # 좁은 문서는 없다
+    assert [e["name"] for e in found["entities"]] == [NAME]
+    assert asked["answer"] == ANSWER and [x["n"] for x in asked["citations"]] == [1, 2] and asked["miss"] is False
+    assert missed["miss"] is True and missed["question_id"]  # MCP 길은 질문을 바로 남긴다

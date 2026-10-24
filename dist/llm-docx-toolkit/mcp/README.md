@@ -47,6 +47,26 @@ stdio MCP 서버. 두 가지를 한다:
 | `extract_pptx_images(path)` | `{source, images:[{image_id, ...}], extracted, ...}` — **.pptx 속 그림들** 을 각각 별도 이미지로 추출해 여러 `image_id` 반환. 각 id 를 `insert_image_block` 에 차례로 삽입 |
 | `insert_image_block(slug, section_id, image_id, alt?, caption?, after_block_id?)` | `{block_id}` — 위 업로드 도구가 준 `image_id` 로 ImageBlock 삽입 |
 
+### AI 위키 (`wiki_*` — docs/llm-wiki W6, CONTRACTS §7)
+
+위키 문서(원천에서 AI 가 짓는 문서)는 위 쓰기 도구로 고치지 못한다(서버 409 `WIKI_USE_PROPOSE`) — 쓰기는 원천 · 되쌓기 ·
+제안(늘 검토)으로. 게이트웨이에 붙인 뒤에는 **게이트웨이 `tools/list`** 로 이 도구들이 뜨는지 확인한다.
+
+| 이름 | 읽기/쓰기 | 반환 |
+|---|---|---|
+| `wiki_index(kind?)` | 읽기 | 목록 마크다운(갈래별 · 한 줄 요약) |
+| `wiki_search(query)` | 읽기 | `{pages:[{slug, title, kind, via}], entities}` — 물음 속 엔티티 · 검색 |
+| `wiki_read(slug, with_citations=True)` | 읽기 | 절 · 블록(id · 글) + 블록별 근거 |
+| `wiki_source(id)` | 읽기 | 원천 한 건(범위 안일 때만) |
+| `wiki_entity(name? \| id?, type?)` | 읽기 | 엔티티 · 문서 · 위키 관계(깊이 1) |
+| `wiki_graph(slug, depth≤2, predicates?)` | 읽기 | 위키 관계 이웃 |
+| `wiki_ask(question)` | 읽기 | 위키로 지은 답 + 각주 · 없으면 `miss` + 질문 id(나만 보는 질문) |
+| `wiki_log(n)` · `wiki_lint_report()` · `wiki_questions(status?)` | 읽기 | 기록 꼬리 · 점검 요약(W7) · 질문 대기열 |
+| `wiki_submit_source(envelope, ingest=True)` | 쓰기 | 원천 봉투 → `{id, short, dedup, doc_slug, ingest_state}` |
+| `wiki_fileback(question, answer, citations, outcome?, audience?)` | 쓰기 | 묻기의 답 → qa 원천(범위는 근거보다 넓지 않게) |
+| `wiki_propose(summary, ops?, relations?)` | 쓰기 | 변경 묶음 → 늘 검토 큐 |
+| `wiki_add_question(text, priority?, audience?)` | 쓰기 | 질문 대기열에 물음 |
+
 block JSON 을 어떻게 짜야 하는지는 외우지 말고 `query_rules` 로 검색하거나
 `mxwp_system_prompt` 를 읽는다 (예: `query_rules("callout 블록 형식")`).
 

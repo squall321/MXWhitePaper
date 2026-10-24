@@ -471,6 +471,13 @@ class MxwpClient:
     # (문서 본문이 아니라 별도 doc_triples 테이블). inverse_predicate 는 object
     # 쪽에서 읽는 역방향 설명.
 
+    def wiki(
+        self, method: str, path: str, *, body: dict[str, Any] | None = None, query: dict[str, Any] | None = None,
+    ) -> tuple[Any, dict[str, Any]]:
+        """AI 위키 창구(`/api/v1/wiki/*` — docs/llm-wiki W6) 한 번 → (data, meta). `wiki_*` 도구가 같이 쓴다."""
+        data, meta, _h = self._request(method, f"/api/v1/wiki{path}", body=body, query=query)
+        return data, meta
+
     def list_predicate_types(self) -> list[dict[str, Any]]:
         data, _meta, _h = self._request("GET", "/api/v1/triples/predicates")
         return data if isinstance(data, list) else []

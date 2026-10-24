@@ -4271,6 +4271,21 @@
         "title": "_ApproveBody",
         "type": "object"
       },
+      "_AskBody": {
+        "properties": {
+          "question": {
+            "maxLength": 2000,
+            "minLength": 2,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "_AskBody",
+        "type": "object"
+      },
       "_Decision": {
         "properties": {
           "note": {
@@ -20113,6 +20128,50 @@
         ]
       }
     },
+    "/api/v1/wiki/ask": {
+      "post": {
+        "description": "묻기 한 번을 JSON 으로(스트리밍 없이 — MCP `wiki_ask`). 답이 없으면 물은 사람만 보는 질문으로 남긴다.",
+        "operationId": "post_ask_api_v1_wiki_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_AskBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Ask Api V1 Wiki Ask Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Ask",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
     "/api/v1/wiki/candidates": {
       "get": {
         "description": "내 후보 — 주인만(admin 도 남의 후보는 못 본다). 기한이 지난 것은 이때 철회한다.",
@@ -21656,6 +21715,53 @@
           }
         },
         "summary": "Put Schema",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/search": {
+      "get": {
+        "description": "묻기의 찾기 단계만 — 물음 속 엔티티의 문서 · 검색이 찾은 위키 문서(볼 수 있는 것) · 엔티티.",
+        "operationId": "get_wiki_search_api_v1_wiki_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 500,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Wiki Search Api V1 Wiki Search Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Wiki Search",
         "tags": [
           "wiki"
         ]

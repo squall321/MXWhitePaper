@@ -103,6 +103,20 @@ def test_registers_tools_resource_template_and_prompt(server_mod) -> None:
         "list_glossary",
         "get_backlinks",
         "export_document",
+        "wiki_index",
+        "wiki_search",
+        "wiki_read",
+        "wiki_source",
+        "wiki_entity",
+        "wiki_graph",
+        "wiki_ask",
+        "wiki_log",
+        "wiki_lint_report",
+        "wiki_questions",
+        "wiki_submit_source",
+        "wiki_fileback",
+        "wiki_propose",
+        "wiki_add_question",
     ]
     assert len(templates) == 1
     assert templates[0].uriTemplate == "rag://chunks/{chunk_id}"
