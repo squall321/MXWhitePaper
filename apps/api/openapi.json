@@ -3654,6 +3654,21 @@
         "title": "_IngestBody",
         "type": "object"
       },
+      "_SchemaBody": {
+        "properties": {
+          "yaml": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Yaml",
+            "type": "string"
+          }
+        },
+        "required": [
+          "yaml"
+        ],
+        "title": "_SchemaBody",
+        "type": "object"
+      },
       "app__routers__backups__RunNowIn": {
         "properties": {
           "format": {
@@ -19627,6 +19642,50 @@
         ]
       }
     },
+    "/api/v1/wiki/index": {
+      "get": {
+        "operationId": "get_index_api_v1_wiki_index_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Index Api V1 Wiki Index Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Index",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/index.md": {
+      "get": {
+        "operationId": "get_index_md_api_v1_wiki_index_md_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Index Md",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
     "/api/v1/wiki/ingest": {
       "post": {
         "operationId": "post_ingest_api_v1_wiki_ingest_post",
@@ -19791,6 +19850,70 @@
           }
         },
         "summary": "Get Log Md",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/schema": {
+      "get": {
+        "operationId": "get_schema_api_v1_wiki_schema_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Schema Api V1 Wiki Schema Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Schema",
+        "tags": [
+          "wiki"
+        ]
+      },
+      "put": {
+        "operationId": "put_schema_api_v1_wiki_schema_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SchemaBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Put Schema Api V1 Wiki Schema Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Schema",
         "tags": [
           "wiki"
         ]

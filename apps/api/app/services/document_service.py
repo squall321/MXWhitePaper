@@ -25,7 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import session_scope
-from app.core.errors import NotFound, PreconditionFailed, ValidationFailed
+from app.core.errors import Forbidden, NotFound, PreconditionFailed, ValidationFailed
 from app.repos import document_repo
 from app.schemas.document import DocumentjsonV10
 from app.search import meili_indexer
@@ -395,12 +395,20 @@ def validate_documentjson(payload: dict[str, Any]) -> dict[str, Any]:
     _assert_renderable_shapes(dumped)
     _assert_nesting_depth(dumped)
     if dumped.get("slug") == wiki_schema.SLUG:
-        # 위키 규칙서 — 기계용 YAML 이 틀리면 저장하지 않는다(새 판은 검증된 것만, request §5-3).
+        # 위키 규칙서 — admin(또는 시스템)만 고치고, 기계용 YAML 이 틀리면 저장하지 않는다(request §5-3). 저장 길이 여럿이라
+        # (만들기 · 바꾸기 · 절 · 블록 패치 · 판 복원) 모두 지나는 이 자리에서 막는다.
+        _require_rule_book_editor()
         try:
             wiki_schema.parse_document(dumped)
         except wiki_schema.RuleBookError as e:
             raise ValidationFailed(f"위키 규칙서가 틀렸다 — {e}", details={"errors": e.errors}) from None
     return dumped
+
+
+def _require_rule_book_editor() -> None:
+    viewer = audience.current_viewer()
+    if not (viewer.kind == "system" or viewer.is_admin):
+        raise Forbidden("위키 규칙서(wiki-schema)는 admin 만 고친다")
 
 
 def _normalise_columns_widths(content: dict[str, Any]) -> None:
@@ -1403,6 +1411,8 @@ async def replace_document(
 async def archive_document(
     s: AsyncSession, *, slug: str, actor_id: str
 ) -> None:
+    if slug == wiki_schema.SLUG:
+        _require_rule_book_editor()
     existing = await document_repo.find_by_slug(s, slug)
     if not existing:
         raise NotFound(f"document not found: {slug}")

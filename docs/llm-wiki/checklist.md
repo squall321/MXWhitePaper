@@ -57,8 +57,8 @@
 - [x] 자동 반영 조건 · 검토 큐 API(검토자 표지 `wiki_reviewer` — 0055)
 - [x] `wiki_citations` · 읽기 응답에 근거 붙이기(`?with=citations`)
 - [ ] 화면 — 위키 홈 · 문서 배지 · 각주 · 원천 카드 · 검토 큐 · 기록
-- [ ] `index.md` · `log.md`(원문 꼴)
-- [ ] 규칙서 `wiki-schema` 문서 · YAML 검증 · 판(YAML 검증 · 판은 됨 — 문서 올리기 · 사람 재검토가 남음)
+- [x] `index.md` · `log.md`(원문 꼴) — 저장해 두는 `wiki-index` 문서는 아직(창구가 늘 새로 짓는다)
+- [ ] 규칙서 `wiki-schema` 문서 · YAML 검증 · 판(검증 · 판 · admin 만 · 올리기 `PUT /schema` 는 됨 — 사람 재검토 뒤 dev 에 v1 로 올린다)
 - [x] 완료 기준 — 합성 20 → 문서 · 틀린 가짜 답 여섯 가지가 다 걸림 · 되돌리기 복원(`tests/test_wiki_ingest.py`)
 
 ## W5 온톨로지

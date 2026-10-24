@@ -16,7 +16,7 @@
 | W1 연결 · 신원 | 위임 창구 · 위임 토큰(세대) · 소속 · 플랫폼 증명 · 진입 토큰 스냅숏 · jti 원장 · 소속→팀 표(API · 화면 `/admin/aff-team-map`) | [[core#게이트웨이 · 포털 위임]] |
 | W2 보이기 범위 | 읽기 길 전수(아래 표) · 길마다 시험 · admin 범위 밖 읽기 감사. 남은 것 — cae00 배포 · 재색인 | [[#Audience]] |
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
-| W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 남은 것 — `index.md` · 규칙서 문서 · 화면 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
+| W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만). 남은 것 — 규칙서 사람 재검토 · 화면 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
 | W5 온톨로지 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -48,6 +48,8 @@
 | 문서 내용(빈 꼴 · 연산 적용 · 자동 절) | [[src/app/wiki/pages.py#apply_ops]] | W4 |
 | 반영 · 되돌리기 · 근거 | [[src/app/wiki/apply.py#apply]] · `revert` · 표 `wiki_changesets` · `wiki_citations`(0054) | W4 |
 | 검토 큐 | [[src/app/wiki/review.py]] · 표지 `users.wiki_reviewer`(0055) | W4 |
+| 목록(index · index.md) | [[src/app/wiki/catalog.py#build]] | W4 |
+| 규칙서 문서 올리기 | [[src/app/wiki/schema_doc.py#put]] | W4 |
 | REST | [[src/app/routers/wiki.py]](`/api/v1/wiki/*`) | W3~ |
 | 위임 창구 · 회수 · 소속→팀 표 | [[src/app/routers/auth_sso.py]] · 검증 `core/auth._resolve_delegated` · 증명 `core/portal_identity.py` | W1 |
 
@@ -139,6 +141,8 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | `POST /ingest` | editor | `{source_ids[≤50]}` — 보이고 활성인 원천을 다시 줄 세운다(아니면 `queued:false` + 까닭) |
 | `GET /changes` · `GET /changes/{id}` | 검토자 | 목록(`status` · `limit` · `offset` → `meta.total`) · 한 건([[#Review]]) |
 | `POST /changes/{id}/approve` · `/reject` · `/revert` | 검토자 | 승인(→ applied) · 거절(`note` 꼭) · 되돌리기 |
+| `GET /index` · `GET /index.md` | reader | 목록 — 볼 수 있는 위키 문서를 규칙서 순서의 갈래(엔티티 유형 · 사례 · 종류)로, 갈래마다 제목 순 `index.max_per_section` 까지 + '그 밖 N'. 원천 · 규칙서는 싣지 않는다(원천은 머리 줄 수). md 는 CONTRACTS §10 꼴 |
+| `GET /schema` · `PUT /schema` | reader · admin | 지금 판 · YAML · 읽은 꼴(문서가 없으면 판 0 · 첫 판 YAML) · 올리기(`{yaml}` → `{version, created}`, 틀리면 422) |
 | `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(W7). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
 
 ## Rule book
@@ -147,7 +151,10 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 첫 판 `DEFAULT`(판 0 — SCHEMA-DRAFT 의 규칙 열 문장 그대로 · 절 꼴 · 정책). 이 판에서 코드가 읽는 칸 — `rules` · `sections` ·
 `policy.auto_apply` · `policy.always_review_kinds` · `budget.ingest_tokens` · `ingest.*`(나머지는 W6 · W7 이 잇는다).
 절 이름 끝 `(자동)` = 코드가 짓는 절, `(사람)` = 사람만 쓰는 절 — AI 쓰기는 나머지 절에만(V5). 저장 때 `validate_documentjson` 이
-slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 싣는다).
+slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 싣는다). **admin(또는 시스템)만 고친다** — 저장 길이 여럿(만들기 ·
+바꾸기 · 절 · 블록 패치 · 판 복원)이라 모두 지나는 `validate_documentjson` 에서 막고, 보관은 `archive_document` 에서 막는다(읽는
+사람 문맥으로 본다 — 위임 호출은 admin 이 owner 로 깎여 있어 못 고친다). 올리기는 `PUT /schema`([[src/app/wiki/schema_doc.py#put]] —
+없으면 설명 한 절 + YAML 한 덩이로 만들고 · 있으면 그 YAML 블록만 바꿔 판을 올린다). 문서는 종류 `schema` · `managed='human'` · `["org"]`.
 
 ## LLM
 

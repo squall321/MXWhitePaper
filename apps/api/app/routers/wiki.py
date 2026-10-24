@@ -17,11 +17,11 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import require_editor, require_reader
+from app.core.auth import require_admin, require_editor, require_reader
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import APIError, ValidationFailed, envelope, format_pydantic_errors
-from app.wiki import jobs, review, sources
+from app.wiki import catalog, jobs, review, schema_doc, sources
 from app.wiki.envelope import SourceEnvelope
 
 
@@ -192,6 +192,32 @@ async def get_log_md(
 ) -> PlainTextResponse:
     entries = await sources.list_log(s, limit=limit, since=since)
     return PlainTextResponse(sources.log_markdown(entries), media_type="text/markdown; charset=utf-8")
+
+
+class _SchemaBody(BaseModel):
+    yaml: str = Field(min_length=1, max_length=200_000)
+
+
+@router.get("/index")
+async def get_index(_: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    return envelope(data=await catalog.build(s))
+
+
+@router.get("/index.md", response_class=PlainTextResponse)
+async def get_index_md(_: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db)) -> PlainTextResponse:
+    return PlainTextResponse(catalog.markdown(await catalog.build(s)), media_type="text/markdown; charset=utf-8")
+
+
+@router.get("/schema")
+async def get_schema(_: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    return envelope(data=await schema_doc.current(s))
+
+
+@router.put("/schema")
+async def put_schema(
+    body: _SchemaBody, user: dict[str, Any] = Depends(require_admin), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await schema_doc.put(s, body.yaml, user=user))
 
 
 @router.get("/health")

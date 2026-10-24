@@ -418,7 +418,7 @@ lost-update 가 발생하지 않는다 ([[#gotchas]] 17, adversarial-verify).
 | `create_document()` | [[src/app/services/document_service.py#create_document]] | POST `/` 의 본체. `wiki={kind, audience}` 면 위키 문서 — 범위 줄(`wiki_pages`)을 같은 커밋에 넣고, 범위가 `["org"]` 보다 좁으면 `doc_created` 웹훅을 보내지 않는다([[wiki#Intake]]) |
 | `replace_document()` | [[src/app/services/document_service.py#replace_document]] | PUT `/{slug}` — 새 버전 INSERT |
 | `archive_document()` | [[src/app/services/document_service.py#archive_document]] | soft-delete |
-| `validate_documentjson()` | [[src/app/services/document_service.py#validate_documentjson]] | 스키마 + 정규화 (renumber, columns widths) + **전역 unique-id 검사** ([[#gotchas]] 16). slug `wiki-schema` 면 위키 규칙서 YAML 도 검사([[wiki#Rule book]]) |
+| `validate_documentjson()` | [[src/app/services/document_service.py#validate_documentjson]] | 스키마 + 정규화 (renumber, columns widths) + **전역 unique-id 검사** ([[#gotchas]] 16). slug `wiki-schema` 면 admin(또는 시스템)만 · 위키 규칙서 YAML 도 검사([[wiki#Rule book]]) |
 | `make_etag()` / `parse_if_match()` | [[src/app/services/document_service.py#make_etag]] | ETag 발급/검증 |
 | `scrub_for_response()` | [[src/app/services/document_service.py#scrub_for_response]] | 응답 직전 role-기반 redaction |
 | `patch_section()`, `patch_block()`, … | [[src/app/services/document_service.py#patch_section]] 부근 | 부분 수정 패밀리 |

@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from app.core.config import get_settings
 from app.core.errors import ValidationFailed
 from app.services import document_service
-from app.wiki import llm
+from app.wiki import audience, llm
 from app.wiki import schema as wiki_schema
 
 
@@ -133,6 +133,7 @@ def _schema_doc(*yamls: str) -> dict[str, Any]:
 
 
 def test_saving_the_rule_book_checks_its_yaml() -> None:
+    audience.set_viewer(audience.SYSTEM)
     assert document_service.validate_documentjson(_schema_doc(wiki_schema.DEFAULT_YAML))["slug"] == wiki_schema.SLUG
     with pytest.raises(ValidationFailed, match="규칙서"):
         document_service.validate_documentjson(_schema_doc("rules: [a]\nsections: {part: [요약]}\n"))

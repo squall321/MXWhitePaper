@@ -300,7 +300,7 @@ DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
 모든 읽기는 §2-11 범위로 거른다 — 목록 · 검색 · 그래프 · 내보내기를 포함해서(request §5-12 의 전수 목록).
 
 지은 것(W3 · W4) — `/sources` · `/sources/{id}` · `/sources/{id}/withdraw` · `/ingest` · `/changes` · `/changes/{id}` · `/approve` ·
-`/reject` · `/revert` · `/log` · `/log.md` · `/health`, 그리고 `GET /api/v1/documents/{slug}?with=citations`. 꼴은 `docs/lat/wiki.md`
+`/reject` · `/revert` · `/log` · `/log.md` · `/index` · `/index.md` · `/schema`(GET · PUT) · `/health`, 그리고 `GET /api/v1/documents/{slug}?with=citations`. 꼴은 `docs/lat/wiki.md`
 §REST 가 정본. 검토자 표지는 `users.wiki_reviewer`(0055 — 관리자 `PATCH /api/v1/admin/users/{id}`).
 
 ## 7. MCP 도구(`dist/llm-docx-toolkit/mcp/server.py` 에 더한다)
