@@ -217,7 +217,7 @@ DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
 | --- | --- | --- |
 | `sim_result` | `summary` · `setup{solver, model, conditions{…}}` · `results[{name, value, unit, where?}]` · `verdict?` · `artifacts[{name, url}]` | 숫자는 늘 `{value, unit}`. 그림은 `attachments` 로 |
 | `field_defect` | `form:'case'|'aggregate'` · (case) `case_ref` · `symptom` · `failure_mode?` · `cause?` · `action?` · `status` · `dates{opened, closed?}` · `model?` · `part?` · `stage?` · (aggregate) `period{from,to}` · `scope{model?, part?, region?}` · `counts[{failure_mode, count, rate?, unit}]` · 공통 `dataset{name, version}` | 사례 한 건 또는 집계 한 묶음(request §6-2). **사람 이름 · 사번 · 연락처 · 고객 · 단말 식별자는 연결기가 떼고 보낸다** — 서버도 V9 로 한 번 더 본다 |
-| `qa` | `question` · `answer` · `evidence[{kind:'tool'|'doc'|'source', ref, excerpt}]` · `model` · `outcome:'solved'|'partial'|'unknown'` · `asker_note?` | 질문자 이름은 싣지 않는다(주인은 `owner` 로만) |
+| `qa` | `question` · `answer` · `evidence[{kind:'tool'|'doc'|'source', ref, excerpt}]` · `model` · `outcome:'solved'|'partial'|'unknown'` · `asker_note?` | 질문자 이름은 싣지 않는다(주인은 `owner` 로만). `answer` 안의 `[k]` 는 생산자 안의 표시다 — MXWP 되쌓기는 `evidence` 의 k 째 `doc` 근거, 포털 챗은 답 안의 근거 블록. 들이기는 번호를 근거로 읽지 않는다 |
 | `deliberation` | `question` · `decision` · `votes[{seat, stance}]` · `evidence[…]` · `minority?` · `job_id` | 버린 근거 · 소수 의견을 지우지 않는다(포털 심의 원칙) |
 | `report` | `ra_report_id` · `title` · `sections[{heading, text}]` · `figures[{name, caption?, upload_id?}]` | RA 는 API 로만 읽는다 |
 | `card` | `card_id` · `domain` · `title` · `claims[{text, evidence?}]` | AIDataHub 지식카드 |

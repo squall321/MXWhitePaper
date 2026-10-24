@@ -181,6 +181,7 @@ async def test_one_source_becomes_a_page_with_citations(wiki: dict[str, Any]) ->
                                {"c": cs["id"]})).one()
     assert state == "done" and page["slug"] in json.dumps(_j(src_doc), ensure_ascii=False)  # 원천 문서가 인용한 문서를 안다
     assert log[0] == "ingest" and _j(log[1])["status"] == "auto_applied"
+    assert "대괄호 번호" in wiki["llm"].calls[0]["body"]["messages"][0]["content"]  # 원천 안 번호는 근거 번호가 아니다(WK-D65)
 
 
 @pytest.mark.parametrize(("scenario", "rule", "status"), [
