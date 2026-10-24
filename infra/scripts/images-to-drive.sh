@@ -22,14 +22,18 @@ REMOTE="${MXWP_IMAGES_REMOTE:-}"
 REMOTE="${REMOTE%/}"
 RETAIN="${MXWP_IMAGES_RETAIN:-3}"
 
-# Ship web.sif always (it changes with the SPA); api.sif optionally (set MXWP_IMAGES_WITH_API=1).
-# postgres/meili/minio rarely change — ship them once with MXWP_IMAGES_ALL=1 if cae00 lacks them.
-TO_SHIP=("$WEB_SIF")
-[ "${MXWP_IMAGES_WITH_API:-0}" = "1" ] && TO_SHIP+=("$API_SIF")
-[ "${MXWP_IMAGES_ALL:-0}" = "1" ] && TO_SHIP+=("$API_SIF" "$POSTGRES_SIF" "$MEILI_SIF" "$MINIO_SIF" "$MC_SIF")
+# 앱 이미지 셋(web · api · wiki)은 늘 함께 싣는다 — 아래에서 latest/ 를 이번 묶음으로 sync 하므로 빠진 것은 Drive 에서 지워지고,
+# 받는 박스(cae00)는 없는 이미지를 짓지 못한다(10-25 — wiki.sif 가 한 번도 실리지 않아 cae00 기동이 멈출 뻔했다).
+# postgres/meili/minio/mc 는 거의 안 바뀐다 — 새 박스면 MXWP_IMAGES_ALL=1 로 한 번.
+TO_SHIP=("$WEB_SIF" "$API_SIF" "$WIKI_SIF")
+[ "${MXWP_IMAGES_ALL:-0}" = "1" ] && TO_SHIP+=("$POSTGRES_SIF" "$MEILI_SIF" "$MINIO_SIF" "$MC_SIF")
 for f in "${TO_SHIP[@]}"; do
   [ -f "$f" ] || { echo "✗ missing $f — build it first (./infra/scripts/build.sh)"; exit 1; }
 done
+# 위키 워커는 api.sif 위에 짓는다 — 바탕보다 낡은 채 실으면 받는 쪽 build.sh 가 다시 지으려 한다(짓지 못하는 박스에서 실패)
+if [ "$API_SIF" -nt "$WIKI_SIF" ]; then
+  echo "✗ $(basename "$WIKI_SIF") 가 $(basename "$API_SIF") 보다 낡았다 — WIKI_ENABLED=true ./infra/scripts/build.sh 로 다시 지은 뒤 싣는다"; exit 1
+fi
 
 TS="$(date -u +%Y%m%d-%H%M%SZ)"
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT

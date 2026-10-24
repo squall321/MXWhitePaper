@@ -34,3 +34,19 @@ _DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${_DB_
   /bin/sh -c "cd /workspace/apps/api && alembic upgrade head"
 
 echo "✓ migrations applied"
+
+# 한 번만 — 보이기 범위 칸(aud* · readers)을 색인에 싣는 재색인(docs/lat/documents.md '보이기 범위 거르기'). 그 전 색인 줄은 칸이
+# 없어 restricted 문서가 검색 · 추천 · 챗 검색에 남는다. 표지를 남겨 두 번은 안 돈다 — 실패하면 다음 migrate.sh 가 다시 한다.
+# 접속 값은 위 alembic 과 같다. 비밀이 명령줄에 찍히지 않게 APPTAINERENV_ 로 넘긴다.
+_REINDEX_MARK="$DATA_DIR/.reindexed-audience-v1"
+if [ ! -f "$_REINDEX_MARK" ]; then
+  echo "→ 한 번만 — 보이기 범위 칸을 색인에 싣는다(python -m app.scripts.reindex)"
+  if APPTAINERENV_DATABASE_URL="$_DATABASE_URL" APPTAINERENV_MEILI_HOST="http://127.0.0.1:${MEILI_PORT}" \
+     APPTAINERENV_MEILI_MASTER_KEY="${MEILI_MASTER_KEY:-}" \
+     "$APPTAINER" exec instance://"$INST_API" /bin/sh -c "cd /workspace/apps/api && python3 -m app.scripts.reindex"; then
+    date -u +%FT%TZ > "$_REINDEX_MARK"
+    echo "✓ reindexed (표지 $(basename "$_REINDEX_MARK"))"
+  else
+    echo "  ⚠ 다시 색인하지 못했다 — 다음 migrate.sh 가 다시 한다(그 전엔 restricted 문서가 검색에 남는다)" >&2
+  fi
+fi

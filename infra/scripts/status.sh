@@ -36,6 +36,8 @@ fi
 printf "  %-10s " "wiki"
 if instance_running "$INST_WIKI"; then
   echo "✓ instance $INST_WIKI (WIKI_ENABLED=${WIKI_ENABLED:-false})"
+elif ! is_true "${WIKI_ENABLED:-false}"; then
+  echo "· 위키 워커 꺼짐 (WIKI_ENABLED=${WIKI_ENABLED:-false})"
 else
   echo "✗ instance $INST_WIKI not running"; ST_FAIL=$((${ST_FAIL:-0}+1))
 fi

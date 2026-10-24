@@ -106,7 +106,7 @@ if [ "$SKIP_GIT" -eq 0 ]; then
       NEEDS_REBUILD=1
       warn "infra .def changed — image rebuild needed"
     fi
-    # alembic migration → 자동 migrate 필요 (api 재기동 시 우리 startscript 가 처리)
+    # alembic migration → api 재기동 뒤 ./infra/scripts/migrate.sh 를 손으로 돌려야 한다 — api.def 의 startscript 는 이관을 돌리지 않는다
     if echo "$CHANGED" | grep -qE '^apps/api/alembic/versions/'; then
       NEEDS_RESTART=1
       warn "new alembic migration — api restart needed"

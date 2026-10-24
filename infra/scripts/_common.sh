@@ -64,6 +64,9 @@ INST_API=mxwp_api
 INST_WIKI=mxwp_wiki
 INST_WEB=mxwp_web
 
+# .env 의 참 · 거짓 — 앱(pydantic)과 같게 true · 1 · yes · on 만 참
+is_true() { case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in true|1|yes|on) return 0 ;; *) return 1 ;; esac; }
+
 # Default ports (override via .env)
 : "${POSTGRES_PORT:=5432}"
 : "${MEILI_PORT:=7700}"

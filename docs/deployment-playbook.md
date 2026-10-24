@@ -346,6 +346,22 @@ MINIO_API_PORT=9000
 MINIO_CONSOLE_PORT=9001
 ```
 
+### cae00 업데이트 — 이미지 · 위키 워커 · 재색인(10-25 점검)
+
+포털 세션의 업데이트 전 점검(10-25)에서 나온 것. 받는 박스(cae00)는 이미지를 짓지 못한다(npm · Docker Hub 막힘).
+
+- **이미지는 셋을 늘 함께 싣는다** — `images-to-drive.sh` 가 web · api · wiki 를 한 묶음으로 올리고 `latest/` 를 그 묶음으로 맞춘다
+  (빠진 것은 Drive 에서 지워진다). 예전엔 web 하나뿐이라 wiki.sif 가 한 번도 실리지 않았다. 위키 워커가 api.sif 보다 낡았으면
+  싣지 않는다(받는 쪽이 다시 지으려 한다). postgres · meili · minio · mc 는 새 박스에만 `MXWP_IMAGES_ALL=1` 로 한 번.
+- **위키 워커는 선택이다** — `WIKI_ENABLED` 가 꺼진 박스는 wiki.sif 를 짓지도 띄우지도 않는다. 켜진 박스에서 이미지가 없거나
+  짓기 · 기동이 실패해도 경고만 하고 API · 웹은 띄운다(예전엔 `set -e` 로 start.sh 가 어떤 인스턴스도 띄우기 전에 끝났다).
+  `status.sh` 도 꺼진 박스의 워커 없음을 실패로 세지 않는다.
+- **재색인은 migrate.sh 가 한 번** — 보이기 범위 칸(restricted 거르기)을 색인에 싣는 `python -m app.scripts.reindex` 를 이관 뒤
+  한 번 돌리고 표지 `infra/data/.reindexed-audience-v1` 를 남긴다. 실패하면 표지가 없어 다음 migrate.sh 가 다시 한다.
+- **이번 업데이트에 `sync-from-drive.sh` 는 쓰지 않는다** — `.def` 가 바뀌면(이번엔 wiki.def) `build.sh --force` 로 모든 이미지를
+  다시 지으려 하고(cae00 은 못 짓는다), 이관도 돌리지 않는다(api.def 의 startscript 는 이관을 하지 않는다). 포털의 update-all
+  (deploy-all-from-drive) → `migrate.sh` 순서로 한다.
+
 ### SSO 전용 켜기 — 사람은 포털로만(사용자 결정 10-25)
 
 `.env` 는 리포 밖이라 배포(update · update-all)가 저절로 켜지 않는다. 박스마다 사람이 한다.

@@ -214,8 +214,16 @@ start_instance "$INST_API" "$API_SIF" \
 # 위키 작업 워커(docs/llm-wiki W3) — API 와 다른 프로세스라 API 재기동이 긴 LLM 작업을 끊지 않는다. WIKI_ENABLED 가
 # 꺼져 있으면 아무것도 집지 않고 쉰다. 비밀은 --env 로 싣지 않는다 — 이 셸이 export 한 .env 를 물려받아 wiki.def 의
 # 시작 스크립트가 컨테이너 안에서 접속 주소를 짓는다.
-start_instance "$INST_WIKI" "$WIKI_SIF" \
-  --bind "$REPO_ROOT:/workspace"
+# WIKI_ENABLED 가 꺼졌으면 띄우지 않는다. 이미지가 없거나 못 떠도 경고만 — 뒤의 웹 기동을 막지 않는다(set -e 라 실패하면 여기서 끝났다).
+if ! is_true "${WIKI_ENABLED:-false}"; then
+  echo "· skip $INST_WIKI (WIKI_ENABLED 꺼짐)"
+elif [ ! -f "$WIKI_SIF" ]; then
+  echo "  ⚠ $(basename "$WIKI_SIF") 없음 — 위키 워커 없이 띄운다(Drive 에서 받아라: ./infra/scripts/images-from-drive.sh)" >&2
+else
+  start_instance "$INST_WIKI" "$WIKI_SIF" \
+    --bind "$REPO_ROOT:/workspace" \
+    || echo "  ⚠ $INST_WIKI 를 띄우지 못했다 — API · 웹은 그대로 띄운다" >&2
+fi
 
 # ── web ─────────────────────────────────────────────────────────────
 # VITE_API_URL is a relative path so the FE always asks its own origin

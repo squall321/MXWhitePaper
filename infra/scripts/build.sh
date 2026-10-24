@@ -113,9 +113,14 @@ build_or_pull "$MINIO_SIF"    ""  "$APPT_DIR/minio.def"
 build_or_pull "$API_SIF"      ""  "$APPT_DIR/api.def"
 
 # 위키 워커 — api.sif 위에 시작 스크립트만 다르다(wiki.def). api.sif 가 더 새것이면 따라 다시 짓는다(바탕이 바뀌었다).
-if [ "$FORCE" -eq 1 ] || [ ! -f "$WIKI_SIF" ] || [ "$API_SIF" -nt "$WIKI_SIF" ]; then
+# WIKI_ENABLED 가 켜진 박스만 지으려 한다. 못 지으면(짓지 못하는 박스 — cae00) 경고만 하고 넘어간다 — 위키 워커 하나 때문에
+# API · 웹 기동이 막히지 않게(start.sh 가 맨 앞에서 이 스크립트를 부른다). 받는 박스는 Drive 의 images-from-drive 로 받는다.
+if ! is_true "${WIKI_ENABLED:-false}"; then
+  echo "· skip  $(basename "$WIKI_SIF") (WIKI_ENABLED 꺼짐 — 위키 워커를 띄우지 않는다)"
+elif [ "$FORCE" -eq 1 ] || [ ! -f "$WIKI_SIF" ] || [ "$API_SIF" -nt "$WIKI_SIF" ]; then
   echo "→ build $(basename "$WIKI_SIF") from wiki.def (base $(basename "$API_SIF"))"
-  "$APPTAINER" build --force --build-arg "API_SIF=$API_SIF" "$WIKI_SIF" "$APPT_DIR/wiki.def"
+  "$APPTAINER" build --force --build-arg "API_SIF=$API_SIF" "$WIKI_SIF" "$APPT_DIR/wiki.def" \
+    || echo "  ⚠ $(basename "$WIKI_SIF") 를 짓지 못했다 — 위키 워커 없이 넘어간다(Drive 에서 받아라: ./infra/scripts/images-from-drive.sh)" >&2
 else
   echo "✓ skip  $(basename "$WIKI_SIF") (exists)"
 fi

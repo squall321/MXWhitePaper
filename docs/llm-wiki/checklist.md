@@ -42,7 +42,7 @@
 - [x] 길마다 시험(범위 셋 × 길 전부) 누설 0 — `test_block_permissions_paths.py` 꼴 — `tests/test_wiki_audience.py` 23(응답 어디든 범위 밖 slug 가 나오면 실패)
 - [x] (Q4 답에 따라) 기존 `restricted` 문서도 같은 필터 — 작성자 · 검토자 · 이메일 owners/reviewers · admin(WK-D27)
 - [x] admin 의 범위 밖 읽기는 감사(`document.read.admin_override`, `get_document_or_404` 한 곳)
-- [ ] 배포 — cae00 에 0050 · 0051 · 재색인(`python -m app.scripts.reindex`). 재색인 전엔 restricted 가 검색에 남는다
+- [ ] 배포 — cae00 에 0050 · 0051 · 재색인(`python -m app.scripts.reindex`). 재색인 전엔 restricted 가 검색에 남는다 — 재색인은 이제 `migrate.sh` 가 이관 뒤 한 번 한다(표지, 10-25)
 
 ## W3 원천 · 작업 실행기
 - [x] 표 — `wiki_sources`(불변 트리거) · `wiki_jobs` · `wiki_log`(덧붙이기만) · `wiki_pages`(0051 · 0052 — 워커 심장박동 `wiki_workers` 더함)

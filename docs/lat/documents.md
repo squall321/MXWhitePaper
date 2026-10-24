@@ -574,7 +574,7 @@ network blip 만 잡는다. 결과적으로 최악의 경우 단일 PUT 의 인�
 `audience_filter_exprs(viewer)` 를 AND 한다 — 각 칸이 '읽는 사람 토큰 ∪ *' 안, readers 가 `*` 또는 그 사람. 칸 하나에 토큰 목록을
 두지 않은 까닭은 Meili 거르기로 '모두 가졌나'(그리고)를 못 쓰고 부분집합을 늘어놓으면 `plat:` 이 많은 사람에서 폭발해서다.
 칸이 없는 옛 색인 줄은 `NOT EXISTS` 로 지금처럼 보인다(이행기) — **배포 뒤 `python -m app.scripts.reindex` 로 다시 색인해야 restricted 가
-검색에서 빠진다.** filterable 설정은 API 기동(lifespan)이 `ensure_index()` 로 맞춘다 — 설정 전 거르기는 'not filterable' 오류다.
+검색에서 빠진다** — `infra/scripts/migrate.sh` 가 이관 뒤 한 번 돌리고 표지 `infra/data/.reindexed-audience-v1` 를 남긴다(10-25). filterable 설정은 API 기동(lifespan)이 `ensure_index()` 로 맞춘다 — 설정 전 거르기는 'not filterable' 오류다.
 
 ### 한국어 부분 매칭 (M1 — Meilisearch native)
 
