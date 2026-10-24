@@ -205,7 +205,7 @@ HWAXPortal `docs/mxwp-wiki/PLAN.md` 가 정본이다. 여기는 MXWP 쪽이 기�
 | P2 | 게이트웨이 provision | REST 다리 `rest.mx-white-paper` 를 `inject` → `per_user` 로(ste 와 같은 모양) — 이 줄은 **코드 수정**이다. 그러면 `rest_call` 쓰기도 그 사람 명의로 열린다 |
 | P3 | 포털 진입 토큰 | **10-24 구현** — `plat:` 은 원래 `groups` 에 실렸고, 소속 `affiliation` 클레임을 MXWP 진입 토큰에만 더했다(값이 없거나 권한표에 없는 소속이면 칸이 없다 — 빈 값을 '소속 없음' 이라는 소속으로 묶지 않게) |
 | P4 | 게이트웨이 | **10-24 구현**(켜기는 박스 설정 `MXWP_SEND_PLAT=1`) — 위임 호출에 `X-Heax-User-Plat` + `X-Heax-Plat-Proof`(소속 증명과 같은 규칙, CONTRACTS §9). 헤더가 없는 호출에서 MXWP 는 `plat:` 범위 문서를 보여 주지 않는다 |
-| P5 | update-all | `infra/.env` 의 `MXWP_SSO_SECRET` 을 provision 에 넘기고(RA_SSO_SECRET 과 같은 줄) 비면 `PER_USER_SSO_OFF` 로 끈다 · MXWP 설정 킷도 적용한다 · 비밀은 **자동 생성하지 않는다**(MXWP 가 준비되기 전에 생기면 그 순간 MXWP 호출이 거부로 바뀐다) |
+| P5 | update-all | **10-24 구현**(f7c9c7b) — 비밀 · 주소는 게이트웨이 `provision.env` 에 둔다(일반 길). update-all 은 그 값을 provision 에 넘기고 · 비면 `PER_USER_SSO_OFF` 로 끄고 · 어긋나면 재프로비저닝한다(`MXWP_SEND_PLAT` 포함). MXWP `.env` 의 같은 비밀은 사람이 넣는다 · 비밀은 **자동 생성하지 않는다**(MXWP 가 준비되기 전에 생기면 그 순간 MXWP 호출이 거부로 바뀐다) |
 | P6 | 포털 챗 | 문서 메뉴 '위키에 남기기' 를 진짜 동작으로 — 그 턴의 질문 · 답 · 근거(활동의 도구 호출 요약)를 `qa` 봉투로 만들어 그 사람 명의로 `POST /api/v1/wiki/sources`(포털 → MXWP 위임 — P1 과 같은 비밀, `X-Heax-Client: hwax-portal`) |
 | P7 | 포털 챗 | '해결됨' 표시(턴 단위) → 위키 후보(주인만 보는 `held` 원천) — §6-3, 사람 결정 §11 Q1 |
 | P8 | 에이전트 서버 | 심의 결정문을 RA 와 함께 위키에도(사람이 고른 범위 · 동의가 있을 때) — `deliberation` 봉투 |
@@ -213,7 +213,9 @@ HWAXPortal `docs/mxwp-wiki/PLAN.md` 가 정본이다. 여기는 MXWP 쪽이 기�
 
 ### 4-4. 사람 몫(cae00 · 각 박스)
 
-1. 비밀 하나를 만들어(`openssl rand -hex 32`) MXWP `.env` 의 `MXWP_SSO_SECRET` 과 포털 `infra/.env` 의 `MXWP_SSO_SECRET` 에 같은 값으로 — 메신저 평문 말고.
+1. 비밀 하나를 만들어(`openssl rand -hex 32`) MXWP `.env` 의 `MXWP_SSO_SECRET` 과 게이트웨이 `HWAXMcpGateway/provision.env` 에 같은 값으로 —
+   메신저 평문 말고. provision.env 에는 넷 — `PER_USER_SSO_APPS` 에 `mx-white-paper:MXWP` 쌍 · `MXWP_SSO_SECRET` ·
+   `MXWP_SSO_URL=http://127.0.0.1:8800/api/v1/auth/sso` · `MXWP_SEND_PLAT=1`(HWAXPortal `docs/mxwp-wiki/PLAN.md` §6 이 정본, 10-24 포털 세션 정정).
 2. update-all → 로그에 `✓ mx-white-paper 사람별 위임 — <주소>` 줄이 나오는지(게이트웨이 provision 이 찍는다 — `/health` 에는 위임 목록이 없다).
 3. 타일 로그인을 dev · cae00 에서 끝까지 한 번(브라우저) — 지금까지 실제 로그인 확인 기록이 없다.
 
