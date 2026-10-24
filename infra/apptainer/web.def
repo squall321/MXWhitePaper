@@ -12,7 +12,8 @@ From: node:20-bookworm-slim
 # set VITE_API_URL to the API origin.)
 #
 # CRITICAL: the dist is base-path-specific. Build it ONLINE with the SAME prefix cae00 serves under:
-#   MXWP_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build   (then `apptainer build web.sif`)
+#   VITE_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build   (then `apptainer build web.sif`)
+#   — or `make build-web`, which does both. Vite reads VITE_BASE_PATH only (MXWP_BASE_PATH alone → base '/').
 
 %labels
     Maintainer  squall321@gmail.com
@@ -55,7 +56,7 @@ From: node:20-bookworm-slim
 
 %help
     MX White Paper Web container (static-serve of a prebuilt SPA).
-    PRODUCTION (cae00, no build): online → `MXWP_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build`
+    PRODUCTION (cae00, no build): online → `VITE_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build`
       → `apptainer build web.sif web.def` (bakes apps/web/dist) → push via images-to-drive.sh →
       cae00 `images-from-drive.sh` + `start.sh` → instance runs `serve -s /opt/web/dist`.
     DEV (online): `apptainer run web.sif` → vite dev with HMR.

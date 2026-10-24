@@ -119,7 +119,7 @@ build_or_pull "$API_SIF"      ""  "$APPT_DIR/api.def"
 if [ ! -f "$REPO_ROOT/apps/web/dist/index.html" ]; then
   echo
   echo "✗ apps/web/dist/index.html 없음 — web.sif 가 빈 SPA 를 패키지 한다."
-  echo "  Portal 모드: MXWP_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build"
+  echo "  Portal 모드: VITE_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build"
   echo "  Standalone : pnpm --filter @mx/web build"
   echo "  또는 make build-web (Drive ship pipeline 사용 시)."
   exit 1

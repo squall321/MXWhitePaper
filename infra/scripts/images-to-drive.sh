@@ -5,7 +5,7 @@
 # with NO pnpm/corepack.
 #
 # Run on an ONLINE build host, AFTER building:
-#   MXWP_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build     # base baked into dist
+#   VITE_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build     # base baked into dist (vite reads VITE_BASE_PATH only)
 #   apptainer build infra/apptainer/web.sif infra/apptainer/web.def # bakes dist into the sif
 #   ./infra/scripts/images-to-drive.sh
 #

@@ -138,7 +138,8 @@ relationships-dump:
 # .env 의 MXWP_IMAGES_REMOTE (예: MxwpDrive:MXWhitePaper/images) 필수.
 build-web:
 	@echo "→ building SPA dist with portal base"
-	@MXWP_BASE_PATH=$${MXWP_BASE_PATH:-/mx-white-paper/} \
+	@# vite.config.ts 는 VITE_BASE_PATH 만 읽는다 — MXWP_BASE_PATH 만 넘기면 base 가 '/' 로 구워진다.
+	@VITE_BASE_PATH=$${MXWP_BASE_PATH:-/mx-white-paper/} \
 		pnpm --filter @mx/web build
 	@echo "→ rebuilding web.sif (bakes apps/web/dist)"
 	@apptainer build --force infra/apptainer/web.sif infra/apptainer/web.def
