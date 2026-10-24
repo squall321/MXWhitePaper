@@ -257,7 +257,8 @@ DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
 
 연산마다 `why`(한 줄)를 단다 — 검토 화면이 그대로 보여 준다. 문서는 slug 또는 `tmp` 로 가리킨다.
 
-W5 구현 — `relation.add` 는 `{doc: 주어, subject, predicate, object, cites, confidence, why, origin(code · llm)}` 로 블록 연산과 같은 `ops` 에
+W5 구현 — `entity.merge` 는 `{doc: '', from, into, why}`(사람의 `human_request` 묶음, 늘 검토)이고 반영은 등록부 · 문서 잇기만
+바꾼다(같은 범위의 문서가 둘이 되면 옮겨 온 쪽에 낡음 표시 — 보관하지 않는다). `relation.add` 는 `{doc: 주어, subject, predicate, object, cites, confidence, why, origin(code · llm)}` 로 블록 연산과 같은 `ops` 에
 들고, 사례 문서의 about-* · simulated-with · observed-in 은 코드가 원천의 주제 힌트로 단다. 정본은 `docs/lat/wiki.md` §Relations.
 
 ## 5. 검증 규칙(코드가 판정한다 — 모델에게 묻지 않는다)

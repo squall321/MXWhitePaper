@@ -21,7 +21,7 @@ from app.core.auth import require_admin, require_editor, require_reader
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import APIError, ValidationFailed, envelope, format_pydantic_errors
-from app.wiki import catalog, jobs, ontology, review, schema_doc, sources
+from app.wiki import catalog, entities, jobs, ontology, review, schema_doc, sources
 from app.wiki.envelope import SourceEnvelope
 
 
@@ -262,6 +262,53 @@ async def reject_ontology(
     s: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     return envelope(data=await ontology.decide(s, kind, key, approve=False, user=user, note=body.note))
+
+
+@router.get("/entities")
+async def get_entities(
+    type: str | None = None,
+    q: str | None = Query(None, max_length=200),
+    status: Literal["active", "merged", "retired"] = "active",
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    _: dict[str, Any] = Depends(require_reader),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    rows, total = await entities.list_entities(s, type_key=type, q=q, status=status, limit=limit, offset=offset)
+    return envelope(data=rows, meta={"total": total, "limit": limit, "offset": offset})
+
+
+@router.get("/entities/duplicates")
+async def get_entity_duplicates(user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    await review.require_reviewer(s, user)
+    return envelope(data=await entities.duplicates(s))
+
+
+@router.get("/entities/{entity_id}")
+async def get_entity(entity_id: UUID, _: dict[str, Any] = Depends(require_reader),
+                     s: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    return envelope(data=await entities.get_entity(s, str(entity_id)))
+
+
+@router.patch("/entities/{entity_id}")
+async def patch_entity(
+    entity_id: UUID, body: entities.EntityPatch, user: dict[str, Any] = Depends(require_editor),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await entities.update_entity(s, str(entity_id), body, user=user))
+
+
+class _MergeBody(BaseModel):
+    from_id: UUID
+    into_id: UUID
+    note: str | None = Field(default=None, max_length=1000)
+
+
+@router.post("/entities/merge", status_code=201)
+async def post_entity_merge(
+    body: _MergeBody, user: dict[str, Any] = Depends(require_editor), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await entities.propose_merge(s, str(body.from_id), str(body.into_id), user=user, note=body.note))
 
 
 @router.get("/health")

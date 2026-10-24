@@ -7,6 +7,7 @@
 - slug 는 ASCII — `ent-<약어>-<외부 id>` 또는 `ent-<약어>-<이름 해시 6>`(한국어 이름에는 영문 이름이 없다). 기본 slug 는 엔티티를
   처음 만들 때 `attrs.slug` 에 적어 두고 다시 짓지 않는다.
 - 사례 문서 — 해석 결과는 `case-sim-<원천 짧은 id>`, 시장불량 사례(case)는 `case-field-<원천 짧은 id>`.
+- 찾은 엔티티는 그 범위의 문서가 이미 있으면 그 slug 를 쓴다(합치기로 옮겨 온 문서는 slug 가 다르다 — 낡음 표시 없는 것 · 오래된 것 먼저).
 """
 from __future__ import annotations
 
@@ -103,6 +104,14 @@ async def _find_entity(s: AsyncSession, type_key: str, name: str, ext: dict[str,
     return None
 
 
+async def _entity_page(s: AsyncSession, entity_id: str, audience: list[str]) -> str | None:
+    return (await s.execute(text("""
+        SELECT d.slug FROM wiki_pages wp JOIN documents d ON d.id = wp.doc_id
+         WHERE wp.entity_id = CAST(:e AS uuid) AND wp.audience = CAST(:a AS text[]) AND d.status <> 'archived'
+         ORDER BY wp.stale_since NULLS FIRST, d.created_at LIMIT 1
+    """), {"e": entity_id, "a": audience})).scalar()
+
+
 async def _page(s: AsyncSession, slug: str) -> dict[str, Any] | None:
     """slug 의 문서(보이기 거르기 없이 — 시스템이 읽는다). 위키 문서면 그 줄도."""
     row = (await s.execute(text("""
@@ -162,7 +171,8 @@ async def targets(s: AsyncSession, src: dict[str, Any]) -> list[Target]:
             base, canonical = base_slug(abbr, name, ext), name
             entity = {"type_key": type_key, "canonical_name": name, "aliases": [], "ext_ids": ext,
                       "attrs": {"slug": base}}
-        t = await _target(s, scoped_slug(base, audience), kind="entity", type_key=type_key,
+        slug = (await _entity_page(s, found["id"], audience) if found else None) or scoped_slug(base, audience)
+        t = await _target(s, slug, kind="entity", type_key=type_key,
                           title=scoped_title(canonical, audience), audience=audience,
                           entity_id=found["id"] if found else None, entity=entity, label=label)
         if all(t.slug != o.slug for o in out):

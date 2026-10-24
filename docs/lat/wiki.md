@@ -17,7 +17,7 @@
 | W2 보이기 범위 | 읽기 길 전수(아래 표) · 길마다 시험 · admin 범위 밖 읽기 감사. 남은 것 — cae00 배포 · 재색인 | [[#Audience]] |
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
 | W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
-| W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지. 남은 것 — 등록부 · 합치기 · LLM 후보 해석 · 온톨로지 화면 | [[#Ontology]] · [[#Relations]] |
+| W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지 · 엔티티 등록부(보이기 · 별칭 · 외부 id · 중복 후보 · 합치기 — 늘 검토 · 되돌리기). 남은 것 — LLM 후보 해석 · 정답표 · 화면(온톨로지 · 등록부) | [[#Ontology]] · [[#Relations]] · [[#Entities]] |
 | W6 묻기 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -45,6 +45,7 @@
 | LLM(구조화 출력) | [[src/app/wiki/llm.py#structured]] | W4 |
 | 해석 · 후보 문서 | [[src/app/wiki/resolve.py#targets]] · 표 `wiki_entity_types` · `wiki_entities`(0054) | W4 |
 | 온톨로지(유형 · 술어 · 제안 → 승인 · 정의역 · 치역) | [[src/app/wiki/ontology.py]] · 표 `wiki_predicates` · `doc_triples` 위키 칸(0056) | W5 |
+| 엔티티 등록부(목록 · 별칭 · 외부 id · 중복 후보 · 합치기) | [[src/app/wiki/entities.py]] | W5 |
 | 들이기(계획 · 쓰기 · 묶음 짓기) | [[src/app/wiki/ingest.py#run]](워커 처리기 `ingest`) | W4 |
 | 검증 V1~V11 · 판정 | [[src/app/wiki/validate.py#run]] · `decide` | W4 |
 | 문서 내용(빈 꼴 · 연산 적용 · 자동 절) | [[src/app/wiki/pages.py#apply_ops]] | W4 |
@@ -151,6 +152,10 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | `GET /ontology` | reader | 유형 · 술어(`status` 로 거르기 — 비면 제안 · 거절까지 모두. 이름에는 범위가 없다). 유형은 `ext_axes` · 살아 있는 엔티티 수 |
 | `POST /ontology/types` · `POST /ontology/predicates` | editor | 제안 → 201 `proposed`. 같은 key · slug 약어 409, 승인되지 않은 상위 · 정의역 · 치역 유형 422 |
 | `POST /ontology/{types\|predicates}/{key}/approve` · `/reject` | admin | 제안 중인 것만(아니면 409). 거절은 `note` 꼭(422). 기록 `ontology` · 감사 `wiki.ontology.*` |
+| `GET /entities` · `GET /entities/{id}` | reader | 등록부 — `type` · `q`(이름, admin 은 별칭도) · `status` · `limit` · `offset` → `meta.total`. 줄마다 `full` · 볼 수 있는 문서(낡음 표시) · `full` 일 때만 별칭 · 외부 id · 속성, 한 건은 `merged_from` |
+| `PATCH /entities/{id}` | editor(`full`) | `{aliases?, ext_ids?}` 바꿔 넣기 — 같은 유형의 다른 엔티티와 겹치면 409, 칸 이름 꼴이 틀리면 422 |
+| `GET /entities/duplicates` | 검토자 | 같은 개체로 보이는 짝(이름 · 별칭 열쇠 · 같은 외부 id) — 둘 다 `full` 인 것만 |
+| `POST /entities/merge` | editor(둘 다 `full`) | `{from_id, into_id, note?}` → 201 변경 묶음(`human_request`, 늘 검토 — 검증에 걸리면 `failed`) |
 | `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(W7). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
 
 ## Rule book
@@ -183,7 +188,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 | 단계 | 무엇 |
 | --- | --- |
 | 거르기 | 활성이 아닌 원천(새 판에 밀림 · 철회)과 `restricted`(WK-D37)는 들이지 않는다 — 원천 `skipped`, 기록에 까닭. LLM 을 부르지 않는다 |
-| 해석 | [[src/app/wiki/resolve.py#targets]] — 힌트마다 외부 id → 별칭 → 정규화 이름(공백 없앰 · casefold)으로 등록부를 찾고, 없으면 새 엔티티(승인된 유형만). 문서는 범위마다 한 장 — `["org"]` 는 기본 slug, 그 밖은 `<기본>--<범위 꼬리>`. 기본 slug(`ent-<약어>-<외부 id>` 또는 `-<이름 해시 6>`)는 엔티티 `attrs.slug` 에 적어 두고 다시 짓지 않는다. 사례 문서 `case-sim-<짧은 id>` · `case-field-<짧은 id>`(W4 는 엔티티를 잇지 않는다) |
+| 해석 | [[src/app/wiki/resolve.py#targets]] — 힌트마다 외부 id → 별칭 → 정규화 이름(공백 없앰 · casefold)으로 등록부를 찾고, 없으면 새 엔티티(승인된 유형만). 찾은 엔티티는 그 범위의 문서가 있으면 그 slug(합치기로 옮겨 온 문서는 slug 가 다르다 — 낡음 없는 것 · 오래된 것 먼저). 문서는 범위마다 한 장 — `["org"]` 는 기본 slug, 그 밖은 `<기본>--<범위 꼬리>`. 기본 slug(`ent-<약어>-<외부 id>` 또는 `-<이름 해시 6>`)는 엔티티 `attrs.slug` 에 적어 두고 다시 짓지 않는다. 사례 문서 `case-sim-<짧은 id>` · `case-field-<짧은 id>`(W4 는 엔티티를 잇지 않는다) |
 | 계획 | `wiki_plan` — 후보 안에서 고칠 문서와 까닭, 원천 문서 요약 · 물음 · 모순. 후보 밖 slug 는 버리고 `plan.unknown` 에 남긴다. 문서 수는 규칙서 `ingest.max_pages_per_source` |
 | 쓰기 | 문서마다 `wiki_write` — 그 문서의 절(누가 쓰나 표시)과 블록 id 를 보여 주고 `block.insert`(절 이름) · `block.update` · `block.delete` 와 근거(sid · loc · quote)를 받는다. 블록 종류는 문단 · 목록 · 표 · 알림 상자. 새 블록 id · 근거의 원천 id(sid 앞자리로 찾음)는 코드가 정한다 |
 | 검증 → 판정 | [[#Validation]] → `auto_applied`(바로 반영) · `pending_review` · `failed`. 반영 중 판 충돌이면 `pending_review` |
@@ -231,6 +236,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 | 함께 반영 | 저장은 문서마다 커밋된다 — 중간에 깨지면 저장한 문서를 판 복원 · 보관으로 되감고 이 묶음 근거를 지우고, 이 묶음이 만든 엔티티 중 살아 있는 문서가 없는 것을 retired |
 | 되돌리기 | `applied` 의 판 위에 더 고친 것이 없을 때만(있으면 409). 새 문서 보관 · 있던 문서 from 판 복원 · 근거 지움 · 관계 되돌림 · 기록 `revert` |
 | 관계 | 문서 저장 **전에** `doc_triples` 에 쓴다 — [[#Relations]]. `applied.triples` 에 줄마다 `created` 또는 바꾸기 전 값(`prev`) |
+| 합치기 | `entity.merge` 를 맨 먼저 — [[#Entities]]. `applied.merges` 에 다시 이은 문서 · 바꾸기 전 별칭 · 외부 id(되돌리기가 그대로 돌린다) |
 
 ## Review
 
@@ -239,6 +245,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 `pending_review` 만, fail 이 있으면 409 · 반영은 `applied`. 거절은 까닭 한 줄이 꼭 있어야(422). 기록 `review`(승인 · 거절).
 **계획 밖 문서의 연산은 승인해도 반영되지 않는다**(그 문서의 판도 꼴도 계획에 없다 — V6 로 사람에게 보일 뿐).
 한 건 상세의 `relations` — 주어 · 술어 이름 · 목적어(제목) · 까닭 · `origin`(code · llm) · 근거, `relations_dropped` — 끝이 후보 밖이라 버린 것.
+`merges` — 두 엔티티의 제안 때 모습 · 까닭 · (반영했으면) 다시 이은 문서 · 낡음 · 다시 들일 원천. 목록에서는 합치기 묶음의 문서 칸에 요약 한 줄.
 
 ## Screens
 
@@ -294,6 +301,22 @@ API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 —
 | 읽기 | `/triples` · 서브그래프 · 링크 그래프(`include_triples=1`) — 위키 관계도 같은 길, 범위는 주어 · 목적어 문서로 |
 
 시험 [[apps/api/tests/test_wiki_ingest.py]] 의 관계 셋 — 쓰기 · 관계(자동) · 검토 상세 · 되돌리기 / 틀린 관계(V7 · 버림) / 이미 있는 끝점 문서를 다시 짓기.
+
+## Entities
+
+[[src/app/wiki/entities.py]] — 등록부(`wiki_entities`)를 읽고 고치고 합친다.
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 보이기 | 읽는 사람이 볼 수 있는 문서(보관 아님)가 하나라도 있으면 보인다 · admin 은 다. 문서 목록도 볼 수 있는 것만 |
+| full | 별칭 · 외부 id · 속성은 **엔티티를 처음 만든 범위(`audience`)의 토큰을 다 가진 사람만** — 좁은 원천이 단 외부 id(BOM 코드 등)가 넓은 문서의 사람에게 새지 않게. 이름 찾기(`q`)도 admin 만 별칭까지 |
+| 고치기 | `full` 인 editor 가 별칭 · 외부 id 를 바꿔 넣는다. 열쇠(`strong_key` — NFKC · casefold · 공백과 `-_.·/()[]` 없앰)가 제 이름과 같은 별칭은 버리고, 같은 유형의 다른 살아 있는 엔티티 이름 · 별칭 · 같은 외부 id 와 겹치면 409. 기록 `ontology`(그 엔티티 범위) · 감사 `wiki.entity.edit` |
+| 중복 후보 | 같은 유형에서 이름 · 별칭 열쇠가 같거나 같은 외부 id 칸 값 — 둘 다 `full` 인 짝(`why` = name · `ext:<칸>`) |
+| 합치기 제안 | `human_request` 묶음 · 연산 `entity.merge{from, into, why}` · 계획에 두 엔티티의 그때 모습. 검증 — V6 늘 검토 · V7 같은 엔티티 · 유형이 다름 · 살아 있지 않음 · 같은 외부 id 칸의 값이 다름 · V4 `from` 범위 토큰이 `into` 범위에 없음(좁은 것을 넓은 것으로 — 샌다). 실패가 있으면 `failed`. 묶음 범위는 둘의 범위 합(org 뺌) |
+| 반영 | `from` → merged(`merged_into`) · `into` 별칭에 `from` 의 이름 · 별칭(열쇠가 같은 것은 빼고) · 없던 외부 id. `from` 의 문서는 `into` 로 다시 잇고, 같은 범위에 `into` 문서가 이미 있으면 옮겨 온 문서에 **낡음 표시만**(보관하지 않는다) — 보관 · 다시 들이기(`reingest` 원천 → `POST /ingest`)는 사람이 |
+| 되돌리기 | 문서 잇기 · 낡음 · `into` 별칭 · 외부 id 를 그 전으로, `from` 을 다시 active |
+
+시험 [[apps/api/tests/test_wiki_entities.py]] — 보이기 · full · 고치기 · 겹침 · 중복 후보 · 합치기(검토 → 반영 → 해석 → 되돌리기) · V4 · V7.
 
 ## Ontology
 

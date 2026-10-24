@@ -8,6 +8,7 @@
 - 관계(`relation.add` — W5)는 문서 저장 전에 `doc_triples`(source `wiki`)에 쓴다. 같은 관계가 있으면 근거 원천을 더하고 바꾸기 전 줄을
   `applied.triples` 에 남긴다(되돌리기가 그대로 돌린다). '관계(자동)' 절은 늘 표에서 다시 짓는다 — 계획의 문서는 같은 판에, 계획 밖
   끝점 문서는 따로 한 판(`wiki relations`). 관계의 두 끝은 그 원천의 후보라 범위가 같다.
+- 합치기(`entity.merge` — W5)는 등록부 · 문서 잇기만 바꾼다(`entities.apply_merge`). 되돌리기 기록은 `applied.merges`.
 - 되돌리기 — 묶음이 저장한 판 위에 더 고친 것이 없을 때만(있으면 409). 새 문서는 보관, 있던 문서는 from 판으로 복원, 이 묶음이 만든
   엔티티는 retired.
 - 지은이는 시스템(첫 admin) — 누가 불렀는지는 묶음의 created_by 가 남긴다.
@@ -270,8 +271,14 @@ async def apply(s: AsyncSession, cs_id: str, *, status: str) -> dict[str, list[i
     applied: dict[str, list[int]] = {}
     slugs: dict[str, str] = {}
     triples: list[dict[str, Any]] = []
+    merges: list[dict[str, Any]] = []
     titles = {p["slug"]: p["title"] for p in plan.get("pages") or []}
     try:
+        from app.wiki import entities  # 늦게 — entities 가 이 모듈을 부른다
+
+        for op in ops:
+            if op["op"] == "entity.merge":
+                merges.append(await entities.apply_merge(s, op))
         triples = await _put_relations(s, ops, cs_id)
         for page in plan.get("pages") or []:
             slug = page["slug"]
@@ -330,17 +337,19 @@ async def apply(s: AsyncSession, cs_id: str, *, status: str) -> dict[str, list[i
         await s.execute(text("""
             UPDATE wiki_changesets SET status = :st, applied = CAST(:a AS jsonb), finished_at = NOW(), error = NULL
              WHERE id = CAST(:i AS uuid)
-        """), {"st": status, "a": json.dumps({**applied, **({"triples": triples} if triples else {})}), "i": cs_id})
+        """), {"st": status, "i": cs_id, "a": json.dumps({**applied, **({"triples": triples} if triples else {}),
+                                                         **({"merges": merges} if merges else {})})})
         await s.commit()
         return applied
     except Exception:
         await s.rollback()
-        await _unwind(s, cs_id, applied, slugs, author_id, triples=triples, plan_slugs=set(titles))
+        await _unwind(s, cs_id, applied, slugs, author_id, triples=triples, plan_slugs=set(titles), merges=merges)
         raise
 
 
 async def _unwind(s: AsyncSession, cs_id: str, applied: dict[str, list[int]], slugs: dict[str, str],
-                  author_id: str, *, triples: list[dict[str, Any]] | None = None, plan_slugs: set[str] | None = None) -> None:
+                  author_id: str, *, triples: list[dict[str, Any]] | None = None, plan_slugs: set[str] | None = None,
+                  merges: list[dict[str, Any]] | None = None) -> None:
     with audience.acting_as(audience.SYSTEM):
         for doc_id, (frm, _to) in applied.items():
             if frm == 0:
@@ -349,6 +358,11 @@ async def _unwind(s: AsyncSession, cs_id: str, applied: dict[str, list[int]], sl
                 await document_service.restore_version(s, slug=slugs[doc_id], version=frm, actor_id=author_id)
     await s.execute(text("DELETE FROM wiki_citations WHERE changeset_id = CAST(:i AS uuid)"), {"i": cs_id})
     await _undo_relations(s, triples or [], cs_id)
+    if merges:
+        from app.wiki import entities
+
+        for rec in reversed(merges):
+            await entities.undo_merge(s, rec)
     # 이 묶음이 만든 엔티티 — 그 뒤 다른 묶음의 문서가 쓰고 있으면 두고, 살아 있는 문서가 없을 때만 retired.
     await s.execute(text("""
         UPDATE wiki_entities e SET status = 'retired', updated_at = NOW()
@@ -366,7 +380,8 @@ async def revert(s: AsyncSession, cs_id: str, *, actor_id: str) -> dict[str, Any
     if cs["status"] not in ("applied", "auto_applied"):
         raise Conflict(f"반영된 묶음만 되돌린다(지금 {cs['status']})")
     triples = cs["applied"].get("triples") or []
-    applied = {k: v for k, v in cs["applied"].items() if k != "triples"}
+    merges = cs["applied"].get("merges") or []
+    applied = {k: v for k, v in cs["applied"].items() if k not in ("triples", "merges")}
     docs: dict[str, dict[str, Any]] = {}
     for doc_id, (_frm, to) in applied.items():
         cur = await _doc(s, doc_id=doc_id)
@@ -375,7 +390,7 @@ async def revert(s: AsyncSession, cs_id: str, *, actor_id: str) -> dict[str, Any
         docs[doc_id] = cur
     author_id, _ = await wiki_author(s)
     await _unwind(s, cs_id, applied, {d: docs[d]["slug"] for d in docs}, author_id, triples=triples,
-                  plan_slugs={p["slug"] for p in cs["plan"].get("pages") or []})
+                  plan_slugs={p["slug"] for p in cs["plan"].get("pages") or []}, merges=merges)
     for source_id in sorted({c["source_id"] for op in cs["ops"] if op["op"].startswith("block.")
                              for c in op.get("cites") or [] if c.get("source_id")}):
         await refresh_source_doc(s, source_id, author_id)

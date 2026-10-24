@@ -5,7 +5,8 @@
 - 대상 문서 owners — W4 의 묶음은 AI 문서만 건드리고 AI 문서의 owners 는 시스템(admin)이라 표지 · admin 으로 충분하다. 사람 문서에
   제안이 닿는 길(W6 `wiki_propose`)이 생기면 그 문서의 owners 를 여기에 더한다.
 - 근거 미리보기는 읽는 사람이 볼 수 있는 원천만 제목을 보인다(V4 에 걸린 묶음은 더 좁은 원천을 인용했을 수 있다).
-- 관계(W5)는 문서 연산과 따로 `relations` 에 — 주어 · 술어 이름 · 목적어 · 까닭 · 코드/AI · 근거.
+- 관계(W5)는 문서 연산과 따로 `relations` 에 — 주어 · 술어 이름 · 목적어 · 까닭 · 코드/AI · 근거. 합치기는 `merges` 에 — 두 엔티티의
+  제안 때 모습과(반영했으면) 다시 이은 문서 · 낡음 표시 · 다시 들일 원천.
 """
 from __future__ import annotations
 
@@ -43,7 +44,8 @@ def _row(r: Any) -> dict[str, Any]:
     return {
         "id": str(r[0]), "short": wiki_apply.short_cs(str(r[0])), "op": r[1], "status": r[2],
         "created_at": r[3].isoformat(), "source": {"id": plan.get("source_id"), "short": plan.get("sid")},
-        "docs": [{"slug": p["slug"], "title": p["title"], "new": p.get("new", False)} for p in plan.get("pages") or []],
+        "docs": [{"slug": p["slug"], "title": p["title"], "new": p.get("new", False)} for p in plan.get("pages") or []]
+        or ([{"slug": "", "title": plan["summary"], "new": False}] if plan.get("merge") else []),
         "rules": [c["rule"] for c in validation if c["verdict"] in ("fail", "review")],
         "audience": list(r[6]), "error": r[7],
     }
@@ -122,6 +124,10 @@ async def get_change(s: AsyncSession, cs_id: str) -> dict[str, Any]:
                    "title": (seen.get(c.get("source_id") or "") or {}).get("title") or "(볼 수 없는 원천)"}
                   for c in op.get("cites") or []],
     } for op in cs["ops"] if op["op"] == "relation.add"]
+    done = {(m["from"], m["into"]): m for m in (cs["applied"].get("merges") or [])}
+    merges = [{"from": plan["merge"]["from"], "into": plan["merge"]["into"], "why": op.get("why", ""),
+               "applied": done.get((op["from"], op["into"]))} for op in cs["ops"] if op["op"] == "entity.merge"
+              and plan.get("merge")]
     return {"id": cs["id"], "short": wiki_apply.short_cs(cs["id"]), "op": cs["op"], "status": cs["status"],
             "created_at": cs["created_at"].isoformat(), "schema_version": cs["schema_version"], "model": cs["model"],
             "summary": plan.get("summary", ""), "questions": plan.get("questions", []),
@@ -129,7 +135,7 @@ async def get_change(s: AsyncSession, cs_id: str) -> dict[str, Any]:
             "validation": cs["validation"], "audience": cs["audience"], "usage": cs["usage"], "error": cs["error"],
             "decision": {"by": str(cs["decided_by"]) if cs["decided_by"] else None,
                          "at": cs["decided_at"].isoformat() if cs["decided_at"] else None, "note": cs["decision_note"]},
-            "docs": docs, "relations": relations, "relations_dropped": plan.get("relations_dropped", [])}
+            "docs": docs, "relations": relations, "relations_dropped": plan.get("relations_dropped", []), "merges": merges}
 
 
 async def _decide_log(s: AsyncSession, cs: dict[str, Any], user_id: str, decision: str, note: str | None) -> None:
