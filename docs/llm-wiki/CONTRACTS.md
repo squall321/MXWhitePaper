@@ -317,7 +317,8 @@ DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
 
 ## 8. 작업 · 예산
 
-- 워커는 API 와 **다른 프로세스**다(같은 api.sif · `python -m app.wiki.worker`) — API 재기동이 들이기를 끊지 않고, 긴 LLM 호출이 API 이벤트 루프를
+- 워커는 API 와 **다른 프로세스**다(api.sif 위에 시작 스크립트만 다른 `wiki.sif` · 인스턴스 `mxwp_wiki` · `python -m app.wiki.worker`)
+  — API 재기동이 들이기를 끊지 않고, 긴 LLM 호출이 API 이벤트 루프를
   붙잡지 않는다. 여럿이 떠도 `SKIP LOCKED` 로 안전하다(지금은 하나).
 - 예산은 규칙서 `budget` — 하루 토큰 상한 · 작업당 상한(들이기 기본 6만 · 점검 20만) · LLM 동시 수(기본 1) · 조용한 시간(배경 작업은 그때만).
   넘치면 작업을 `held` 로 두고 기록에 남긴다(조용히 버리지 않는다).

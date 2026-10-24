@@ -33,6 +33,13 @@ else
   echo "✗ not ready"; ST_FAIL=$((${ST_FAIL:-0}+1))
 fi
 
+printf "  %-10s " "wiki"
+if instance_running "$INST_WIKI"; then
+  echo "✓ instance $INST_WIKI (WIKI_ENABLED=${WIKI_ENABLED:-false})"
+else
+  echo "✗ instance $INST_WIKI not running"; ST_FAIL=$((${ST_FAIL:-0}+1))
+fi
+
 # 모든 항목이 ✗ 여도 exit 0 이었다 — 스크립트나 CI 가 종료코드로 판단할 방법이 없었다.
 # 사람이 눈으로 보는 출력은 그대로 두고 종료코드만 정직하게 만든다.
 if [ "${ST_FAIL:-0}" -gt 0 ]; then

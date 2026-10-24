@@ -55,7 +55,7 @@ fi
 # ── B. Instances ───────────────────────────────────────────────────
 echo
 echo "▶ B. Apptainer instances"
-for name in "$INST_POSTGRES" "$INST_MEILI" "$INST_MINIO" "$INST_API" "$INST_WEB"; do
+for name in "$INST_POSTGRES" "$INST_MEILI" "$INST_MINIO" "$INST_API" "$INST_WIKI" "$INST_WEB"; do
   if instance_running "$name"; then
     echo -e "  $PASS $name"
   else
@@ -175,7 +175,7 @@ if [ "$TAIL_LOGS" = 1 ]; then
   echo
   echo "▶ G. Recent log tails (${TAIL_LINES} lines each)"
   echo "    full path of each log shown below — use 'cat' or 'less' for more."
-  for name in mxwp_api mxwp_web mxwp_meili mxwp_minio mxwp_postgres; do
+  for name in mxwp_api mxwp_wiki mxwp_web mxwp_meili mxwp_minio mxwp_postgres; do
     for ext in out err; do
       f="$LOG_DIR/${name}.${ext}"
       if [ -s "$f" ]; then

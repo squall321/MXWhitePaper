@@ -53,6 +53,7 @@ MEILI_SIF="$APPT_DIR/meili.sif"
 MINIO_SIF="$APPT_DIR/minio.sif"
 MC_SIF="$APPT_DIR/mc.sif"
 API_SIF="$APPT_DIR/api.sif"
+WIKI_SIF="$APPT_DIR/wiki.sif"   # api.sif 위에 시작 스크립트만 다른 위키 워커(wiki.def)
 WEB_SIF="$APPT_DIR/web.sif"
 
 # ── Instances ───────────────────────────────────────────────────────
@@ -60,6 +61,7 @@ INST_POSTGRES=mxwp_postgres
 INST_MEILI=mxwp_meili
 INST_MINIO=mxwp_minio
 INST_API=mxwp_api
+INST_WIKI=mxwp_wiki
 INST_WEB=mxwp_web
 
 # Default ports (override via .env)

@@ -15,7 +15,7 @@
 | W0 준비 | 봉투 모델 · 합성 원천 20 · 가짜 LLM · 설정 자리 | [[#Envelope]] · [[#Test bundle]] · [[#Fake LLM]] · [[#Settings]] |
 | W1 연결 · 신원 | 위임 창구 · 위임 토큰(세대) · 소속 · 플랫폼 증명 · 진입 토큰 스냅숏 · jti 원장 · 소속→팀 표(API · 화면 `/admin/aff-team-map`) | [[core#게이트웨이 · 포털 위임]] |
 | W2 보이기 범위 | 읽기 길 전수(아래 표) · 길마다 시험 · admin 범위 밖 읽기 감사. 남은 것 — cae00 배포 · 재색인 | [[#Audience]] |
-| W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 남은 것 — 워커 인스턴스 · 덤프 제외 · 스냅숏 확인 | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
+| W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
 | W4 들이기 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -96,6 +96,7 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | 처리기 | `@worker.handler(op)` 로 등록. **처리기가 없는 op 는 집지 않는다** — 들이기(W4) 전에 받은 원천의 `ingest` 작업은 줄에서 기다린다. `noop`(args `sleep_s` · `fail`)은 점검용 |
 | 꺼짐 | `WIKI_ENABLED` 가 꺼져 있으면 집지 않고 30초씩 쉰다(`wiki_workers.state='disabled'`) |
 | 커밋 | `claim` 만 스스로 커밋한다. `enqueue` 등은 부르는 쪽이 — 원천 받기와 작업 줄 세우기를 한 트랜잭션에 넣는다 |
+| 인스턴스 | `mxwp_wiki` — `infra/apptainer/wiki.def`(api.sif 위에 시작 스크립트만 다름 · `--build-arg API_SIF=…`). build.sh 는 api.sif 가 더 새것이면 따라 다시 짓는다. 시작 스크립트가 물려받은 `.env` 로 접속 주소를 짓고(명령줄에 비밀 없음) 워커가 죽으면 5초 뒤 다시 띄운다. start · stop · status · update(여섯) · diag · logs `wiki` · sync-from-drive(API 코드가 바뀌면 다시 띄움) |
 
 시험 [[apps/api/tests/test_wiki_jobs.py]] — 순서 · not_before · 워커가 죽은 뒤 다른 워커가 다시 집기 · 재시도 · 거듭된 lease 만료 · 불변 · 덧붙이기만.
 
@@ -162,6 +163,10 @@ API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 —
   시험은 `audience.set_viewer(audience.SYSTEM)` 또는 `with audience.acting_as(...)`. CLI(`scripts/import_one.py`)는 시작할 때 시스템으로.
 - 시험 문서는 SQL 로 직접 넣는다 — `document_service.create_document` 는 dev Meili 색인 · 웹훅까지 부른다. 받기 시험처럼 그 길을
   꼭 지나야 하면 끝에 `meili_indexer.delete_document` 로 색인 줄까지 지운다.
+- **워커는 `--reload` 가 없다** — 위키 코드를 고치면 `mxwp_wiki` 를 다시 띄워야 새 코드로 돈다(update.sh · sync-from-drive.sh 는
+  알아서 한다). dev 에서 손으로 — `apptainer instance stop mxwp_wiki && ./infra/scripts/start.sh`.
+- **dev 에서 위키를 켠 채(`WIKI_ENABLED=1`) 시험을 돌리면 살아 있는 워커가 시험 작업(`noop` · `ingest`)을 집는다** — 같은 dev DB 다.
+  시험 전에 `mxwp_wiki` 를 내리거나 위키를 끈다(꺼져 있으면 워커는 집지 않는다).
 - **`apptainer exec instance://mxwp_api` 는 인스턴스의 환경을 물려받지 않는다** — `setup_buckets` 같은 스크립트는 컨테이너 안에서
   `set -a; . /workspace/.env; set +a` 를 먼저(안 하면 기본값 `minio:9000` 으로 붙으려다 멈춘다). 시험은 conftest 가 `.env` 를 읽는다.
 - 범위가 `["org"]` 보다 좁은 위키 문서는 바깥 웹훅 `doc_created` 를 보내지 않는다(WK-D34). 판 바꾸기 · 보관 웹훅은 아직 그대로 —

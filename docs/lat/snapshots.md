@@ -13,6 +13,7 @@
 | MinIO `mxwp-images` 버킷 전체 | 본문 이미지 |
 | MinIO `mxwp-files` 버킷 전체 | 첨부 파일 |
 | MinIO `mxwp-exports` 버킷 (있으면) | export artifacts |
+| MinIO `mxwp-wiki-sources` 버킷 전체 | 위키 원천 첨부(sha256 키) — PostgreSQL 쪽 `wiki_*` 표와 같은 시점으로 복원된다([[wiki#Intake]]) |
 | `manifest.json` | snapshot id, created_at (초 단위), sha256, 호스트 정보, note |
 
 | 제외 | 이유 |
@@ -269,6 +270,10 @@ staging / prod) 으로 운영되는데, `mxwp-snapshot.timer` 를 zone A 호스�
 3-zone 간 **교차 복제는 별도 채널** — 기존 Google Drive sync
 ([[src/infra/scripts/data-dump-to-drive.sh]], [[src/infra/scripts/data-merge-from-drive.sh]],
 setup-drive-sync.sh) 가 담당하며 snapshot timer 와 독립적으로 동작한다.
+
+★ Drive 복제(data-dump · data-merge)는 **위키를 싣지 않는다** — `wiki_pages` 줄이 있는 문서와 그 태그 줄, 버킷
+`mxwp-wiki-sources`. 범위(audience)가 다른 zone 으로 새지 않게 하고, 위키는 zone 마다 원천에서 다시 짓는다(docs/llm-wiki W3).
+합치기도 이 버킷을 건너뛰고, 덤프의 문서가 그 zone 의 위키 문서와 slug 가 같으면 덮어쓰지 않는다. 스냅숏은 위처럼 다 담는다.
 
 운영 룰:
 

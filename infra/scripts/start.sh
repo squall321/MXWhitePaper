@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Start the 5-service MXWP stack as Apptainer instances (host network).
-# Order: postgres → meilisearch → minio → minio-init (one-shot) → api → web
+# Start the 6-service MXWP stack as Apptainer instances (host network).
+# Order: postgres → meilisearch → minio → minio-init (one-shot) → api → wiki(위키 워커) → web
 set -euo pipefail
 . "$(dirname "$0")/_common.sh"
 require_apptainer
@@ -210,6 +210,13 @@ start_instance "$INST_API" "$API_SIF" \
   --env "HTTPS_PROXY=${MXWP_PROXY}" \
   --env "NO_PROXY=localhost,127.0.0.1,::1"
 
+# ── wiki worker ─────────────────────────────────────────────────────
+# 위키 작업 워커(docs/llm-wiki W3) — API 와 다른 프로세스라 API 재기동이 긴 LLM 작업을 끊지 않는다. WIKI_ENABLED 가
+# 꺼져 있으면 아무것도 집지 않고 쉰다. 비밀은 --env 로 싣지 않는다 — 이 셸이 export 한 .env 를 물려받아 wiki.def 의
+# 시작 스크립트가 컨테이너 안에서 접속 주소를 짓는다.
+start_instance "$INST_WIKI" "$WIKI_SIF" \
+  --bind "$REPO_ROOT:/workspace"
+
 # ── web ─────────────────────────────────────────────────────────────
 # VITE_API_URL is a relative path so the FE always asks its own origin
 # for /api/v1. Vite's dev-server proxy (apps/web/vite.config.ts) forwards
@@ -300,6 +307,7 @@ echo "  postgres : 127.0.0.1:${POSTGRES_PORT}"
 echo "  meili    : http://127.0.0.1:${MEILI_PORT}"
 echo "  minio    : http://127.0.0.1:${MINIO_API_PORT} (console: ${MINIO_CONSOLE_PORT})"
 echo "  api      : http://127.0.0.1:${API_PORT}/docs"
+echo "  wiki     : instance $INST_WIKI (WIKI_ENABLED=${WIKI_ENABLED:-false} — 꺼져 있으면 쉰다)"
 echo "  web      : http://127.0.0.1:${WEB_PORT}"
 echo
 echo "Next: ./infra/scripts/migrate.sh && ./infra/scripts/seed.sh"

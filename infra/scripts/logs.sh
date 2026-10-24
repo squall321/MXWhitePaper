@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tail the Apptainer instance log for a service.
-# Usage:  ./logs.sh <service>     where service ∈ {postgres, meili, minio, api, web}
+# Usage:  ./logs.sh <service>     where service ∈ {postgres, meili, minio, api, wiki, web}
 set -euo pipefail
 . "$(dirname "$0")/_common.sh"
 require_apptainer
@@ -11,6 +11,7 @@ case "$svc" in
   meili)    inst="$INST_MEILI"    ;;
   minio)    inst="$INST_MINIO"    ;;
   api)      inst="$INST_API"      ;;
+  wiki)     inst="$INST_WIKI"     ;;
   web)      inst="$INST_WEB"      ;;
   *) echo "✗ unknown service: $svc"; exit 1 ;;
 esac

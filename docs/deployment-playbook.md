@@ -207,7 +207,8 @@ sed -i "s/HOST_IP/$HOST_IP/g" .env
 - 해결: 무조건 `restart.sh` (stop + start)
 
 ### 카. 서비스 상태 ≠ 인스턴스 상태
-- `apptainer instance list` 에 5개 다 보여도 안의 service 가 crash 한 채일 수 있음
+- `apptainer instance list` 에 6개(위키 워커 `mxwp_wiki` 포함) 다 보여도 안의 service 가 crash 한 채일 수 있음 — 워커는
+  심장박동 표(`wiki_workers.seen_at` · `/api/v1/wiki/health` 의 `workers`)로 본다
 - 해결: `diag.sh` 가 port LISTEN + HTTP 응답 + 로그 까지 3중 검증
 
 ### 타. ufw 차단

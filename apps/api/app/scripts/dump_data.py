@@ -97,17 +97,21 @@ QUERIES: list[tuple[str, str]] = [
         "tags",
         "SELECT id, name FROM tags ORDER BY name",
     ),
+    # 위키 문서(wiki_pages 줄이 있는 문서)와 그 태그 줄은 싣지 않는다 — 범위(audience)가 다른 박스로 새고,
+    # 위키는 박스마다 원천에서 다시 짓는다(docs/llm-wiki W3). wiki_* 표는 처음부터 이 목록에 없다.
     (
         "documents",
         """SELECT id, slug, part_id, title, summary, status,
                   content_json, schema_ver, version, owner_id,
                   created_at, updated_at, indegree
            FROM documents
+           WHERE NOT EXISTS (SELECT 1 FROM wiki_pages wp WHERE wp.doc_id = documents.id)
            ORDER BY created_at""",
     ),
     (
         "document_tags",
-        "SELECT document_id, tag_id FROM document_tags",
+        """SELECT document_id, tag_id FROM document_tags dt
+           WHERE NOT EXISTS (SELECT 1 FROM wiki_pages wp WHERE wp.doc_id = dt.document_id)""",
     ),
 ]
 

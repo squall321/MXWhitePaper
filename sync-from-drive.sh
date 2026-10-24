@@ -82,6 +82,7 @@ echo
 # ── 1) git pull ─────────────────────────────────────────────────────────────
 NEEDS_REBUILD=0
 NEEDS_RESTART=0
+NEEDS_WIKI_RESTART=0
 if [ "$SKIP_GIT" -eq 0 ]; then
   log "step 1/4 — git pull"
   PREV_HEAD="$(git rev-parse HEAD)"
@@ -111,6 +112,10 @@ if [ "$SKIP_GIT" -eq 0 ]; then
       warn "new alembic migration — api restart needed"
     fi
     # FE/BE 코드 변경은 api/web 의 --reload 가 자동 감지 → 별도 동작 없음
+    # 위키 워커(mxwp_wiki)는 --reload 가 없다 — API 코드가 바뀌면 다시 띄워 새 코드로 돌게 한다.
+    if echo "$CHANGED" | grep -qE '^apps/api/(app|alembic)/'; then
+      NEEDS_WIKI_RESTART=1
+    fi
   fi
   echo
 else
@@ -139,6 +144,10 @@ if [ "$DRY_RUN" -eq 0 ]; then
     APPTAINER="${APPTAINER:-apptainer}"
     "$APPTAINER" instance stop mxwp_api 2>/dev/null || true
     sleep 2
+  fi
+  if [ "$NEEDS_RESTART" -eq 1 ] || [ "$NEEDS_WIKI_RESTART" -eq 1 ]; then
+    warn "restarting wiki worker for new code..."
+    "${APPTAINER:-apptainer}" instance stop mxwp_wiki 2>/dev/null || true
   fi
 
   if ! ./infra/scripts/start.sh 2>&1 | tail -3; then

@@ -125,6 +125,11 @@ for line in sys.stdin:
           echo "  · skipping $bucket (backup bucket)"
           continue
           ;;
+        ${MINIO_BUCKET_WIKI_SOURCES:-mxwp-wiki-sources})
+          # 위키(원천 · 위키 문서)는 덤프에 싣지 않는다 — 범위(audience)가 다른 박스로 새고, 위키는 원천에서 다시 짓는다.
+          echo "  · skipping $bucket (wiki sources)"
+          continue
+          ;;
       esac
       echo "  → mirroring $bucket"
       mkdir -p "$STAGE/minio/$bucket"

@@ -46,9 +46,10 @@
 - [x] 표 — `wiki_sources`(불변 트리거) · `wiki_jobs` · `wiki_log`(덧붙이기만) · `wiki_pages`(0051 · 0052 — 워커 심장박동 `wiki_workers` 더함)
 - [x] 봉투 검증(종류별 body) · 첨부(업로드 파이프라인) · 버킷 `wiki-sources`(이름은 `mxwp-wiki-sources` — WK-D35)
 - [x] `POST /sources` 멱등 · 철회 · 원천 문서(`src-…`) · 목록 · 한 건 · 기록(`/log` · `/log.md`)
-- [ ] 워커 `python -m app.wiki.worker` · 인스턴스 `mxwp_wiki` · start · stop · status · update(여섯) · diag · sync-from-drive
+- [x] 워커 `python -m app.wiki.worker` · 인스턴스 `mxwp_wiki` · start · stop · status · update(여섯) · diag · sync-from-drive
+  (dev 에서 띄워 봄 — 심장박동 `disabled` · 정지 신호에 `stopped`)
 - [x] `/api/v1/wiki/health`
-- [ ] **데이터 덤프 · 합치기에서 위키 제외** · 스냅숏에는 포함 확인
+- [x] **데이터 덤프 · 합치기에서 위키 제외** · 스냅숏에는 포함 확인(스냅숏은 코드로 확인 — 전체 pg_dump · 백업 밖 모든 버킷)
 
 ## W4 들이기 · 검토 · 근거(첫 동작판)
 - [ ] 가짜 LLM 쓰기 답 시나리오 여섯(정상 · 지어낸 숫자 · 근거 없음 · 잠긴 블록 · 범위 섞임 · 계획 밖 문서 · 300자 넘는 인용) — 쓰기 스키마와 함께(W0 에서 옮김)

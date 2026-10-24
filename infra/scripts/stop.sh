@@ -16,6 +16,7 @@ stop_instance() {
 
 # Reverse order
 stop_instance "$INST_WEB"
+stop_instance "$INST_WIKI"
 stop_instance "$INST_API"
 stop_instance "$INST_MINIO"
 stop_instance "$INST_MEILI"

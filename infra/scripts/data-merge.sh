@@ -189,6 +189,11 @@ if [ "$NO_MINIO" -eq 0 ] && [ -d "$MINIO_SRC" ]; then
   for bucket_dir in "$MINIO_SRC"/*/; do
     [ -d "$bucket_dir" ] || continue
     bucket="$(basename "$bucket_dir")"
+    # 위키 원천은 합치지 않는다(덤프도 싣지 않는다 — data-dump.sh). 옛 덤프에 섞여 와도 건너뛴다.
+    if [ "$bucket" = "${MINIO_BUCKET_WIKI_SOURCES:-mxwp-wiki-sources}" ]; then
+      echo "  · skipping $bucket (wiki sources)"
+      continue
+    fi
     echo "  → bucket: $bucket"
     if [ "$DRY_RUN" -eq 0 ]; then
       # mc mirror /src -> remote: copies objects from dump into MinIO.

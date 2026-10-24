@@ -83,6 +83,7 @@ NEED_SCHEMA_GEN=0
 NEED_MIGRATE=0
 NEED_REBUILD_API=0
 NEED_REBUILD_WEB=0
+NEED_REBUILD_WIKI=0
 
 if [ -z "$CHANGED" ]; then
   echo "  (no diff data — running all idempotent steps)"
@@ -96,11 +97,12 @@ else
   changed_in 'apps/api/alembic/versions/'                && NEED_MIGRATE=1
   changed_in 'infra/apptainer/api\.def$'                 && NEED_REBUILD_API=1
   changed_in 'infra/apptainer/web\.def$'                 && NEED_REBUILD_WEB=1
+  changed_in 'infra/apptainer/wiki\.def$'                && NEED_REBUILD_WIKI=1
 fi
 
 # Force rebuild flag override
 case "$FORCE_REBUILD" in
-  all) NEED_REBUILD_API=1; NEED_REBUILD_WEB=1 ;;
+  all) NEED_REBUILD_API=1; NEED_REBUILD_WEB=1; NEED_REBUILD_WIKI=1 ;;
   api) NEED_REBUILD_API=1 ;;
   web) NEED_REBUILD_WEB=1 ;;
 esac
@@ -153,7 +155,7 @@ echo
 echo "▶ 5/8  .sif rebuild"
 REBUILT_ANY=0
 rebuild_sif() {
-  local name="$1"
+  local name="$1"; shift   # 나머지는 build 인자(wiki 의 --build-arg API_SIF=…)
   local sif="$APPT_DIR/${name}.sif"
   local def="$APPT_DIR/${name}.def"
   echo "  → rebuild $name"
@@ -161,7 +163,7 @@ rebuild_sif() {
   # 거기선 PATH 에 apptainer 가 없거나 다른 버전이 잡힌다. 나머지 코드는 이미 "$APPTAINER" 다.
   "$APPTAINER" instance stop "mxwp_${name}" >/dev/null 2>&1
   # 빌드 실패해도 REBUILT_ANY=1 을 세워 '재빌드했다'로 보고했다. tail -3 로 원인도 잘렸다.
-  if "$APPTAINER" build --force "$sif" "$def" > "/tmp/mxwp-build-${name}.log" 2>&1; then
+  if "$APPTAINER" build --force "$@" "$sif" "$def" > "/tmp/mxwp-build-${name}.log" 2>&1; then
     REBUILT_ANY=1
   else
     echo "    ✗ $name 빌드 실패 — /tmp/mxwp-build-${name}.log" >&2
@@ -176,6 +178,10 @@ fi
 if [ "$NEED_REBUILD_WEB" = 1 ]; then
   rebuild_sif web
 fi
+# 위키 워커는 api.sif 위에 짓는다 — api 를 다시 지으면 따라 다시 짓는다.
+if [ "$NEED_REBUILD_API" = 1 ] || [ "$NEED_REBUILD_WIKI" = 1 ]; then
+  rebuild_sif wiki --build-arg "API_SIF=$API_SIF"
+fi
 [ "$REBUILT_ANY" = 0 ] && echo "  (no .def changes)"
 
 # ── 6. restart ──────────────────────────────────────────────────────
@@ -186,9 +192,9 @@ if [ "$RESTART" = 1 ]; then
     # Force restart — apptainer instance start skips already-running
     # instances and that's exactly what we want to avoid when env changed.
     # 이 스택의 인스턴스만 내린다 — `instance stop --all` 은 이 계정의 apptainer 인스턴스 전부(dev 40여 개 — 포털 · HEAX 앱 · 다른
-    # DB 까지)를 내렸다(10-17 결정 16 · 포털 데이터 이관 D8). 떠 있는지 묻지 않고 다섯 이름을 그냥 내린다 — 없으면 오류를 버린다.
+    # DB 까지)를 내렸다(10-17 결정 16 · 포털 데이터 이관 D8). 떠 있는지 묻지 않고 여섯 이름을 그냥 내린다 — 없으면 오류를 버린다.
     # stop.sh 의 instance_running 은 pipefail 아래 `instance list | grep -q` 라 떠 있는 것을 '없다' 로 읽을 수 있어 쓰지 않는다.
-    for _inst in "$INST_WEB" "$INST_API" "$INST_MINIO" "$INST_MEILI" "$INST_POSTGRES"; do
+    for _inst in "$INST_WEB" "$INST_WIKI" "$INST_API" "$INST_MINIO" "$INST_MEILI" "$INST_POSTGRES"; do
       "$APPTAINER" instance stop "$_inst" >/dev/null 2>&1 || true
     done
     "$REPO_ROOT/infra/scripts/start.sh" 2>&1 | sed 's/^/  /' | tail -10

@@ -328,9 +328,18 @@ async def _import_documents(
                 part_id = None
 
         existing = (await s.execute(
-            text("SELECT id, updated_at FROM documents WHERE slug = :slug"),
+            text("""
+                SELECT id, updated_at, EXISTS (SELECT 1 FROM wiki_pages wp WHERE wp.doc_id = documents.id)
+                FROM documents WHERE slug = :slug
+            """),
             {"slug": slug},
         )).first()
+
+        if existing and existing[2]:
+            # 이 박스의 위키 문서는 덤프로 덮어쓰지 않는다 — 위키는 원천에서 다시 짓는다(docs/llm-wiki W3).
+            # id_map 에도 넣지 않는다 — 넣으면 덤프의 태그 줄이 위키 문서에 붙는다.
+            skipped += 1
+            continue
 
         if existing:
             local_id = str(existing[0])

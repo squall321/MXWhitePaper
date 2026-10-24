@@ -112,6 +112,14 @@ build_or_pull "$MINIO_SIF"    ""  "$APPT_DIR/minio.def"
 
 build_or_pull "$API_SIF"      ""  "$APPT_DIR/api.def"
 
+# 위키 워커 — api.sif 위에 시작 스크립트만 다르다(wiki.def). api.sif 가 더 새것이면 따라 다시 짓는다(바탕이 바뀌었다).
+if [ "$FORCE" -eq 1 ] || [ ! -f "$WIKI_SIF" ] || [ "$API_SIF" -nt "$WIKI_SIF" ]; then
+  echo "→ build $(basename "$WIKI_SIF") from wiki.def (base $(basename "$API_SIF"))"
+  "$APPTAINER" build --force --build-arg "API_SIF=$API_SIF" "$WIKI_SIF" "$APPT_DIR/wiki.def"
+else
+  echo "✓ skip  $(basename "$WIKI_SIF") (exists)"
+fi
+
 # Audit fix H4 — web.def 의 `%files apps/web/dist /opt/web/dist` 가 dist 부재
 # 시 silent 하게 빈 디렉토리를 바인드한다 → serve 가 빈 index.html 을 200
 # 으로 응답해서 instance 가 healthy 처럼 보이지만 실제로는 broken SPA.
