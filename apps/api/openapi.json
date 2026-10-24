@@ -1272,6 +1272,20 @@
             ],
             "title": "Block Id"
           },
+          "n": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "답의 [n](묻기의 근거 번호) — 주면 남길 때 근거 차례로 바꾼다",
+            "title": "N"
+          },
           "slug": {
             "maxLength": 200,
             "minLength": 1,

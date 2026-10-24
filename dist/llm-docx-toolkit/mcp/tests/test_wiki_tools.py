@@ -154,7 +154,7 @@ def test_wiki_write_tools_post_bodies(server_mod) -> None:
     _call(s, "wiki_propose", {"summary": "s", "ops": [{"op": "block.delete", "doc": "p", "block_id": "B1", "why": "w"}]})
     _call(s, "wiki_add_question", {"text": "물음"})
     _call(s, "wiki_submit_source", {"envelope": {"schema": "mxwp-source/1"}, "ingest": False})
-    assert bodies["fileback"][0]["citations"] == [{"slug": "p", "block_id": "B1"}] and "audience" not in bodies["fileback"][0]
+    assert bodies["fileback"][0]["citations"] == [{"slug": "p", "block_id": "B1", "n": 1}] and "audience" not in bodies["fileback"][0]
     assert bodies["propose"][0] == {"summary": "s", "ops": [{"op": "block.delete", "doc": "p", "block_id": "B1", "why": "w"}],
                                     "relations": []}
     assert bodies["question"][0] == {"text": "물음", "priority": 3} and bodies["source"][1] == "ingest=false"

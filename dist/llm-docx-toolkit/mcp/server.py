@@ -1248,8 +1248,9 @@ def build_server() -> FastMCP:
     @mcp.tool(
         name="wiki_fileback",
         description=(
-            "wiki_ask 의 답을 위키에 남긴다(qa 원천 → 들이기 → 문답 문서). citations 는 wiki_ask 가 준 각주의 {slug, block_id}. "
-            "범위는 비면 근거 문서들의 범위 — 근거보다 넓게는 못 남긴다. → {id, short, dedup, audience, ingest_state}"
+            "wiki_ask 의 답을 위키에 남긴다(qa 원천 → 들이기 → 문답 문서). citations 는 wiki_ask 가 준 각주 {n, slug, block_id} 그대로 — "
+            "답의 [n] 을 남긴 근거 차례로 바꾼다. 범위는 비면 근거 문서들의 범위(근거가 없으면 나만) — 근거보다 넓게는 못 남긴다. "
+            "→ {id, short, dedup, audience, ingest_state}"
         ),
     )
     def wiki_fileback(question: str, answer: str, citations: list[dict[str, Any]], outcome: str = "solved",
@@ -1257,7 +1258,7 @@ def build_server() -> FastMCP:
         client = _make_client()
         _require_token(client)
         body = {"question": question, "answer": answer, "outcome": outcome,
-                "citations": [{"slug": c.get("slug"), "block_id": c.get("block_id")} for c in citations],
+                "citations": [{"slug": c.get("slug"), "block_id": c.get("block_id"), "n": c.get("n")} for c in citations],
                 **({"audience": audience} if audience else {})}
         data, _ = client.wiki("POST", "/fileback", body=body)
         return data or {}

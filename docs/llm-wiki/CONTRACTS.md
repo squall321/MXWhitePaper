@@ -293,7 +293,7 @@ W5 구현 — `entity.merge` 는 `{doc: '', from, into, why}`(사람의 `human_r
 | `POST /sources/{id}/withdraw` | 주인 · admin | 철회 |
 | `POST /ingest` | editor | `{source_ids}` 다시 들이기 |
 | `POST /query` | reader | SSE — 위키로 답한다(request §5-7). 프레임은 챗과 같은 `tool_call` · `tool_result` · `token` · `error` · `done` + `citation` |
-| `POST /fileback` | reader | `{question, answer, citations, outcome}` → `qa` 원천 + 들이기 |
+| `POST /fileback` | reader | `{question, answer, citations[{slug, block_id?, n?}], outcome, audience?}` → `qa` 원천 + 들이기. 범위는 근거보다 넓지 않게(근거가 없으면 나만) · 답의 `[n]` 은 남긴 근거 차례로 |
 | `GET /changes` · `GET /changes/{id}` | 범위 안의 검토자 | 검토 큐 · 한 건(문서별 블록 diff · 검증 결과 · `why`) |
 | `POST /changes/{id}/approve` · `/reject` · `/revert` | 검토자 · admin | |
 | `GET /entities` · `GET /entities/{id}` · `POST /entities/resolve` | reader + 범위 | 이름 → 후보(정확 · 별칭 · 외부 id · 검색 순) |

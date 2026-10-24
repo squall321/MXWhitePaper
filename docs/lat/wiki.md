@@ -127,7 +127,7 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 
 | 무엇 | 어떻게 |
 | --- | --- |
-| 범위 | 보낸 사람이 토큰을 모두 가져야 한다(admin · 시스템은 다). `["org"]` 는 admin 만(되쌓기의 근거가 모두 전사 문서면 예외 — `org_ok`). 위임 호출은 admin 이 owner 로 깎여 늘 일반 규칙 |
+| 범위 | 보낸 사람이 토큰을 모두 가져야 한다(admin · 시스템은 다). `["org"]` 는 admin 만(되쌓기의 근거가 있고 모두 전사 문서면 예외 — `org_ok`). 위임 호출은 admin 이 owner 로 깎여 늘 일반 규칙 |
 | 주인 | 비면 보낸 사람. 남의 이메일은 admin(연결기)만. `owner_email`(불변 · 0053) + `owner_user_id`(그 이메일의 사람 — 나중에 이을 수 있게 바꿀 수 있는 칸) |
 | via | 위임 `gateway` → `gateway` · `hwax-portal` → `portal-chat` · API 토큰 → `connector:<origin.system>`(인증이 `auth_via='api_token'` 을 단다) · 웹 세션 → `upload` |
 | 멱등 | 먼저 찾고(같으면 200 `dedup`), INSERT 는 `ON CONFLICT DO NOTHING` — 동시에 같은 것 둘이 와도 한 줄 |
@@ -164,7 +164,7 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | `GET /entities/duplicates` | 검토자 | 같은 개체로 보이는 짝(이름 · 별칭 열쇠 · 같은 외부 id) — 둘 다 `full` 인 것만 |
 | `POST /entities/merge` | editor(둘 다 `full`) | `{from_id, into_id, note?}` → 201 변경 묶음(`human_request`, 늘 검토 — 검증에 걸리면 `failed`) |
 | `POST /query` | reader(분에 20) | SSE — `{messages[{role, content}] ≤20}`(마지막이 물음). 프레임 `tool_call` · `tool_result`(wiki_index · wiki_search · wiki_read) · `token` · `citation`(쓴 근거마다 `{n, slug, title, section, block_id, sources}`) · `miss` · `error` · `done{miss, cited, uncited, pages, usage}` — [[#Query]] |
-| `POST /fileback` | reader | `{question, answer, citations[{slug, block_id?}], outcome, audience?, model?}` → 201(새것) · 200(멱등) `{id, short, dedup, doc_slug, ingest_state, audience}` — [[#Fileback]]. 볼 수 없는 근거 422 · 근거보다 넓은 범위 422(`details.required`) · 가진 토큰 밖 403 |
+| `POST /fileback` | reader | `{question, answer, citations[{slug, block_id?, n?}], outcome, audience?, model?}` → 201(새것) · 200(멱등) `{id, short, dedup, doc_slug, ingest_state, audience}` — [[#Fileback]]. 볼 수 없는 근거 422 · 근거보다 넓은 범위 422(`details.required`) · 가진 토큰 밖 403 |
 | `GET /candidates` · `POST /candidates/{id}/approve` · `/discard` | 주인(reader) | 내 후보(기한이 지난 것은 이때 철회) · 승인 `{audience?}`(비면 보낸 범위 → 그 범위의 새 원천을 들이고 후보는 superseded, 나만이면 그 줄을 들인다 → `{id, short, candidate, audience, dedup}`) · 버림(철회). 남의 후보 404 |
 | `POST /propose` | editor | `{summary, ops[block.insert · block.update · block.delete], relations[]}` → 201 `{id, short, status, validation}` — 늘 `pending_review`(실패가 있으면 `failed`). 고칠 문서는 이미 있고 볼 수 있는 위키 문서(아니면 422) — [[#Propose]] |
 | `GET /search?q=` | reader | 묻기의 찾기만 — `{pages[{slug, title, kind, via: entity · search}], entities[{id, name, type_key}]}`(볼 수 있는 위키 문서) |
@@ -357,12 +357,13 @@ API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 —
 
 | 무엇 | 어떻게 |
 | --- | --- |
-| 근거 | 각주로 받은 (slug · block_id) — 부른 사람이 볼 수 있는 위키 문서(원천 · 규칙서 · 목록 빼고)여야. 봉투 `evidence` 에 블록 글 발췌(300자) `doc` + 그 블록이 기댄 원천(볼 수 있는 것) `source` |
-| 범위 | 비면 근거 문서들의 좁은 토큰을 합친 것(모두 전사면 `["org"]`, 합칠 수 없으면 나만). 고르면 가진 토큰 안에서 — 근거의 좁은 토큰을 다 담거나 나만(`user:<id>`). 좁은 문서에서 온 답이 넓은 문답 문서로 새지 않게 |
+| 근거 | 각주로 받은 (slug · block_id · n?) — 부른 사람이 볼 수 있는 위키 문서(원천 · 규칙서 · 목록 빼고)여야. 봉투 `evidence` 에 블록 글 발췌(300자) `doc` 들이 앞, 그 블록들이 기댄 원천(볼 수 있는 것) `source` 가 뒤 |
+| 각주 번호 | 각주에 묻기의 번호 `n` 이 있으면 답의 `[n]` 을 남긴 근거 차례 `[k]`(k 째 `doc` 근거)로 바꾼다 — 묻기 번호는 그 묻기 밖에서 가리키는 곳이 없다. 알려 주지 않은 대괄호 숫자(`results[0]` 같은 것)는 그대로 |
+| 범위 | 비면 근거 문서들의 좁은 토큰을 합친 것(모두 전사면 `["org"]`, 합칠 수 없으면 나만). **근거가 없으면 나만**. 고르면 가진 토큰 안에서 — 근거의 좁은 토큰을 다 담거나 나만(`user:<id>`). 좁은 문서에서 온 답이 넓은 문답 문서로 새지 않게. 전사 예외(`org_ok`)는 근거가 있고 모두 전사일 때만 — 근거 없는 답을 `["org"]` 로 고르면 받기 규칙대로 403 |
 | 봉투 | `origin mxwp / wiki-fileback/<해시(사람 · 물음 열쇠 · 답)>`(멱등) · 주인 = 부른 사람 · 동의 `button` · 근거로 쓴 엔티티 문서의 엔티티를 주제 힌트로 · 질문자 이름은 본문에 없다(Q9) |
 | 문답 문서 | 들이기가 문답 문서를 첫 후보로 — 같은 물음 열쇠면 그 문서, 비슷하면 그 문서 · 새 문서 중 계획이 고른다(같은 물음의 묶음). '비슷한 질문(자동)' 절이 인용한 문답 원천의 물음을 싣는다 |
 
-시험 [[apps/api/tests/test_wiki_fileback.py]] — 문답 문서 · 멱등 · 합치기 · 비슷한 질문 · 범위(볼 수 없음 · 넓음 · 나만 · 토큰 밖).
+시험 [[apps/api/tests/test_wiki_fileback.py]] — 문답 문서 · 멱등 · 합치기 · 비슷한 질문 · 범위(볼 수 없음 · 넓음 · 나만 · 토큰 밖 · 근거 없음) · 각주 번호.
 
 ## Query
 

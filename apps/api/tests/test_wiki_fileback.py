@@ -177,3 +177,27 @@ async def test_scope_is_never_wider_than_evidence(world: dict[str, Any]) -> None
     assert default.status_code == 201 and default.json()["data"]["audience"] == ["aff:SYN-CAE1"]
     assert mine.status_code == 201 and mine.json()["data"]["audience"] == [f"user:{world['aff']['id']}"]
     assert beyond.status_code == 403  # 가진 토큰 밖
+
+
+async def test_uncited_answer_stays_mine(world: dict[str, Any]) -> None:
+    body = {"question": f"{NAME} 근거 없는 답", "answer": "아마 412 MPa 쯤이다.", "outcome": "partial"}
+    async with _client() as c:
+        mine = await c.post(f"{API}/fileback", headers=world["reader"]["headers"], json=body)
+        wide = await c.post(f"{API}/fileback", headers=world["reader"]["headers"],
+                            json={**body, "question": f"{NAME} 근거 없는 답 전사", "audience": ["org"]})
+    assert mine.status_code == 201 and mine.json()["data"]["audience"] == [f"user:{world['reader']['id']}"]
+    assert wide.status_code == 403  # 근거 없는 답에는 전사 예외가 없다 — 받기 규칙 그대로(org 는 admin 만)
+
+
+async def test_markers_follow_evidence_order(world: dict[str, Any]) -> None:
+    body = {"question": f"{NAME} 각주 번호", "answer": "최대 응력은 412 MPa 다 [3]. 결과 첫 칸은 results[0] 이다 [9].",
+            "citations": [{"slug": f"ent-part-f{RUN}", "block_id": f"f{RUN}b1", "n": 3}]}
+    async with _client() as c:
+        r = await c.post(f"{API}/fileback", headers=world["reader"]["headers"], json=body)
+    assert r.status_code == 201, r.text
+    async with session_scope() as s:
+        payload = _j((await s.execute(text("SELECT payload FROM wiki_sources WHERE id = CAST(:i AS uuid)"),
+                                      {"i": r.json()["data"]["id"]})).scalar_one())
+    assert payload["answer"] == "최대 응력은 412 MPa 다 [1]. 결과 첫 칸은 results[0] 이다 [9]."  # 알려 준 번호만
+    assert [e["kind"] for e in payload["evidence"]] == ["doc", "source"]  # 문서 근거가 앞 — [1] 은 첫 문서 근거
+    assert payload["evidence"][0]["ref"] == f"ent-part-f{RUN}#f{RUN}b1"
