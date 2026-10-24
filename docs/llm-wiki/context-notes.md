@@ -260,6 +260,18 @@
   1분 안에는 로그인 화면의 단추와 안내만 남긴다. `/auth/mode` 를 페이지마다 묻는 것이 같은 IP 의 익명 몫(분당 60)을 먹어 refresh 가
   429 를 받았다(e2e 묶음) — 고정 응답이라 `healthz` 처럼 속도 제한에서 뺐다. 포털 뒤에서는 `X-Forwarded-For` 로 사람마다 센다.
 
+## 2026-10-25 — dev SSO 전용 켬(사용자 결정 · 포털 MW-D22)
+
+- `.env` 에 `MXWP_SSO_ONLY=true` · `MXWP_LOCAL_LOGIN_ALLOW=admin@mx.local`(e2e · 비상) · `PORTAL_LAUNCH_URL` 을 더했다. 진입 링크는 상대 주소가
+  아니라 포털 정식 주소(HWAXPortal `infra/.env` 의 `PUBLIC_BASE_URL` 한 줄만 읽어) + `/launch/mx-white-paper` — dev 에는 MX 백서 앞단이
+  둘이고(HPC 포털 443 · HWAX 포털 8088) 443 에서는 상대 주소가 404, dev 포털 로그인(OIDC)이 `PUBLIC_BASE_URL` 로 돌아온다(포털 세션 확인).
+  주소는 어디에도 찍지 않았다.
+- 켜기 전 목록 — 포털로 들어온 적 없는 사람 계정 1,654(거의 다 예전 시험 찌꺼기 `@mx.local`), 진짜 사람은 koo.park · hwax.demo 둘(둘 다
+  포털 진입 기록 없음 — 포털 타일로 한 번 들어와야 한다). 포털 기록상 dev 의 포털 진입 콜백은 그때까지 한 번도 없었다.
+- `mxwp_api` · `mxwp_web` 만 다시 띄움 — mxwp-mcp 는 포털 감시 크론이 1분 안에 되살렸다.
+- 켜며 고친 것 — 부팅 refresh 응답에 사용자가 없어 `/me` 가 올 때까지 '확인 중' 이 꺼지는 틈이 있었고, SSO 전용에서는 그 틈에 포털로
+  한 번 더 다녀오게 됐다(SSO 전용 API 위 e2e 가 포털로 넘어가며 드러남, fef6733).
+
 ## 2026-10-24 — dev 위키 켬(사용자 결정 '끝에서 끝 잇기에 필요한 것을 다 하라')
 
 - `.env` 에 `WIKI_ENABLED=true` 한 줄을 더했다(비밀 줄은 안 건드림). LLM(`WIKI_LLM_*` · `WIKI_QUERY_LLM_*`)은 비워 둔다 — 들이기는 줄에서

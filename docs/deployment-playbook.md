@@ -346,6 +346,27 @@ MINIO_API_PORT=9000
 MINIO_CONSOLE_PORT=9001
 ```
 
+### SSO 전용 켜기 — 사람은 포털로만(사용자 결정 10-25)
+
+`.env` 는 리포 밖이라 배포(update · update-all)가 저절로 켜지 않는다. 박스마다 사람이 한다.
+
+1. 막힐 계정을 본다 — `apptainer exec instance://mxwp_api bash -c 'cd /workspace/apps/api && python -m app.scripts.sso_only_check'`
+   (포털로 들어온 적 없는 사람 계정 · 서비스 계정 뺌 · 비상 관리자 표시). 그 사람들에게 포털 타일로 한 번 들어오라고 알린다.
+2. `.env` 에 넣는다 —
+   ```bash
+   MXWP_SSO_ONLY=true
+   MXWP_LOCAL_LOGIN_ALLOW=<비상 관리자 이메일>        # 포털 SSO 가 고장 났을 때 — 화면은 /login?local=1
+   PORTAL_LAUNCH_URL=<포털 PUBLIC_BASE_URL>/launch/mx-white-paper
+   ```
+   진입 링크는 **포털 정식 주소(HWAXPortal `infra/.env` 의 `PUBLIC_BASE_URL`) + `/launch/mx-white-paper`** 한 규칙으로 준다 — MX 백서
+   앞단이 여럿이어도(dev 는 HPC 포털 443 · HWAX 포털 8088) 맞고, 포털 로그인(OIDC)이 돌아오는 주소와 같다. 포털 nginx 가 443 을
+   직접 받는 박스(cae00 `ENABLE_TLS=true`)는 기본값(상대 주소)도 맞는다.
+3. `mxwp_api` · `mxwp_web` 만 이름으로 내리고 `infra/scripts/start.sh` — mxwp-mcp 가 API 인스턴스 안에서 돌아 같이 내려가니 포털
+   쪽(감시 크론 · `services.sh`)에 알린다.
+4. 확인 — `GET /api/v1/auth/mode` 가 `sso_only: true` · 진입 링크, 가입 · 비밀번호 로그인은 403 `SSO_ONLY`, 비상 관리자는 들어간다.
+
+끄기는 `MXWP_SSO_ONLY=false` 로 바꾸고 3 을 되풀이한다.
+
 ---
 
 ## 10. 스크립트 인벤토리 (18개)
