@@ -56,3 +56,6 @@ body: `{messages: [{role:'user'\|'assistant', content}]}` (1~50개).
   mock 재실행 대신 error+done 으로 닫는다 (이중 생성 방지).
 - FE `renderText` 는 링크 스킴을 화이트리스트(내부 `/` · http/https)한다 — LLM 토큰의 `javascript:` 방어.
 - slug 자동생성: `_slugify(title)` (한글은 `chat-doc` 폴백), 충돌 시 `-<hex>` 재시도.
+- **색 클래스** — Tailwind 에는 `smsg-{50…900}` 만 있다. `smsg-gray-*` · `smsg-blue-*` · `smsg-surface` 는 `styles/tokens.css` 의 CSS 변수라
+  `bg-[var(--smsg-gray-050)]` 꼴로 쓴다(어두운 화면에서 저절로 바뀐다). 클래스 이름으로 쓰면 CSS 가 없어 밝은 화면에서 내 말풍선이
+  흰 글자만 남았다(10-24 고침). `pages/Help.tsx` 에는 아직 그 꼴이 남아 있다.

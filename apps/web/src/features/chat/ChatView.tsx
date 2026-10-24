@@ -44,13 +44,13 @@ function renderText(text: string): ReactNode[] {
       const external = /^https?:\/\//i.test(href)
       if (internal) {
         parts.push(
-          <Link key={`${li}-${m.index}`} to={href} className="text-smsg-blue-700 underline">
+          <Link key={`${li}-${m.index}`} to={href} className="text-[var(--smsg-blue-700)] underline">
             {label}
           </Link>,
         )
       } else if (external) {
         parts.push(
-          <a key={`${li}-${m.index}`} href={href} className="text-smsg-blue-700 underline" target="_blank" rel="noreferrer">
+          <a key={`${li}-${m.index}`} href={href} className="text-[var(--smsg-blue-700)] underline" target="_blank" rel="noreferrer">
             {label}
           </a>,
         )
@@ -74,28 +74,28 @@ function ToolCardView({ card }: { card: ToolCard }) {
     : card.name === 'get_document' ? '📖 문서 열람'
     : card.name
   return (
-    <div className="mt-2 rounded-md border border-smsg-gray-200 bg-smsg-gray-050 px-3 py-2 text-sm">
-      <div className="flex items-center gap-2 font-medium text-smsg-gray-700">
+    <div className="mt-2 rounded-md border border-[var(--smsg-gray-200)] bg-[var(--smsg-gray-050)] px-3 py-2 text-sm">
+      <div className="flex items-center gap-2 font-medium text-[var(--smsg-gray-700)]">
         <span>{label}</span>
         <span className={card.ok ? 'text-emerald-600' : 'text-red-600'}>
           {card.ok ? '완료' : '실패'}
         </span>
       </div>
       {card.link ? (
-        <Link to={card.link} className="mt-1 inline-block text-smsg-blue-700 underline">
+        <Link to={card.link} className="mt-1 inline-block text-[var(--smsg-blue-700)] underline">
           {card.summary}
         </Link>
       ) : (
-        <div className="mt-1 text-smsg-gray-700">{card.summary}</div>
+        <div className="mt-1 text-[var(--smsg-gray-700)]">{card.summary}</div>
       )}
       {card.results && card.results.length > 0 && (
         <ul className="mt-1 space-y-0.5">
           {card.results.map((r) => (
             <li key={r.slug}>
-              <Link to={`/docs/${r.slug}`} className="text-smsg-blue-700 underline">
+              <Link to={`/docs/${r.slug}`} className="text-[var(--smsg-blue-700)] underline">
                 {r.title}
               </Link>
-              {r.snippet && <span className="text-smsg-gray-500"> — {r.snippet}</span>}
+              {r.snippet && <span className="text-[var(--smsg-gray-500)]"> — {r.snippet}</span>}
             </li>
           ))}
         </ul>
@@ -192,8 +192,8 @@ export function ChatView() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6">
         {messages.length === 0 ? (
           <div className="mt-10 text-center">
-            <h1 className="text-2xl font-semibold text-smsg-gray-900">무엇을 정리할까요?</h1>
-            <p className="mt-2 text-smsg-gray-500">
+            <h1 className="text-2xl font-semibold text-[var(--smsg-gray-900)]">무엇을 정리할까요?</h1>
+            <p className="mt-2 text-[var(--smsg-gray-500)]">
               대화로 백서를 만들고, 기존 백서를 검색할 수 있습니다.
             </p>
             <div className="mt-6 flex flex-col items-center gap-2">
@@ -201,7 +201,7 @@ export function ChatView() {
                 <button
                   key={ex}
                   onClick={() => send(ex)}
-                  className="w-full max-w-xl rounded-md border border-smsg-gray-200 bg-smsg-surface px-4 py-2 text-left text-sm text-smsg-gray-700 hover:bg-smsg-gray-050"
+                  className="w-full max-w-xl rounded-md border border-[var(--smsg-gray-200)] bg-[var(--smsg-surface)] px-4 py-2 text-left text-sm text-[var(--smsg-gray-700)] hover:bg-[var(--smsg-gray-050)]"
                 >
                   {ex}
                 </button>
@@ -215,11 +215,11 @@ export function ChatView() {
                 <div
                   className={
                     m.role === 'user'
-                      ? 'inline-block max-w-[85%] rounded-2xl bg-smsg-blue-500 px-4 py-2 text-left text-white'
-                      : 'inline-block max-w-[95%] rounded-2xl bg-smsg-gray-050 px-4 py-2 text-smsg-gray-900'
+                      ? 'inline-block max-w-[85%] rounded-2xl bg-[var(--smsg-blue-500)] px-4 py-2 text-left text-white'
+                      : 'inline-block max-w-[95%] rounded-2xl bg-[var(--smsg-gray-050)] px-4 py-2 text-[var(--smsg-gray-900)]'
                   }
                 >
-                  {m.text ? renderText(m.text) : m.streaming ? <span className="text-smsg-gray-500">…</span> : null}
+                  {m.text ? renderText(m.text) : m.streaming ? <span className="text-[var(--smsg-gray-500)]">…</span> : null}
                   {m.tools.map((c, ci) => (
                     <ToolCardView key={ci} card={c} />
                   ))}
@@ -235,7 +235,7 @@ export function ChatView() {
           e.preventDefault()
           send(input)
         }}
-        className="border-t border-smsg-gray-200 bg-smsg-surface px-4 py-3"
+        className="border-t border-[var(--smsg-gray-200)] bg-[var(--smsg-surface)] px-4 py-3"
       >
         <div className="flex items-end gap-2">
           <textarea
@@ -249,7 +249,7 @@ export function ChatView() {
             }}
             rows={1}
             placeholder="메시지를 입력하세요 — 예: '…를 백서로 정리해줘' (Enter 전송, Shift+Enter 줄바꿈)"
-            className="max-h-40 min-h-[44px] flex-1 resize-none rounded-md border border-smsg-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-smsg-blue-500"
+            className="max-h-40 min-h-[44px] flex-1 resize-none rounded-md border border-[var(--smsg-gray-300)] bg-[var(--smsg-surface)] px-3 py-2 text-sm text-[var(--smsg-gray-900)] outline-none focus:border-[var(--smsg-blue-500)]"
           />
           {busy ? (
             <Button type="button" variant="secondary" onClick={stop}>
