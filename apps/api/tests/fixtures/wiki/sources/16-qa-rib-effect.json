@@ -1,0 +1,68 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "qa",
+  "origin": {
+    "system": "hwax-portal",
+    "ref": "SYN-CONV-0004#5",
+    "rev": null,
+    "url": "/chat/SYN-CONV-0004/5"
+  },
+  "title": "힌지 리브 추가로 응력이 얼마나 줄었나",
+  "captured_at": "2026-09-16T11:00:00+09:00",
+  "owner": {
+    "email": "syn.analyst1@example.com"
+  },
+  "audience": [
+    "aff:SYN-CAE1"
+  ],
+  "sensitivity": "internal",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상폴드 A1",
+      "ext": {
+        "sp_model": "SYN-M-A1"
+      }
+    },
+    {
+      "type": "part",
+      "name": "힌지 브래킷",
+      "ext": {
+        "bom_code": "SYN-BOM-HB01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "힌지 브래킷 균열"
+    },
+    {
+      "type": "countermeasure",
+      "name": "힌지 리브 추가"
+    }
+  ],
+  "body": {
+    "question": "힌지 리브 추가로 응력이 얼마나 줄었나?",
+    "answer": "412 MPa 에서 338 MPa 로 줄었다. 계산: 338 / 412 = 0.82 — 약 18% 줄었다.",
+    "evidence": [
+      {
+        "kind": "tool",
+        "ref": "stcx.job_postprocess SYN-JOB-0001",
+        "excerpt": "max_von_mises_stress 412 MPa"
+      },
+      {
+        "kind": "tool",
+        "ref": "stcx.job_postprocess SYN-JOB-0002",
+        "excerpt": "max_von_mises_stress 338 MPa"
+      }
+    ],
+    "model": "합성-챗모델",
+    "outcome": "solved"
+  },
+  "attachments": [],
+  "consent": {
+    "by": "syn.analyst1@example.com",
+    "at": "2026-09-16T11:00:00+09:00",
+    "mode": "candidate",
+    "note": null
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "sim_result",
+  "origin": {
+    "system": "dynaforge",
+    "ref": "SYN-RPT-0101",
+    "rev": null,
+    "url": "/apps/dynaforge/reports/SYN-RPT-0101"
+  },
+  "title": "가상폴드 A1 낙하 충격 보고서 — 힌지 브래킷",
+  "captured_at": "2026-08-20T14:30:00+09:00",
+  "owner": {
+    "email": "syn.analyst1@example.com"
+  },
+  "audience": [
+    "aff:SYN-CAE1"
+  ],
+  "sensitivity": "internal",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상폴드 A1",
+      "ext": {
+        "sp_model": "SYN-M-A1"
+      }
+    },
+    {
+      "type": "part",
+      "name": "힌지 브래킷",
+      "ext": {
+        "bom_code": "SYN-BOM-HB01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "힌지 브래킷 균열"
+    },
+    {
+      "type": "sim-type",
+      "name": "전각도 낙하"
+    }
+  ],
+  "body": {
+    "summary": "1.5 m 전각도 낙하, 메시 1.0 mm 로 해석했다. 힌지 브래킷 최대 응력은 296 MPa 로 허용 응력 380 MPa 아래라 안전으로 판정했다.",
+    "setup": {
+      "solver": "LS-DYNA R13 (explicit)",
+      "model": "가상폴드 A1 조립 FE 모델 v2",
+      "conditions": {
+        "scenario": "전각도 낙하",
+        "drop_height": {
+          "value": 1.5,
+          "unit": "m"
+        },
+        "floor": "강판",
+        "mesh_size": {
+          "value": 1.0,
+          "unit": "mm"
+        },
+        "report_kind": "impact"
+      }
+    },
+    "results": [
+      {
+        "name": "max_von_mises_stress",
+        "value": 296,
+        "unit": "MPa",
+        "where": "힌지 브래킷 체결부"
+      },
+      {
+        "name": "allowable_stress",
+        "value": 380,
+        "unit": "MPa",
+        "where": "힌지 브래킷 재료 기준"
+      }
+    ],
+    "verdict": "안전",
+    "artifacts": [
+      {
+        "name": "후처리 보고서",
+        "url": "/apps/dynaforge/reports/SYN-RPT-0101/report"
+      }
+    ]
+  },
+  "attachments": [],
+  "consent": null
+}

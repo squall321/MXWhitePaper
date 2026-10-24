@@ -1,0 +1,42 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "qa",
+  "origin": {
+    "system": "hwax-portal",
+    "ref": "SYN-CONV-0005#1",
+    "rev": null,
+    "url": "/chat/SYN-CONV-0005/1"
+  },
+  "title": "힌지 시험 일정은 누구에게 묻나",
+  "captured_at": "2026-09-20T09:40:00+09:00",
+  "owner": {
+    "email": "syn.quality1@example.com"
+  },
+  "audience": [
+    "org"
+  ],
+  "sensitivity": "internal",
+  "subject_hints": [
+    {
+      "type": "part",
+      "name": "힌지 브래킷",
+      "ext": {
+        "bom_code": "SYN-BOM-HB01"
+      }
+    }
+  ],
+  "body": {
+    "question": "힌지 개폐 시험 일정은 누구에게 묻나?",
+    "answer": "시험 담당에게 묻는다 — 연락처 010-1234-5678, syn.contact@example.com.",
+    "evidence": [],
+    "model": "합성-챗모델",
+    "outcome": "partial"
+  },
+  "attachments": [],
+  "consent": {
+    "by": "syn.quality1@example.com",
+    "at": "2026-09-20T09:40:00+09:00",
+    "mode": "button",
+    "note": null
+  }
+}

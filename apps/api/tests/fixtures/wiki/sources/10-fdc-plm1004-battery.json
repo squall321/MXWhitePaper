@@ -1,0 +1,57 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "field_defect",
+  "origin": {
+    "system": "plm-defect",
+    "ref": "SYN-PLM-1004",
+    "rev": null,
+    "url": null
+  },
+  "title": "가상바 B2 배터리 스웰링 — 후면 커버 들뜸",
+  "captured_at": "2026-09-28T10:45:00+09:00",
+  "owner": null,
+  "audience": [
+    "plat:plmdefect"
+  ],
+  "sensitivity": "restricted",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상바 B2",
+      "ext": {
+        "sp_model": "SYN-M-B2"
+      }
+    },
+    {
+      "type": "part",
+      "name": "배터리 팩",
+      "ext": {
+        "bom_code": "SYN-BOM-BP01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "배터리 스웰링"
+    }
+  ],
+  "body": {
+    "form": "case",
+    "case_ref": "SYN-PLM-1004",
+    "symptom": "후면 커버가 들뜬다",
+    "failure_mode": "배터리 스웰링",
+    "cause": "고온 보관 중 가스 발생 추정",
+    "status": "open",
+    "dates": {
+      "opened": "2026-09-28"
+    },
+    "model": "가상바 B2",
+    "part": "배터리 팩",
+    "stage": "양산",
+    "dataset": {
+      "name": "PLM 문제점(합성)",
+      "version": "2026-10"
+    }
+  },
+  "attachments": [],
+  "consent": null
+}

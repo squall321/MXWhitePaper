@@ -1,0 +1,91 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "sim_result",
+  "origin": {
+    "system": "stcx",
+    "ref": "SYN-JOB-0002",
+    "rev": "1",
+    "url": "/apps/smarttwin/jobs/SYN-JOB-0002"
+  },
+  "title": "가상폴드 A1 힌지 리브 추가안 — 전각도 낙하 1.5 m",
+  "captured_at": "2026-09-15T09:05:00+09:00",
+  "owner": {
+    "email": "syn.analyst1@example.com"
+  },
+  "audience": [
+    "org"
+  ],
+  "sensitivity": "internal",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상폴드 A1",
+      "ext": {
+        "sp_model": "SYN-M-A1"
+      }
+    },
+    {
+      "type": "part",
+      "name": "힌지 브래킷",
+      "ext": {
+        "bom_code": "SYN-BOM-HB01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "힌지 브래킷 균열"
+    },
+    {
+      "type": "countermeasure",
+      "name": "힌지 리브 추가"
+    },
+    {
+      "type": "sim-type",
+      "name": "전각도 낙하"
+    }
+  ],
+  "body": {
+    "summary": "힌지 브래킷에 리브를 더한 설계안을 같은 조건(1.5 m 전각도 낙하)으로 해석했다. 최대 응력은 338 MPa 로 허용 응력 380 MPa 아래다.",
+    "setup": {
+      "solver": "LS-DYNA R13 (explicit)",
+      "model": "가상폴드 A1 조립 FE 모델 v3 — 리브 추가안",
+      "conditions": {
+        "scenario": "전각도 낙하",
+        "drop_height": {
+          "value": 1.5,
+          "unit": "m"
+        },
+        "floor": "강판",
+        "mesh_size": {
+          "value": 0.5,
+          "unit": "mm"
+        },
+        "bracket_material": "SUS304",
+        "design_variation": "리브 추가"
+      }
+    },
+    "results": [
+      {
+        "name": "max_von_mises_stress",
+        "value": 338,
+        "unit": "MPa",
+        "where": "힌지 브래킷 체결부 모서리"
+      },
+      {
+        "name": "allowable_stress",
+        "value": 380,
+        "unit": "MPa",
+        "where": "힌지 브래킷 재료 기준"
+      }
+    ],
+    "verdict": "주의 — 허용 응력 이하",
+    "artifacts": [
+      {
+        "name": "후처리 보고서",
+        "url": "/apps/smarttwin/jobs/SYN-JOB-0002/report"
+      }
+    ]
+  },
+  "attachments": [],
+  "consent": null
+}

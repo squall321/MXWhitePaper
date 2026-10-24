@@ -1,0 +1,5 @@
+{
+  "model": "fake-wiki",
+  "note": "서버 오류 — 500 을 진짜 서버 꼴의 오류 본문으로 낸다.",
+  "rules": [{"reply": {"error": {"status": 500, "message": "fake LLM: 서버 오류", "type": "InternalServerError"}}}]
+}

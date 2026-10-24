@@ -1,0 +1,69 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "deliberation",
+  "origin": {
+    "system": "hwax-portal",
+    "ref": "delib:SYN-DLB-0002",
+    "rev": null,
+    "url": "/delib/SYN-DLB-0002"
+  },
+  "title": "가상바 B2 커버 글라스 두께 심의",
+  "captured_at": "2026-10-05T10:00:00+09:00",
+  "owner": {
+    "email": "syn.analyst2@example.com"
+  },
+  "audience": [
+    "org"
+  ],
+  "sensitivity": "internal",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상바 B2",
+      "ext": {
+        "sp_model": "SYN-M-B2"
+      }
+    },
+    {
+      "type": "part",
+      "name": "커버 글라스",
+      "ext": {
+        "bom_code": "SYN-BOM-CG01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "커버 글라스 깨짐"
+    }
+  ],
+  "body": {
+    "question": "가상바 B2 커버 글라스를 두껍게 하나?",
+    "decision": "보류한다. 해석 판정은 주의(168 MPa, 강도 200 MPa 아래)이고 두께를 늘리면 무게가 는다. 시장 사례를 더 모은 뒤 다시 본다.",
+    "votes": [
+      {
+        "seat": "구조",
+        "stance": "보류"
+      },
+      {
+        "seat": "품질",
+        "stance": "찬성"
+      }
+    ],
+    "evidence": [
+      {
+        "kind": "source",
+        "ref": "stcx:SYN-JOB-0003",
+        "excerpt": "max_principal_stress 168 MPa"
+      }
+    ],
+    "minority": "품질 — 시장 사례가 이미 있으니 지금 두껍게 해야 한다",
+    "job_id": "SYN-DLB-0002"
+  },
+  "attachments": [],
+  "consent": {
+    "by": "syn.analyst2@example.com",
+    "at": "2026-10-05T10:00:00+09:00",
+    "mode": "button",
+    "note": null
+  }
+}

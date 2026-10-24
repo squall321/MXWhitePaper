@@ -200,12 +200,18 @@ finding — `id` · `run_id` · `rule`(request §5-8 표의 열쇠) · `severity
 | `field_defect` | `form:'case'|'aggregate'` · (case) `case_ref` · `symptom` · `failure_mode?` · `cause?` · `action?` · `status` · `dates{opened, closed?}` · `model?` · `part?` · `stage?` · (aggregate) `period{from,to}` · `scope{model?, part?, region?}` · `counts[{failure_mode, count, rate?, unit}]` · 공통 `dataset{name, version}` | 사례 한 건 또는 집계 한 묶음(request §6-2). **사람 이름 · 사번 · 연락처 · 고객 · 단말 식별자는 연결기가 떼고 보낸다** — 서버도 V9 로 한 번 더 본다 |
 | `qa` | `question` · `answer` · `evidence[{kind:'tool'|'doc'|'source', ref, excerpt}]` · `model` · `outcome:'solved'|'partial'|'unknown'` · `asker_note?` | 질문자 이름은 싣지 않는다(주인은 `owner` 로만) |
 | `deliberation` | `question` · `decision` · `votes[{seat, stance}]` · `evidence[…]` · `minority?` · `job_id` | 버린 근거 · 소수 의견을 지우지 않는다(포털 심의 원칙) |
-| `report` | `ra_report_id` · `title` · `sections[{heading, text}]` · `figures[…]` | RA 는 API 로만 읽는다 |
-| `card` | `card_id` · `domain` · `title` · `claims[{text, evidence}]` | AIDataHub 지식카드 |
+| `report` | `ra_report_id` · `title` · `sections[{heading, text}]` · `figures[{name, caption?, upload_id?}]` | RA 는 API 로만 읽는다 |
+| `card` | `card_id` · `domain` · `title` · `claims[{text, evidence?}]` | AIDataHub 지식카드 |
+| `document` | `doc_slug` · `version` | MXWP 사람 백서를 그 판으로 원천에(request §6-4) |
 | `correction` | `doc_slug` · `block_id?` · `text` · `reason` | 사람이 위키 문서를 고친 것 — 다음 들이기가 따라야 하는 원천 |
-| `inquiry_answer` | `question_id` · `answer` · `tool_calls[{tool, args_digest, result_excerpt}]` · `confidence` | 지속 질의의 답 |
+| `inquiry_answer` | `question_id` · `answer` · `tool_calls[{tool, args_digest, result_excerpt}]` · `confidence`(0~1) | 지속 질의의 답 |
+| `note` | `text` | 사람이 남긴 짧은 메모 |
+
+구현 — [[src/app/wiki/envelope.py]](`docs/lat/wiki.md` §Envelope 가 정본).
 
 규칙.
+- `audience` 는 받을 때 정규화한다 — 중복 제거 · 정렬 · 다른 토큰과 함께인 `org` 는 뺀다(org ∧ X = X). 빈 목록 · 틀린 꼴 · 서로 다른
+  `aff:` 둘 · `user:` 둘(만족하는 사람이 없다)은 거부.
 - 서버가 `schema` · `kind` 별 꼴을 검증하고(pydantic), 모르는 칸은 거부한다(조용히 버리지 않는다).
 - `audience` 는 보낸 사람이 볼 수 있는 범위보다 넓을 수 없다(`org` 는 서비스 계정 또는 관리자만, 또는 원천 시스템이 원래 전사 공개인 자료).
 - 위임 호출(게이트웨이 · 포털)은 `owner.email` 이 호출자와 같아야 한다. 서비스 연결기는 원천 시스템이 준 주인을 그대로 싣는다.

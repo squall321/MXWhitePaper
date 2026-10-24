@@ -1,0 +1,5 @@
+{
+  "model": "fake-wiki",
+  "note": "연결 끊김 — 어느 요청이든 응답 없이 끊는다(클라이언트는 RemoteProtocolError).",
+  "rules": [{"reply": {"disconnect": true}}]
+}

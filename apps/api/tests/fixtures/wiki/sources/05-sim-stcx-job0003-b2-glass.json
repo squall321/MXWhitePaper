@@ -1,0 +1,86 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "sim_result",
+  "origin": {
+    "system": "stcx",
+    "ref": "SYN-JOB-0003",
+    "rev": "1",
+    "url": "/apps/smarttwin/jobs/SYN-JOB-0003"
+  },
+  "title": "가상바 B2 단일 낙하 1.2 m 화면 아래 — 커버 글라스 주응력",
+  "captured_at": "2026-08-11T11:20:00+09:00",
+  "owner": {
+    "email": "syn.analyst2@example.com"
+  },
+  "audience": [
+    "org"
+  ],
+  "sensitivity": "internal",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상바 B2",
+      "ext": {
+        "sp_model": "SYN-M-B2"
+      }
+    },
+    {
+      "type": "part",
+      "name": "커버 글라스",
+      "ext": {
+        "bom_code": "SYN-BOM-CG01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "커버 글라스 깨짐"
+    },
+    {
+      "type": "sim-type",
+      "name": "단일 낙하"
+    }
+  ],
+  "body": {
+    "summary": "1.2 m 에서 화면이 아래로 떨어지는 단일 낙하를 해석했다. 커버 글라스 최대 주응력은 168 MPa 로 글라스 강도 200 MPa 아래다.",
+    "setup": {
+      "solver": "LS-DYNA R13 (explicit)",
+      "model": "가상바 B2 조립 FE 모델 v1",
+      "conditions": {
+        "scenario": "단일 낙하",
+        "drop_height": {
+          "value": 1.2,
+          "unit": "m"
+        },
+        "orientation": "화면 아래",
+        "floor": "강판",
+        "mesh_size": {
+          "value": 0.5,
+          "unit": "mm"
+        }
+      }
+    },
+    "results": [
+      {
+        "name": "max_principal_stress",
+        "value": 168,
+        "unit": "MPa",
+        "where": "커버 글라스 모서리"
+      },
+      {
+        "name": "glass_strength",
+        "value": 200,
+        "unit": "MPa",
+        "where": "커버 글라스 기준"
+      }
+    ],
+    "verdict": "주의",
+    "artifacts": [
+      {
+        "name": "후처리 보고서",
+        "url": "/apps/smarttwin/jobs/SYN-JOB-0003/report"
+      }
+    ]
+  },
+  "attachments": [],
+  "consent": null
+}

@@ -1,0 +1,52 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "qa",
+  "origin": {
+    "system": "hwax-portal",
+    "ref": "SYN-CONV-0002#1",
+    "rev": null,
+    "url": "/chat/SYN-CONV-0002/1"
+  },
+  "title": "커버 글라스 낙하 해석은 무엇으로 판정하나",
+  "captured_at": "2026-08-12T14:05:00+09:00",
+  "owner": {
+    "email": "syn.analyst2@example.com"
+  },
+  "audience": [
+    "org"
+  ],
+  "sensitivity": "internal",
+  "subject_hints": [
+    {
+      "type": "part",
+      "name": "커버 글라스",
+      "ext": {
+        "bom_code": "SYN-BOM-CG01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "커버 글라스 깨짐"
+    }
+  ],
+  "body": {
+    "question": "커버 글라스 낙하 해석은 무엇으로 판정하나?",
+    "answer": "최대 주응력을 글라스 강도 200 MPa 와 견준다. 모서리 낙하는 따로 본다.",
+    "evidence": [
+      {
+        "kind": "tool",
+        "ref": "stcx.job_postprocess SYN-JOB-0003",
+        "excerpt": "glass_strength 200 MPa"
+      }
+    ],
+    "model": "합성-챗모델",
+    "outcome": "partial"
+  },
+  "attachments": [],
+  "consent": {
+    "by": "syn.analyst2@example.com",
+    "at": "2026-08-12T14:05:00+09:00",
+    "mode": "button",
+    "note": null
+  }
+}

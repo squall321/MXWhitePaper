@@ -49,6 +49,8 @@ dev = [
   "ruff>=0.7",
   "pyright>=1.1.388",
   "datamodel-code-generator>=0.26",
+  # 가짜 LLM(tests/fakes/fake_llm.py)이 요청 스키마 · 시나리오 답을 검사한다.
+  "jsonschema>=4.20",
 ]
 
 [project.scripts]

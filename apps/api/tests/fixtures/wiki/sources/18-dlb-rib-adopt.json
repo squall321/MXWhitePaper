@@ -1,0 +1,83 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "deliberation",
+  "origin": {
+    "system": "hwax-portal",
+    "ref": "delib:SYN-DLB-0001",
+    "rev": null,
+    "url": "/delib/SYN-DLB-0001"
+  },
+  "title": "가상폴드 A1 힌지 리브 추가안 양산 적용 심의",
+  "captured_at": "2026-09-22T15:00:00+09:00",
+  "owner": {
+    "email": "syn.quality1@example.com"
+  },
+  "audience": [
+    "aff:SYN-CAE1",
+    "plat:plmdefect"
+  ],
+  "sensitivity": "internal",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상폴드 A1",
+      "ext": {
+        "sp_model": "SYN-M-A1"
+      }
+    },
+    {
+      "type": "part",
+      "name": "힌지 브래킷",
+      "ext": {
+        "bom_code": "SYN-BOM-HB01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "힌지 브래킷 균열"
+    },
+    {
+      "type": "countermeasure",
+      "name": "힌지 리브 추가"
+    }
+  ],
+  "body": {
+    "question": "가상폴드 A1 힌지 리브 추가안을 양산에 넣나?",
+    "decision": "넣는다. 해석 최대 응력이 338 MPa 로 허용 응력 380 MPa 아래다. 시장 재발은 양산 뒤 석 달 동안 PLM 문제점으로 다시 본다.",
+    "votes": [
+      {
+        "seat": "구조",
+        "stance": "찬성"
+      },
+      {
+        "seat": "품질",
+        "stance": "조건부 찬성"
+      },
+      {
+        "seat": "원가",
+        "stance": "반대"
+      }
+    ],
+    "evidence": [
+      {
+        "kind": "source",
+        "ref": "stcx:SYN-JOB-0002",
+        "excerpt": "max_von_mises_stress 338 MPa"
+      },
+      {
+        "kind": "tool",
+        "ref": "plm_case_detail SYN-PLM-1001",
+        "excerpt": "원인 체결부 모서리 응력 집중"
+      }
+    ],
+    "minority": "원가 — 리브 추가로 부품 원가가 오른다",
+    "job_id": "SYN-DLB-0001"
+  },
+  "attachments": [],
+  "consent": {
+    "by": "syn.quality1@example.com",
+    "at": "2026-09-22T15:00:00+09:00",
+    "mode": "button",
+    "note": null
+  }
+}

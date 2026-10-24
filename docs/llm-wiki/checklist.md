@@ -10,11 +10,13 @@
 - [x] request §11 결정 확인(Q3 · Q5 · Q6 · Q7 은 W4 완료 전, Q4 는 W2 시작 전) — 10-24 사용자 결정 WK-D15~D18(Q1 · Q3~Q7 · Q9 · Q10)
 - [x] 낡은 문서 셋 — HWAX-PORTAL-INTEGRATION(접두 떼기 · `serve -s`) · llm-widgets-via-api(토큰 범위) · mcp-parity 체크리스트
   (+ 같은 낡은 말의 `.env.example` · 고치다 찾은 `make build-web` 접두 결함 `8ff0d42`)
-- [ ] 가짜 LLM 서버(json_schema · 도구 호출 · 시나리오 열) — 진짜 꼴과 같게
-- [ ] 합성 원천 묶음 20(모순 · 낡음 · 빈틈 하나씩 심기)
-- [ ] 규칙서 초안 사람 검토
-- [ ] `docs/lat/wiki.md` 뼈 · lat README 노드 표
-- [ ] 설정 자리(`WIKI_*` · `MXWP_SSO_*`)
+- [x] 가짜 LLM 서버(json_schema · 도구 호출 · 시나리오 열) — 진짜 꼴과 같게 — `tests/fakes/fake_llm.py`. 시나리오는 전송 넷(끊김 · 형식
+  틀림 · 느림 · 500) + 규칙 기계(match · times · capture · conform), 쓰기 답 여섯은 W4 칸으로 옮겼다(WK-D19)
+- [x] 합성 원천 묶음 20(모순 · 낡음 · 빈틈 하나씩 심기) — `tests/fixtures/wiki/sources/`(+ 사람의 정정 · 연락처 꼴)
+- [ ] 규칙서 초안 사람 검토 — v0 로 시작, W4 에서 다시 본다(WK-D18)
+- [x] `docs/lat/wiki.md` 뼈 · lat README 노드 표
+- [x] 설정 자리(`WIKI_*` · `MXWP_SSO_*`) — 포털 설정 킷에 넣을 줄은 없다(기본값으로 충분 · 비밀은 사람)
+- [x] 완료 기준 — 가짜 LLM + 합성 묶음으로 빈 시험이 돈다(`test_wiki_w0.py` 24 passed · 전체 1228 passed, 4 skipped — 10-24)
 
 ## W1 연결 · 신원
 - [ ] C1 `POST /api/v1/auth/sso` — 404(비밀 없음) · 401 · 403 · 400 · 200, `compare_digest`
@@ -46,6 +48,7 @@
 - [ ] **데이터 덤프 · 합치기에서 위키 제외** · 스냅숏에는 포함 확인
 
 ## W4 들이기 · 검토 · 근거(첫 동작판)
+- [ ] 가짜 LLM 쓰기 답 시나리오 여섯(정상 · 지어낸 숫자 · 근거 없음 · 잠긴 블록 · 범위 섞임 · 계획 밖 문서 · 300자 넘는 인용) — 쓰기 스키마와 함께(W0 에서 옮김)
 - [ ] 엔티티 해석(결정적) · 계획 · 쓰기 · 검증 V1~V11 · 반영(document_service 경로) · 되돌리기
 - [ ] 자동 반영 조건 · 검토 큐 API
 - [ ] `wiki_citations` · 읽기 응답에 근거 붙이기

@@ -60,7 +60,22 @@
 - **WK-D18 사용자 결정 — 규칙서는 초안(SCHEMA-DRAFT)을 그대로 v0 로 시작한다.** W4 에서 `wiki-schema` 문서로 올릴 때 다시 본다 — 그때까지
   checklist 의 '규칙서 초안 사람 검토' 칸은 비워 둔다.
 
+- **WK-D19 가짜 LLM 의 쓰기 답 시나리오(지어낸 숫자 · 근거 없음 · 잠긴 블록 · 범위 섞임 · 계획 밖 문서 · 300자 넘는 인용)는 W4 로 미룬다.**
+  W0 은 규칙 기계(match · times · capture · conform)와 스키마와 무관한 전송 넷(끊김 · 형식 틀림 · 느림 · 500)만. 까닭 — 쓰기 단계의 출력
+  스키마보다 먼저 지으면 답의 꼴을 짐작으로 정하고, 스키마가 정해질 때 다시 쓰게 된다.
+- **WK-D20 가짜 LLM 은 표준 라이브러리 `http.server`(진짜 소켓)로, 꼴은 vLLM OpenAI 호환으로 짓는다.** 까닭 — ASGI 안 가짜로는 '연결 끊김' 을
+  진짜 `RemoteProtocolError` 로, '느림' 을 진짜 읽기 시간 초과로 낼 수 없다. dev 에 닿는 LLM 이 없어 박스의 vLLM 판(오류 본문 꼴)을 재지
+  못했다 — 가짜는 두 꼴(`openai` · `vllm-legacy`)을 다 내고 W4 클라이언트가 둘 다 읽는다. 답이 요청 스키마에 맞는지는 가짜가 먼저 본다
+  (`conform` — 진짜의 유도 디코딩처럼, 시나리오 결함을 500 으로).
+- **WK-D21 봉투에 꼴이 없던 셋을 정했다** — `document{doc_slug, version}` · `note{text}` · `report.figures[{name, caption?, upload_id?}]`,
+  `inquiry_answer.confidence` 는 0~1. 해석 조건도 숫자는 `{value, unit}` 만(Strict). `audience` 는 받을 때 정규화(org ∧ X = X)하고 만족 불가
+  조합은 거부(CONTRACTS §3 갱신).
+
 ## 조사 메모(2026-10-24, W0)
+
+- 시험의 pytest · jsonschema 는 api.sif 안이 아니라 호스트 `~/.local` 에서 온다(홈 마운트 — `--no-mount home` 으로 띄우면 둘 다 없다).
+  jsonschema 는 pyproject `dev` 에 적었다.
+- 포털 세션 정정(10-24) — 포털 쪽 비밀 자리는 포털 `infra/.env` 가 아니라 게이트웨이 `HWAXMcpGateway/provision.env` 다(request §4-4 · P5 고침).
 
 - 낡은 문서 셋을 고치다 `make build-web`(→ `make ship`)이 접두를 굽지 못하는 것을 찾았다 — `vite.config.ts` 는 `VITE_BASE_PATH` 만 읽는데
   `MXWP_BASE_PATH` 만 넘겼다(vite `resolveConfig` 로 base `/`). 지금 dist(09-13)는 접두가 있어 손수 지은 것으로 보인다. `8ff0d42` 로 고쳤다.

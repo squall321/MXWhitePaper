@@ -1,0 +1,56 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "field_defect",
+  "origin": {
+    "system": "plm-defect",
+    "ref": "SYN-PLM-1002",
+    "rev": null,
+    "url": null
+  },
+  "title": "가상폴드 A1 힌지 브래킷 균열 — 힌지 덜컹거림",
+  "captured_at": "2026-09-11T17:30:00+09:00",
+  "owner": null,
+  "audience": [
+    "plat:plmdefect"
+  ],
+  "sensitivity": "restricted",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상폴드 A1",
+      "ext": {
+        "sp_model": "SYN-M-A1"
+      }
+    },
+    {
+      "type": "part",
+      "name": "힌지 브래킷",
+      "ext": {
+        "bom_code": "SYN-BOM-HB01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "힌지 브래킷 균열"
+    }
+  ],
+  "body": {
+    "form": "case",
+    "case_ref": "SYN-PLM-1002",
+    "symptom": "힌지가 덜컹거린다",
+    "failure_mode": "힌지 브래킷 균열",
+    "status": "open",
+    "dates": {
+      "opened": "2026-09-11"
+    },
+    "model": "가상폴드 A1",
+    "part": "힌지 브래킷",
+    "stage": "양산",
+    "dataset": {
+      "name": "PLM 문제점(합성)",
+      "version": "2026-10"
+    }
+  },
+  "attachments": [],
+  "consent": null
+}

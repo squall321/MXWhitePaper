@@ -1,0 +1,35 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "correction",
+  "origin": {
+    "system": "mxwp",
+    "ref": "SYN-COR-0001",
+    "rev": null,
+    "url": "/doc/ent-part-hinge-bracket"
+  },
+  "title": "힌지 브래킷 재료 정정",
+  "captured_at": "2026-10-10T13:00:00+09:00",
+  "owner": {
+    "email": "syn.analyst1@example.com"
+  },
+  "audience": [
+    "org"
+  ],
+  "sensitivity": "internal",
+  "subject_hints": [
+    {
+      "type": "part",
+      "name": "힌지 브래킷",
+      "ext": {
+        "bom_code": "SYN-BOM-HB01"
+      }
+    }
+  ],
+  "body": {
+    "doc_slug": "ent-part-hinge-bracket",
+    "text": "힌지 브래킷 재료는 SUS301 이다(SUS304 아님 — 도면 개정 C 기준).",
+    "reason": "도면 확인"
+  },
+  "attachments": [],
+  "consent": null
+}

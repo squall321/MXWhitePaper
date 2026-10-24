@@ -1,0 +1,62 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "field_defect",
+  "origin": {
+    "system": "plm-defect",
+    "ref": "SYN-AGG-2026Q3-A1",
+    "rev": null,
+    "url": null
+  },
+  "title": "가상폴드 A1 시장 불량 집계 2026 3분기",
+  "captured_at": "2026-10-02T09:00:00+09:00",
+  "owner": null,
+  "audience": [
+    "plat:plmdefect"
+  ],
+  "sensitivity": "restricted",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상폴드 A1",
+      "ext": {
+        "sp_model": "SYN-M-A1"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "힌지 브래킷 균열"
+    },
+    {
+      "type": "failure-mode",
+      "name": "커버 글라스 깨짐"
+    }
+  ],
+  "body": {
+    "form": "aggregate",
+    "period": {
+      "from": "2026-07-01",
+      "to": "2026-09-30"
+    },
+    "scope": {
+      "model": "가상폴드 A1"
+    },
+    "counts": [
+      {
+        "failure_mode": "힌지 브래킷 균열",
+        "count": 14,
+        "unit": "건"
+      },
+      {
+        "failure_mode": "커버 글라스 깨짐",
+        "count": 3,
+        "unit": "건"
+      }
+    ],
+    "dataset": {
+      "name": "PLM 문제점(합성)",
+      "version": "2026-10"
+    }
+  },
+  "attachments": [],
+  "consent": null
+}

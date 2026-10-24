@@ -1,0 +1,92 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "sim_result",
+  "origin": {
+    "system": "stcx",
+    "ref": "SYN-JOB-0001",
+    "rev": "1",
+    "url": "/apps/smarttwin/jobs/SYN-JOB-0001"
+  },
+  "title": "가상폴드 A1 전각도 낙하 1.5 m — 힌지 브래킷 최대 응력",
+  "captured_at": "2026-08-04T10:12:00+09:00",
+  "owner": {
+    "email": "syn.analyst1@example.com"
+  },
+  "audience": [
+    "aff:SYN-CAE1"
+  ],
+  "sensitivity": "internal",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상폴드 A1",
+      "ext": {
+        "sp_model": "SYN-M-A1"
+      }
+    },
+    {
+      "type": "part",
+      "name": "힌지 브래킷",
+      "ext": {
+        "bom_code": "SYN-BOM-HB01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "힌지 브래킷 균열"
+    },
+    {
+      "type": "sim-type",
+      "name": "전각도 낙하"
+    }
+  ],
+  "body": {
+    "summary": "1.5 m 전각도 낙하에서 힌지 브래킷 체결부 모서리의 최대 응력이 412 MPa 로 허용 응력 380 MPa 를 넘었다. 최악 자세는 모서리 낙하다.",
+    "setup": {
+      "solver": "LS-DYNA R13 (explicit)",
+      "model": "가상폴드 A1 조립 FE 모델 v3",
+      "conditions": {
+        "scenario": "전각도 낙하",
+        "drop_height": {
+          "value": 1.5,
+          "unit": "m"
+        },
+        "floor": "강판",
+        "mesh_size": {
+          "value": 0.5,
+          "unit": "mm"
+        },
+        "bracket_material": "SUS304"
+      }
+    },
+    "results": [
+      {
+        "name": "max_von_mises_stress",
+        "value": 412,
+        "unit": "MPa",
+        "where": "힌지 브래킷 체결부 모서리"
+      },
+      {
+        "name": "allowable_stress",
+        "value": 380,
+        "unit": "MPa",
+        "where": "힌지 브래킷 재료 기준"
+      },
+      {
+        "name": "max_plastic_strain",
+        "value": 0.021,
+        "unit": "1",
+        "where": "힌지 브래킷 체결부 모서리"
+      }
+    ],
+    "verdict": "위험 — 허용 응력 초과",
+    "artifacts": [
+      {
+        "name": "후처리 보고서",
+        "url": "/apps/smarttwin/jobs/SYN-JOB-0001/report"
+      }
+    ]
+  },
+  "attachments": [],
+  "consent": null
+}

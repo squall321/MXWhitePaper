@@ -1,0 +1,53 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "qa",
+  "origin": {
+    "system": "hwax-portal",
+    "ref": "SYN-CONV-0003#2",
+    "rev": null,
+    "url": "/chat/SYN-CONV-0003/2"
+  },
+  "title": "배터리 스웰링을 해석으로 볼 수 있나",
+  "captured_at": "2026-10-01T16:20:00+09:00",
+  "owner": {
+    "email": "syn.quality1@example.com"
+  },
+  "audience": [
+    "org"
+  ],
+  "sensitivity": "internal",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상바 B2",
+      "ext": {
+        "sp_model": "SYN-M-B2"
+      }
+    },
+    {
+      "type": "part",
+      "name": "배터리 팩",
+      "ext": {
+        "bom_code": "SYN-BOM-BP01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "배터리 스웰링"
+    }
+  ],
+  "body": {
+    "question": "가상바 B2 배터리 스웰링을 해석으로 볼 수 있나?",
+    "answer": "위키에 아직 근거가 없다. 배터리 스웰링을 다룬 해석 사례를 찾지 못했다.",
+    "evidence": [],
+    "model": "합성-챗모델",
+    "outcome": "unknown"
+  },
+  "attachments": [],
+  "consent": {
+    "by": "syn.quality1@example.com",
+    "at": "2026-10-01T16:20:00+09:00",
+    "mode": "candidate",
+    "note": null
+  }
+}

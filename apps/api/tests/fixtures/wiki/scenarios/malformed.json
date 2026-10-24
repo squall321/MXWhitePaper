@@ -1,0 +1,5 @@
+{
+  "model": "fake-wiki",
+  "note": "형식 틀림 — 어느 요청이든 JSON 이 아닌 글을 낸다(json_schema 모드면 content, 도구 모드면 arguments).",
+  "rules": [{"reply": {"text": "이건 JSON 이 아니다 {\"ops\": ["}}]
+}

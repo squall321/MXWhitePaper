@@ -1,0 +1,59 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "field_defect",
+  "origin": {
+    "system": "plm-defect",
+    "ref": "SYN-PLM-1003",
+    "rev": null,
+    "url": null
+  },
+  "title": "가상바 B2 커버 글라스 깨짐 — 모서리 낙하 뒤 금",
+  "captured_at": "2026-09-05T13:10:00+09:00",
+  "owner": null,
+  "audience": [
+    "plat:plmdefect"
+  ],
+  "sensitivity": "restricted",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상바 B2",
+      "ext": {
+        "sp_model": "SYN-M-B2"
+      }
+    },
+    {
+      "type": "part",
+      "name": "커버 글라스",
+      "ext": {
+        "bom_code": "SYN-BOM-CG01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "커버 글라스 깨짐"
+    }
+  ],
+  "body": {
+    "form": "case",
+    "case_ref": "SYN-PLM-1003",
+    "symptom": "모서리로 떨어뜨린 뒤 화면 모서리에 금이 갔다",
+    "failure_mode": "커버 글라스 깨짐",
+    "cause": "모서리 충격 — 글라스 모서리 지지 부족",
+    "action": "모서리 완충재 추가 검토",
+    "status": "closed",
+    "dates": {
+      "opened": "2026-07-21",
+      "closed": "2026-09-05"
+    },
+    "model": "가상바 B2",
+    "part": "커버 글라스",
+    "stage": "양산",
+    "dataset": {
+      "name": "PLM 문제점(합성)",
+      "version": "2026-10"
+    }
+  },
+  "attachments": [],
+  "consent": null
+}

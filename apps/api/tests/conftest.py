@@ -55,6 +55,15 @@ os.environ["ALLOW_DEV_ADMIN_FALLBACK"] = "1"
 os.environ.setdefault("MXWP_SKIP_VIEW_REFRESH", "1")
 
 
+@pytest.fixture
+def fake_llm():
+    """가짜 LLM 서버(tests/fakes/fake_llm.py)를 빈 시나리오로 띄운다 — 시험이 `fake_llm.load(...)` 로 답을 고른다."""
+    from tests.fakes.fake_llm import FakeLLM
+
+    with FakeLLM({"rules": []}) as llm:
+        yield llm
+
+
 @pytest.fixture(autouse=True)
 def _reset_rate_limiter_per_test():
     """매 테스트마다 글로벌 per-IP token bucket 을 비운다.

@@ -1,0 +1,59 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "field_defect",
+  "origin": {
+    "system": "plm-defect",
+    "ref": "SYN-PLM-1001",
+    "rev": null,
+    "url": null
+  },
+  "title": "가상폴드 A1 힌지 브래킷 균열 — 접을 때 소리 · 유격",
+  "captured_at": "2026-08-20T18:00:00+09:00",
+  "owner": null,
+  "audience": [
+    "plat:plmdefect"
+  ],
+  "sensitivity": "restricted",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상폴드 A1",
+      "ext": {
+        "sp_model": "SYN-M-A1"
+      }
+    },
+    {
+      "type": "part",
+      "name": "힌지 브래킷",
+      "ext": {
+        "bom_code": "SYN-BOM-HB01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "힌지 브래킷 균열"
+    }
+  ],
+  "body": {
+    "form": "case",
+    "case_ref": "SYN-PLM-1001",
+    "symptom": "접을 때 소리가 나고 힌지에 유격이 생긴다",
+    "failure_mode": "힌지 브래킷 균열",
+    "cause": "체결부 모서리 응력 집중",
+    "action": "힌지 브래킷 리브 추가 설계 변경",
+    "status": "closed",
+    "dates": {
+      "opened": "2026-07-03",
+      "closed": "2026-08-20"
+    },
+    "model": "가상폴드 A1",
+    "part": "힌지 브래킷",
+    "stage": "양산",
+    "dataset": {
+      "name": "PLM 문제점(합성)",
+      "version": "2026-10"
+    }
+  },
+  "attachments": [],
+  "consent": null
+}

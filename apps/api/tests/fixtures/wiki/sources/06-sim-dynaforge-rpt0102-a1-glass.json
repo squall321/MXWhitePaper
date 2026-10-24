@@ -1,0 +1,86 @@
+{
+  "schema": "mxwp-source/1",
+  "kind": "sim_result",
+  "origin": {
+    "system": "dynaforge",
+    "ref": "SYN-RPT-0102",
+    "rev": null,
+    "url": "/apps/dynaforge/reports/SYN-RPT-0102"
+  },
+  "title": "가상폴드 A1 단일 낙하 1.0 m — 커버 글라스",
+  "captured_at": "2026-09-08T15:00:00+09:00",
+  "owner": {
+    "email": "syn.analyst1@example.com"
+  },
+  "audience": [
+    "aff:SYN-CAE1"
+  ],
+  "sensitivity": "internal",
+  "subject_hints": [
+    {
+      "type": "product-model",
+      "name": "가상폴드 A1",
+      "ext": {
+        "sp_model": "SYN-M-A1"
+      }
+    },
+    {
+      "type": "part",
+      "name": "커버 글라스",
+      "ext": {
+        "bom_code": "SYN-BOM-CG01"
+      }
+    },
+    {
+      "type": "failure-mode",
+      "name": "커버 글라스 깨짐"
+    },
+    {
+      "type": "sim-type",
+      "name": "단일 낙하"
+    }
+  ],
+  "body": {
+    "summary": "1.0 m 단일 낙하에서 커버 글라스 최대 주응력은 142 MPa 로 글라스 강도 200 MPa 아래다.",
+    "setup": {
+      "solver": "LS-DYNA R13 (explicit)",
+      "model": "가상폴드 A1 조립 FE 모델 v3",
+      "conditions": {
+        "scenario": "단일 낙하",
+        "drop_height": {
+          "value": 1.0,
+          "unit": "m"
+        },
+        "orientation": "모서리",
+        "floor": "강판",
+        "mesh_size": {
+          "value": 0.5,
+          "unit": "mm"
+        }
+      }
+    },
+    "results": [
+      {
+        "name": "max_principal_stress",
+        "value": 142,
+        "unit": "MPa",
+        "where": "커버 글라스 모서리"
+      },
+      {
+        "name": "glass_strength",
+        "value": 200,
+        "unit": "MPa",
+        "where": "커버 글라스 기준"
+      }
+    ],
+    "verdict": "안전",
+    "artifacts": [
+      {
+        "name": "후처리 보고서",
+        "url": "/apps/dynaforge/reports/SYN-RPT-0102/report"
+      }
+    ]
+  },
+  "attachments": [],
+  "consent": null
+}
