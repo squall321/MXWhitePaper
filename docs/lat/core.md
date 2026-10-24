@@ -342,6 +342,9 @@ Replay guard 는 DB 표 `portal_launch_jti`(C6, `0050`) — `_claim_jti` 가 `IN
 `ReturnAfterPortalEntry` 가 되돌린다. 1분 안에 다시 오면(다녀왔는데 세션이 안 이어짐) 저절로 보내지 않고 로그인 화면의 단추만
 ([[src/features/auth/portalEntry.ts#goToPortalEntry]]). e2e 도우미는 `/login?local=1` 로 들어간다. `/auth/mode` 는 속도 제한에서
 뺐다(`healthz` 처럼 — 페이지마다 묻는 고정 응답이 같은 IP 의 익명 몫을 먹어 refresh 가 429 를 받았다).
+**함정** — 부팅 refresh 응답에는 사용자가 없어 토큰을 넣는 순간(`setSession`) '확인 중' 이 꺼지고 `/me` 가 올 때까지 사용자가 빈다.
+예전엔 그 틈에 로그인 화면을 잠깐 거쳐 저절로 돌아왔지만 SSO 전용에서는 포털로 페이지를 떠난다 — `refresh()` 가 `/me` 를
+기다리는 동안 '확인 중' 을 다시 켠다(부팅 · 401 훅이 끝나면 끈다, 10-25).
 
 테스트 [[apps/api/tests/test_portal_sso.py]] — disabled 404 + malformed 401 +
 no_key 401 + happy 303(+ 스냅숏) + replay 401(DB) + 필수 클레임(실제 RS256 서명 — aud · jti · exp · sub 가 빠지면

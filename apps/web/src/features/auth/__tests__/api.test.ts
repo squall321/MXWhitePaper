@@ -82,6 +82,19 @@ describe('auth/api · refresh()', () => {
     expect(useAuthStore.getState().accessToken).toBe('t2')
   })
 
+  it('keeps hydrating while /me is pending — no user-less gap for the guard', async () => {
+    post.mockResolvedValueOnce({ data: { data: { access_token: 't4', expires_in: 1800 } } })
+    let resolveMe: (v: unknown) => void = () => {}
+    get.mockReturnValueOnce(new Promise((r) => { resolveMe = r }))
+    const pending = refresh()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(useAuthStore.getState().accessToken).toBe('t4')
+    expect(useAuthStore.getState().user).toBeNull()
+    expect(useAuthStore.getState().hydrating).toBe(true) // 보호 경로는 아직 '세션 확인 중'
+    resolveMe({ data: { data: adminUser } })
+    expect((await pending)?.email).toBe('admin@mx.local')
+  })
+
   it('returns the echoed user when /refresh includes one', async () => {
     post.mockResolvedValueOnce({
       data: { data: { access_token: 't3', expires_in: 900, user: adminUser } },

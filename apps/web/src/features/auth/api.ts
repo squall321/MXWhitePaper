@@ -164,7 +164,9 @@ export async function refresh(): Promise<AuthUser | null> {
     if (!ok) return null
     const user = res.data?.data?.user
     if (user) return user
-    // Server didn't echo user; pull from /me.
+    // Server didn't echo user; pull from /me. 그동안 '세션 확인 중' 을 다시 켠다 — 토큰만 있고 사용자가 빈 틈에 보호 경로가
+    // 로그인 화면(SSO 전용이면 포털 진입 링크 — 페이지를 떠난다)으로 보내지 않게. 부르는 쪽(부팅 · 401 훅)이 끝나면 끈다.
+    useAuthStore.getState().setHydrating(true)
     return await me()
   } catch {
     return null
