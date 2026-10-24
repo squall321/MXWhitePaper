@@ -149,8 +149,8 @@ finding — `id` · `run_id` · `rule`(request §5-8 표의 열쇠) · `severity
 
 ### 2-10. 신원 · 소속 · 플랫폼 권한
 
-- `users` 에 `portal_affiliation` text null · `portal_plat` text[] null · `portal_access_at` timestamptz 를 **더한다** — 포털 진입 토큰의 `access`
-  클레임(포털 몫, request §4)과 게이트웨이의 **서명된** 소속 · 플랫폼 헤더(§9)로 채운다. 평문 헤더만으로는 채우지 않는다. 값은 받을 때마다 덮어쓴다
+- `users` 에 `portal_affiliation` text null · `portal_plat` text[] null · `portal_access_at` timestamptz 를 **더한다** — 포털 진입 토큰의 `affiliation`
+  클레임 · `groups` 의 `plat:` 항목(§9)과 게이트웨이의 **서명된** 소속 · 플랫폼 헤더(§9)로 채운다. 평문 헤더만으로는 채우지 않는다. 값은 받을 때마다 덮어쓴다
   (포털에서 소속 · 권한이 바뀌면 다음 진입 · 다음 호출부터 따른다). `portal_access_at` 이 오래되면(규칙서 `access.max_age_h`, 기본 24) 그 사람의
   `aff:` · `plat:` 토큰은 **없는 것으로** 본다(닫힌 쪽).
 - `wiki_aff_team_map` — `affiliation` PK · `team_id` FK — 처음 들어온 SSO 사용자를 '첫 팀' 대신 소속에 맞는 팀에 넣는다(관리자가 채운다,
@@ -308,10 +308,10 @@ finding — `id` · `run_id` · `rule`(request §5-8 표의 열쇠) · `severity
 
 | 길 | 받는 것 | MXWP 가 하는 것 |
 | --- | --- | --- |
-| 브라우저 타일 | 포털 진입 토큰(RS256 · 90초 · `scope=launch`) — `sub` · `email` · `name` · `groups`(AD 그룹) + (포털이 더하면) `access{affiliation, plat[]}` | 지금의 `portal-callback` 그대로 + `access` 를 `users.portal_*` 에, `wiki_aff_team_map` 으로 첫 팀. `access` 가 없으면(옛 포털) 위키의 `aff:` · `plat:` 문서는 못 본다 |
+| 브라우저 타일 | 포털 진입 토큰(RS256 · 90초 · `scope=launch`) — `sub` · `email` · `name` · `groups` · **`affiliation`**. `groups` 에는 AD 그룹과 함께 포털이 그 진입 순간 원장으로 센 합성 그룹(`feat:…` · `plat:…`, 관리자면 `portal-admin`)이 **원래 실린다**(HWAXPortal `deps.entitled`). `affiliation`(소속 id)은 포털 10-24 구현 — 이 시스템(`claims_affiliation: true`)에만, 값이 있고 권한표에 있는 소속일 때만 실리고 아니면 **칸이 없다**(HWAXPortal `backend/app/auth/routes/launch.py` · `tests/test_launch_affiliation_claim.py`) | 지금의 `portal-callback` 그대로 + `affiliation` → `users.portal_affiliation`(칸이 없으면 NULL), `groups` 의 `plat:` 항목 → `users.portal_plat`, `wiki_aff_team_map` 으로 첫 팀. 진입 토큰은 포털 키로 서명돼 있으니 그대로 믿는다 |
 | 게이트웨이 위임(새로) | `POST /api/v1/auth/sso` — `X-Heax-Gateway-Secret` · `X-Heax-User-Email` · `X-Heax-User-Name`(퍼센트 인코딩) · `X-Heax-Client`(`gateway` · `hwax-portal`) | 그 사람 토큰 발급 — 200 `{access_token, token_type:"bearer", expires_in}`(12시간 이상) · 비밀이 비면 **404** · 틀리면 401 · 비활성 403 · 이메일 없음 400. 클라이언트마다 따로 발급(서로 회수하지 않게) |
 | 위임 토큰으로 온 호출 | `Authorization: Bearer <위 토큰>` + `X-Heax-User-Affiliation`(퍼센트 인코딩) + `X-Heax-Aff-Proof`(`v1.<exp>.<hmac>`) — **지금 게이트웨이가 이미 싣는다** | 증명 검증 — HMAC-SHA256(같은 비밀, `v1|<email>|<소속>|<exp>`) · 만료 전 · 토큰 주인 이메일과 같을 때만 소속을 믿는다. 평문 헤더만이면 무시 |
-| 플랫폼 권한(새로 — 게이트웨이 몫) | `X-Heax-User-Plat`(쉼표 목록, `plat:` 만) + `X-Heax-Plat-Proof`(`v1|<email>|<정렬한 목록>|<exp>` 의 HMAC) | 소속 증명과 같은 규칙. 게이트웨이가 아직 안 싣는 동안은 `plat:` 문서를 MCP 로 못 본다(닫힌 쪽) — 브라우저는 진입 토큰 `access` 로 본다 |
+| 플랫폼 권한(게이트웨이 — 10-24 구현, HWAXMcpGateway `_plat_proof`) | `X-Heax-User-Plat` — `plat:` 항목만 정렬해 쉼표로 이은 값을 퍼센트 인코딩(`quote(…, safe=",:")`) · `X-Heax-Plat-Proof` — `v1.<exp>.<hmac>`, 서명 대상은 **인코딩 전** `v1|<email>|<정렬해 쉼표로 이은 목록>|<exp>`(HMAC-SHA256, 같은 위임 비밀, 유효 120초 — `GATEWAY_AFF_PROOF_TTL`). 박스 설정 `MXWP_SEND_PLAT=1`(게이트웨이 provision.env)로 켠 앱에만 싣고, 목록이 비면 두 헤더가 없다 | 소속 증명과 같은 규칙 — unquote → 쉼표로 나눔 → 정렬해 다시 이음 → 같은 문자열로 HMAC → `compare_digest` · 만료 전 · 토큰 주인 이메일과 같을 때만 믿는다. 헤더가 없으면 그 호출에서 `plat:` 범위는 없는 것으로(닫힌 쪽) |
 
 ## 10. 목록(index) · 기록(log) 꼴
 

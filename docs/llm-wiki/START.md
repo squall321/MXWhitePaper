@@ -101,7 +101,7 @@ dist/llm-docx-toolkit/mcp/server.py     # wiki_* 도구(CONTRACTS §7)
 | 이 리포가 끝내면 | 포털 쪽이 할 것 |
 | --- | --- |
 | C1 위임 창구(`/api/v1/auth/sso`) | P1 provision 설정 · P5 update-all · 사람이 비밀 전달(request §4-4) |
-| C4 소속 증명 검증 | (게이트웨이는 이미 싣는다) · P3 진입 토큰 `access` 클레임 · P4 플랫폼 증명 |
+| C4 소속 증명 검증 | (게이트웨이는 이미 싣는다) · P3 진입 토큰 `affiliation` · P4 플랫폼 증명(둘 다 10-24 구현 — CONTRACTS §9) |
 | W3 `/api/v1/wiki/sources` · `/health` | P6 '위키에 남기기' · P9 상태판 |
 | W6 `wiki_*` MCP | 게이트웨이 `tools/list` 확인 · 에이전트 서버 도구 영역 · 페르소나 `he-doc-mxwhitepaper` 안내문 |
 | 워커 인스턴스 `mxwp_wiki` | 포털 `infra/services.yaml` MXWP 항목에 여섯째 인스턴스 |

@@ -189,7 +189,7 @@ MXWP 리포 기준 경로(`apps/api/app/…`). 조사 2026-10-24.
 | C1 | **위임 창구 `POST /api/v1/auth/sso`** — 헤더 `X-Heax-Gateway-Secret` · `X-Heax-User-Email`(필수) · `X-Heax-User-Name`(퍼센트 인코딩) · `X-Heax-Client`(`gateway` · `hwax-portal`). 200 `{access_token, token_type:"bearer", expires_in}` | ste · HWAX Risk · RA(옛 `sso/heax.py`)와 같은 계약(`HWAXPortal/docs/sso-delegation/PLAN.md` §1). 비밀이 비면 **404(꺼짐)** · 틀리면 401 · 비활성 · 자동 생성 꺼짐 403 · 이메일 없음 400. 비밀 비교는 `hmac.compare_digest` |
 | C2 | 위임 토큰 — 12시간 이상 · 범위 read + write(admin 아님) · 발급 클라이언트별로 따로(같은 사람의 `gateway` 발급이 `hwax-portal` 발급 · 웹 세션을 회수하지 않게) · 세대 번호로 회수 가능 | 게이트웨이는 최대 12시간 캐시하고 401 이면 한 번 다시 받는다(`HWAXMcpGateway/gateway.py` `USER_PAT_TTL_S`) |
 | C3 | 사용자 자동 생성은 지금의 `_upsert_user` 를 그대로 쓰되 설정 `MXWP_SSO_JIT_CREATE`(기본 켬)로 끌 수 있게 | 처음 보는 사람이 게이트웨이로 먼저 오면 그때 생긴다 |
-| C4 | **소속 · 플랫폼 권한 받기** — 위임 호출의 `X-Heax-User-Affiliation` + `X-Heax-Aff-Proof` 를 검증해 `users.portal_affiliation` 에(평문만이면 무시), 진입 토큰의 `access` 클레임(포털이 더한다 — P3)을 같은 칸에 | CONTRACTS §2-10 · §9. 증명 꼴은 게이트웨이 `_aff_proof` 와 **같아야** 한다(`v1|<email>|<소속>|<exp>` 의 HMAC-SHA256, 같은 비밀) |
+| C4 | **소속 · 플랫폼 권한 받기** — 위임 호출의 `X-Heax-User-Affiliation` + `X-Heax-Aff-Proof` 를 검증해 `users.portal_affiliation` 에(평문만이면 무시), 진입 토큰의 `affiliation` 클레임 · `groups` 의 `plat:` 항목(P3 — 포털 10-24 구현)을 같은 칸에 | CONTRACTS §2-10 · §9. 증명 꼴은 게이트웨이 `_aff_proof` 와 **같아야** 한다(`v1|<email>|<소속>|<exp>` 의 HMAC-SHA256, 같은 비밀) |
 | C5 | **소속 → 팀** — `wiki_aff_team_map` 으로 처음 들어온 사람의 팀을 정한다(비면 지금처럼 첫 팀) | 관리자 화면 한 장 |
 | C6 | 진입 토큰 jti 재사용 막기를 DB 로(지금은 프로세스 메모리 — 워커가 둘이 되면 뚫린다) | 위키 워커와 무관하지만 연결 점검 김에 |
 | C7 | MCP 서버 — `wiki_*` 도구(§5-15)와, 위키 문서를 고치는 기존 쓰기 도구 막기 | CONTRACTS §7 |
@@ -203,8 +203,8 @@ HWAXPortal `docs/mxwp-wiki/PLAN.md` 가 정본이다. 여기는 MXWP 쪽이 기�
 | --- | --- | --- |
 | P1 | 게이트웨이 provision | `PER_USER_SSO_APPS="mx-white-paper:MXWP"` · `MXWP_SSO_SECRET` · `MXWP_SSO_URL`(기본 `http://127.0.0.1:8800/api/v1/auth/sso` — API 직결, Caddy 를 안 거친다) — **코드 수정 없는 일반 길**(`HWAXMcpGateway/provision-config.sh` 703~737행). 목록 조회용 서비스 헤더는 RA 처럼 남긴다 |
 | P2 | 게이트웨이 provision | REST 다리 `rest.mx-white-paper` 를 `inject` → `per_user` 로(ste 와 같은 모양) — 이 줄은 **코드 수정**이다. 그러면 `rest_call` 쓰기도 그 사람 명의로 열린다 |
-| P3 | 포털 진입 토큰 | 클레임 `access: {affiliation, plat:[…]}` 를 더한다(없으면 싣지 않는다 — 빈 값을 '소속 없음' 이라는 소속으로 묶지 않게) |
-| P4 | 게이트웨이 | 위임 호출에 `X-Heax-User-Plat` + `X-Heax-Plat-Proof`(소속 증명과 같은 규칙) — 그 전까지 MXWP 는 MCP 로 `plat:` 범위 문서를 보여 주지 않는다 |
+| P3 | 포털 진입 토큰 | **10-24 구현** — `plat:` 은 원래 `groups` 에 실렸고, 소속 `affiliation` 클레임을 MXWP 진입 토큰에만 더했다(값이 없거나 권한표에 없는 소속이면 칸이 없다 — 빈 값을 '소속 없음' 이라는 소속으로 묶지 않게) |
+| P4 | 게이트웨이 | **10-24 구현**(켜기는 박스 설정 `MXWP_SEND_PLAT=1`) — 위임 호출에 `X-Heax-User-Plat` + `X-Heax-Plat-Proof`(소속 증명과 같은 규칙, CONTRACTS §9). 헤더가 없는 호출에서 MXWP 는 `plat:` 범위 문서를 보여 주지 않는다 |
 | P5 | update-all | `infra/.env` 의 `MXWP_SSO_SECRET` 을 provision 에 넘기고(RA_SSO_SECRET 과 같은 줄) 비면 `PER_USER_SSO_OFF` 로 끈다 · MXWP 설정 킷도 적용한다 · 비밀은 **자동 생성하지 않는다**(MXWP 가 준비되기 전에 생기면 그 순간 MXWP 호출이 거부로 바뀐다) |
 | P6 | 포털 챗 | 문서 메뉴 '위키에 남기기' 를 진짜 동작으로 — 그 턴의 질문 · 답 · 근거(활동의 도구 호출 요약)를 `qa` 봉투로 만들어 그 사람 명의로 `POST /api/v1/wiki/sources`(포털 → MXWP 위임 — P1 과 같은 비밀, `X-Heax-Client: hwax-portal`) |
 | P7 | 포털 챗 | '해결됨' 표시(턴 단위) → 위키 후보(주인만 보는 `held` 원천) — §6-3, 사람 결정 §11 Q1 |

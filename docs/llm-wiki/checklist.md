@@ -19,7 +19,7 @@
 - [ ] C1 `POST /api/v1/auth/sso` — 404(비밀 없음) · 401 · 403 · 400 · 200, `compare_digest`
 - [ ] C2 위임 토큰 — 12시간 이상 · read + write · 클라이언트별 발급 · 세대 회수
 - [ ] C3 자동 생성 스위치 `MXWP_SSO_JIT_CREATE`
-- [ ] C4 소속 증명 검증(맞음 · 만료 · 다른 이메일 · 평문만) · 진입 토큰 `access` 받기 · `users.portal_*`
+- [ ] C4 소속 증명 검증(맞음 · 만료 · 다른 이메일 · 평문만) · 진입 토큰 `affiliation` · `groups` 의 `plat:` 받기 · 플랫폼 증명 검증 · `users.portal_*`
 - [ ] C5 `wiki_aff_team_map` + 관리자 화면
 - [ ] C6 진입 토큰 jti 재사용 막기를 DB 로
 - [ ] C8 HWAX-PORTAL-INTEGRATION 을 지금 모습으로(위임 · 소속 포함)
