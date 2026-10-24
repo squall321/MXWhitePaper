@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Slug, SectionLevel1, SectionLevel2, SectionLevel3 } from '@/types/document'
 import { BlockRenderer } from './blocks/BlockRenderer'
+import { WikiCited } from '@/features/wiki/WikiCitations'
 import { parseFootnoteDefinition } from './blocks/ParagraphBlock'
 import { Inline } from './wiki/Inline'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
@@ -165,15 +166,18 @@ export function SectionRenderer({
               blocks={directBlocks}
               layout={section.layout}
               className="mt-3"
-              renderBlock={(block) =>
-                isLong ? (
-                  <LazyBlockSlot block={block}>
+              renderBlock={(block) => (
+                // AI 위키 문서면 블록 끝에 근거 번호(컨텍스트가 없으면 그대로 — WikiCited).
+                <WikiCited blockId={block.id}>
+                  {isLong ? (
+                    <LazyBlockSlot block={block}>
+                      <BlockRenderer block={block} />
+                    </LazyBlockSlot>
+                  ) : (
                     <BlockRenderer block={block} />
-                  </LazyBlockSlot>
-                ) : (
-                  <BlockRenderer block={block} />
-                )
-              }
+                  )}
+                </WikiCited>
+              )}
             />
           )
         })()}

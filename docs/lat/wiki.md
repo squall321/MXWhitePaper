@@ -16,7 +16,7 @@
 | W1 연결 · 신원 | 위임 창구 · 위임 토큰(세대) · 소속 · 플랫폼 증명 · 진입 토큰 스냅숏 · jti 원장 · 소속→팀 표(API · 화면 `/admin/aff-team-map`) | [[core#게이트웨이 · 포털 위임]] |
 | W2 보이기 범위 | 읽기 길 전수(아래 표) · 길마다 시험 · admin 범위 밖 읽기 감사. 남은 것 — cae00 배포 · 재색인 | [[#Audience]] |
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
-| W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만). 남은 것 — 규칙서 사람 재검토 · 화면 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
+| W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
 | W5 온톨로지 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -50,6 +50,7 @@
 | 검토 큐 | [[src/app/wiki/review.py]] · 표지 `users.wiki_reviewer`(0055) | W4 |
 | 목록(index · index.md) | [[src/app/wiki/catalog.py#build]] | W4 |
 | 규칙서 문서 올리기 | [[src/app/wiki/schema_doc.py#put]] | W4 |
+| 화면(apps/web) | [[src/features/wiki/api.ts]] · [[src/features/wiki/WikiCitations.tsx]] · `pages/Wiki{Home,Source,Changes,Log}.tsx` | W4 |
 | REST | [[src/app/routers/wiki.py]](`/api/v1/wiki/*`) | W3~ |
 | 위임 창구 · 회수 · 소속→팀 표 | [[src/app/routers/auth_sso.py]] · 검증 `core/auth._resolve_delegated` · 증명 `core/portal_identity.py` | W1 |
 
@@ -135,6 +136,7 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | --- | --- | --- |
 | `POST /sources` | editor | 201 `{id, short, dedup:false, doc_slug, ingest_state}` / 200 `dedup:true`. `?ingest=0` 이면 작업 없음. 봉투 오류 422 — `details.errors[].field` 가 `body.…` 로 시작한다 |
 | `GET /sources` | reader | `kind` · `system` · `status` · `since` · `until` · `limit`(≤200) · `offset` → `meta.total`. 줄마다 `mine`(내가 주인) |
+| `GET /pages/{slug}` | reader | 위키 문서 한 장 — 종류 · 관리 · 범위 · 잠금 · 낡음 · 엔티티 + 블록별 근거 + 기대는 원천(생긴 때 순). 위키 문서가 아니거나 못 보면 404 |
 | `GET /sources/{id}` | reader | 위 + `payload` · `blobs` · `subject_hints` · `consent_mode`. 범위 밖은 404 |
 | `POST /sources/{id}/withdraw` | 주인 · admin | `{status, changed, cancelled_jobs}` — 두 번째는 `changed:false` |
 | `GET /log` · `GET /log.md` | reader | 범위 토큰을 모두 가진 줄. md 는 옛것부터 `## [YYYY-MM-DD HH:MM] op \| 제목`(KST) + detail 한 줄 |
@@ -226,6 +228,20 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 한 건 상세는 문서마다 연산의 앞(계획이 읽은 판 — `document_versions`) · 뒤 글 · 까닭 · 근거(볼 수 있는 원천만 제목). 승인은
 `pending_review` 만, fail 이 있으면 409 · 반영은 `applied`. 거절은 까닭 한 줄이 꼭 있어야(422). 기록 `review`(승인 · 거절).
 **계획 밖 문서의 연산은 승인해도 반영되지 않는다**(그 문서의 판도 꼴도 계획에 없다 — V6 로 사람에게 보일 뿐).
+
+## Screens
+
+apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiEnabled` 가 인증 없는 `/wiki/health` 로 본다. MXWP 홈 `/home` 이 이미 '위키' 라 이름을 갈랐다).
+
+| 화면 | 무엇 |
+| --- | --- |
+| `/wiki` | 목록(갈래마다 카드) · 최근 기록 8 · 검토 기다림 수(검토자만 — 아니면 403 이라 숨김) |
+| 문서 `/docs/:slug` | 위키 문서면 머리띠(AI · 사람 관리 · 유형 · 범위 · 검토 잠금 · 낡음 · '이 문서가 기대는 원천 N') + 블록 끝 각주 `[n]` → 원천 카드(종류 · 출처 · 생긴 때 · 위치 · 인용 · 원천 문서 · 원본). 근거 지도는 `GET /wiki/pages/{slug}` 를 문서 화면이 컨텍스트로 내리고 `SectionRenderer` 가 블록마다 `WikiCited` 로 감싼다(컨텍스트가 없으면 그대로). 번호는 기대는 원천 차례 — 같은 원천은 어디서나 같은 번호 |
+| `/wiki/sources/:id` | 원천 — 배지 · 출처 · 생긴 때 · 원천 문서 · 첨부 · 본문(낱값 표 + 객체 목록마다 표) · 철회(주인) |
+| `/wiki/changes` · `/wiki/changes/:id` | 검토 큐(상태 탭) · 한 건(요약 · 검증 표 · 문서마다 연산의 앞 · 뒤 · 까닭 · 근거 · 승인 · 거절(까닭 꼭) · 되돌리기) |
+| `/wiki/log` | 기록 — log.md 꼴 · 작업으로 거르기 · 묶음으로 잇기 |
+
+꺼지면(404 `wiki_disabled`) 화면은 '여기에는 없다' 를 보인다(`WikiError`). 다크 모드 시각 회귀 4 케이스([[visual-regression]]).
 
 ## Test bundle
 

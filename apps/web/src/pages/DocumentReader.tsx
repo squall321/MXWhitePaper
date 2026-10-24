@@ -1,7 +1,10 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useParams, useOutletContext, useSearchParams } from 'react-router-dom'
 import { useDocument } from '@/features/document/hooks/useDocument'
 import { WikiArticle } from '@/components/WikiArticle'
+import { getWikiPage, useWikiEnabled } from '@/features/wiki/api'
+import { WikiCitationsProvider, WikiPageBanner } from '@/features/wiki/WikiCitations'
 import { RightRail } from '@/components/layout/RightRail'
 import { useEditorStore, editorSelectors } from '@/features/editor/state'
 import { useEditorShortcuts } from '@/features/editor/hooks/useEditorShortcuts'
@@ -73,6 +76,14 @@ export function DocumentReaderPage() {
   const { slug } = useParams<{ slug: string }>()
   const { setRightRail, setLeftRail } = useOutletContext<AppOutletContext>()
   const { data, isPending, isError, error } = useDocument(slug)
+  // AI 위키 문서면 배지 · 각주 · 원천 카드(위키가 꺼졌거나 위키 문서가 아니면 404 — 아무것도 더하지 않는다).
+  const wikiOn = useWikiEnabled()
+  const wikiPage = useQuery({
+    queryKey: ['wiki', 'page', slug],
+    queryFn: () => getWikiPage(slug as string),
+    enabled: wikiOn && !!slug,
+    retry: false,
+  })
   const [searchParams] = useSearchParams()
   const [showVersions, setShowVersions] = useState(false)
   const [orgDrawerOpen, setOrgDrawerOpen] = useState(false)
@@ -288,10 +299,16 @@ export function DocumentReaderPage() {
         <CollapsibleOutline slug={slug} document={live} />
       )}
 
+      {wikiPage.data && !isFullEditing && <WikiPageBanner page={wikiPage.data} />}
+
       {isFullEditing ? (
         <ArticleDropSurface slug={slug} document={live}>
           <WikiArticle document={live} row={data.row} meta={data.meta} editableSlug={slug} />
         </ArticleDropSurface>
+      ) : wikiPage.data ? (
+        <WikiCitationsProvider page={wikiPage.data}>
+          <WikiArticle document={live} row={data.row} meta={data.meta} editableSlug={slug} />
+        </WikiCitationsProvider>
       ) : (
         <WikiArticle document={live} row={data.row} meta={data.meta} editableSlug={slug} />
       )}

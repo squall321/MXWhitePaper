@@ -108,6 +108,11 @@ async def get_source(
     return envelope(data=await sources.get_source(s, str(source_id)))
 
 
+@router.get("/pages/{slug}")
+async def get_page(slug: str, _: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    return envelope(data=await sources.page_info(s, slug))
+
+
 @router.post("/sources/{source_id}/withdraw")
 async def withdraw_source(
     source_id: UUID, user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db),

@@ -82,3 +82,150 @@ test.describe('visual: admin aff-team-map (light · dark)', () => {
     })
   }
 })
+
+// docs/llm-wiki W4 — AI 위키 화면(홈 · 검토 한 건 · 원천 · 문서 머리띠 · 원천 카드). dev 는 위키가 꺼져 있어 위키 API 를 고정 응답으로
+// 바꾼다(값은 모두 지어낸 것 — SYN-). 문서 각주는 표본 문서의 첫 문단에 근거를 단다(문서 본문은 진짜 dev 응답).
+const W = {
+  srcA: '11111111-1111-4111-8111-111111111111',
+  srcB: '22222222-2222-4222-8222-222222222222',
+  cs: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+}
+const WIKI_SOURCES = [
+  { source_id: W.srcA, short: 'src_11111111', kind: 'sim_result', title: '가상폴드 A1 전각도 낙하 1.5 m — 힌지 브래킷 최대 응력',
+    system: 'stcx', url: '/apps/smarttwin/jobs/SYN-JOB-0002', captured_at: '2026-08-04T01:12:00+00:00', status: 'active',
+    doc_slug: 'src-11111111' },
+  { source_id: W.srcB, short: 'src_22222222', kind: 'qa', title: '힌지 브래킷 균열은 어디서 시작하나', system: 'hwax-portal',
+    url: null, captured_at: '2026-09-01T05:00:00+00:00', status: 'active', doc_slug: 'src-22222222' },
+]
+
+async function mockWiki(page: import('@playwright/test').Page): Promise<void> {
+  const ok = (data: unknown, meta: unknown = null) => ({ json: { data, meta, error: null } })
+  await page.route('**/api/v1/wiki/health', (r) => r.fulfill(ok({ jobs: {}, workers: [], llm: 'ok', last_lint: null })))
+  await page.route('**/api/v1/wiki/index', (r) => r.fulfill(ok({
+    version: 0, at: '2026-10-24 15:00', docs: 5, sources: 12, sections: [
+      { key: 'part', label: '부품', count: 2, more: 0, items: [
+        { slug: 'ent-part-syn-bom-hb01', title: '힌지 브래킷', summary: '폴드 힌지를 몸체에 잡는 브래킷.', kind: 'entity' },
+        { slug: 'ent-part-syn-bom-cg01', title: '커버 글라스', summary: '', kind: 'entity' }] },
+      { key: 'failure-mode', label: '불량 유형', count: 1, more: 0, items: [
+        { slug: 'ent-fm-3f2a1c', title: '힌지 브래킷 균열', summary: '체결부 모서리에서 시작하는 균열.', kind: 'entity' }] },
+      { key: 'sim-case', label: '해석 사례', count: 2, more: 0, items: [
+        { slug: 'case-sim-11111111', title: '가상폴드 A1 전각도 낙하 1.5 m', summary: '', kind: 'case' },
+        { slug: 'case-sim-33333333', title: '가상바 B2 단일 낙하 1.2 m', summary: '', kind: 'case' }] },
+    ] })))
+  await page.route('**/api/v1/wiki/log?*', (r) => r.fulfill(ok([
+    { id: 3, at: '2026-10-24T06:00:00+00:00', op: 'ingest', title: '가상폴드 A1 전각도 낙하 1.5 m (src_11111111)',
+      detail: { changeset: 'cs_aaaaaaaa', status: 'auto_applied', docs: 2, new: 1 }, actor: 'wiki', job_id: null,
+      changeset_id: W.cs },
+    { id: 2, at: '2026-10-24T05:40:00+00:00', op: 'review', title: 'cs_bbbbbbbb 승인', detail: { decision: '승인' },
+      actor: 'user:x', job_id: null, changeset_id: null },
+  ])))
+  await page.route('**/api/v1/wiki/changes?*', (r) => r.fulfill(ok([], { total: 1 })))
+  await page.route(`**/api/v1/wiki/changes/${W.cs}`, (r) => r.fulfill(ok({
+    id: W.cs, short: 'cs_aaaaaaaa', op: 'ingest', status: 'pending_review', created_at: '2026-10-24T06:00:00+00:00',
+    schema_version: 0, model: 'fake-wiki', summary: '1.5 m 전각도 낙하에서 체결부 모서리 응력이 허용 응력을 넘었다.',
+    questions: [], contradictions: [], source: { id: W.srcA, short: 'src_11111111' }, audience: ['org'], usage: {},
+    error: null, decision: { by: null, at: null, note: null },
+    validation: ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11'].map((rule) => ({
+      rule, verdict: rule === 'V5' ? 'review' : 'pass', detail: rule === 'V5' ? 'ent-part-syn-bom-hb01 블록 01J…: 잠긴 블록을 고친다' : '' })),
+    docs: [{ slug: 'ent-part-syn-bom-hb01', title: '힌지 브래킷', new: false, kind: 'entity', type_key: 'part', audience: ['org'],
+      why: '해석 결과를 해석에서 절에 더한다.', ops: [
+        { op: 'block.update', block_id: '01J0000000000000000000000A', why: '새 판의 응력으로 고친다.', section: '해석에서',
+          before: '최대 응력은 405 MPa 다.', after: '최대 응력은 412 MPa 다(허용 380 MPa).',
+          cites: [{ sid: 'src_11111111', short: 'src_11111111', title: WIKI_SOURCES[0].title, loc: { path: '/results/0' },
+            quote: 'max_von_mises_stress 412 MPa' }] },
+        { op: 'block.insert', block_id: '01J0000000000000000000000B', why: '판정을 옮긴다.', section: '해석에서',
+          before: null, after: '판정 — 위험(허용 응력 초과).', cites: [] }] }],
+  })))
+  await page.route(`**/api/v1/wiki/sources/${W.srcA}`, (r) => r.fulfill(ok({
+    id: W.srcA, short: 'src_11111111', kind: 'sim_result', title: WIKI_SOURCES[0].title,
+    origin: { system: 'stcx', ref: 'SYN-JOB-0002', rev: '1', url: '/apps/smarttwin/jobs/SYN-JOB-0002' }, summary: null,
+    audience: ['org'], sensitivity: 'internal', via: 'connector:stcx', captured_at: '2026-08-04T01:12:00+00:00',
+    received_at: '2026-10-24T05:59:00+00:00', status: 'active', ingest_state: 'done', supersedes_id: null,
+    doc_slug: 'src-11111111', attachments: 1, mine: false, consent_mode: null, subject_hints: [],
+    blobs: [{ key: 'ab/abcdef', name: 'fig1.png', mime: 'image/webp', sha256: 'abcdef', bytes: 18432, role: 'figure' }],
+    payload: { summary: '1.5 m 전각도 낙하에서 최대 응력이 허용 응력을 넘었다.',
+      setup: { solver: 'LS-DYNA R13 (explicit)', model: '가상폴드 A1 FE v3', conditions: { drop_height: { value: 1.5, unit: 'm' } } },
+      results: [{ name: 'max_von_mises_stress', value: 412, unit: 'MPa', where: '체결부 모서리' },
+        { name: 'allowable_stress', value: 380, unit: 'MPa', where: '재료 기준' }], verdict: '위험 — 허용 응력 초과' },
+  })))
+}
+
+// 로그인은 묶음 앞에서 한 번 — `/auth/*` 는 IP 당 분에 10번이라 시험마다 로그인하면 찬다. 갱신 쿠키는 써도 바뀌지 않으므로
+// 시험마다 넣어 준다. 밝음 → 어두움은 다시 불러오지 않고 emulateMedia 만 바꾼다(ThemeProvider 가 system 변화를 따른다).
+test.describe('visual: AI 위키 (light · dark)', () => {
+  let cookies: Awaited<ReturnType<import('@playwright/test').BrowserContext['cookies']>> = []
+
+  test.beforeAll(async ({ browser }, info) => {
+    const ctx = await browser.newContext({ baseURL: info.project.use.baseURL })
+    const page = await ctx.newPage()
+    await loginAsAdmin(page)
+    cookies = await ctx.cookies()
+    await ctx.close()
+  })
+
+  test.beforeEach(async ({ context, page }) => {
+    await context.addCookies(cookies)
+    await mockWiki(page)
+  })
+
+  async function both(page: import('@playwright/test').Page, shoot: (scheme: 'light' | 'dark') => Promise<void>) {
+    await shoot('light')
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await shoot('dark')
+  }
+
+  for (const [name, path, testId] of [
+    ['home', '/wiki', 'wiki-home'],
+    ['change', `/wiki/changes/${W.cs}`, 'wiki-change'],
+    ['source', `/wiki/sources/${W.srcA}`, 'wiki-source'],
+  ] as const) {
+    test(`renders the wiki ${name} page consistently in light and dark`, async ({ page }) => {
+      // 창을 세로로 넉넉히 — 긴 화면을 찍으려 스크롤하면 위에 붙는 상단 내비(dev 의 알림 수가 든)가 덮는다.
+      await page.setViewportSize({ width: 1440, height: 2200 })
+      await page.emulateMedia({ colorScheme: 'light' })
+      await page.goto(path)
+      await page.getByTestId(testId).waitFor()
+      await page.waitForLoadState('networkidle')
+      await both(page, (scheme) => expect(page.getByTestId(testId)).toHaveScreenshot(`wiki-${name}-${scheme}.png`, {
+        maxDiffPixelRatio: 0.02, animations: 'disabled',
+      }))
+    })
+  }
+
+  test('renders the wiki banner and source card on a document in light and dark', async ({ page }) => {
+    let firstBlock: (id: string) => void = () => {}
+    const block = new Promise<string>((resolve) => { firstBlock = resolve })
+    await page.route((url) => url.pathname.endsWith(`/api/v1/documents/${SAMPLE_SLUG}`), async (r) => {
+      const res = await r.fetch()
+      const body = await res.json()
+      const sections = body?.data?.content?.sections ?? []
+      const para = sections.flatMap((s: { blocks?: { id: string; type: string }[] }) => s.blocks ?? [])
+        .find((b: { type: string }) => b.type === 'paragraph')
+      firstBlock(para?.id ?? '')
+      await r.fulfill({ response: res, json: body })
+    })
+    await page.route(`**/api/v1/wiki/pages/${SAMPLE_SLUG}`, async (r) => {
+      const id = await block
+      await r.fulfill({ json: { error: null, meta: null, data: {
+        slug: SAMPLE_SLUG, kind: 'entity', managed: 'ai', audience: ['aff:SYN-CAE1'], review_lock: false, stale_since: null,
+        entity: { type_key: 'part', name: '힌지 브래킷' }, sources: WIKI_SOURCES,
+        citations: { [id]: WIKI_SOURCES.map((s, i) => ({ ...s, locator: { path: `/results/${i}` },
+          quote: i === 0 ? 'max_von_mises_stress 412 MPa' : null })) },
+      } } })
+    })
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.goto(`/docs/${encodeURIComponent(SAMPLE_SLUG)}`)
+    await page.getByTestId('wiki-page-banner').waitFor()
+    await page.getByTestId('wiki-footnotes').first().getByRole('button', { name: '[1]' }).click()
+    await page.getByTestId('wiki-source-card').waitFor()
+    await both(page, async (scheme) => {
+      await expect(page.getByTestId('wiki-page-banner')).toHaveScreenshot(`wiki-doc-banner-${scheme}.png`, {
+        maxDiffPixelRatio: 0.02, animations: 'disabled',
+      })
+      await expect(page.getByTestId('wiki-source-card')).toHaveScreenshot(`wiki-source-card-${scheme}.png`, {
+        maxDiffPixelRatio: 0.02, animations: 'disabled',
+      })
+    })
+  })
+})

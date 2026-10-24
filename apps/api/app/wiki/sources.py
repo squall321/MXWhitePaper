@@ -473,3 +473,24 @@ async def enqueue_ingest(s: AsyncSession, source_ids: list[str], *, caller: dict
         out.append({"id": source_id, "queued": True, "job_id": job_id})
     await s.commit()
     return out
+
+
+async def page_info(s: AsyncSession, slug: str) -> dict[str, Any]:
+    """위키 문서 한 장 — 종류 · 관리 · 범위 · 잠금 · 낡음 · 엔티티 + 블록별 근거 + 기대는 원천(문서 화면의 배지 · 각주 · 원천 카드)."""
+    row = (await s.execute(text(f"""
+        SELECT d.id, wp.kind, wp.managed, wp.audience, wp.review_lock, wp.stale_since, e.type_key, e.canonical_name
+          FROM documents d JOIN wiki_pages wp ON wp.doc_id = d.id LEFT JOIN wiki_entities e ON e.id = wp.entity_id
+         WHERE d.slug = :slug AND {audience.visible_sql("d")}
+    """), {"slug": slug, **audience.sql_params()})).first()
+    if row is None:
+        raise NotFound(f"위키 문서가 아니다: {slug}")
+    cites = await citations_for_doc(s, str(row[0]))
+    seen: dict[str, dict[str, Any]] = {}
+    for items in cites.values():
+        for c in items:
+            seen.setdefault(c["source_id"], {k: c[k] for k in ("source_id", "short", "kind", "title", "system", "url",
+                                                                "captured_at", "status", "doc_slug")})
+    return {"slug": slug, "kind": row[1], "managed": row[2], "audience": list(row[3]), "review_lock": bool(row[4]),
+            "stale_since": row[5].isoformat() if row[5] else None,
+            "entity": {"type_key": row[6], "name": row[7]} if row[6] else None, "citations": cites,
+            "sources": sorted(seen.values(), key=lambda x: x["captured_at"])}

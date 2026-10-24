@@ -26,8 +26,8 @@ import) 로 검증 불가 → 실 브라우저 렌더 + baseline diff 가 유일
 ```
 apps/web/
 ├── tests/e2e/
-│   ├── visual-darkmode.spec.ts                                    # 다크모드 light + dark 2 케이스 + 소속→팀 관리자 화면 2
-│   ├── visual-darkmode.spec.ts-snapshots/                         # baseline 2 PNG
+│   ├── visual-darkmode.spec.ts                                    # 다크모드 light + dark 2 케이스 + 소속→팀 관리자 화면 2 + AI 위키 4
+│   ├── visual-darkmode.spec.ts-snapshots/                         # baseline PNG(문서 2 · 소속→팀 2 · AI 위키 10)
 │   ├── visual-presentation.spec.ts                                # presentation 4 슬라이드 (NEW: presentation-layout cycle)
 │   └── visual-presentation.spec.ts-snapshots/                     # baseline 4 PNG
 └── playwright.config.ts                                            # 변경 없음 — testDir './tests/e2e' 그대로
@@ -101,6 +101,13 @@ CI 통합 시에는 별도 playwright 이미지 (`mcr.microsoft.com/playwright`)
   못 돈다. 새 화면 케이스(`aff-team-map-*`)의 기준 그림은 접두 없는 vite dev(:5174, 같은 API)에서 떴다.
 - **로그인 속도 제한** — 확인 · 기준 갱신을 잇달아 돌리면 `/auth/login` 이 '너무 많은 시도' 로 막혀 `loginAsAdmin` 이 시간 초과로 깨진다
   (그림 차이가 아니다). 1분쯤 쉬고 다시.
+- **AI 위키 케이스(docs/llm-wiki W4)는 위키 API 를 `page.route` 로 고정한다** — dev 는 위키가 꺼져 있고(`WIKI_ENABLED`), 고정 응답이라
+  그림이 안정된다(값은 모두 지어낸 것 — `SYN-`). 문서 머리띠 · 원천 카드 케이스는 표본 문서의 GET 을 가로채 첫 문단 id 를 알아낸 뒤
+  그 블록에 근거를 단다(문서 본문은 진짜 dev 응답).
+- **AI 위키 묶음은 로그인을 한 번만** — `/auth/*` 는 IP 당 분에 10번이라 시험마다 `loginAsAdmin` 하면 찬다. 묶음 앞(`beforeAll`)에서
+  로그인한 쿠키를 시험마다 넣고(갱신 쿠키는 써도 바뀌지 않는다), 밝음 → 어두움은 다시 불러오지 않고 `emulateMedia` 만 바꾼다.
+- **긴 화면은 창을 세로로 키워 찍는다**(1440×2200) — 요소 그림을 찍으려 스크롤하면 위에 붙는 상단 내비(dev 의 알림 수가 든)가
+  요소를 덮어 dev 데이터가 기준 그림에 섞인다.
 - **mermaid random id** — 다이어그램 SVG에 `mermaid-${random}` ID 가 들어가 baseline diff false-positive 가능. **현재 회피**: maxDiffPixelRatio 0.02 (작은 텍스트 변화 흡수). 더 엄격히 가려면 mermaid id를 deterministic 하게 mock 필요 (별도 사이클).
 - **font rendering host 의존성** — Pretendard Variable 가 host 시스템 폰트로 fallback 되는 경우 픽셀 다름. CI 안정화 시 font 결정성 docker layer 추가 필요.
 - **viewport 단일 (chromium-desktop)** — tablet/mobile 케이스는 baseline 폭증 위험 → PoC 사이클 out-of-scope.

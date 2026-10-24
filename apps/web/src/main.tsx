@@ -100,6 +100,22 @@ const AdminGlossaryPendingPage = lazyLogged('AdminGlossaryPending', () =>
 const AdminAffTeamMapPage = lazyLogged('AdminAffTeamMap', () =>
   import('./pages/AdminAffTeamMap').then((m) => ({ default: m.AdminAffTeamMapPage })),
 )
+// AI 위키(docs/llm-wiki W4) — 홈 · 원천 · 검토 큐 · 기록
+const WikiHomePage = lazyLogged('WikiHome', () =>
+  import('./pages/WikiHome').then((m) => ({ default: m.WikiHomePage })),
+)
+const WikiSourcePage = lazyLogged('WikiSource', () =>
+  import('./pages/WikiSource').then((m) => ({ default: m.WikiSourcePage })),
+)
+const WikiChangesPage = lazyLogged('WikiChanges', () =>
+  import('./pages/WikiChanges').then((m) => ({ default: m.WikiChangesPage })),
+)
+const WikiChangePage = lazyLogged('WikiChange', () =>
+  import('./pages/WikiChanges').then((m) => ({ default: m.WikiChangePage })),
+)
+const WikiLogPage = lazyLogged('WikiLog', () =>
+  import('./pages/WikiLog').then((m) => ({ default: m.WikiLogPage })),
+)
 const HealthDashboardPage = lazyLogged('HealthDashboard', () =>
   import('./pages/HealthDashboard').then((m) => ({ default: m.HealthDashboardPage })),
 )
@@ -431,6 +447,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="admin/retention" element={<Boundaried name="admin/retention"><RetentionPoliciesPage /></Boundaried>} />
                 <Route path="admin/glossary-pending" element={<Boundaried name="admin/glossary-pending"><AdminGlossaryPendingPage /></Boundaried>} />
                 <Route path="admin/aff-team-map" element={<Boundaried name="admin/aff-team-map"><AdminAffTeamMapPage /></Boundaried>} />
+                <Route path="wiki" element={<Boundaried name="wiki"><WikiHomePage /></Boundaried>} />
+                <Route path="wiki/sources/:id" element={<Boundaried name="wiki/sources/:id"><WikiSourcePage /></Boundaried>} />
+                <Route path="wiki/changes" element={<Boundaried name="wiki/changes"><WikiChangesPage /></Boundaried>} />
+                <Route path="wiki/changes/:id" element={<Boundaried name="wiki/changes/:id"><WikiChangePage /></Boundaried>} />
+                <Route path="wiki/log" element={<Boundaried name="wiki/log"><WikiLogPage /></Boundaried>} />
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
                 <Route path="activity" element={<Boundaried name="activity"><ActivityFeedPage /></Boundaried>} />

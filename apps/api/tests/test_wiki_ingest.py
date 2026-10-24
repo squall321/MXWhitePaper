@@ -161,6 +161,11 @@ async def test_one_source_becomes_a_page_with_citations(wiki: dict[str, Any]) ->
     async with _client() as c:
         doc = (await c.get(f"/api/v1/documents/{page['slug']}", headers=wiki["reader"]["headers"],
                            params={"with": "citations"})).json()["data"]
+        info = (await c.get(f"{API}/pages/{page['slug']}", headers=wiki["reader"]["headers"])).json()["data"]
+        missing = await c.get(f"{API}/pages/no-such-wiki-page-{RUN}", headers=wiki["reader"]["headers"])
+    assert (info["kind"], info["managed"], info["audience"]) == ("case", "ai", ["org"])
+    assert [s["source_id"] for s in info["sources"]] == [sid] and info["citations"] == doc["citations"]
+    assert missing.status_code == 404
     first = doc["content"]["sections"][0]
     assert first["title"] == "요약" and len(first["blocks"]) == 1
     cites = doc["citations"][first["blocks"][0]["id"]]

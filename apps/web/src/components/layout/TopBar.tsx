@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge'
 import { NetworkStatusPill } from '@/components/NetworkStatusPill'
 import { NotificationBell } from '@/features/notifications/components/NotificationBell'
 import { useLocale } from '@/lib/i18n'
+import { useWikiEnabled } from '@/features/wiki/api'
 import { LanguageSwitcher } from './LanguageSwitcher'
 
 interface TopBarProps {
@@ -45,6 +46,7 @@ export function TopBar({
   const canWrite = !!user && ['editor', 'owner', 'admin'].includes(role)
   const isAdmin = !!user && role === 'admin'
   const canSeeAnalytics = !!user && ['owner', 'admin'].includes(role)
+  const wikiOn = useWikiEnabled()
   const location = useLocation()
 
   const [overflowOpen, setOverflowOpen] = useState(false)
@@ -139,6 +141,7 @@ export function TopBar({
           {/* Secondary group — visible on lg+, collapsed into overflow on md/sm */}
           <div className="hidden items-center gap-1.5 lg:flex">
             <NavLinkPill to="/home" label="위키" active={isActive('/home')} />
+            {wikiOn && <NavLinkPill to="/wiki" label="AI 위키" active={isActive('/wiki')} />}
             <NavLinkPill to="/orgs" label={t('topbar.org')} active={isActive('/orgs')} />
             <NavLinkPill to="/glossary" label="용어집" active={isActive('/glossary')} />
             <NavLinkPill to="/recent" label={t('topbar.recent')} active={isActive('/recent')} />
@@ -205,6 +208,14 @@ export function TopBar({
                   current={isActive('/glossary')}
                   onClick={() => setOverflowOpen(false)}
                 />
+                {wikiOn && (
+                  <OverflowItem
+                    to="/wiki"
+                    label="AI 위키"
+                    current={isActive('/wiki')}
+                    onClick={() => setOverflowOpen(false)}
+                  />
+                )}
                 <OverflowItem
                   to="/recent"
                   label={t('topbar.recentFull')}
