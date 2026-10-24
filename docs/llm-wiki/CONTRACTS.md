@@ -129,6 +129,8 @@ DocumentJSON v1.0(`packages/shared/schemas/document.json` → datamodel-codegen)
 **`wiki_predicates`** — `key` PK · `label_ko`("A 는 B 를 …") · `inverse_ko` · `domain_types` text[] · `range_types` text[] · `symmetric` ·
 `description` · `status` · `proposed_by` · `approved_by`. 지금의 `app/lib/relationship_types.py` 열 가지는 그대로 두고 이 표가 **더한다**
 (그 열 가지는 문서 사이 관계 — 전제 · 인용 · 대체 …, 이 표는 공학 개체 사이 관계).
+W5(0056)에서 지었다 — 대칭 칸 이름은 `is_symmetric`(`symmetric` 은 PostgreSQL 예약어), 유형 · 술어 모두 `status` 에 `rejected` 와
+`decided_at` · `decision_note` 를 더했고, 기록 `wiki_log` 에 op `ontology` 를 더했다. 정본은 `docs/lat/wiki.md` §Ontology.
 
 **`wiki_entities`** — `id` uuid PK · `type_key` FK · `canonical_name` · `aliases` text[] · `ext_ids` jsonb(`{ra_entity, sp_model, sp_project, bom_code,
 fmea_item, mt_material, …}`) · `attrs` jsonb · `audience` text[] · `status`(`active` · `merged` · `retired`) · `merged_into` ·

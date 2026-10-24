@@ -85,23 +85,24 @@ links_graph 와 달리 `content_json` 을 매 요청 walk 하므로 새로 추�
 | 컬럼 | 비고 |
 | --- | --- |
 | `id` | ULID (TEXT PK) |
-| `subject_slug` / `object_slug` | doc.slug. **FK 강제 안 함** — 문서 삭제 시 orphan 으로 남김 |
+| `subject_slug` / `object_slug` | doc.slug. **FK 강제 안 함** — 문서를 지우면 트리거 `trg_doc_triples_drop` 이 그 slug 의 triple 을 지운다(0056). 만들기는 slug 를 검사하지 않아 아직 안 쓴 문서를 가리킬 수 있다 |
 | `predicate` | 자연어 술어 (subject→object), max 200자 |
 | `inverse_predicate` | 역방향 자연어 술어 (object→subject), nullable. manual 은 선택 입력, llm 은 추출 시 함께 생성, 없으면 표시 측 fallback (0049_triple_inverse_predicate) |
-| `source` | `'llm'` 또는 `'manual'` (CHECK) |
+| `source` | `'llm'` · `'manual'` · `'wiki'`(LLM 위키 관계 — [[wiki#Ontology]]) (CHECK) |
 | `confidence` | LLM 만 사용 (0~1), manual 은 NULL |
 | `created_by` | manual 만 보관, llm 은 NULL |
+| `predicate_key` · `source_ids` · `changeset_id` · `wiki_status` | 위키 관계만(0056) — 술어 표 key · 근거 원천 · 반영한 묶음 · `proposed`/`accepted`/`retired`. source `wiki` 면 key · 상태가 꼭 있다 |
 | UNIQUE | `(subject_slug, predicate, object_slug, source)` |
 
 ### Endpoints
 
 | Method | Path | 권한 | 역할 |
 | --- | --- | --- | --- |
-| `GET` | `/api/v1/triples` | reader | 필터 조회 (`subject`/`object`/`predicate`/`source`) |
+| `GET` | `/api/v1/triples` | reader | 필터 조회 (`subject`/`object`/`predicate`/`source` — `wiki` 도). `retired` 위키 관계는 내지 않는다(서브그래프 · 링크 그래프도) |
 | `GET` | `/api/v1/triples/predicates` | reader | 정제된 관계 유형 캐논 ([[src/app/lib/relationship_types.py]]) — 온톨로지 |
 | `GET` | `/api/v1/triples/subgraph?root=&depth=` | reader | root 에서 depth(1~4)홉 BFS 서브그래프 (양방향, 노드 200 cap) |
 | `POST` | `/api/v1/triples` | editor | 단건 생성. UNIQUE 위반 시 409. **캐논 predicate 면 inverse 자동채움** (명시 inverse 우선) |
-| `DELETE` | `/api/v1/triples/{id}` | editor/admin | 작성자 본인 또는 admin. `created_by=NULL`(=llm) 은 admin 전용 |
+| `DELETE` | `/api/v1/triples/{id}` | editor/admin | 작성자 본인 또는 admin. `created_by=NULL`(=llm) 은 admin 전용. 위키 관계는 409 — 묶음으로만(되돌리기) |
 | `POST` | `/api/v1/triples/extract` | editor | 문서 단건 LLM 추출 (body `{subject_slug}`) |
 | `POST` | `/api/v1/triples/extract/bulk` | admin | 일괄 추출 (`{slugs?}` / `{domain?}` / 미지정시 published 전체) |
 
@@ -152,9 +153,11 @@ triple 은 런타임 제외.
 - **3 그래프 데이터 원천 다름** — links_graph 는 `links` 테이블, dep_graph 는
   `content_json` 직접 walk. `[[slug]]` 추가 직후 links_graph 에 안 보이면
   resync 가 안 된 것 (dep_graph 는 즉시 반영).
-- **triple FK 없음** — `doc_triples.subject/object_slug` 는 FK 가 아니다. 문서가
-  삭제돼도 triple 은 남는다. graph 응답에선 `_triple_edges` 가 노드 멤버십으로
-  걸러서 orphan triple 이 안 보일 뿐, 테이블엔 그대로 있다 (별도 cleanup 필요).
+- **triple FK 없음** — `doc_triples.subject/object_slug` 는 FK 가 아니다. 문서를
+  지우면 트리거가 그 slug 를 주어 · 목적어로 쓰던 triple 을 지운다(0056 — 보관은
+  지우기가 아니라 남는다). 0056 은 그 전에 남은 것 중 **주어가 없는 것만** 지웠다 —
+  목적어는 아직 안 쓴 문서를 가리킬 수 있다. graph 응답의 `_triple_edges` 는 여전히
+  노드 멤버십으로 거른다.
 - **extract 는 llm triple 만 교체** — 같은 문서 재추출 시 `source='manual'` 은
   절대 안 건드린다. `_replace_llm_triples` 가 `WHERE source='llm'` 로만 삭제.
 - **`include_triples` 기본 OFF** — graph 응답 크기 보호. FE 가 명시적으로 켜야 함.

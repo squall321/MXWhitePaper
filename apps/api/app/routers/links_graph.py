@@ -109,6 +109,7 @@ async def _triple_edges(
             FROM doc_triples
             WHERE subject_slug = ANY(:slugs)
               AND object_slug = ANY(:slugs)
+              AND (wiki_status IS NULL OR wiki_status = 'accepted')
         """),
         {"slugs": list(node_slugs)},
     )).all()

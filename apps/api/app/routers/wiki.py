@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import httpx
@@ -21,7 +21,7 @@ from app.core.auth import require_admin, require_editor, require_reader
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import APIError, ValidationFailed, envelope, format_pydantic_errors
-from app.wiki import catalog, jobs, review, schema_doc, sources
+from app.wiki import catalog, jobs, ontology, review, schema_doc, sources
 from app.wiki.envelope import SourceEnvelope
 
 
@@ -223,6 +223,45 @@ async def put_schema(
     body: _SchemaBody, user: dict[str, Any] = Depends(require_admin), s: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     return envelope(data=await schema_doc.put(s, body.yaml, user=user))
+
+
+@router.get("/ontology")
+async def get_ontology(
+    status: Literal["approved", "proposed", "rejected"] | None = None,
+    _: dict[str, Any] = Depends(require_reader),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await ontology.listing(s, status=status))
+
+
+@router.post("/ontology/types", status_code=201)
+async def propose_type(
+    body: ontology.TypeProposal, user: dict[str, Any] = Depends(require_editor), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await ontology.propose_type(s, body, user=user))
+
+
+@router.post("/ontology/predicates", status_code=201)
+async def propose_predicate(
+    body: ontology.PredicateProposal, user: dict[str, Any] = Depends(require_editor), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await ontology.propose_predicate(s, body, user=user))
+
+
+@router.post("/ontology/{kind}/{key}/approve")
+async def approve_ontology(
+    kind: ontology.Kind, key: str, body: _Decision | None = None, user: dict[str, Any] = Depends(require_admin),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await ontology.decide(s, kind, key, approve=True, user=user, note=body.note if body else None))
+
+
+@router.post("/ontology/{kind}/{key}/reject")
+async def reject_ontology(
+    kind: ontology.Kind, key: str, body: _Decision, user: dict[str, Any] = Depends(require_admin),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await ontology.decide(s, kind, key, approve=False, user=user, note=body.note))
 
 
 @router.get("/health")

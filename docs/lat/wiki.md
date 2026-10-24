@@ -17,7 +17,8 @@
 | W2 보이기 범위 | 읽기 길 전수(아래 표) · 길마다 시험 · admin 범위 밖 읽기 감사. 남은 것 — cae00 배포 · 재색인 | [[#Audience]] |
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
 | W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
-| W5 온톨로지 ~ W8 cae00 | (아직) | — |
+| W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 남은 것 — 들이기의 관계 · 등록부 · 합치기 · LLM 후보 해석 · 화면 | [[#Ontology]] |
+| W6 묻기 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
 
@@ -43,6 +44,7 @@
 | 규칙서(YAML 검증 · 판) | [[src/app/wiki/schema.py#RuleBook]] · 저장 검사 `document_service.validate_documentjson` | W4 |
 | LLM(구조화 출력) | [[src/app/wiki/llm.py#structured]] | W4 |
 | 해석 · 후보 문서 | [[src/app/wiki/resolve.py#targets]] · 표 `wiki_entity_types` · `wiki_entities`(0054) | W4 |
+| 온톨로지(유형 · 술어 · 제안 → 승인 · 정의역 · 치역) | [[src/app/wiki/ontology.py]] · 표 `wiki_predicates` · `doc_triples` 위키 칸(0056) | W5 |
 | 들이기(계획 · 쓰기 · 묶음 짓기) | [[src/app/wiki/ingest.py#run]](워커 처리기 `ingest`) | W4 |
 | 검증 V1~V11 · 판정 | [[src/app/wiki/validate.py#run]] · `decide` | W4 |
 | 문서 내용(빈 꼴 · 연산 적용 · 자동 절) | [[src/app/wiki/pages.py#apply_ops]] | W4 |
@@ -146,6 +148,9 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | `POST /changes/{id}/approve` · `/reject` · `/revert` | 검토자 | 승인(→ applied) · 거절(`note` 꼭) · 되돌리기 |
 | `GET /index` · `GET /index.md` | reader | 목록 — 볼 수 있는 위키 문서를 규칙서 순서의 갈래(엔티티 유형 · 사례 · 종류)로, 갈래마다 제목 순 `index.max_per_section` 까지 + '그 밖 N'. 원천 · 규칙서는 싣지 않는다(원천은 머리 줄 수). md 는 CONTRACTS §10 꼴 |
 | `GET /schema` · `PUT /schema` | reader · admin | 지금 판 · YAML · 읽은 꼴(문서가 없으면 판 0 · 첫 판 YAML) · 올리기(`{yaml}` → `{version, created}`, 틀리면 422) |
+| `GET /ontology` | reader | 유형 · 술어(`status` 로 거르기 — 비면 제안 · 거절까지 모두. 이름에는 범위가 없다). 유형은 `ext_axes` · 살아 있는 엔티티 수 |
+| `POST /ontology/types` · `POST /ontology/predicates` | editor | 제안 → 201 `proposed`. 같은 key · slug 약어 409, 승인되지 않은 상위 · 정의역 · 치역 유형 422 |
+| `POST /ontology/{types\|predicates}/{key}/approve` · `/reject` | admin | 제안 중인 것만(아니면 409). 거절은 `note` 꼭(422). 기록 `ontology` · 감사 `wiki.ontology.*` |
 | `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(W7). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
 
 ## Rule book
@@ -267,6 +272,23 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 구조화 출력 꼴 `WIKI_LLM_STRUCTURED`(json_schema · tools) ·
 묻기 `WIKI_QUERY_LLM_*`(비면 배경과 같게) · 위임 `MXWP_SSO_SECRET`(비면 위임 창구 404) · `MXWP_SSO_JIT_CREATE`(기본 켬).
 API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 — 새 키에 start.sh `--env` 를 더할 필요가 없다.
+
+## Ontology
+
+[[src/app/wiki/ontology.py]] — 용어집과 같은 길(제안 → admin 승인 · 까닭 단 거절). 들이기는 **approved 만** 쓴다(새 엔티티의 유형 ·
+관계의 술어 — V7). 위임 호출은 admin 이 owner 로 깎여 승인하지 못한다.
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 첫 판 | 유형 14(0054) · 술어 18(0056 — SCHEMA-DRAFT §5, `about-model` · `about-part` 와 `in-stage` · `in-project` 는 둘씩) 모두 approved |
+| 술어 이름 | `label_ko` 는 상대 문서 링크 뒤에 붙여 읽는다 — A 의 문서에서 'B 의 일부다', B 의 문서에서 역 'A 를 포함한다'. 초안에서 그렇게 안 읽히던 것 몇은 고쳤다(WK-D44) |
+| 정의역 · 치역 | `Predicate.fits(주어 유형, 목적어 유형)` — 빈 칸은 아무 유형, 대칭은 뒤집어도 맞다, `same-as` 는 같은 유형끼리. 대칭 칸 이름은 `is_symmetric`(symmetric 은 예약어) |
+| 바깥 어휘 | `wiki_entity_types.ext_axes` — `{ra, sp, other, ext_ids}`(축 이름 · 외부 id 칸 이름만, 값은 박스에서) |
+| 상태 | `approved` · `proposed` · `rejected`(+ `decided_at` · `decision_note`). 거절한 key 는 다시 제안할 수 없다(409 — 다른 key) |
+| 기록 | `wiki_log` op `ontology`(범위 `["org"]`) · 감사 `wiki.ontology.{propose,approve,reject}` |
+| triple | `doc_triples` 에 `predicate_key` · `source_ids` · `changeset_id` · `wiki_status` · source `wiki`. 위키 관계는 `/triples` 에서 읽기만(지우기 409), `retired` 는 목록 · 서브그래프 · 링크 그래프에서 뺀다. 문서를 지우면 그 slug 의 triple 도 지운다(트리거 — [[graph#Gotchas]]) |
+
+시험 [[apps/api/tests/test_wiki_ontology.py]] — 첫 판 · 제안 → 승인 · 거절 · 정의역 · 치역 · 지운 문서의 triple · 위키 관계는 읽기만.
 
 ## Gotchas
 

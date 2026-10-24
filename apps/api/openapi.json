@@ -1658,6 +1658,68 @@
         "title": "PolishBody",
         "type": "object"
       },
+      "PredicateProposal": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "domain_types": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Domain Types",
+            "type": "array"
+          },
+          "inverse_ko": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Inverse Ko",
+            "type": "string"
+          },
+          "key": {
+            "pattern": "^[a-z][a-z0-9-]{1,40}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "label_ko": {
+            "description": "[[B]] 뒤에 붙여 읽는 말 — 예 '의 일부다'",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Label Ko",
+            "type": "string"
+          },
+          "range_types": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Range Types",
+            "type": "array"
+          },
+          "symmetric": {
+            "default": false,
+            "title": "Symmetric",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "label_ko",
+          "inverse_ko"
+        ],
+        "title": "PredicateProposal",
+        "type": "object"
+      },
       "ProviderCreate": {
         "properties": {
           "attribute_mapping": {
@@ -3405,6 +3467,75 @@
           "object_slug"
         ],
         "title": "TripleCreate",
+        "type": "object"
+      },
+      "TypeProposal": {
+        "properties": {
+          "abbr": {
+            "description": "slug 약어(SCHEMA-DRAFT §3)",
+            "pattern": "^[a-z][a-z0-9]{0,11}$",
+            "title": "Abbr",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "ext_axes": {
+            "additionalProperties": true,
+            "description": "바깥 어휘 대응 — 축 이름 · ext_ids 칸",
+            "title": "Ext Axes",
+            "type": "object"
+          },
+          "key": {
+            "pattern": "^[a-z][a-z0-9-]{1,40}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "label_en": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label En"
+          },
+          "label_ko": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Label Ko",
+            "type": "string"
+          },
+          "parent_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Key"
+          }
+        },
+        "required": [
+          "key",
+          "label_ko",
+          "abbr"
+        ],
+        "title": "TypeProposal",
         "type": "object"
       },
       "UserPatch": {
@@ -19850,6 +19981,289 @@
           }
         },
         "summary": "Get Log Md",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/ontology": {
+      "get": {
+        "operationId": "get_ontology_api_v1_wiki_ontology_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "approved",
+                    "proposed",
+                    "rejected"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Ontology Api V1 Wiki Ontology Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Ontology",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/ontology/predicates": {
+      "post": {
+        "operationId": "propose_predicate_api_v1_wiki_ontology_predicates_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PredicateProposal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Propose Predicate Api V1 Wiki Ontology Predicates Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Propose Predicate",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/ontology/types": {
+      "post": {
+        "operationId": "propose_type_api_v1_wiki_ontology_types_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TypeProposal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Propose Type Api V1 Wiki Ontology Types Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Propose Type",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/ontology/{kind}/{key}/approve": {
+      "post": {
+        "operationId": "approve_ontology_api_v1_wiki_ontology__kind___key__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "types",
+                "predicates"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/_Decision"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Approve Ontology Api V1 Wiki Ontology  Kind   Key  Approve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Ontology",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/ontology/{kind}/{key}/reject": {
+      "post": {
+        "operationId": "reject_ontology_api_v1_wiki_ontology__kind___key__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "types",
+                "predicates"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Decision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reject Ontology Api V1 Wiki Ontology  Kind   Key  Reject Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reject Ontology",
         "tags": [
           "wiki"
         ]

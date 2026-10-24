@@ -2,7 +2,8 @@
 
 graph-edge-predicates 사이클 1차 (DB+API). `doc_triples` 테이블의 CRUD 와
 LLM 추출 트리거 (mock provider) 를 노출한다. wiki/tag 엣지는 기존
-links/document_tags 가 담당하고, 이 라우터는 source='llm'|'manual' 만 다룬다.
+links/document_tags 가 담당하고, 이 라우터는 source='llm'|'manual' 만 다룬다. 위키 관계(source='wiki' —
+docs/llm-wiki W5)는 읽기만 — 쓰기 · 지우기는 변경 묶음(반영 · 되돌리기)으로만 하고, 내린(retired) 관계는 내지 않는다.
 
 GET    /api/v1/triples            필터 조회 (reader)
 POST   /api/v1/triples            단건 생성 (editor)
@@ -45,12 +46,14 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
         "created_by": str(row[6]) if row[6] else None,
         "created_at": row[7].isoformat() if row[7] else None,
         "inverse_predicate": row[8],
+        "predicate_key": row[9],
+        "wiki_status": row[10],
     }
 
 
 _SELECT_COLS = (
     "id, subject_slug, predicate, object_slug, source, confidence, "
-    "created_by, created_at, inverse_predicate"
+    "created_by, created_at, inverse_predicate, predicate_key, wiki_status"
 )
 
 
@@ -72,7 +75,8 @@ _SUBGRAPH_MAX_NODES = 200
 # 주어 · 목적어 문서가 범위 밖이면 그 관계를 뺀다(없는 slug 는 남긴다) — 관계 줄만으로도 이름이 샌다.
 _VISIBLE_ENDS = (
     f"{audience.slug_visible_sql('doc_triples.subject_slug', '_ts')} "
-    f"AND {audience.slug_visible_sql('doc_triples.object_slug', '_to')}"
+    f"AND {audience.slug_visible_sql('doc_triples.object_slug', '_to')} "
+    "AND (doc_triples.wiki_status IS NULL OR doc_triples.wiki_status = 'accepted')"
 )
 
 
@@ -153,8 +157,8 @@ async def list_triples(
         where.append("predicate = :predicate")
         params["predicate"] = predicate
     if source:
-        if source not in ("llm", "manual"):
-            raise ValidationFailed("source must be 'llm' or 'manual'")
+        if source not in ("llm", "manual", "wiki"):
+            raise ValidationFailed("source must be 'llm', 'manual' or 'wiki'")
         where.append("source = :source")
         params["source"] = source
 
@@ -249,11 +253,13 @@ async def delete_triple(
     created_by 가 NULL (=llm) 인 triple 은 admin 만 삭제 가능.
     """
     row = (await s.execute(
-        text("SELECT created_by FROM doc_triples WHERE id = :id"),
+        text("SELECT created_by, source FROM doc_triples WHERE id = :id"),
         {"id": triple_id},
     )).first()
     if not row:
         raise NotFound("Triple not found")
+    if row[1] == "wiki":
+        raise Conflict("위키 관계는 변경 묶음으로만 고친다 — 그 묶음을 되돌린다")
 
     created_by = str(row[0]) if row[0] else None
     is_admin = user.get("role") == "admin"
