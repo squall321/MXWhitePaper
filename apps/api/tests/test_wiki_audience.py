@@ -62,6 +62,7 @@ def _payload(name: str, confidentiality: str) -> dict[str, Any]:
     doc["slug"] = _slug(name)
     doc["title"] = f"W2 범위 시험 {RUN} {name}"
     doc["metadata"]["confidentiality"] = confidentiality
+    doc["metadata"]["tags"] = [f"w2tag{RUN}"]
     for sec in doc["sections"]:
         sec["id"] = _ulid()
         for b in sec["blocks"]:
@@ -118,6 +119,8 @@ async def world() -> Any:
     yield tokens
     async with session_scope() as s:
         await s.execute(text("DELETE FROM documents WHERE slug LIKE :p"), {"p": f"w2-aud-{RUN}-%"})
+        # 시험이 남긴 감사 줄(admin 범위 밖 읽기 · 조회) — dev DB 를 더럽히지 않게
+        await s.execute(text("DELETE FROM audit_logs WHERE target LIKE :t"), {"t": f"document:w2-aud-{RUN}-%"})
         await s.execute(text("DELETE FROM audit_logs WHERE user_id IN (SELECT id FROM users WHERE email LIKE :e)"),
                         {"e": f"w2-aud-{RUN}-%"})
         await s.execute(text("DELETE FROM users WHERE email LIKE :e"), {"e": f"w2-aud-{RUN}-%"})
@@ -465,3 +468,152 @@ async def test_subscription_events_skip_out_of_scope_subscribers(world: dict[str
         await s.execute(text("DELETE FROM notifications WHERE payload->>'slug' = :s"), {"s": _slug("aff")})
         await s.execute(text("DELETE FROM subscriptions WHERE document_id = CAST(:d AS uuid)"), {"d": ids["aff"]})
         await s.commit()
+
+
+def _slugs_in(obj: Any) -> set[str]:
+    """응답 어디든(값 · 중첩) 이 실행의 시험 slug 가 나오면 모은다 — 범위 밖 slug 가 한 번이라도 나오면 샌 것이다."""
+    found: set[str] = set()
+    prefix = f"w2-aud-{RUN}-"
+
+    def walk(v: Any) -> None:
+        if isinstance(v, str):
+            if v.startswith(prefix) or v.startswith(f"document:{prefix}") or f"/docs/{prefix}" in v:
+                name = v.split(prefix, 1)[1].split("/")[0].split("#")[0]
+                if name in DOCS:  # 시험 사람의 이메일도 같은 접두를 쓴다 — 문서 이름만 센다
+                    found.add(name)
+        elif isinstance(v, dict):
+            for x in v.values():
+                walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+
+    walk(obj)
+    return found
+
+
+async def test_personal_lists_hide_out_of_scope(world: dict[str, str | None]) -> None:
+    """북마크 · 최근 열람 · 알림 예약 · 구독 · 활동 — 만든 뒤 범위가 좁아져도 그 사람의 목록에서 빠진다."""
+    ids = await _ids()
+    uid = await _uid("none")
+    async with session_scope() as s:
+        for did in ids.values():
+            for sql in ("INSERT INTO bookmarks (user_id, document_id) VALUES (CAST(:u AS uuid), CAST(:d AS uuid))",
+                        "INSERT INTO document_reads (user_id, document_id) VALUES (CAST(:u AS uuid), CAST(:d AS uuid))",
+                        "INSERT INTO reminders (user_id, document_id, remind_at) "
+                        "VALUES (CAST(:u AS uuid), CAST(:d AS uuid), NOW() + interval '1 day')",
+                        "INSERT INTO subscriptions (user_id, document_id) VALUES (CAST(:u AS uuid), CAST(:d AS uuid))"):
+                await s.execute(text(sql), {"u": uid, "d": did})
+        await s.commit()
+    try:
+        async with _client() as c:
+            h = _auth(world["none"])
+            for path in ("/api/v1/bookmarks", "/api/v1/reads/recent", "/api/v1/me/reminders",
+                         "/api/v1/me/subscriptions"):
+                r = await c.get(path, headers=h)
+                assert r.status_code == 200, (path, r.text[:200])
+                assert _slugs_in(r.json()) == EXPECT["none"], (path, _slugs_in(r.json()))
+            act = await c.get("/api/v1/activity", params={"limit": 200}, headers=h)
+            assert act.status_code == 200, act.text[:200]
+            assert _slugs_in(act.json()) <= EXPECT["none"], _slugs_in(act.json())
+    finally:
+        async with session_scope() as s:
+            for table in ("bookmarks", "document_reads", "reminders", "subscriptions"):
+                await s.execute(text(f"DELETE FROM {table} WHERE user_id = CAST(:u AS uuid)"), {"u": uid})
+            await s.commit()
+
+
+async def test_tag_comments_series_reviews_per_viewer(world: dict[str, str | None]) -> None:
+    ids = await _ids()
+    aff_uid = await _uid("aff")
+    series_id = str(uuid4())
+    async with session_scope() as s:
+        await s.execute(text("""
+            INSERT INTO doc_series (id, slug, title, owner_user_id) VALUES (CAST(:i AS uuid), :s, :t, CAST(:o AS uuid))
+        """), {"i": series_id, "s": f"w2ser-{RUN}", "t": f"W2 시리즈 {RUN}", "o": aff_uid})
+        for pos, did in enumerate(ids.values()):
+            await s.execute(text("""
+                INSERT INTO doc_series_items (series_id, document_id, position) VALUES (CAST(:s AS uuid), CAST(:d AS uuid), :p)
+            """), {"s": series_id, "d": did, "p": pos})
+            await s.execute(text("""
+                INSERT INTO document_reviewers (document_id, reviewer_user_id, status)
+                VALUES (CAST(:d AS uuid), CAST(:u AS uuid), 'pending')
+            """), {"d": did, "u": aff_uid})
+        await s.commit()
+    try:
+        async with _client() as c:
+            for who in ("aff", "none", "admin"):
+                h = _auth(world[who])
+                # aff 는 이 시험에서 모든 문서의 검토자다 — 검토자는 restricted 도 본다(WK-D27).
+                visible = EXPECT[who] | ({"restricted"} if who == "aff" else set())
+                tagged = await c.get(f"/api/v1/tags/w2tag{RUN}/documents", headers=h)
+                assert _slugs_in(tagged.json()) == visible, (who, "tag", _slugs_in(tagged.json()))
+                for name in DOCS:
+                    cm = await c.get(f"/api/v1/documents/{_slug(name)}/comments", headers=h)
+                    assert (cm.status_code == 200) == (name in visible), (who, name, cm.status_code)
+                ser = await c.get(f"/api/v1/series/w2ser-{RUN}", headers=h)
+                assert ser.status_code == 200, ser.text[:200]
+                assert _slugs_in(ser.json()) == visible, (who, "series", _slugs_in(ser.json()))
+            rev = await c.get("/api/v1/me/reviews", headers=_auth(world["aff"]))
+            assert _slugs_in(rev.json()) == EXPECT["aff"] | {"restricted"}, _slugs_in(rev.json())
+    finally:
+        async with session_scope() as s:
+            await s.execute(text("DELETE FROM doc_series WHERE id = CAST(:i AS uuid)"), {"i": series_id})
+            await s.execute(text("DELETE FROM document_reviewers WHERE reviewer_user_id = CAST(:u AS uuid)"),
+                            {"u": aff_uid})
+            await s.commit()
+
+
+async def test_analytics_and_widgets_hide_out_of_scope(world: dict[str, str | None]) -> None:
+    async with session_scope() as s:
+        for name in DOCS:
+            for _ in range(30):
+                await s.execute(text("INSERT INTO audit_logs (action, target) VALUES ('document.view', :t)"),
+                                {"t": f"document:{_slug(name)}"})
+        await s.commit()
+    try:
+        async with _client() as c:
+            for who in ("aff", "none"):
+                h = _auth(world[who])
+                for path, params in (("/api/v1/analytics/top-docs", {"days": 1, "limit": 100}),
+                                     ("/api/v1/analytics/top-views", {"days": 1, "limit": 50}),
+                                     ("/api/v1/analytics/overview", {})):
+                    r = await c.get(path, params=params, headers=h)
+                    assert r.status_code == 200, (path, r.text[:200])
+                    assert _slugs_in(r.json()) <= EXPECT[who], (who, path, _slugs_in(r.json()))
+                for name in DOCS:
+                    d = await c.get(f"/api/v1/analytics/documents/{_slug(name)}", headers=h)
+                    if name not in EXPECT[who]:
+                        assert d.status_code == 404, (who, name, d.status_code)
+            top = await c.get("/api/v1/analytics/top-docs", params={"days": 1, "limit": 100}, headers=_auth(world["aff"]))
+            assert {"org", "plain", "aff"} <= _slugs_in(top.json())
+            widget = await c.get("/api/v1/widgets/table/documents-top", params={"limit": 47},
+                                 headers=_auth(world["admin"]))
+            assert _slugs_in(widget.json()) <= EVERYONE, _slugs_in(widget.json())  # 공유 캐시라 익명 기준
+    finally:
+        async with session_scope() as s:
+            await s.execute(text("DELETE FROM audit_logs WHERE action = 'document.view' AND target LIKE :t"),
+                            {"t": f"document:w2-aud-{RUN}-%"})
+            await s.commit()
+
+
+async def test_admin_out_of_scope_read_is_audited(world: dict[str, str | None]) -> None:
+    """admin 은 다 보지만, 자기 토큰으로는 못 볼 문서를 꺼내면 감사 줄이 남는다(CONTRACTS §2-11)."""
+    async with session_scope() as s:
+        admin_id = str((await s.execute(text(
+            "SELECT id FROM users WHERE role = 'admin' AND is_active ORDER BY created_at LIMIT 1"))).scalar_one())
+    token = make_access_token(admin_id, extra={"role": "admin"})
+    async with session_scope() as s:  # 앞 시험(dev 폴백 admin)이 남긴 줄을 비우고 시작
+        await s.execute(text("DELETE FROM audit_logs WHERE target LIKE :t"), {"t": f"document:w2-aud-{RUN}-%"})
+        await s.commit()
+    async with _client() as c:
+        for name in ("aff", "plain"):
+            assert (await c.get(f"/api/v1/documents/{_slug(name)}", headers=_auth(token))).status_code == 200
+    async with session_scope() as s:
+        rows = (await s.execute(text("""
+            SELECT target FROM audit_logs WHERE action = 'document.read.admin_override' AND target LIKE :t
+        """), {"t": f"document:w2-aud-{RUN}-%"})).scalars().all()
+        await s.execute(text("DELETE FROM audit_logs WHERE action = 'document.read.admin_override' AND target LIKE :t"),
+                        {"t": f"document:w2-aud-{RUN}-%"})
+        await s.commit()
+    assert rows == [f"document:{_slug('aff')}"], rows

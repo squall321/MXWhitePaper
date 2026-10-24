@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | W0 준비 | 봉투 모델 · 합성 원천 20 · 가짜 LLM · 설정 자리 | [[#Envelope]] · [[#Test bundle]] · [[#Fake LLM]] · [[#Settings]] |
 | W1 연결 · 신원 | 위임 창구 · 위임 토큰(세대) · 소속 · 플랫폼 증명 · 진입 토큰 스냅숏 · jti 원장 · 소속→팀 표(API · 화면 `/admin/aff-team-map`) | [[core#게이트웨이 · 포털 위임]] |
-| W2 보이기 범위 | 짓는 중 — 저장소 층 · 공유 · oEmbed · 홈 · 그래프 셋 · 검색 · 챗 검색 · 알림 · 메일 · AIDataHub 됨, 활동 · 북마크 · 태그 · 반응 · 시리즈 · 저장된 보기 · 분석 · 위젯 · 댓글 목록 남음 | [[#Audience]] |
+| W2 보이기 범위 | 읽기 길 전수(아래 표) · 길마다 시험 · admin 범위 밖 읽기 감사. 남은 것 — cae00 배포 · 재색인 | [[#Audience]] |
 | W3 원천 · 작업 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -73,6 +73,11 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 막지 않는다), 메일은 보낼 때 받는 사람별로 `viewer_for_user` + `can_see`(구독 이벤트 · 결재 요청 · 자동화 · 알림 예약). 공유 링크 메일은
 익명이 보는 문서만 링크가 생기므로 따로 막지 않는다. 바깥 밀어내기(AIDataHub)는 `GET /documents?audience=org`(익명 기준 목록).
 재색인(`app.scripts.reindex`)은 뷰에 없는 색인 줄도 지운다 — 남으면 범위 칸 없이 이행기 규칙으로 제목이 뜬다.
+그 밖의 목록 — 활동 피드(판 · 댓글 · 공유 · 북마크 · 검토) · 북마크 · 최근 열람 · 태그(구름은 공유 캐시라 익명 기준, 태그별 목록은 사람
+기준) · 반응 · 시리즈 · 저장된 보기 · 알림 예약 · 구독 목록 · 검토 대기 · 분석(조회 감사 줄 `document:<slug>` 의 문서로) · 위젯
+'최근 문서'(공유 캐시라 익명) · 용어의 관련 문서 · 댓글(문서를 못 보면 404). admin 이 자기 토큰으로 못 볼 문서를 꺼내면
+`get_document_or_404` 가 감사 `document.read.admin_override` 를 남긴다(GET 은 커밋하지 않으니 따로 세션).
+일부러 거르지 않는 곳 — `/admin/*`(admin 은 다 본다) · 백업 그리기(결과는 admin 만) · 관리자 태그 바꾸기 · triple 일괄 추출(admin).
 
 시험 [[apps/api/tests/test_wiki_audience.py]] — 문서 여섯(org · aff · plat · aff+plat 위키, restricted, 보통) × 읽는 사람 여섯(소속 ·
 플랫폼 · 없음 · 오래된 소속 · 작성자 · admin) × 길.

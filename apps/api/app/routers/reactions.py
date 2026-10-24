@@ -23,6 +23,7 @@ from app.core.auth import require_reader
 from app.core.db import get_db
 from app.core.errors import APIError, NotFound, envelope
 from app.services import notification_prefs as prefs_svc
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1", tags=["reactions"])
 
@@ -57,15 +58,15 @@ async def _resolve_doc(s: AsyncSession, doc_id_or_slug: str) -> tuple[str, str, 
     if is_uuid:
         row = (await s.execute(
             text(
-                "SELECT id, slug, owner_id FROM documents "
-                "WHERE id = CAST(:v AS uuid)"
+                "SELECT id, slug, owner_id FROM documents d "
+                f"WHERE id = CAST(:v AS uuid) AND {audience.visible_sql('d')}"
             ),
-            {"v": doc_id_or_slug},
+            {"v": doc_id_or_slug, **audience.sql_params()},
         )).first()
     else:
         row = (await s.execute(
-            text("SELECT id, slug, owner_id FROM documents WHERE slug = :v"),
-            {"v": doc_id_or_slug},
+            text(f"SELECT id, slug, owner_id FROM documents d WHERE slug = :v AND {audience.visible_sql('d')}"),
+            {"v": doc_id_or_slug, **audience.sql_params()},
         )).first()
     if not row:
         raise NotFound(f"document '{doc_id_or_slug}' not found")

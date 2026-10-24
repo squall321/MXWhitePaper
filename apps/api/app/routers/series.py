@@ -42,6 +42,7 @@ from app.core.auth import get_current_user, require_editor, require_reader
 from app.core.db import get_db
 from app.core.errors import APIError, Conflict, Forbidden, NotFound, envelope
 from app.repos import document_repo
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1", tags=["series"])
 
@@ -113,16 +114,17 @@ async def _require_series(s: AsyncSession, slug: str) -> dict[str, Any]:
 
 
 async def _list_items(s: AsyncSession, series_id: str) -> list[dict[str, Any]]:
+    # 시리즈에 묶여 있어도 범위 밖 문서는 목록에서 빠진다(docs/llm-wiki W2).
     rows = (await s.execute(
-        text("""
+        text(f"""
             SELECT i.document_id, i.position, i.added_at,
                    d.slug, d.title
             FROM doc_series_items i
             JOIN documents d ON d.id = i.document_id
-            WHERE i.series_id = CAST(:sid AS uuid)
+            WHERE i.series_id = CAST(:sid AS uuid) AND {audience.visible_sql("d")}
             ORDER BY i.position ASC, i.added_at ASC
         """),
-        {"sid": series_id},
+        {"sid": series_id, **audience.sql_params()},
     )).all()
     return [
         {
@@ -198,7 +200,7 @@ async def list_series(
     s: AsyncSession = Depends(get_db),
     _user: dict[str, Any] = Depends(require_reader),
 ) -> dict[str, Any]:
-    rows = (await s.execute(text("""
+    rows = (await s.execute(text(f"""
         SELECT
           ds.id, ds.slug, ds.title, ds.description, ds.cover_image_id,
           ds.owner_user_id, ds.created_at, ds.updated_at,
@@ -207,11 +209,11 @@ async def list_series(
           (SELECT d.title
              FROM doc_series_items i
              JOIN documents d ON d.id = i.document_id
-            WHERE i.series_id = ds.id
+            WHERE i.series_id = ds.id AND {audience.visible_sql("d")}
             ORDER BY i.position ASC, i.added_at ASC LIMIT 1) AS first_title
         FROM doc_series ds
         ORDER BY ds.updated_at DESC
-    """))).all()
+    """), audience.sql_params())).all()
     items = [
         {
             "id": str(r[0]),

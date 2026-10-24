@@ -17,7 +17,7 @@ from __future__ import annotations
 import contextlib
 from collections.abc import Iterator
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -183,3 +183,22 @@ async def can_see(s: Any, viewer: Viewer | None, doc_id: str) -> bool:
         text(f"SELECT 1 FROM documents d WHERE d.id = CAST(:id AS uuid) AND {visible_sql('d')}"),
         {"id": doc_id, **sql_params(viewer)},
     )).first() is not None
+
+
+async def audit_admin_override(doc: dict[str, Any]) -> None:
+    """admin 이 자기 토큰으로는 못 볼 문서를 꺼내면 감사에 남긴다(CONTRACTS §2-11). GET 은 커밋하지 않으니 따로 세션을 연다."""
+    v = _current.get()
+    if v is None or v.kind != "user" or not v.is_admin:
+        return
+    from sqlalchemy import text
+
+    from app.core.db import session_scope
+
+    async with session_scope() as s2:
+        if await can_see(s2, replace(v, is_admin=False), str(doc["id"])):
+            return
+        await s2.execute(text("""
+            INSERT INTO audit_logs (user_id, action, target, payload)
+            VALUES (CAST(:u AS uuid), 'document.read.admin_override', :t, CAST('{}' AS jsonb))
+        """), {"u": v.user_id, "t": f"document:{doc.get('slug')}"})
+        await s2.commit()

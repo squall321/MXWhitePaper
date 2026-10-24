@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import require_reader
 from app.core.db import get_db as get_session
 from app.core.errors import envelope
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1/widgets", tags=["widgets"])
 
@@ -676,14 +677,15 @@ async def table_documents_top(
 ) -> dict[str, Any]:
     async def _compute() -> dict[str, Any]:
         rows = (await s.execute(
-            text("""
+            # 요청 단위로 공유하는 캐시(cached)라 사람마다 다를 수 없다 — 익명 기준(['org'] · restricted 아님, W2).
+            text(f"""
                 SELECT slug, title, status, version, updated_at
-                  FROM documents
-                 WHERE status = 'published'
+                  FROM documents d
+                 WHERE status = 'published' AND {audience.visible_sql("d")}
                  ORDER BY updated_at DESC
                  LIMIT :lim
             """),
-            {"lim": limit},
+            {"lim": limit, **audience.sql_params(audience.ANONYMOUS)},
         )).mappings().all()
         return envelope(
             data={

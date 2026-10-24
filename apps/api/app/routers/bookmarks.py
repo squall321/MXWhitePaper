@@ -25,6 +25,7 @@ from app.core.auth import get_current_user, require_reader
 from app.core.db import get_db
 from app.core.errors import APIError, Conflict, Forbidden, NotFound, envelope
 from app.repos import document_repo
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1", tags=["bookmarks"])
 
@@ -87,16 +88,17 @@ async def _resolve_doc_id(s: AsyncSession, doc_id_or_slug: str) -> str:
     # try id first
     if len(val) == 36 and val.count("-") == 4:
         row = (await s.execute(
-            text("SELECT id FROM documents WHERE id = CAST(:v AS uuid) AND status != 'archived'"),
-            {"v": val},
+            text(f"SELECT id FROM documents d WHERE id = CAST(:v AS uuid) AND status != 'archived' "
+                 f"AND {audience.visible_sql('d')}"),
+            {"v": val, **audience.sql_params()},
         )).first()
         if row:
             return str(row[0])
 
     # fallback to slug
     row = (await s.execute(
-        text("SELECT id FROM documents WHERE slug = :v AND status != 'archived'"),
-        {"v": val},
+        text(f"SELECT id FROM documents d WHERE slug = :v AND status != 'archived' AND {audience.visible_sql('d')}"),
+        {"v": val, **audience.sql_params()},
     )).first()
     if not row:
         raise NotFound(f"document '{val}' not found")
@@ -182,13 +184,13 @@ async def list_bookmarks(
     s: AsyncSession = Depends(get_db),
     user: dict[str, Any] = Depends(require_reader),
 ) -> dict[str, Any]:
-    sql = """
+    sql = f"""
         SELECT b.id, b.document_id, d.slug, d.title, b.folder, b.notes, b.created_at
         FROM bookmarks b
         JOIN documents d ON d.id = b.document_id
-        WHERE b.user_id = CAST(:u AS uuid)
+        WHERE b.user_id = CAST(:u AS uuid) AND {audience.visible_sql("d")}
     """
-    params: dict[str, Any] = {"u": user["id"]}
+    params: dict[str, Any] = {"u": user["id"], **audience.sql_params()}
     if folder is not None:
         if folder == "":
             sql += " AND b.folder IS NULL"
@@ -233,16 +235,17 @@ async def patch_bookmark(
     if not sets:
         raise BookmarkValidationError("nothing to update")
 
+    # 만든 뒤 범위가 좁아진 문서면 제목 · slug 를 돌려주지 않는다(docs/llm-wiki W2).
     full = (await s.execute(
         text(f"""
             UPDATE bookmarks SET {', '.join(sets)}
             WHERE id = CAST(:id AS uuid)
             RETURNING id, document_id,
-              (SELECT slug FROM documents WHERE id = bookmarks.document_id),
-              (SELECT title FROM documents WHERE id = bookmarks.document_id),
+              (SELECT slug FROM documents d WHERE d.id = bookmarks.document_id AND {audience.visible_sql("d")}),
+              (SELECT title FROM documents d WHERE d.id = bookmarks.document_id AND {audience.visible_sql("d")}),
               folder, notes, created_at
         """),
-        params,
+        {**params, **audience.sql_params()},
     )).first()
 
     await document_repo.insert_audit(
@@ -340,7 +343,7 @@ async def get_recent_reads(
     user: dict[str, Any] = Depends(require_reader),
 ) -> dict[str, Any]:
     rows = (await s.execute(
-        text("""
+        text(f"""
             SELECT r.document_id, d.slug, d.title, d.summary,
                    r.read_at, r.read_seconds,
                    (SELECT 1 FROM bookmarks b
@@ -349,10 +352,11 @@ async def get_recent_reads(
             JOIN documents d ON d.id = r.document_id
             WHERE r.user_id = CAST(:u AS uuid)
               AND d.status != 'archived'
+              AND {audience.visible_sql("d")}
             ORDER BY r.read_at DESC
             LIMIT :lim
         """),
-        {"u": user["id"], "lim": limit},
+        {"u": user["id"], "lim": limit, **audience.sql_params()},
     )).all()
     items = [
         {

@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import get_current_user
 from app.core.db import get_db
 from app.core.errors import envelope
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1", tags=["activity"])
 
@@ -119,7 +120,9 @@ async def _load_doc_versions(
 ) -> list[dict[str, Any]]:
     """Yield doc_edited (version>1) and doc_created (version=1) rows."""
     where = ["1=1"]
-    params: dict[str, Any] = {"lim": limit}
+    # 보이기 범위 — 범위 밖 문서의 활동(제목 · slug)은 피드에서 빠진다(docs/llm-wiki W2).
+    where.append(audience.visible_sql("d"))
+    params: dict[str, Any] = {"lim": limit, **audience.sql_params()}
     if since:
         where.append("v.edited_at >= :since")
         params["since"] = since
@@ -175,7 +178,9 @@ async def _load_comments(
     me_id: str | None = None,
 ) -> list[dict[str, Any]]:
     where = ["c.status = 'visible'"]
-    params: dict[str, Any] = {"lim": limit}
+    # 보이기 범위 — 범위 밖 문서의 활동(제목 · slug)은 피드에서 빠진다(docs/llm-wiki W2).
+    where.append(audience.visible_sql("d"))
+    params: dict[str, Any] = {"lim": limit, **audience.sql_params()}
     if since:
         where.append("c.created_at >= :since")
         params["since"] = since
@@ -231,7 +236,9 @@ async def _load_share_links(
     me_id: str | None = None,
 ) -> list[dict[str, Any]]:
     where = ["1=1"]
-    params: dict[str, Any] = {"lim": limit}
+    # 보이기 범위 — 범위 밖 문서의 활동(제목 · slug)은 피드에서 빠진다(docs/llm-wiki W2).
+    where.append(audience.visible_sql("d"))
+    params: dict[str, Any] = {"lim": limit, **audience.sql_params()}
     if since:
         where.append("sl.created_at >= :since")
         params["since"] = since
@@ -283,7 +290,9 @@ async def _load_bookmarks(
     me_id: str | None = None,
 ) -> list[dict[str, Any]]:
     where = ["1=1"]
-    params: dict[str, Any] = {"lim": limit}
+    # 보이기 범위 — 범위 밖 문서의 활동(제목 · slug)은 피드에서 빠진다(docs/llm-wiki W2).
+    where.append(audience.visible_sql("d"))
+    params: dict[str, Any] = {"lim": limit, **audience.sql_params()}
     if since:
         where.append("b.created_at >= :since")
         params["since"] = since
@@ -336,7 +345,9 @@ async def _load_reviewers(
 ) -> list[dict[str, Any]]:
     """Returns review_requested + review_decided rows."""
     where = ["1=1"]
-    params: dict[str, Any] = {"lim": limit}
+    # 보이기 범위 — 범위 밖 문서의 활동(제목 · slug)은 피드에서 빠진다(docs/llm-wiki W2).
+    where.append(audience.visible_sql("d"))
+    params: dict[str, Any] = {"lim": limit, **audience.sql_params()}
     # Use the most recent of (added_at, reviewed_at) as the row's effective ts.
     # Pending → added_at, decided → reviewed_at.
     if since:

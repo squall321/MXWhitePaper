@@ -34,6 +34,7 @@ from app.core.auth import get_current_user, require_editor, require_reader
 from app.core.db import get_db
 from app.core.errors import Forbidden, NotFound, ValidationFailed, envelope
 from app.repos import document_repo
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1", tags=["subscriptions"])
 
@@ -273,16 +274,17 @@ async def list_my_subscriptions(
     user: dict[str, Any] = Depends(require_reader),
 ) -> dict[str, Any]:
     rows = (await s.execute(
-        text("""
+        text(f"""
             SELECT s.id, s.document_id, d.slug, d.title, d.updated_at,
                    s.events, s.digest_cadence, s.last_digest_at, s.created_at
             FROM subscriptions s
             JOIN documents d ON d.id = s.document_id
             WHERE s.user_id = CAST(:u AS uuid)
               AND d.status != 'archived'
+              AND {audience.visible_sql("d")}
             ORDER BY s.created_at DESC
         """),
-        {"u": user["id"]},
+        {"u": user["id"], **audience.sql_params()},
     )).all()
     items: list[dict[str, Any]] = []
     for r in rows:

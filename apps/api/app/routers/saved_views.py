@@ -44,6 +44,7 @@ from app.core.auth import get_current_user, require_reader
 from app.core.db import get_db
 from app.core.errors import Forbidden, NotFound, ValidationFailed, envelope
 from app.repos import document_repo
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1", tags=["saved-views"])
 
@@ -435,6 +436,9 @@ async def _apply_filters_to_documents(
         where.append("(d.title ILIKE :q OR COALESCE(d.summary,'') ILIKE :q)")
         params["q"] = f"%{q.strip()}%"
 
+    # 보이기 범위 — 저장된 보기도 지금 볼 수 있는 문서만(docs/llm-wiki W2).
+    where.append(audience.visible_sql("d"))
+    params.update(audience.sql_params())
     where_sql = " WHERE " + " AND ".join(where) if where else ""
 
     # `current_user_id` is currently unused for ACL — saved views are private to

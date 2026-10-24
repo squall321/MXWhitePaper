@@ -34,6 +34,7 @@ from app.services.heading_promote import promote_inline_headings
 from app.services.section_numbering import renumber_sections
 from app.services.wiki_link_alias import resolve_term_aliases
 from app.services.wiki_link_extractor import extract_wiki_links
+from app.wiki import audience
 
 logger = logging.getLogger(__name__)
 
@@ -1390,6 +1391,7 @@ async def get_document_or_404(s: AsyncSession, slug: str) -> dict[str, Any]:
     doc = await document_repo.find_by_slug(s, slug)
     if not doc:
         raise NotFound(f"document not found: {slug}")
+    await audience.audit_admin_override(doc)
     return doc
 
 

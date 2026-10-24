@@ -556,7 +556,7 @@ async def my_reviews(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     rows = (await s.execute(
-        text("""
+        text(f"""
             SELECT
               d.slug, d.title, d.status,
               r.status, r.added_at, r.reviewed_at,
@@ -567,9 +567,10 @@ async def my_reviews(
             WHERE r.reviewer_user_id = CAST(:u AS uuid)
               AND r.status IN ('pending','changes_requested')
               AND d.status != 'archived'
+              AND {audience.visible_sql("d")}
             ORDER BY r.added_at DESC
         """),
-        {"u": user["id"]},
+        {"u": user["id"], **audience.sql_params()},
     )).all()
     items = [
         {

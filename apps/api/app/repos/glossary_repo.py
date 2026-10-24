@@ -12,6 +12,8 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.wiki import audience
+
 # ─────────────────────────────────────────────────────────────────────────
 # SELECT 컬럼 — 모든 GET 응답이 일관된 형태를 갖도록.
 # ─────────────────────────────────────────────────────────────────────────
@@ -430,15 +432,17 @@ async def find_related_for_term(
     """
     # 1) docs
     doc_rows = (await s.execute(
-        text("""
+        # 용어의 관련 문서 — 범위 밖 문서는 제목째 빠진다(docs/llm-wiki W2).
+        text(f"""
             SELECT d.id, d.slug, d.title
             FROM terms t
             JOIN documents d ON d.id = ANY(t.related_docs)
             WHERE t.id = CAST(:id AS uuid)
               AND d.status != 'archived'
+              AND {audience.visible_sql("d")}
             ORDER BY d.title
         """),
-        {"id": term_id},
+        {"id": term_id, **audience.sql_params()},
     )).all()
     docs = [{"id": str(r[0]), "slug": r[1], "title": r[2]} for r in doc_rows]
 

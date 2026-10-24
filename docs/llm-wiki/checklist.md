@@ -31,14 +31,16 @@
 
 ## W2 보이기 범위
 - [x] 범위 토큰 계산(org · aff · plat · user — 그리고) · `access.max_age_h` — `app/wiki/audience.py`(규칙서 전까지 24 고정)
-- [ ] 저장소 층 필터(문서 GET · 목록 · 판 · diff · 복원) — GET · 목록 · 판 · 복원 · 역링크 · export.html 됨, diff 남음
+- [x] 저장소 층 필터(문서 GET · 목록 · 판 · diff · 복원) — diff 는 FE 가 GET 둘로 짓는다(cross-doc-diff)
 - [x] Meilisearch `audience` 필터 칸 · 재색인 — `aud1~3` · `readers`(WK-D29) · 기동 때 설정 · **배포 뒤 재색인은 사람 몫**(dev 는 했다)
-- [ ] 그래프 넷(링크 · 의존 · 고아 · 역링크 · triple) · 다른 문서 안 미리보기 — 그래프 넷 · 홈 됨, 미리보기 남음
+- [x] 그래프 넷(링크 · 의존 · 고아 · 역링크 · triple) · 다른 문서 안 미리보기 — 링크 카드는 GET 으로, 용어 관련 문서 · 시리즈도 거른다
 - [x] 내보내기 · 발표 · 공유 링크 · oEmbed — 내보내기 · 발표는 `get_document_or_404` 로, 공유는 익명 기준(WK-D28)
-- [ ] 댓글 · 알림 · 요약 메일 · 구독 · 분석 — 알림(읽을 때) · 요약 메일 · 구독 이벤트 · 결재 · 자동화 · 알림 예약 메일 됨, 댓글 목록 · 분석 남음
+- [x] 댓글 · 알림 · 요약 메일 · 구독 · 분석 — 알림은 읽을 때, 메일은 받는 사람별로(WK-D31), 분석은 조회 감사 줄의 문서로
 - [x] 챗 도구 · MXWP MCP 읽기 도구 · AIDataHub 밀어내기(`["org"]` 만) — 챗 · MCP 는 API 를 거쳐 거르고, AIDataHub 는 `?audience=org`
-- [ ] 길마다 시험(범위 셋 × 길 전부) 누설 0 — `test_block_permissions_paths.py` 꼴
+- [x] 길마다 시험(범위 셋 × 길 전부) 누설 0 — `test_block_permissions_paths.py` 꼴 — `tests/test_wiki_audience.py` 23(응답 어디든 범위 밖 slug 가 나오면 실패)
 - [x] (Q4 답에 따라) 기존 `restricted` 문서도 같은 필터 — 작성자 · 검토자 · 이메일 owners/reviewers · admin(WK-D27)
+- [x] admin 의 범위 밖 읽기는 감사(`document.read.admin_override`, `get_document_or_404` 한 곳)
+- [ ] 배포 — cae00 에 0050 · 0051 · 재색인(`python -m app.scripts.reindex`). 재색인 전엔 restricted 가 검색에 남는다
 
 ## W3 원천 · 작업 실행기
 - [ ] 표 — `wiki_sources`(불변 트리거) · `wiki_jobs` · `wiki_log`(덧붙이기만) · `wiki_pages`

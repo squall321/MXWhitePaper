@@ -26,6 +26,7 @@ from app.core.db import get_db
 from app.core.errors import ValidationFailed, envelope
 from app.repos import document_repo
 from app.services.document_service import refresh_search_view, reindex_meili
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1/tags", tags=["tags"])
 
@@ -73,7 +74,8 @@ async def list_tags(
     if cached is not None:
         return envelope(data=cached, meta={"count": len(cached), "cached": True})
 
-    params: dict[str, Any] = {"lim": limit}
+    # 태그 구름은 사람과 무관한 캐시(cache_key)라 익명 기준으로 센다 — 범위 밖 문서에만 있는 태그 이름도 새지 않게(W2).
+    params: dict[str, Any] = {"lim": limit, **audience.sql_params(audience.ANONYMOUS)}
     where_clause = ""
     if q is not None and q.strip():
         where_clause = "WHERE LOWER(t.tag) LIKE :prefix"
@@ -88,6 +90,7 @@ async def list_tags(
             FROM documents d
             WHERE d.status != 'archived'
               AND jsonb_typeof(d.content_json -> 'metadata' -> 'tags') = 'array'
+              AND {audience.visible_sql("d")}
         ) AS t
         {where_clause}
         GROUP BY t.tag
@@ -114,10 +117,11 @@ async def list_documents_for_tag(
 ) -> dict[str, Any]:
     if not tag.strip():
         raise ValidationFailed("tag must not be empty")
-    sql = """
+    sql = f"""
         SELECT d.slug, d.title, d.summary, d.updated_at
         FROM documents d
         WHERE d.status != 'archived'
+          AND {audience.visible_sql("d")}
           AND jsonb_typeof(d.content_json -> 'metadata' -> 'tags') = 'array'
           AND EXISTS (
               SELECT 1 FROM jsonb_array_elements_text(
@@ -129,7 +133,7 @@ async def list_documents_for_tag(
     """
     rows = (await s.execute(
         text(sql),
-        {"tag": tag, "lim": limit, "off": offset},
+        {"tag": tag, "lim": limit, "off": offset, **audience.sql_params()},
     )).all()
     items = [
         {

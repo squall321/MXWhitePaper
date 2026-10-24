@@ -31,6 +31,7 @@ from app.core.auth import get_current_user, require_reader
 from app.core.db import get_db
 from app.core.errors import Forbidden, NotFound, ValidationFailed, envelope
 from app.repos import document_repo
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1", tags=["reminders"])
 
@@ -169,7 +170,8 @@ async def list_my_reminders(
     s: AsyncSession = Depends(get_db),
     user: dict[str, Any] = Depends(require_reader),
 ) -> dict[str, Any]:
-    where = "r.user_id = CAST(:u AS uuid)"
+    # 예약한 뒤 범위가 좁아진 문서의 알림 예약은 목록에서 빠진다(docs/llm-wiki W2).
+    where = f"r.user_id = CAST(:u AS uuid) AND {audience.visible_sql('d')}"
     if not include_fired:
         where += " AND r.fired_at IS NULL"
     rows = (await s.execute(
@@ -183,7 +185,7 @@ async def list_my_reminders(
             ORDER BY r.remind_at ASC
             """
         ),
-        {"u": user["id"]},
+        {"u": user["id"], **audience.sql_params()},
     )).all()
     items = [
         _row_to_dict(r, slug=r[7], title=r[8]) for r in rows
@@ -286,8 +288,8 @@ async def patch_reminder(
     assert full is not None  # existence verified above at line 256
     # Look up slug+title for response parity with list endpoint.
     doc_row = (await s.execute(
-        text("SELECT slug, title FROM documents WHERE id = CAST(:d AS uuid)"),
-        {"d": str(full[2])},
+        text(f"SELECT slug, title FROM documents d WHERE id = CAST(:d AS uuid) AND {audience.visible_sql('d')}"),
+        {"d": str(full[2]), **audience.sql_params()},
     )).first()
     slug = doc_row[0] if doc_row else None
     title = doc_row[1] if doc_row else None

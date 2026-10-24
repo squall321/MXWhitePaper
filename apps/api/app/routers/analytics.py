@@ -24,8 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import get_current_user, require_admin, require_reader
 from app.core.db import get_db
 from app.core.errors import Forbidden, NotFound, envelope
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
+
+
+# 'document:<slug>' 조회 감사 줄의 문서가 없거나 보일 때만(app/wiki/audience.py).
+_VIEWED_DOC_VISIBLE = audience.slug_visible_sql("substr(a.target, 10)", "_av")
 
 
 @router.get("/overview", summary="대시보드 오버뷰")
@@ -66,17 +71,19 @@ async def overview(
     """))).all()
     top_searches = [{"q": r[0], "count": int(r[1])} for r in top_searches_rows]
 
-    top_viewed_rows = (await s.execute(text("""
+    # 조회 감사 줄('document:<slug>')에 제목을 붙인다 — 그 문서가 범위 밖이면 줄째 뺀다(slug 도 샌다, docs/llm-wiki W2).
+    top_viewed_rows = (await s.execute(text(f"""
         SELECT a.target, COUNT(*) AS n,
                COALESCE(d.title, a.target) AS title
         FROM audit_logs a
         LEFT JOIN documents d ON ('document:' || d.slug) = a.target
         WHERE a.action = 'document.view'
           AND a.created_at >= NOW() - INTERVAL '30 days'
+          AND {_VIEWED_DOC_VISIBLE}
         GROUP BY a.target, d.title
         ORDER BY n DESC
         LIMIT 10
-    """))).all()
+    """), audience.sql_params())).all()
     top_viewed_docs = [
         {
             "target": r[0],
@@ -153,7 +160,7 @@ async def top_views(
     _user: dict[str, Any] = Depends(require_reader),
 ) -> dict[str, Any]:
     rows = (await s.execute(
-        text("""
+        text(f"""
             SELECT a.target, COUNT(*) AS n,
                    COALESCE(d.title, a.target) AS title,
                    d.slug
@@ -161,11 +168,12 @@ async def top_views(
             LEFT JOIN documents d ON ('document:' || d.slug) = a.target
             WHERE a.action = 'document.view'
               AND a.created_at >= NOW() - (:d || ' days')::interval
+              AND {_VIEWED_DOC_VISIBLE}
             GROUP BY a.target, d.title, d.slug
             ORDER BY n DESC
             LIMIT :lim
         """),
-        {"d": str(days), "lim": limit},
+        {"d": str(days), "lim": limit, **audience.sql_params()},
     )).all()
     items = [
         {
@@ -244,11 +252,11 @@ async def document_analytics(
 ) -> dict[str, Any]:
     # 1) Resolve doc id + ownership
     doc = (await s.execute(
-        text("""
+        text(f"""
             SELECT id, owner_id, title, status
-            FROM documents WHERE slug = :slug
+            FROM documents d WHERE slug = :slug AND {audience.visible_sql("d")}
         """),
-        {"slug": slug},
+        {"slug": slug, **audience.sql_params()},
     )).first()
     if not doc:
         raise NotFound(f"document '{slug}' not found")
@@ -459,7 +467,7 @@ async def top_docs(
     _user: dict[str, Any] = Depends(require_reader),
 ) -> dict[str, Any]:
     rows = (await s.execute(
-        text("""
+        text(f"""
             WITH views AS (
               SELECT a.target,
                      COUNT(*) AS views
@@ -484,10 +492,11 @@ async def top_docs(
             LEFT JOIN reads r ON r.document_id = d.id
             WHERE d.status != 'archived'
               AND COALESCE(v.views, 0) > 0
+              AND {audience.visible_sql("d")}
             ORDER BY views DESC, unique_readers DESC
             LIMIT :lim
         """),
-        {"n": str(days), "lim": limit},
+        {"n": str(days), "lim": limit, **audience.sql_params()},
     )).all()
     items = [
         {

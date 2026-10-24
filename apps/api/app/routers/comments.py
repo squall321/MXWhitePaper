@@ -27,6 +27,7 @@ from app.core.errors import APIError, Forbidden, NotFound, envelope
 from app.repos import document_repo
 from app.services import notification_prefs as prefs_svc
 from app.services.document_service import fire_webhook
+from app.wiki import audience
 
 router_doc = APIRouter(prefix="/api/v1/documents", tags=["comments"])
 router_one = APIRouter(prefix="/api/v1/comments", tags=["comments"])
@@ -89,8 +90,9 @@ _SELECT_COMMENT_COLUMNS = """
 
 async def _resolve_doc_id(s: AsyncSession, slug: str) -> str:
     row = (await s.execute(
-        text("SELECT id FROM documents WHERE slug = :slug AND status != 'archived'"),
-        {"slug": slug},
+        # 볼 수 없는 문서의 댓글은 읽지도 달지도 못한다 — 있는지도 말하지 않는다(docs/llm-wiki W2).
+        text(f"SELECT id FROM documents d WHERE slug = :slug AND status != 'archived' AND {audience.visible_sql('d')}"),
+        {"slug": slug, **audience.sql_params()},
     )).first()
     if not row:
         raise NotFound(f"document '{slug}' not found")
