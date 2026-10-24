@@ -124,11 +124,14 @@ class MxwpClient:
         *,
         opener: Callable[..., Any] | None = None,
         timeout: float = 15.0,
+        extra_headers: dict[str, str] | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self._opener = opener or _default_opener
         self.timeout = timeout
+        # 위임 호출의 소속 · 플랫폼 증명(http MCP 가 받은 그대로) — API 호출에만 싣는다(presigned PUT 에는 싣지 않는다).
+        self.extra_headers = dict(extra_headers or {})
 
     @classmethod
     def from_env(cls, **kw: Any) -> "MxwpClient":
@@ -141,7 +144,7 @@ class MxwpClient:
     # ── transport ───────────────────────────────────────────────────
 
     def _headers(self, if_match: str | None) -> dict[str, str]:
-        h = {"Accept": "application/json", "User-Agent": "mxwp-mcp/1.0"}
+        h = {"Accept": "application/json", "User-Agent": "mxwp-mcp/1.0", **self.extra_headers}
         if self.token:
             h["Authorization"] = f"Bearer {self.token}"
         if if_match:

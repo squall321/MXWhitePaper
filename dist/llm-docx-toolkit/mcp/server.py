@@ -132,16 +132,35 @@ def _request_bearer_token() -> str | None:
     return value.strip()
 
 
+# 게이트웨이가 위임 호출에 싣는 소속 · 플랫폼 증명(docs/llm-wiki CONTRACTS §9). http 모드에서 받은 그대로 API 로 넘긴다 —
+# 서명은 API 가 위임 비밀로 검증하므로(위조 · 만료 · 다른 이메일은 API 가 무시한다) 여기서는 거르지 않는다. 이 넷 밖은 넘기지 않는다.
+_FORWARD_HEADERS = ("x-heax-user-affiliation", "x-heax-aff-proof", "x-heax-user-plat", "x-heax-plat-proof")
+
+
+def _request_forward_headers() -> dict[str, str]:
+    """현재 HTTP 요청에 실린 증명 머리글(있는 것만). stdio(요청 컨텍스트 없음)면 빈 사전."""
+    if _MCP is None:
+        return {}
+    try:
+        req = _MCP.get_context().request_context.request
+    except Exception:
+        return {}
+    if req is None:
+        return {}
+    return {name: value for name in _FORWARD_HEADERS if (value := req.headers.get(name))}
+
+
 def _make_client() -> Any:
     """Tests monkeypatch this to inject a fake-transport client.
 
-    http 모드면 요청별 Bearer 토큰을, 없으면 env MXWP_API_TOKEN 을 쓴다
-    (stdio 경로는 요청 컨텍스트가 없어 항상 env 토큰 — 기존 동작 불변).
+    http 모드면 요청별 Bearer 토큰과 증명 머리글을, 없으면 env MXWP_API_TOKEN 을 쓴다
+    (stdio 경로는 요청 컨텍스트가 없어 항상 env 토큰 · 머리글 없음 — 기존 동작 불변).
     """
     api = _api()
     token = _request_bearer_token() or os.environ.get("MXWP_API_TOKEN", "")
     return api.MxwpClient(
-        os.environ.get("MXWP_API_URL", api.DEFAULT_API_URL), token
+        os.environ.get("MXWP_API_URL", api.DEFAULT_API_URL), token,
+        extra_headers=_request_forward_headers(),
     )
 
 

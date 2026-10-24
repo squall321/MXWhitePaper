@@ -252,6 +252,34 @@ def test_make_client_prefers_request_bearer_over_env(server_mod, monkeypatch) ->
     assert client.base_url == "http://example:9999"
 
 
+def test_forward_headers_pass_only_the_four_proofs(server_mod) -> None:
+    _install_ctx(server_mod, {
+        "authorization": "Bearer mxwp_REQTOKEN", "x-heax-user-affiliation": "SYN-CAE1", "x-heax-aff-proof": "v1.1.a",
+        "x-heax-user-plat": "plat:plmdefect", "x-heax-plat-proof": "v1.1.b", "x-heax-gateway-secret": "never",
+        "cookie": "never",
+    })
+    assert server_mod._request_forward_headers() == {
+        "x-heax-user-affiliation": "SYN-CAE1", "x-heax-aff-proof": "v1.1.a",
+        "x-heax-user-plat": "plat:plmdefect", "x-heax-plat-proof": "v1.1.b",
+    }
+    client = server_mod._make_client()
+    headers = client._headers(None)
+    assert headers["x-heax-plat-proof"] == "v1.1.b" and headers["Authorization"] == "Bearer mxwp_REQTOKEN"
+    assert "x-heax-gateway-secret" not in headers and "cookie" not in headers
+
+
+def test_forward_headers_empty_without_proofs_or_in_stdio(server_mod) -> None:
+    _install_ctx(server_mod, {"authorization": "Bearer mxwp_REQTOKEN"})
+    assert server_mod._request_forward_headers() == {}
+    server_mod.build_server()
+
+    def _raise():
+        raise LookupError("no active request context")
+
+    server_mod._MCP.get_context = _raise
+    assert server_mod._request_forward_headers() == {}
+
+
 def test_make_client_falls_back_to_env_in_stdio(server_mod, monkeypatch) -> None:
     monkeypatch.setenv("MXWP_API_TOKEN", "mxwp_ENVTOKEN")
     server_mod.build_server()

@@ -193,6 +193,9 @@ apptainer exec instance://mxwp_api bash -lc \
 - 서버는 API 와 **같은 인스턴스** 안에 떠서 `MXWP_API_URL=http://127.0.0.1:8800`
   으로 백엔드에 접근한다. 요청마다 클라이언트의 `Authorization: Bearer` 를
   백엔드로 forward 하므로 env 에 토큰을 둘 필요가 없다.
+- 게이트웨이가 위임 호출에 싣는 소속 · 플랫폼 증명 머리글 넷(`X-Heax-User-Affiliation` · `X-Heax-Aff-Proof` ·
+  `X-Heax-User-Plat` · `X-Heax-Plat-Proof`)도 **받은 그대로(있을 때만)** API 호출에 싣는다 — 서명은 API 가 위임 비밀로
+  검증한다. 이 넷 밖의 머리글은 넘기지 않고, presigned PUT(MinIO)에는 싣지 않는다. stdio 는 머리글이 없다.
 
 **상시 구동 (user systemd):**
 
