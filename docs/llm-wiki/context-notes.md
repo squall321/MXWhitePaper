@@ -144,8 +144,23 @@
 - **WK-D42 원천 문서의 '이 원천을 인용한 문서' 에는 원천과 범위가 같은 문서만.** 까닭 — 원천을 인용한 문서는 원천보다 좁을 수 있고,
   그 제목이 넓은 원천 문서에 실리면 '좁은 문서가 있다' 가 샌다(규칙 5). 위키 문서의 지은이는 시스템(첫 admin) — 누가 불렀는지는
   묶음의 created_by 에. 판 메모는 ASCII 80자 규칙(`normalize_change_log`) 때문에 `wiki cs_…` · `wiki source cited-by`.
+- **WK-D43(사람에게 물을 것) 게이트웨이의 신원 없는 내부 호출은 MXWP 에서 서비스 계정(admin) 시야 — 모든 범위를 본다.** 사람 명의
+  위임이 붙은 뒤에도 신원 없는 내부 호출(GW_TOKEN 만)은 좁은 위키 문서 · restricted 까지 읽는다. 갈래 — (가) 그대로(내부 호출을
+  믿는다, 감사에 no-identity 가 남는다) (나) 신원 없는 호출은 MXWP 가 익명(`["org"]` · restricted 아님)으로 읽게 — 게이트웨이가 표지를
+  싣거나 서비스 계정을 admin 이 아닌 역할로. W6(MCP) 전에 정한다.
 - dev 검색 색인에 DB 에서 이미 지워진 문서 100 장(그중 restricted 4)이 남아 제목이 검색에 뜨고 있었다(시험 · 초기화 잔재). 재색인이
   뷰에 없는 줄을 지우게 고치고 dev 를 다시 색인했다(427 장).
+
+## 조사 메모(2026-10-24, W1 끝에서 끝 — 포털 세션 hwaxportal-a5)
+
+- dev 위임을 켰다(포털 세션 — 사람 확인 뒤 `MXWP_SSO_SECRET` · mxwp_api 재기동 · 게이트웨이 재프로비저닝). 포털 챗과 같은 길(GW_TOKEN +
+  x-hwax-user)로 만든 MXWP 문서의 주인 · 감사 `document.create` 가 그 사람(데모 계정, MXWP editor)이고 게이트웨이 감사는
+  `mode=as-user-pat`. MXWP 쪽 `sso_delegations` 에 client `gateway` 세대 1 이 생겼다. 확인 뒤 그 문서는 보관했다.
+- 다른 사용자(MXWP 역할 reader)의 같은 요청은 403(`Requires role >= editor`) — 위임이 그 사람 역할로 막았다. 예전엔 같은 요청이
+  `admin@mx.local` 로 통과했다. 그 사람 역할을 바꿀지는 포털 세션이 사람에게 묻는 중(이 세션은 바꾸지 않는다).
+- 신원 없는 내부 호출 → 게이트웨이 `mode=service note=no-identity` — request §4-5 의 문장을 고쳤다.
+- MXWP 는 받은 머리글을 기록하지 않아 plat 증명 도착은 로그로 못 본다 — 범위 `["plat:plmdefect"]` 위키 문서 `plat-probe-1024`(합성)를
+  잠시 두고 게이트웨이로 읽어 보게 했다(200 이면 도착, 404 면 안 옴). 확인 뒤 지운다.
 
 ## 조사 메모(2026-10-24, W3)
 
