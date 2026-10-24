@@ -324,4 +324,62 @@ test.describe('visual: AI 위키 (light · dark)', () => {
       })
     })
   })
+
+  // W6 — 메인 챗의 위키 모드. 묻기 SSE 는 고정 프레임(물음에 '배터리' 가 있으면 MISS). 찍은 뒤 '위키에 남기기' 가 보내는 몸통을 본다.
+  test('renders the chat wiki mode answer and miss consistently in light and dark', async ({ page }) => {
+    const sse = (frames: [string, unknown][]) => frames.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join('')
+    const tools: [string, unknown][] = [
+      ['tool_result', { name: 'wiki_index', ok: true, summary: '문서 5 · 갈래 3' }],
+      ['tool_result', { name: 'wiki_search', ok: true, summary: '1건',
+        results: [{ slug: 'ent-part-syn-bom-hb01', title: '힌지 브래킷', url_path: '/docs/ent-part-syn-bom-hb01' }] }],
+      ['tool_result', { name: 'wiki_read', ok: true, summary: '문서 1 · 근거 4 · 원천 1' }],
+    ]
+    await page.route('**/api/v1/wiki/query', (r) => {
+      const asked = (r.request().postDataJSON() as { messages: { content: string }[] }).messages.at(-1)?.content ?? ''
+      r.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: sse(asked.includes('배터리') ? [
+        ...tools,
+        ['token', { text: '위키에 아직 없다\n배터리 쪽 이야기는 위키 문서에 없다.' }],
+        ['miss', { question: asked, question_id: null }],
+        ['done', { miss: true, cited: 0, question_id: null }],
+      ] : [
+        ...tools,
+        ['token', { text: '1.5 m 전각도 낙하에서 최대 응력은 412 MPa 로 허용 응력 380 MPa 를 넘었다 [1]. ' }],
+        ['token', { text: '균열은 체결부 모서리에서 시작한다 [2].' }],
+        ['citation', { n: 1, slug: 'ent-part-syn-bom-hb01', title: '힌지 브래킷', section: '해석에서', block_id: '01JB0000000000000000000001',
+          sources: [{ source_id: W.srcA, short: 'src_11111111', title: '가상폴드 A1 전각도 낙하 1.5 m' }] }],
+        ['citation', { n: 2, slug: 'ent-part-syn-bom-hb01', title: '힌지 브래킷', section: '요약', block_id: '01JB0000000000000000000002',
+          sources: [] }],
+        ['done', { miss: false, cited: 2, uncited: false, pages: ['ent-part-syn-bom-hb01'], scope: ['org'] }],
+      ]) })
+    })
+    let filed: unknown = null
+    await page.route('**/api/v1/wiki/fileback', (r) => {
+      filed = r.request().postDataJSON()
+      r.fulfill({ status: 201, json: { error: null, meta: null, data: {
+        id: W.srcB, short: 'src_22222222', dedup: false, doc_slug: null, ingest_state: 'queued', audience: ['org'] } } })
+    })
+    await page.setViewportSize({ width: 1440, height: 1400 })
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.goto('/')
+    await page.getByRole('radio', { name: '위키에 묻기' }).click()
+    const box = page.getByPlaceholder(/위키에 물어보세요/)
+    await box.fill('힌지 브래킷 최대 응력은 얼마였나?')
+    await box.press('Enter')
+    await page.getByRole('button', { name: '위키에 남기기' }).waitFor()
+    await box.fill('힌지 브래킷 배터리 쪽은 어떤가?')
+    await box.press('Enter')
+    await page.getByRole('button', { name: '질문으로 남기기' }).waitFor()
+    await both(page, (scheme) => expect(page.getByTestId('chat-messages')).toHaveScreenshot(`wiki-chat-${scheme}.png`, {
+      maxDiffPixelRatio: 0.02, animations: 'disabled',
+    }))
+    await page.getByRole('button', { name: '위키에 남기기' }).click()
+    await expect(page.getByText('위키에 남겼다')).toBeVisible()
+    expect(filed).toEqual({
+      question: '힌지 브래킷 최대 응력은 얼마였나?',
+      answer: '1.5 m 전각도 낙하에서 최대 응력은 412 MPa 로 허용 응력 380 MPa 를 넘었다 [1]. 균열은 체결부 모서리에서 시작한다 [2].',
+      citations: [{ n: 1, slug: 'ent-part-syn-bom-hb01', block_id: '01JB0000000000000000000001' },
+        { n: 2, slug: 'ent-part-syn-bom-hb01', block_id: '01JB0000000000000000000002' }],
+      outcome: 'solved', audience: ['org'],
+    })
+  })
 })

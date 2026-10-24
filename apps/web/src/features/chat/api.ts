@@ -1,4 +1,4 @@
-// 대화형 채팅 SSE 클라이언트 — fetch + ReadableStream 으로 이벤트 스트림 파싱.
+// 대화형 채팅 SSE 클라이언트 — fetch + ReadableStream 으로 이벤트 스트림 파싱(백서 챗 `/chat` · 위키 묻기 `/wiki/query`).
 import { getAccessToken } from '@/features/auth/store'
 
 // apiClient 와 동일한 base 규칙 (standalone "/" · 포털 "/mx-white-paper/" 양쪽).
@@ -16,7 +16,27 @@ export interface SearchHit {
   snippet?: string
 }
 
-/** BE(chat_agent) 가 흘리는 SSE 이벤트를 판별 유니온으로. */
+/** 위키 묻기의 각주 하나 — 답의 `[n]` 이 기댄 위키 문서 블록과 그 블록의 원천. */
+export interface WikiCitation {
+  n: number
+  slug: string
+  title: string
+  section: string
+  block_id: string
+  sources: { source_id: string; short: string; title: string }[]
+}
+
+/** 묻기의 끝 — 답했으면 `scope`(읽은 근거의 범위 = 되쌓기 기본 범위), 시간 제한이면 `timeout`, LLM 이 없으면 `llm: 'unset'`. */
+export interface ChatDone {
+  miss?: boolean
+  cited?: number
+  uncited?: boolean
+  llm?: string
+  timeout?: boolean
+  scope?: string[]
+}
+
+/** BE(chat_agent · wiki/query) 가 흘리는 SSE 이벤트를 판별 유니온으로. */
 export type ChatEvent =
   | { type: 'tool_call'; name: string; args: Record<string, unknown> }
   | {
@@ -29,8 +49,10 @@ export type ChatEvent =
       results?: SearchHit[]
     }
   | { type: 'token'; text: string }
+  | ({ type: 'citation' } & WikiCitation)
+  | { type: 'miss'; question: string; question_id: string | null }
   | { type: 'error'; message: string }
-  | { type: 'done' }
+  | ({ type: 'done' } & ChatDone)
 
 function frameToEvent(frame: string): ChatEvent | null {
   let event = ''
@@ -49,19 +71,14 @@ function frameToEvent(frame: string): ChatEvent | null {
   return { type: event, ...data } as ChatEvent
 }
 
-/**
- * 채팅 스트림. `onEvent` 로 각 SSE 이벤트를 흘리고, 스트림 종료 시 resolve.
- * `signal` 로 취소(중단) 가능. 인증은 Bearer(있으면) + 쿠키(dev 폴백).
- */
-export async function streamChat(
-  messages: ChatMsg[],
-  opts: { onEvent: (e: ChatEvent) => void; signal?: AbortSignal },
-): Promise<void> {
+type StreamOpts = { onEvent: (e: ChatEvent) => void; signal?: AbortSignal }
+
+async function streamSSE(path: string, messages: ChatMsg[], opts: StreamOpts): Promise<void> {
   const token = getAccessToken()
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const resp = await fetch(`${baseURL}/chat`, {
+  const resp = await fetch(`${baseURL}${path}`, {
     method: 'POST',
     headers,
     credentials: 'include',
@@ -97,4 +114,17 @@ export async function streamChat(
       if (ev) opts.onEvent(ev)
     }
   }
+}
+
+/**
+ * 채팅 스트림. `onEvent` 로 각 SSE 이벤트를 흘리고, 스트림 종료 시 resolve.
+ * `signal` 로 취소(중단) 가능. 인증은 Bearer(있으면) + 쿠키(dev 폴백).
+ */
+export function streamChat(messages: ChatMsg[], opts: StreamOpts): Promise<void> {
+  return streamSSE('/chat', messages, opts)
+}
+
+/** 위키 묻기(`POST /wiki/query`) — 챗과 같은 프레임 + `citation` · `miss`. 마지막 말이 물음이다. */
+export function streamWikiQuery(messages: ChatMsg[], opts: StreamOpts): Promise<void> {
+  return streamSSE('/wiki/query', messages, opts)
 }

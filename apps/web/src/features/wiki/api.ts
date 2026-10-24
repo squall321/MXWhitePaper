@@ -1,4 +1,4 @@
-// AI 위키 API — 목록 · 기록 · 원천 · 검토 큐 · 위키 문서 정보(배지 · 근거) · 켜짐 여부(W4) · 온톨로지 · 엔티티 등록부 · 합치기(W5)
+// AI 위키 API — 목록 · 기록 · 원천 · 검토 큐 · 위키 문서 정보(배지 · 근거) · 켜짐 여부(W4) · 온톨로지 · 엔티티 등록부 · 합치기(W5) · 내 후보 · 되쌓기 · 질문(W6)
 /**
  * `apps/api/app/routers/wiki.py`(`/api/v1/wiki/*`)와 1:1. 위키가 꺼져 있으면 모두 404(`wiki_disabled`) — `useWikiEnabled` 가
  * 인증 없는 `/wiki/health` 로 본다. 범위 밖 원천 · 문서 · 묶음은 서버가 404 로 감춘다.
@@ -382,6 +382,34 @@ export async function approveWikiCandidate(id: string, audience?: string[]): Pro
 
 export async function discardWikiCandidate(id: string): Promise<{ status: string }> {
   return unwrap(await apiClient.post<ApiEnvelope<{ status: string }>>(`/wiki/candidates/${encodeURIComponent(id)}/discard`))
+}
+
+export interface WikiFilebackResult {
+  id: string
+  short: string
+  dedup: boolean
+  doc_slug: string | null
+  ingest_state: string
+  audience: string[]
+}
+
+/** 묻기의 답을 위키에 남긴다 — qa 원천(그 사람 명의) → 들이기. 범위는 근거보다 넓을 수 없다(서버가 본다). */
+export async function filebackWikiAnswer(body: {
+  question: string
+  answer: string
+  citations: { slug: string; block_id: string; n: number }[]
+  outcome: 'solved' | 'partial' | 'unknown'
+  audience?: string[]
+}): Promise<WikiFilebackResult> {
+  return unwrap(await apiClient.post<ApiEnvelope<WikiFilebackResult>>('/wiki/fileback', body))
+}
+
+/** 질문 대기열에 남긴다 — 범위를 주지 않으면 남긴 사람만 본다. 같은 물음이면 물은 수만 오른다. */
+export async function addWikiQuestion(text: string, origin: 'user' | 'query_miss'):
+  Promise<{ id: string; asked_count: number; created: boolean; audience: string[] }> {
+  return unwrap(await apiClient.post<ApiEnvelope<{ id: string; asked_count: number; created: boolean; audience: string[] }>>(
+    '/wiki/questions', { text, origin },
+  ))
 }
 
 /** ISO 시각 → `YYYY-MM-DD HH:MM`(KST) — 규칙서의 날짜 꼴. */

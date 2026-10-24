@@ -2,6 +2,7 @@
 
 > 모듈 목적: `/`(메인) 채팅에서 대화로 백서를 **생성/증분**하고 코퍼스를 **검색**한다.
 > vLLM(OpenAI 호환)을 config 로 잡고 미설정/실패 시 mock 폴백 (플레이북 §8).
+> 위키가 켜져 있으면 같은 화면에 **위키 모드**('위키에 묻기')가 있다 — 서버는 [[wiki#Query]](mock 폴백 없음).
 > 연관 lat: [[core]] (auth/config), [[documents]] (create/replace), [[graph]] (검색은 meili).
 
 ## 데이터 흐름
@@ -25,8 +26,9 @@ FE features/chat/api.ts  ──POST /api/v1/chat (SSE)──►  routers/chat.py
 | OpenAI 호환 호출 (도구 포함) | [[src/app/services/llm_client.py#complete]] / `is_live` |
 | 도구 4종 | `chat_agent._tool_search_corpus` / `_tool_get_document` / `_tool_create_document` / `_tool_append_section` |
 | DocumentJSON 조립 (방어 정규화) | `chat_agent._build_documentjson` + `_normalize_sections/_paragraphs` |
-| FE 스트림 클라이언트 | [[src/features/chat/api.ts#streamChat]] (SSE 파서) |
-| FE UI (메시지/도구 카드) | [[src/features/chat/ChatView.tsx]] |
+| FE 스트림 클라이언트 | [[src/features/chat/api.ts#streamChat]] · [[src/features/chat/api.ts#streamWikiQuery]] (SSE 파서 하나) |
+| FE UI (메시지/도구 카드 · 모드) | [[src/features/chat/ChatView.tsx]] |
+| 위키 답의 꼬리 (각주 · 남기기 · 질문) | [[src/features/chat/WikiAnswer.tsx#WikiAnswerActions]] · `WikiCitationList` |
 | 페이지 (메인/보조) | `src/pages/Chat.tsx` (index) · `src/pages/Help.tsx` (`/help`) |
 
 ## Endpoints
@@ -36,6 +38,20 @@ FE features/chat/api.ts  ──POST /api/v1/chat (SSE)──►  routers/chat.py
 | `POST /api/v1/chat` | editor | `text/event-stream` — tool_call·tool_result·token·error·done |
 
 body: `{messages: [{role:'user'\|'assistant', content}]}` (1~50개).
+
+위키 모드는 `POST /api/v1/wiki/query`(reader · 20/분 · 말 20개까지) · `POST /wiki/fileback` · `POST /wiki/questions` — [[wiki#Query]] ·
+[[wiki#Fileback]].
+
+## 위키 모드
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 켜짐 | 입력창 위 '백서 만들기 · 위키에 묻기' 고르기 — `useWikiEnabled()`(`/wiki/health`)가 켜졌을 때만. 스트림 도는 동안은 못 바꾼다 |
+| 앞 대화 | 말마다 모드를 달고, 보낼 때 **같은 모드의 빈 말 아닌 것만**(위키는 끝 20개). 백서 답이 위키 물음의 앞 대화로 섞이지 않는다 |
+| 프레임 | 도구 카드 셋(`wiki_index` · `wiki_search` · `wiki_read`) · `token` · `citation`(답의 `[n]` 을 그 문서로 잇고 아래에 근거 목록 — 문서 · 절 · 원천) · `miss` · `done` |
+| 위키에 남기기 | 각주 단 답만(`done.cited > 0`) — 결과(해결됨 · 일부 · 모름)를 골라 `/wiki/fileback`, 각주는 `{n, slug, block_id}`, 범위는 `done.scope`(읽은 근거 모두 — 각주를 덜 단 답도 새지 않는다). 각주 없는 답은 '남기지 않는다' |
+| 질문으로 남기기 | MISS 면 `/wiki/questions`(`query_miss` — 나만 본다) |
+| 없음 | 오류 · 시간 제한(`done.timeout`) · 묻기 LLM 없음(`done.llm = unset`)이면 꼬리 행동이 없다 |
 
 ## 설정 (env, [[core]] Settings)
 
