@@ -1323,9 +1323,12 @@ API token:
 Authorization: Bearer mxwp_<token>
 ```
 
-- 발급: 위키 UI 의 Settings → API Tokens, 또는 admin 의 `POST /api/v1/api-tokens`.
-- token 은 scope 배열을 가짐 (`documents:read`, `documents:write`,
-  `uploads:write` 등). 호출하려는 엔드포인트가 요구하는 scope 가 부족하면 403.
+- 발급: 위키 UI 프로필 메뉴 → '개인 API 토큰'(`/me/api-tokens`), 또는 본인 토큰 발급
+  `POST /api/v1/me/api-tokens`(평문 토큰은 발급 응답에 한 번만 나온다).
+- scope 는 `read` · `write` · `admin` 셋뿐이다 — `read` 는 GET · HEAD, `write` 는 그에 더해
+  POST · PUT · PATCH · DELETE(`/admin/*` 제외), `admin` 은 전부. 모자라면 403
+  `SCOPE_INSUFFICIENT`(`details.required_scope`). `/me/*` 는 scope 와 무관하다
+  (`apps/api/app/services/api_token_scopes.py`).
 - 분당 호출 한도: 일반 사용자 120 req/min, 이미지 업로드 별도 한도.
 
 JWT (사용자 로그인) 도 같은 헤더로 사용 가능.

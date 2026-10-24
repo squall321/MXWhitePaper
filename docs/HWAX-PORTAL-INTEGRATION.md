@@ -2,20 +2,24 @@
 
 > Context for future work: this app can run **standalone** (at `/`) OR **behind the HWAX Portal**
 > (`hwax.sec.samsung.net`), which reverse-proxies it under the sub-path **`/mx-white-paper/`** and
-> **passes that prefix through** (does not strip it). So when behind the portal, every asset URL,
-> the router, and the `/api` calls must live under `/mx-white-paper/`. This was wired up on
-> 2026-06-07. Standalone behaviour is unchanged (base defaults to `/`).
+> **strips that prefix** before forwarding (`HWAXPortal/backend/config/routes.env` —
+> `mx-white-paper=http://localhost:5173/` and `mx-white-paper/api=http://localhost:8800/api/`; the
+> trailing slash strips). The containers serve at their root, but the browser asks for
+> `/mx-white-paper/…`, so the SPA's asset URLs, router basename and `/api` base are **baked with the
+> prefix at build time**. Wired up on 2026-06-07. Standalone behaviour is unchanged (base defaults to `/`).
 
 ## How it works
 
-One env var drives everything: **`MXWP_BASE_PATH`** (in `.env`).
+One build-time value drives everything: **`VITE_BASE_PATH`** (read by `apps/web/vite.config.ts`).
 
 - Empty / unset → standalone, base `/` (original behaviour).
-- `MXWP_BASE_PATH=/mx-white-paper/` → served under the portal sub-path.
+- `VITE_BASE_PATH=/mx-white-paper/` → Vite `base` (assets), router `basename` and the api-client
+  default (`${import.meta.env.BASE_URL}api/v1`) all sit under the portal sub-path.
 
-`infra/scripts/start.sh` threads it into the web instance as:
-- `VITE_BASE_PATH=$MXWP_BASE_PATH` — Vite `base` (assets), router `basename`, api-client default.
-- `VITE_API_URL=<prefix>api/v1` — so the FE calls `/mx-white-paper/api/v1`.
+`make build-web` passes the shell's `MXWP_BASE_PATH` (default `/mx-white-paper/`) to the build as
+`VITE_BASE_PATH`. Vite reads **only** `VITE_BASE_PATH` — `MXWP_BASE_PATH=… pnpm build` alone bakes
+base `/` (checked with `vite resolveConfig`, 2026-10-24). Nothing reads the prefix at run time:
+`start.sh` passes no VITE env to the web instance, and `MXWP_BASE_PATH` in `.env` changes nothing.
 
 ## Production = prebuilt dist baked into web.sif, served by `serve` (NO build on the server)
 
@@ -26,20 +30,21 @@ One env var drives everything: **`MXWP_BASE_PATH`** (in `.env`).
 - `%files apps/web/dist /opt/web/dist` — the **prebuilt SPA is baked into the image** at
   `apptainer build` time (online).
 - `%post` bakes a tiny static server (`serve@14`).
-- `%startscript` = **`exec serve -s /opt/web/dist -l 5173`** — pure static serve, SPA fallback, no
-  pnpm, no network. `serve` serves at the **root**, so the front layer (portal) **strips**
-  `/mx-white-paper/`; the SPA's asset/router/api URLs are baked with the prefix.
+- `%startscript` = **`serve -s /opt/web/dist -l tcp://0.0.0.0:5173`**, detached with `setsid nohup`
+  (an `exec` there gets reaped) — pure static serve, SPA fallback, no pnpm, no network. `serve` serves
+  at the **root**, so the front layer (portal) **strips** `/mx-white-paper/`; the SPA's
+  asset/router/api URLs are baked with the prefix. `start.sh` relaunches the same `serve` if `:5173`
+  does not answer.
 - `/api` is handled by the **front layer**, not the container: the portal routes
-  `/mx-white-paper/api/` → the API `:8800` (`HWAXPortal/backend/config/routes.env`).
+  `/mx-white-paper/api/` → the API `:8800/api/` (`HWAXPortal/backend/config/routes.env`).
 - `%runscript` still runs `vite dev` for interactive development on online machines only.
 
 ### Online build → Drive → cae00 (no build anywhere on cae00)
 
 ```bash
 # ONLINE host (can reach npm):
-MXWP_BASE_PATH=/mx-white-paper/ pnpm --filter @mx/web build        # base baked into dist
-apptainer build infra/apptainer/web.sif infra/apptainer/web.def    # bakes dist into web.sif
-./infra/scripts/images-to-drive.sh                                 # web.sif → Google Drive
+make build-web                        # VITE_BASE_PATH=/mx-white-paper/ pnpm build + apptainer build web.sif
+./infra/scripts/images-to-drive.sh    # web.sif → Google Drive   (make ship = both)
 
 # cae00 (no npm, no Docker Hub):
 ./infra/scripts/images-from-drive.sh    # pulls web.sif (+ verifies sha256) into infra/apptainer/
@@ -53,28 +58,33 @@ as `MXWP_DRIVE_REMOTE`). Scripts: `infra/scripts/images-to-drive.sh` / `images-f
 
 ## Files changed (for reference)
 
-- `apps/web/vite.config.ts` — `BASE`/`API_PREFIX` from `VITE_BASE_PATH`; shared `API_PROXY` used by
-  both `server` (dev) and `preview` (prod); `base: BASE`.
+- `apps/web/vite.config.ts` — `BASE`/`API_PREFIX` from `VITE_BASE_PATH`; the same `/api` proxy for
+  `server` (dev) and `preview` (local check of a build); `base: BASE`.
 - `apps/web/src/main.tsx` — `<BrowserRouter basename={import.meta.env.BASE_URL}>`.
 - `apps/web/src/lib/api/client.ts`, `features/sharing/api.ts`, `bootstrap.ts` — API base default
   `${import.meta.env.BASE_URL}api/v1` (still overridable via `VITE_API_URL`).
-- `infra/apptainer/web.def` — `%startscript` = build + `vite preview` (was `vite dev`).
-- `infra/scripts/start.sh` — injects `VITE_BASE_PATH`/`VITE_API_URL` from `MXWP_BASE_PATH`.
-- `.env.example` — `MXWP_BASE_PATH` documented.
+- `infra/apptainer/web.def` — `%startscript` = `serve -s` of the baked dist (was build + `vite preview`,
+  before that `vite dev`).
+- `infra/scripts/start.sh` — starts the web instance with no VITE env and relaunches `serve` if needed.
+- `Makefile` `build-web` — `MXWP_BASE_PATH` (default `/mx-white-paper/`) → `VITE_BASE_PATH`.
 
 ## Run behind the portal
 
 ```bash
-# in .env:  MXWP_BASE_PATH=/mx-white-paper/
-./infra/scripts/build.sh --force     # rebuild web.sif if web.def changed
-./infra/scripts/start.sh             # web instance builds dist + serves via preview on :5173
+# ONLINE build host:
+make build-web                       # bake /mx-white-paper/ into dist, then dist into web.sif
+# the serving box:
+./infra/scripts/start.sh             # web instance: serve -s /opt/web/dist on :5173 (no build)
 ```
 
-The portal forwards `https://hwax.sec.samsung.net/mx-white-paper/` → `127.0.0.1:5173`.
+The portal forwards `https://hwax.sec.samsung.net/mx-white-paper/` → `127.0.0.1:5173/` and
+`/mx-white-paper/api/` → `127.0.0.1:8800/api/` (prefix stripped). On the API side the same sub-path
+needs `REFRESH_COOKIE_PATH=/` and `PORTAL_SSO_LANDING=/mx-white-paper/` (`docs/lat/core.md`).
 
 ## Gotchas
 
-- `MXWP_BASE_PATH` must be present at **build time** (start.sh handles this) — base is baked into the
-  static assets, not applied at serve time.
-- The portal **passes the prefix through** (does not strip), so the SPA must be built with the base.
-- `/api` proxy lives in BOTH `server` and `preview` config — keep them in sync (shared `API_PROXY`).
+- The prefix must be present at **build time** as `VITE_BASE_PATH` (`make build-web` maps
+  `MXWP_BASE_PATH` to it) — base is baked into the static assets, not applied at serve time.
+- The portal **strips** the prefix, so the containers see root paths while the browser sees
+  `/mx-white-paper/…` — that is why the SPA must be built with the base.
+- `/api` proxy lives in BOTH `server` and `preview` config — keep them in sync (`makeApiProxy()`).
