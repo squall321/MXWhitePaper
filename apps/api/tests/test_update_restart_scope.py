@@ -1,4 +1,4 @@
-# update.sh 의 재기동이 이 스택의 인스턴스 다섯만 내리는지 — `instance stop --all` 이 이 계정의 인스턴스 전부를 내렸다(10-17 HWAX 결정 16)
+# update.sh 의 재기동이 이 스택의 인스턴스 여섯(위키 워커 mxwp_wiki 포함)만 내리는지 — `instance stop --all` 이 이 계정의 인스턴스 전부를 내렸다(10-17 HWAX 결정 16)
 #
 # 재기동 구획을 원문 그대로 떼어 가짜 apptainer(받은 인자를 적는다)로 돌린다. 앱을 import 하지 않아 호스트 pytest 로도 돈다.
 import re
@@ -23,7 +23,7 @@ def test_재기동은_이_스택의_인스턴스만_내린다(tmp_path):
     (tmp_path / "infra/scripts/start.sh").write_text('#!/usr/bin/env bash\necho started\n')
     (tmp_path / "infra/scripts/start.sh").chmod(0o755)
     names = dict(re.findall(r"^(INST_[A-Z]+)=(\S+)$", COMMON, flags=re.M))
-    assert len(names) == 5, names
+    assert len(names) == 6 and names["INST_WIKI"] == "mxwp_wiki", names
     env_lines = "\n".join(f"{k}={v}" for k, v in names.items())
     script = (f"set -euo pipefail\nAPPTAINER={fake}\nREPO_ROOT={tmp_path}\nENV_MARK={tmp_path}/mark\n"
               f"RESTART=1\nREBUILT_ANY=1\nCHANGED=\nENV_CHANGED_SINCE_RESTART=0\n{env_lines}\n{_restart_block()}\necho END\n")
