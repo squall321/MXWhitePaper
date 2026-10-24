@@ -61,6 +61,25 @@ class Settings(BaseSettings):
     portal_sso_default_role: str = Field(default="editor")   # role for auto-created SSO users
     portal_sso_landing: str = Field(default="/mx-white-paper/")  # where to send the browser after login
 
+    # ── 게이트웨이 · 포털 위임(docs/llm-wiki C1~C4) ───────────────────────────────────────────────
+    # 게이트웨이 · 포털과만 나눠 갖는 비밀. 비면 POST /api/v1/auth/sso 가 404(꺼짐)이고 소속 · 플랫폼 증명도
+    # 믿지 않는다. 자동으로 만들지 않는다 — 사람이 이 .env 와 게이트웨이 provision.env 에 같은 값을 넣는다(request §4-4).
+    mxwp_sso_secret: str = Field(default="")
+    # 위임 창구로 처음 보는 이메일이 오면 사용자를 만든다. 끄면 403 — 브라우저로 먼저 들어온 사람만 받는다.
+    mxwp_sso_jit_create: bool = Field(default=True)
+
+    # ── LLM 위키(docs/llm-wiki) ──────────────────────────────────────────────────────────────────
+    # 끄면(기본) /api/v1/wiki/* 가 404. 위키 쓰기는 mock 으로 대신하지 않는다 — LLM 이 없으면 작업이 줄에서 기다린다.
+    wiki_enabled: bool = Field(default=False)
+    # 배경(들이기 · 점검 · 지속 질의) LLM — 챗의 LLM_* 와 따로 둔다(박스마다 고른다, request §7).
+    wiki_llm_base_url: str = Field(default="")     # OpenAI 호환 base, 예 http://<ip>:<port>/v1
+    wiki_llm_model: str = Field(default="")
+    wiki_llm_api_key: str = Field(default="")
+    # 대화형(묻기) LLM — 비면 배경과 같게.
+    wiki_query_llm_base_url: str = Field(default="")
+    wiki_query_llm_model: str = Field(default="")
+    wiki_query_llm_api_key: str = Field(default="")
+
     # CORS
     cors_origins: str = Field(default="http://localhost:5173,http://localhost:80")
 
