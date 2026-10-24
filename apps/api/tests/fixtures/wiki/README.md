@@ -48,3 +48,19 @@
 | `ingest-long-quote` | 301자 인용 | V10 → failed |
 | `ingest-relations` | 사례 · 부품 · 불량 유형 · 해석 종류를 고르고 관계 둘(부품 → 불량 유형 · 불량 유형 → 사례)을 근거와 함께(W5) | — (자동 반영 · 코드가 둘을 더한다) |
 | `ingest-bad-relation` | 없는 술어 · 정의역 밖 · 후보 밖 끝 | V7 → failed · 후보 밖은 버린다 |
+| `ingest-resolve` | 엔티티 후보 고르기(`wiki_resolve`) — 첫 후보를 확신 0.9 로(시험이 0.4 로 바꿔 검토도 본다) | — / V7 → 검토 |
+
+들이기 시나리오는 모두 `wiki_resolve` 에 '답 없음'(`choices: []`)을 둔다 — 후보가 생겨도 W4 처럼 새 엔티티로 간다.
+
+## `resolve-gold.json` — 엔티티 해석 정답표(초안, W5)
+
+**MXWP 세션이 지은 초안이다 — 사람이 확인해 고친다**(request §9 '사람이 정답표를 만든다'). 등록부 13(모델 둘 · 부품 넷 · 불량 유형 셋 ·
+해석 종류 둘 · 대책 · 재료)과 사례 29.
+
+| 갈래 | 수 | 무엇 |
+| --- | --- | --- |
+| 결정적(exact · ext · spacing · punct · alias) | 15 | 외부 id · 띄어쓰기 · 구두점 · 별칭(대소문자) — 결정적으로 맞춰야 한다 |
+| 고르기(typo · suffix · synonym) | 9 | 오타 · 꼬리 말(assy · 시험 · 5G) · 다른 말(크랙 · 파손 · 부풀음 · 보강) — 정답이 후보에 있어야 하고 LLM 이 고른다 |
+| 새 것(near-miss · new) | 5 | 비슷한 다른 개체(가상폴드 A2 · 힌지 브래킷 변형 · SUS304)와 등록부에 없는 것 — new 여야 한다 |
+
+재기 — `python -m app.scripts.wiki_resolve_eval [--gold …] [--no-llm]`(심은 등록부는 되돌린다).

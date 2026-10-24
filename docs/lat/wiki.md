@@ -17,7 +17,7 @@
 | W2 보이기 범위 | 읽기 길 전수(아래 표) · 길마다 시험 · admin 범위 밖 읽기 감사. 남은 것 — cae00 배포 · 재색인 | [[#Audience]] |
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
 | W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
-| W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지 · 엔티티 등록부(보이기 · 별칭 · 외부 id · 중복 후보 · 합치기 — 늘 검토 · 되돌리기). 남은 것 — LLM 후보 해석 · 정답표 · 화면(온톨로지 · 등록부) | [[#Ontology]] · [[#Relations]] · [[#Entities]] |
+| W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지 · 엔티티 등록부(보이기 · 별칭 · 외부 id · 중복 후보 · 합치기 — 늘 검토 · 되돌리기). 엔티티 후보 해석(열쇠 · 후보 · `wiki_resolve`) · 정답표 초안 · 평가 스크립트. 남은 것 — 화면(온톨로지 · 등록부) · LLM 을 낀 정확도(진짜 LLM 이 있는 박스) | [[#Ontology]] · [[#Relations]] · [[#Entities]] · [[#Resolution]] |
 | W6 묻기 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -188,7 +188,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 | 단계 | 무엇 |
 | --- | --- |
 | 거르기 | 활성이 아닌 원천(새 판에 밀림 · 철회)과 `restricted`(WK-D37)는 들이지 않는다 — 원천 `skipped`, 기록에 까닭. LLM 을 부르지 않는다 |
-| 해석 | [[src/app/wiki/resolve.py#targets]] — 힌트마다 외부 id → 별칭 → 정규화 이름(공백 없앰 · casefold)으로 등록부를 찾고, 없으면 새 엔티티(승인된 유형만). 찾은 엔티티는 그 범위의 문서가 있으면 그 slug(합치기로 옮겨 온 문서는 slug 가 다르다 — 낡음 없는 것 · 오래된 것 먼저). 문서는 범위마다 한 장 — `["org"]` 는 기본 slug, 그 밖은 `<기본>--<범위 꼬리>`. 기본 slug(`ent-<약어>-<외부 id>` 또는 `-<이름 해시 6>`)는 엔티티 `attrs.slug` 에 적어 두고 다시 짓지 않는다. 사례 문서 `case-sim-<짧은 id>` · `case-field-<짧은 id>`(W4 는 엔티티를 잇지 않는다) |
+| 해석 | [[src/app/wiki/resolve.py#targets]] — 힌트마다 외부 id → 별칭 → 정규화 이름(공백 없앰 · casefold) → 열쇠로 등록부를 찾고, 못 찾으면 후보를 LLM 에게 물은 뒤([[#Resolution]]), 그래도 없으면 새 엔티티(승인된 유형만). 찾은 엔티티는 그 범위의 문서가 있으면 그 slug(합치기로 옮겨 온 문서는 slug 가 다르다 — 낡음 없는 것 · 오래된 것 먼저). 문서는 범위마다 한 장 — `["org"]` 는 기본 slug, 그 밖은 `<기본>--<범위 꼬리>`. 기본 slug(`ent-<약어>-<외부 id>` 또는 `-<이름 해시 6>`)는 엔티티 `attrs.slug` 에 적어 두고 다시 짓지 않는다. 사례 문서 `case-sim-<짧은 id>` · `case-field-<짧은 id>`(W4 는 엔티티를 잇지 않는다) |
 | 계획 | `wiki_plan` — 후보 안에서 고칠 문서와 까닭, 원천 문서 요약 · 물음 · 모순. 후보 밖 slug 는 버리고 `plan.unknown` 에 남긴다. 문서 수는 규칙서 `ingest.max_pages_per_source` |
 | 쓰기 | 문서마다 `wiki_write` — 그 문서의 절(누가 쓰나 표시)과 블록 id 를 보여 주고 `block.insert`(절 이름) · `block.update` · `block.delete` 와 근거(sid · loc · quote)를 받는다. 블록 종류는 문단 · 목록 · 표 · 알림 상자. 새 블록 id · 근거의 원천 id(sid 앞자리로 찾음)는 코드가 정한다 |
 | 검증 → 판정 | [[#Validation]] → `auto_applied`(바로 반영) · `pending_review` · `failed`. 반영 중 판 충돌이면 `pending_review` |
@@ -213,7 +213,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 | V4 audience | 인용한 원천의 범위 토큰(org 뺌)이 문서 범위에 다 있나 | fail — 그대로 승인하면 좁은 사실이 넓은 문서로 샌다 |
 | V5 locked | 잠긴 블록 · AI 가 쓰지 않는 절(`(자동)` · `(사람)`) · 사람 문서 · 검토 잠금 · `always_review_kinds` | review |
 | V6 scope | 계획에 없던 문서 · 지우기(늘 검토) · 묶음 크기(문서 · 블록 — 규칙서 `policy.auto_apply`) | review |
-| V7 ontology | 새 엔티티의 유형이 approved 인가 · 관계의 술어가 approved 인가 · 정의역 · 치역 · 두 끝이 후보인가 · 자기 자신과의 관계 | fail |
+| V7 ontology | 새 엔티티의 유형이 approved 인가 · 관계의 술어가 approved 인가 · 정의역 · 치역 · 두 끝이 후보인가 · 자기 자신과의 관계 | fail(엔티티 해석 의심은 review — 실패가 검토보다 앞선다) |
 | V8 links | `[[slug]]` 가 있거나 같은 묶음에서 생기나 · **더 좁은 문서로 링크하지 않나**(넓은 문서가 좁은 문서를 드러내지 않게) | fail |
 | V9 privacy | 이메일 · 전화 · 사번 꼴 — 가린다(`[가림]`, 연산의 블록을 고친다). 문답 · 심의만이 아니라 모든 원천에 | warn |
 | V10 quote | 근거 인용 300자(규칙서 `ingest.quote_max_chars`) · 원천 본문(300자 넘는 글)을 통째 옮김 | fail |
@@ -266,6 +266,7 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 
 `apps/api/tests/fixtures/wiki/` — 합성 원천 20 장(해석 6 · 사례 4 · 집계 2 · 문답 5 · 심의 2 · 정정 1)과 일부러 심은 결함(모순 · 낡음 ·
 빈틈 · 사람의 정정 · 연락처 꼴). 무엇이 어디 심겼는지는 그 폴더 `README.md`, 심겨 있는지는 [[apps/api/tests/test_wiki_w0.py]] 가 못 박는다.
+엔티티 해석 정답표 `resolve-gold.json`(초안 — 사람이 확인) — 등록부 13 · 사례 29(결정적 15 · 고르기 9 · 새 것 5) — [[#Resolution]].
 
 ## Fake LLM
 
@@ -285,6 +286,21 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 구조화 출력 꼴 `WIKI_LLM_STRUCTURED`(json_schema · tools) ·
 묻기 `WIKI_QUERY_LLM_*`(비면 배경과 같게) · 위임 `MXWP_SSO_SECRET`(비면 위임 창구 404) · `MXWP_SSO_JIT_CREATE`(기본 켬).
 API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 — 새 키에 start.sh `--env` 를 더할 필요가 없다.
+
+## Resolution
+
+[[src/app/wiki/resolve.py#resolve_hints]] — 힌트 하나 = `Resolution`(찾은 엔티티 · `how` · 후보 · 확신 · 까닭 · 의심). 들이기가 `plan.resolve` 에 남긴다.
+
+| 단계 | 어떻게 |
+| --- | --- |
+| 결정적 | 외부 id → 별칭 → 이름(공백 없앰 · casefold — SQL) → 열쇠(`strong_key` — 공백과 `-_.·/()[]` 없앰 · NFKC · casefold, 여럿이면 오래된 것). `how` = ext · alias · name · key |
+| 후보 | 못 찾으면 같은 유형의 살아 있는 엔티티 중 **원천 범위가 볼 수 있는 것**(범위 토큰 ⊆ 원천 범위 — 이름 · 별칭 · 외부 id 가 프롬프트 · 계획에 실린다)을 글자쌍 Dice(`similarity`) 순으로 `CANDIDATE_MIN` 0.4 이상 · `CANDIDATE_MAX` 5 까지. 비슷한 것이 없고 그 유형이 `SMALL_REGISTRY` 12 이하면 전부(한글 · 영문처럼 글자쌍이 안 겹치는 이름) |
+| 고르기 | 후보가 있는 힌트가 있으면 계획 앞에 `wiki_resolve` 한 번 — 힌트 이름표 `h1` · 후보 이름표 `h1c2`. [[src/app/wiki/ingest.py#apply_choices]] — 고른 후보는 그 엔티티(`llm`), `new` · 답 없음은 새 엔티티(잘못 잇느니 중복이 낫다 — 합치기가 있다), 없는 이름표 · 확신이 규칙서 `ingest.resolve_min_confidence`(기본 0.75 — 첫 판 YAML 에 없는 칸) 아래면 **의심** → V7 review |
+| 별칭 | 배우지 않는다 — 잘못 고른 짝이 다음 해석으로 번지지 않게. 사람이 등록부에서 단다([[#Entities]]) |
+| 재기 | [[src/app/scripts/wiki_resolve_eval.py]] — 정답표(`tests/fixtures/wiki/resolve-gold.json`, 초안)의 등록부를 한 트랜잭션에 심고 사례를 돌린 뒤 되돌린다. 정확도 · 결정적 정확도 · 후보 재현율 · 갈래별 · 틀린 사례. LLM 이 없거나 `--no-llm` 이면 고르기 없이. `existing: true` 등록부 줄은 박스의 진짜 엔티티를 쓴다 |
+
+dev(LLM 없음 · 10-24) — 29 사례 중 결정적 15 건 100 % · 비슷한 다른 개체를 결정적으로 잇는 것 0 · 후보 재현율 100 % · 고르기 없이 정확도 69 %
+(남은 9 건은 정답이 후보에 있다 — LLM 이 고를 몫). 시험 [[apps/api/tests/test_wiki_resolve.py]] · 들이기 둘(오타 → 고름 · 낮은 확신 → 검토).
 
 ## Relations
 

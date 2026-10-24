@@ -76,6 +76,7 @@ class Context:
     cited_blocks: set[tuple[str, str]] = field(default_factory=set)  # (slug, block_id) — 근거가 이미 달린 블록
     predicates: dict[str, Predicate] = field(default_factory=dict)  # approved 술어
     endpoints: dict[str, Target] = field(default_factory=dict)  # 관계의 끝이 될 수 있는 문서(고른 문서 + 있는 후보)
+    doubts: list[str] = field(default_factory=list)  # 엔티티 해석이 의심스러운 힌트(W5) — V7 검토
 
 
 def _num(raw: str) -> tuple[float, int]:
@@ -334,6 +335,8 @@ def run(ops: list[dict[str, Any]], ctx: Context) -> list[Check]:
     for target in ctx.targets.values():
         if target.entity and target.entity["type_key"] not in ctx.approved_types:
             found["V7"].append(f"{target.slug}: 승인되지 않은 유형 {target.entity['type_key']}")
+    if ctx.doubts:
+        review["V7"] = [f"엔티티 해석이 의심스럽다 — {d}" for d in ctx.doubts]
     for slug, doc_ops in by_doc.items():
         if slug not in ctx.targets:
             continue
@@ -353,11 +356,12 @@ def run(ops: list[dict[str, Any]], ctx: Context) -> list[Check]:
     checks: list[Check] = []
     for i in range(1, 12):
         rule = f"V{i}"
-        if review.get(rule):
+        if found[rule] and rule in HARD:  # 실패가 검토보다 앞선다(V7 은 둘 다 날 수 있다)
+            checks.append(Check(rule, "fail", "; ".join(found[rule])[:2000]))
+        elif review.get(rule):
             checks.append(Check(rule, "review", "; ".join(review[rule])[:2000]))
         elif found[rule]:
-            verdict = "fail" if rule in HARD else "warn"
-            checks.append(Check(rule, verdict, "; ".join(found[rule])[:2000]))
+            checks.append(Check(rule, "warn", "; ".join(found[rule])[:2000]))
         else:
             checks.append(Check(rule, "pass"))
     return checks

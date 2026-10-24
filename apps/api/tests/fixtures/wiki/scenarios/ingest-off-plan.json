@@ -78,6 +78,20 @@
           "sec": "\\n## ([^\\n(]+?) \\(AI\\)"
         }
       }
+    },
+    {
+      "match": {
+        "schema": "wiki_resolve"
+      },
+      "reply": {
+        "json": {
+          "choices": []
+        }
+      },
+      "usage": {
+        "prompt_tokens": 600,
+        "completion_tokens": 10
+      }
     }
   ]
 }

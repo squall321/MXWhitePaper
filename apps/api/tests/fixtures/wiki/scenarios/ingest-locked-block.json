@@ -65,6 +65,20 @@
           "completion_tokens": 200
         }
       }
+    },
+    {
+      "match": {
+        "schema": "wiki_resolve"
+      },
+      "reply": {
+        "json": {
+          "choices": []
+        }
+      },
+      "usage": {
+        "prompt_tokens": 600,
+        "completion_tokens": 10
+      }
     }
   ]
 }

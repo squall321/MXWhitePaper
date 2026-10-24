@@ -148,6 +148,8 @@ class Ingest(_M):
     one_at_a_time: bool = True
     max_pages_per_source: int = Field(12, ge=1, le=50)
     quote_max_chars: int = Field(300, ge=20, le=300)
+    # 엔티티 후보 고르기(W5) — LLM 의 확신이 이보다 낮으면 묶음을 검토로(V7). 첫 판 YAML 에는 없다 — 기본값.
+    resolve_min_confidence: float = Field(0.75, ge=0, le=1)
 
 
 class IndexCfg(_M):

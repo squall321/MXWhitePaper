@@ -437,3 +437,37 @@ async def test_relation_to_existing_page_refreshes_it(wiki: dict[str, Any]) -> N
         await wiki_review.revert(s, cs["id"], user=wiki["admin"])
         content = (await s.execute(text("SELECT content_json FROM documents WHERE slug = :s"), {"s": part})).scalar_one()
     assert f"[[{case}|" not in _section(_j(content), "관계")  # 되돌리면 계획 밖 끝점 문서도 다시 짓는다
+
+
+# ── 엔티티 후보 고르기(W5) ────────────────────────────────────────────────────────────────────
+
+async def _typo_after_part(wiki: dict[str, Any]) -> tuple[str, str]:
+    first = await _receive(wiki["admin"], "17")  # org 문답 — 부품 '힌지 브래킷 <RUN>' 과 그 문서를 만든다
+    await _drain()
+    part = (await _change(first))["plan"]["pages"][0]["slug"]
+    typo = {"type": "part", "name": f"힌지 브라켓 {RUN}"}  # 오타 · 외부 id 없음 — 결정적으로는 못 찾는다
+    return part, await _receive(wiki["admin"], "14", ingest=False, subject_hints=[typo])
+
+
+async def test_llm_picks_a_candidate(wiki: dict[str, Any]) -> None:
+    part, sid = await _typo_after_part(wiki)
+    wiki["llm"].load("ingest-resolve.json")
+    async with session_scope() as s:
+        await sources.enqueue_ingest(s, [sid], caller=wiki["admin"])
+    await _drain()
+    cs = await _change(sid)
+    r = cs["plan"]["resolve"][0]
+    assert r["how"] == "llm" and r["entity"]["name"] == f"힌지 브래킷 {RUN}" and r["candidates"][0]["name"] == f"힌지 브래킷 {RUN}"
+    assert cs["plan"]["pages"][0]["slug"] == part and cs["status"] == "auto_applied", cs["validation"]  # 있던 부품 문서를 고친다
+
+
+async def test_low_confidence_choice_goes_to_review(wiki: dict[str, Any]) -> None:
+    _part, sid = await _typo_after_part(wiki)
+    sc = _scenario("ingest-resolve")
+    next(r for r in sc["rules"] if r["match"]["schema"] == "wiki_resolve")["reply"]["json"]["choices"][0]["confidence"] = 0.4
+    wiki["llm"].load(sc)
+    async with session_scope() as s:
+        await sources.enqueue_ingest(s, [sid], caller=wiki["admin"])
+    await _drain()
+    cs = await _change(sid)
+    assert cs["status"] == "pending_review" and _verdict(cs, "V7") == "review" and cs["plan"]["resolve"][0]["doubt"]

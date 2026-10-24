@@ -11,11 +11,15 @@
 - 관계(W5) — 사례 문서가 무엇에 관한 것인지(about-model · about-part · simulated-with)와 시장 사례의 불량 관찰(observed-in)은 코드가
   원천의 주제 힌트로 단다. 그 밖의 관계는 계획이 `relations` 로 낸다(승인된 술어 · 후보 사이 · 근거). 끝은 고른 문서와 이미 있는 후보 —
   둘 다 원천과 범위가 같다. 끝이 그 밖이면 버리고 `plan.relations_dropped` 에 남긴다.
+- 엔티티 후보(W5) — 결정적으로 못 찾은 힌트에 비슷한 후보가 있으면 계획 앞에 `wiki_resolve` 로 한 번 묻는다. 고른 후보는 그 엔티티로,
+  `new` · 답 없음은 새 엔티티로. 확신이 규칙서 `ingest.resolve_min_confidence` 보다 낮거나 없는 후보를 고르면 V7 검토(의심). 별칭은
+  배우지 않는다(잘못 고른 짝이 다음 해석으로 번지지 않게 — 사람이 등록부에서 단다). 해석은 `plan.resolve` 에 남긴다.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Annotated, Any, Literal
 from zoneinfo import ZoneInfo
 
@@ -105,6 +109,17 @@ class DeleteOp(BaseModel):
     why: str
 
 
+class ResolveChoice(BaseModel):
+    hint: str = Field(description="힌트 이름표 그대로 — h1 · h2 …")
+    choice: str = Field(description="같은 개체인 후보의 이름표(예 h1c2) 또는 new")
+    confidence: float = Field(ge=0, le=1)
+    why: str = Field(description="까닭 한 줄")
+
+
+class ResolveOut(BaseModel):
+    choices: list[ResolveChoice] = Field(default_factory=list)
+
+
 class WriteOut(BaseModel):
     ops: list[Annotated[InsertOp | UpdateOp | DeleteOp, Field(discriminator="op")]]
 
@@ -139,6 +154,43 @@ def _source_block(src: dict[str, Any]) -> str:
     return (f"<<<원천 {src['sid']}\n종류: {src['kind']}\n제목: {src['title']}\n범위: {', '.join(src['audience'])}\n"
             f"생긴 때: {src['captured_at'].astimezone(KST):%Y-%m-%d %H:%M} KST\n요약: {src.get('summary') or ''}\n"
             f"본문(JSON):\n{body}\n>>>")
+
+
+def resolve_messages(book: wiki_schema.RuleBook, src: dict[str, Any],
+                     pending: list[resolve.Resolution]) -> list[dict[str, str]]:
+    lines: list[str] = []
+    for n, r in enumerate(pending, 1):
+        lines.append(f"h{n}: {r.type_key} · {r.name} · 외부 id {', '.join(f'{k}={v}' for k, v in sorted(r.ext.items())) or '-'}")
+        for m, c in enumerate(r.candidates, 1):
+            ext = ", ".join(f"{k}={v}" for k, v in sorted((c["ext_ids"] or {}).items())) or "-"
+            lines.append(f"  - h{n}c{m}: {c['name']} · 별칭 {', '.join(c['aliases']) or '-'} · 외부 id {ext}")
+    return [_system(book), {"role": "user", "content": (
+        f"{_source_block(src)}\n\n원천의 주제 힌트와 등록부의 후보:\n" + "\n".join(lines) + "\n\n"
+        "할 일 — 힌트마다 같은 개체인 후보를 하나 고르거나(choice = 후보 이름표, 예 h1c2) 없으면 new. 이름이 비슷해도 다른 모델 · "
+        "다른 부품 · 다른 불량이면 new. confidence 는 0~1, why 는 한 줄. 모든 힌트에 답한다.")}]
+
+
+def apply_choices(pending: list[resolve.Resolution], out: ResolveOut, min_conf: float) -> None:
+    """LLM 의 답을 해석에 적는다 — 고른 후보 · new · 답 없음(새 엔티티), 없는 후보 · 낮은 확신은 의심(V7 검토)."""
+    by_hint = {c.hint.strip().lower(): c for c in out.choices}
+    for n, r in enumerate(pending, 1):
+        c = by_hint.get(f"h{n}")
+        if c is None:
+            r.how, r.why = "new", "답이 없다 — 새 엔티티"
+            continue
+        r.confidence, r.why = c.confidence, c.why
+        pick = c.choice.strip().lower()
+        if pick == "new":
+            r.how = "new"
+            continue
+        m = re.fullmatch(rf"h{n}c(\d+)", pick)
+        if m is None or not 1 <= int(m.group(1)) <= len(r.candidates):
+            r.how, r.doubt = "new", f"{r.name}: 없는 후보를 골랐다({c.choice}) — 새 엔티티로 두고 사람이 본다"
+            continue
+        cand = r.candidates[int(m.group(1)) - 1]
+        r.entity, r.how = {"id": cand["id"], "name": cand["name"], "attrs": cand["attrs"]}, "llm"
+        if c.confidence < min_conf:
+            r.doubt = f"{r.name} → {cand['name']}: 확신 {c.confidence:.2f} < {min_conf:.2f}"
 
 
 def plan_messages(book: wiki_schema.RuleBook, src: dict[str, Any], targets: list[resolve.Target],
@@ -307,7 +359,8 @@ async def normalize_ops(s: AsyncSession, raw: list[InsertOp | UpdateOp | DeleteO
 async def build_context(s: AsyncSession, book: wiki_schema.RuleBook, chosen: list[resolve.Target],
                         base: dict[str, dict[str, Any]], ops: list[dict[str, Any]], *,
                         endpoints: dict[str, resolve.Target] | None = None,
-                        preds: dict[str, ontology.Predicate] | None = None) -> validate.Context:
+                        preds: dict[str, ontology.Predicate] | None = None,
+                        doubts: list[str] | None = None) -> validate.Context:
     source_ids = sorted({c["source_id"] for op in ops for c in op.get("cites") or [] if c.get("source_id")})
     rows = (await s.execute(text("""
         SELECT id, payload, audience, kind, captured_at, title FROM wiki_sources WHERE id = ANY(CAST(:ids AS uuid[]))
@@ -329,7 +382,7 @@ async def build_context(s: AsyncSession, book: wiki_schema.RuleBook, chosen: lis
                             existing_slugs=set(existing), link_audience=existing,
                             approved_types=await ontology.approved_types(s), cited_blocks=cited,
                             predicates=preds if preds is not None else await ontology.predicates(s),
-                            endpoints=endpoints or {t.slug: t for t in chosen})
+                            endpoints=endpoints or {t.slug: t for t in chosen}, doubts=doubts or [])
 
 
 def _audience(chosen: list[resolve.Target], src: dict[str, Any]) -> list[str]:
@@ -355,7 +408,7 @@ async def run(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
         await s.commit()
         raise llm.LLMUnavailable("WIKI_LLM_BASE_URL · WIKI_LLM_MODEL 이 비었다")
     book = await wiki_schema.load(s)
-    targets = await resolve.targets(s, src)
+    resolutions = await resolve.resolve_hints(s, src)
     preds = await ontology.predicates(s)
     _, author_email = await wiki_apply.wiki_author(s)
     division = get_settings().import_default_division
@@ -365,6 +418,14 @@ async def run(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
     usage = llm.Usage()
     prompts: list[Any] = []
     try:
+        pending = [r for r in resolutions if r.entity is None and r.candidates]
+        if pending:
+            messages = resolve_messages(book, src, pending)
+            prompts.append(messages)
+            got = await llm.structured(ep, messages, ResolveOut, name="wiki_resolve", usage=usage)
+            _check_budget(book, usage)
+            apply_choices(pending, got, book.spec.ingest.resolve_min_confidence)
+        targets = await resolve.targets(s, src, resolutions)
         messages = plan_messages(book, src, targets, preds)
         prompts.append(messages)
         plan = await llm.structured(ep, messages, PlanOut, name="wiki_plan", usage=usage)
@@ -402,7 +463,8 @@ async def run(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
     endpoints = {t.slug: t for t in targets if t.exists or t in chosen}
     rel_ops, dropped = await relation_ops(s, src, plan.relations, endpoints, preds)
     ops = await normalize_ops(s, raw) + rel_ops
-    ctx = await build_context(s, book, chosen, base, ops, endpoints=endpoints, preds=preds)
+    ctx = await build_context(s, book, chosen, base, ops, endpoints=endpoints, preds=preds,
+                              doubts=[r.doubt for r in resolutions if r.doubt])
     checks = validate.run(ops, ctx)
     status = validate.decide(checks, ops, book)
     why = {p.slug: p.why for p in plan.pages}
@@ -411,6 +473,7 @@ async def run(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
         "source_id": source_id, "sid": src["sid"],
         "unknown": [p.slug for p in plan.pages if p.slug not in by_slug],
         "relations_dropped": dropped,
+        "resolve": [r.as_plan() for r in resolutions],
         "endpoints": [{"slug": t.slug, "type_key": t.type_key, "title": t.title} for t in endpoints.values()
                       if t not in chosen],
         "pages": [{"slug": t.slug, "kind": t.kind, "type_key": t.type_key, "title": t.title, "audience": t.audience,

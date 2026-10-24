@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import re
-import unicodedata
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -24,19 +23,14 @@ from app.core.errors import Conflict, NotFound, ValidationFailed
 from app.repos import document_repo
 from app.wiki import audience
 from app.wiki.apply import ApplyConflict, short_cs
+from app.wiki.resolve import strong_key
 
-_PUNCT = re.compile(r"[\s\-_.·/()\[\]]+")
 _EXT_KEY = re.compile(r"^[a-z][a-z0-9_]{1,40}$")
 _VISIBLE = f"""(CAST(:_aud_all AS boolean) OR EXISTS (
     SELECT 1 FROM wiki_pages _ep JOIN documents d ON d.id = _ep.doc_id
      WHERE _ep.entity_id = e.id AND d.status <> 'archived' AND {audience.visible_sql('d')}))"""
 _COLS = """e.id, e.type_key, t.label_ko, e.canonical_name, e.aliases, e.ext_ids, e.attrs, e.audience, e.status, e.merged_into,
            e.created_at, e.updated_at"""
-
-
-def strong_key(name: str) -> str:
-    """중복 찾기 열쇠 — NFKC · casefold · 공백과 흔한 구두점(-_.·/()[]) 없앰."""
-    return _PUNCT.sub("", unicodedata.normalize("NFKC", name)).casefold()
 
 
 def _full(aud: list[str], viewer: audience.Viewer) -> bool:

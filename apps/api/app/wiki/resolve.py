@@ -1,5 +1,8 @@
 # 위키 들이기의 결정적 엔티티 해석 · 후보 문서 — 외부 id → 별칭 → 정규화 이름 순으로 등록부에서 찾고, 범위마다 한 장인 문서를 고른다
-"""request §5-6 ② · CONTRACTS §2-6 · §2-11 · SCHEMA-DRAFT §3. W4 는 결정적 부분만 — 후보 중 LLM 이 고르기 · 합치기는 W5.
+"""request §5-6 ② · CONTRACTS §2-6 · §2-11 · SCHEMA-DRAFT §3. W4 는 결정적 부분, W5 는 후보 — `resolve_hints` 가 힌트마다
+외부 id → 별칭 → 이름 → 열쇠(`strong_key` — 공백 · 흔한 구두점 무시)로 찾고, 못 찾으면 비슷한 후보(글자쌍 유사도 — `CANDIDATE_MIN`)를
+모은다. 후보 중 고르기는 들이기가 LLM 에게 묻고(ingest `wiki_resolve`) 그 답을 `Resolution` 에 적어 `targets` 에 넘긴다. 후보는 원천의
+범위가 볼 수 있는 엔티티만(범위 토큰 ⊆ 원천 범위 — 프롬프트 · 계획에 이름 · 별칭 · 외부 id 가 실린다).
 
 - 유형이 승인되지 않은 힌트는 해석하지 않는다(새 엔티티를 만들 수 없다 — V7).
 - 엔티티 문서는 범위마다 한 장 — `["org"]` 는 기본 slug, 그 밖은 `<기본>--<범위 꼬리>`(예 `ent-part-…--syn-cae1`). 원천의 사실은 원천과
@@ -15,13 +18,17 @@ import hashlib
 import json
 import re
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 _SLUG_BAD = re.compile(r"[^a-z0-9]+")
+_PUNCT = re.compile(r"[\s\-_.·/()\[\]]+")
+CANDIDATE_MIN = 0.4  # 글자쌍 Dice — 이보다 낮으면 후보가 아니다
+CANDIDATE_MAX = 5
+SMALL_REGISTRY = 12  # 비슷한 후보가 없을 때 이만큼 이하인 유형은 전부를 후보로(한글 · 영문처럼 글자쌍이 안 겹치는 이름)
 
 
 @dataclass
@@ -44,8 +51,45 @@ class Target:
     labels: dict[str, str] = field(default_factory=dict)
 
 
+@dataclass
+class Resolution:
+    """힌트 하나의 해석 — 찾은 엔티티(how) · 못 찾았으면 후보 · LLM 이 고른 뒤의 확신 · 까닭 · 의심."""
+
+    index: int
+    type_key: str
+    name: str
+    ext: dict[str, str]
+    entity: dict[str, Any] | None = None  # {id, name, attrs}
+    how: str = "new"  # ext · alias · name · key · llm · new
+    candidates: list[dict[str, Any]] = field(default_factory=list)  # {id, name, aliases, ext_ids, score}
+    confidence: float | None = None
+    why: str = ""
+    doubt: str | None = None  # 있으면 V7 검토
+
+    def as_plan(self) -> dict[str, Any]:
+        out = asdict(self)
+        out["entity"] = {"id": self.entity["id"], "name": self.entity["name"]} if self.entity else None
+        out["candidates"] = [{"id": c["id"], "name": c["name"], "score": c["score"]} for c in self.candidates]
+        return out
+
+
 def normalize(name: str) -> str:
     return re.sub(r"\s+", "", unicodedata.normalize("NFKC", name)).casefold()
+
+
+def strong_key(name: str) -> str:
+    """중복 · 해석의 열쇠 — NFKC · casefold · 공백과 흔한 구두점(-_.·/()[]) 없앰."""
+    return _PUNCT.sub("", unicodedata.normalize("NFKC", name)).casefold()
+
+
+def similarity(a: str, b: str) -> float:
+    """열쇠의 글자쌍 Dice(0~1). 한 글자 열쇠는 그 글자 하나를 쌍으로 본다."""
+    def grams(x: str) -> set[str]:
+        k = strong_key(x)
+        return {k[i:i + 2] for i in range(len(k) - 1)} or {k}
+
+    ga, gb = grams(a), grams(b)
+    return 2 * len(ga & gb) / (len(ga) + len(gb)) if ga and gb else 0.0
 
 
 def _slugify(value: str) -> str:
@@ -104,6 +148,49 @@ async def _find_entity(s: AsyncSession, type_key: str, name: str, ext: dict[str,
     return None
 
 
+async def _by_key(s: AsyncSession, type_key: str, name: str,
+                  src_audience: list[str]) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """열쇠가 같은 엔티티(여럿이면 오래된 것) 또는 비슷한 후보 — 후보는 원천 범위가 볼 수 있는 것만, 유사도 순 CANDIDATE_MAX 까지.
+    비슷한 것이 없고 볼 수 있는 엔티티가 SMALL_REGISTRY 이하면 전부(점수 낮은 것까지)."""
+    rows = (await s.execute(text("""
+        SELECT id, canonical_name, aliases, ext_ids, attrs, audience FROM wiki_entities
+         WHERE type_key = :t AND status = 'active' ORDER BY created_at
+    """), {"t": type_key})).all()
+    key = strong_key(name)
+    for r in rows:
+        if key in {strong_key(n) for n in [r[1], *r[2]]}:
+            return {"id": str(r[0]), "name": r[1], "attrs": r[4], "how": "key"}, []
+    allowed = [{"id": str(r[0]), "name": r[1], "aliases": list(r[2]),
+                "ext_ids": json.loads(r[3]) if isinstance(r[3], str) else r[3], "attrs": r[4],
+                "score": round(max(similarity(name, n) for n in [r[1], *r[2]]), 3)}
+               for r in rows if set(r[5]) - {"org"} <= set(src_audience)]
+    scored = sorted((c for c in allowed if c["score"] >= CANDIDATE_MIN), key=lambda c: -c["score"])
+    if scored:
+        return None, scored[:CANDIDATE_MAX]
+    return None, allowed if len(allowed) <= SMALL_REGISTRY else []
+
+
+async def resolve_hints(s: AsyncSession, src: dict[str, Any]) -> list[Resolution]:
+    """원천의 힌트마다 결정적으로 찾고, 못 찾으면 후보를 모은다(LLM 은 부르지 않는다). 승인되지 않은 유형 · 빈 이름은 뺀다."""
+    approved = {r[0] for r in (await s.execute(text("SELECT key FROM wiki_entity_types WHERE status = 'approved'"))).all()}
+    out: list[Resolution] = []
+    for i, hint in enumerate(src.get("subject_hints") or []):
+        type_key, name = hint.get("type"), str(hint.get("name") or "").strip()
+        if type_key not in approved or not name:
+            continue
+        ext = {str(k): str(v) for k, v in (hint.get("ext") or {}).items()}
+        res = Resolution(index=i, type_key=type_key, name=name, ext=ext)
+        found = await _find_entity(s, type_key, name, ext)
+        cands: list[dict[str, Any]] = []
+        if found is None:
+            found, cands = await _by_key(s, type_key, name, list(src["audience"]))
+        if found is not None:
+            res.entity, res.how = {k: found[k] for k in ("id", "name", "attrs")}, found["how"]
+        res.candidates = cands
+        out.append(res)
+    return out
+
+
 async def _entity_page(s: AsyncSession, entity_id: str, audience: list[str]) -> str | None:
     return (await s.execute(text("""
         SELECT d.slug FROM wiki_pages wp JOIN documents d ON d.id = wp.doc_id
@@ -143,8 +230,11 @@ async def _target(s: AsyncSession, slug: str, *, kind: str, type_key: str, title
     return t
 
 
-async def targets(s: AsyncSession, src: dict[str, Any]) -> list[Target]:
-    """원천 하나가 고칠 수 있는 문서들 — 사례 문서(해당하면) · 힌트마다 엔티티 문서. 같은 slug 는 한 번."""
+async def targets(s: AsyncSession, src: dict[str, Any], resolutions: list[Resolution] | None = None) -> list[Target]:
+    """원천 하나가 고칠 수 있는 문서들 — 사례 문서(해당하면) · 힌트마다 엔티티 문서. 같은 slug 는 한 번.
+
+    `resolutions` 가 없으면 결정적 해석만(후보가 있어도 새 엔티티 — LLM 을 묻지 않은 것과 같다).
+    """
     types = {r[0]: (r[1], r[2]) for r in (await s.execute(text(
         "SELECT key, abbr, label_ko FROM wiki_entity_types WHERE status = 'approved'"))).all()}
     audience = list(src["audience"])
@@ -157,13 +247,11 @@ async def targets(s: AsyncSession, src: dict[str, Any]) -> list[Target]:
     elif src["kind"] == "field_defect" and body.get("form") == "case" and "field-case" in types:
         out.append(await _target(s, f"case-field-{short}", kind="case", type_key="field-case", title=src["title"],
                                  audience=audience, entity_id=None, entity=None, label=types["field-case"][1]))
-    for hint in src.get("subject_hints") or []:
-        type_key, name = hint.get("type"), str(hint.get("name") or "").strip()
-        if type_key not in types or not name:
+    for res in resolutions if resolutions is not None else await resolve_hints(s, src):
+        type_key, name, ext, found = res.type_key, res.name, res.ext, res.entity
+        if type_key not in types:
             continue
         abbr, label = types[type_key]
-        ext = {str(k): str(v) for k, v in (hint.get("ext") or {}).items()}
-        found = await _find_entity(s, type_key, name, ext)
         if found:
             base = (found["attrs"] or {}).get("slug") or base_slug(abbr, found["name"], ext)
             canonical, entity = found["name"], None

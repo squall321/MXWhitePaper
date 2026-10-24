@@ -1,0 +1,90 @@
+{
+  "_note": "엔티티 후보 고르기(W5) — 결정적으로 못 찾은 힌트(오타)에 첫 후보를 확신 0.9 로 고른다. 계획 · 쓰기는 정상과 같다",
+  "model": "fake-wiki",
+  "rules": [
+    {
+      "match": {
+        "schema": "wiki_plan"
+      },
+      "reply": {
+        "json": {
+          "summary": "{{summary}}",
+          "pages": [
+            {
+              "slug": "{{cand}}",
+              "why": "원천의 사실을 담는다."
+            }
+          ]
+        },
+        "capture": {
+          "cand": "후보: ([a-z0-9-]+)",
+          "summary": "\\n요약: ([^\\n]*)"
+        },
+        "usage": {
+          "prompt_tokens": 1200,
+          "completion_tokens": 80
+        }
+      }
+    },
+    {
+      "match": {
+        "schema": "wiki_write"
+      },
+      "reply": {
+        "json": {
+          "ops": [
+            {
+              "op": "block.insert",
+              "doc": "{{doc}}",
+              "section": "{{sec}}",
+              "block": {
+                "type": "paragraph",
+                "text": "{{summary}}"
+              },
+              "cites": [
+                {
+                  "sid": "{{sid}}",
+                  "loc": {
+                    "path": "/"
+                  }
+                }
+              ],
+              "why": "원천을 옮긴다."
+            }
+          ]
+        },
+        "capture": {
+          "doc": "\\n문서: ([a-z0-9-]+)",
+          "sid": "<<<원천 (src_[0-9a-f]+)",
+          "summary": "\\n요약: ([^\\n]*)",
+          "sec": "\\n## ([^\\n(]+?) \\(AI\\)"
+        },
+        "usage": {
+          "prompt_tokens": 1500,
+          "completion_tokens": 200
+        }
+      }
+    },
+    {
+      "match": {
+        "schema": "wiki_resolve"
+      },
+      "reply": {
+        "json": {
+          "choices": [
+            {
+              "hint": "h1",
+              "choice": "h1c1",
+              "confidence": 0.9,
+              "why": "오타 — 같은 부품"
+            }
+          ]
+        }
+      },
+      "usage": {
+        "prompt_tokens": 700,
+        "completion_tokens": 30
+      }
+    }
+  ]
+}

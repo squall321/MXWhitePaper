@@ -1,0 +1,344 @@
+{
+  "_note": "엔티티 해석 정답표 — 초안(W5, MXWP 세션이 지었다). 사람이 확인해 고친다. 값은 모두 지어낸 것(SYN-). registry 를 트랜잭션 안에 심고 cases 를 돌린 뒤 되돌린다(app/scripts/wiki_resolve_eval.py). existing: true 인 등록부 줄은 심지 않고 그 이름의 살아 있는 엔티티를 쓴다(cae00 의 진짜 등록부로 잴 때).",
+  "status": "draft",
+  "registry": [
+    {
+      "key": "model-a1",
+      "type": "product-model",
+      "name": "가상폴드 A1",
+      "aliases": [
+        "SYN Fold A1"
+      ],
+      "ext": {
+        "sp_model": "SYN-M-A1"
+      }
+    },
+    {
+      "key": "model-b2",
+      "type": "product-model",
+      "name": "가상바 B2",
+      "ext": {
+        "sp_model": "SYN-M-B2"
+      }
+    },
+    {
+      "key": "part-hb",
+      "type": "part",
+      "name": "힌지 브래킷",
+      "aliases": [
+        "Hinge Bracket"
+      ],
+      "ext": {
+        "bom_code": "SYN-BOM-HB01"
+      }
+    },
+    {
+      "key": "part-hc",
+      "type": "part",
+      "name": "힌지 커버",
+      "ext": {
+        "bom_code": "SYN-BOM-HC01"
+      }
+    },
+    {
+      "key": "part-cg",
+      "type": "part",
+      "name": "커버 글라스",
+      "aliases": [
+        "Cover Glass"
+      ],
+      "ext": {
+        "bom_code": "SYN-BOM-CG01"
+      }
+    },
+    {
+      "key": "part-bp",
+      "type": "part",
+      "name": "배터리 팩",
+      "ext": {
+        "bom_code": "SYN-BOM-BP01"
+      }
+    },
+    {
+      "key": "fm-crack",
+      "type": "failure-mode",
+      "name": "힌지 브래킷 균열"
+    },
+    {
+      "key": "fm-glass",
+      "type": "failure-mode",
+      "name": "커버 글라스 깨짐"
+    },
+    {
+      "key": "fm-swell",
+      "type": "failure-mode",
+      "name": "배터리 스웰링"
+    },
+    {
+      "key": "simt-ad",
+      "type": "sim-type",
+      "name": "전각도 낙하"
+    },
+    {
+      "key": "simt-sd",
+      "type": "sim-type",
+      "name": "단일 낙하"
+    },
+    {
+      "key": "cm-rib",
+      "type": "countermeasure",
+      "name": "힌지 리브 추가"
+    },
+    {
+      "key": "mat-301",
+      "type": "material",
+      "name": "SUS301"
+    }
+  ],
+  "cases": [
+    {
+      "hint": {
+        "type": "part",
+        "name": "힌지 브래킷",
+        "ext": {
+          "bom_code": "SYN-BOM-HB01"
+        }
+      },
+      "expect": "part-hb",
+      "kind": "exact"
+    },
+    {
+      "hint": {
+        "type": "part",
+        "name": "HB01 브래킷 어셈블리",
+        "ext": {
+          "bom_code": "SYN-BOM-HB01"
+        }
+      },
+      "expect": "part-hb",
+      "kind": "ext"
+    },
+    {
+      "hint": {
+        "type": "part",
+        "name": "힌지브래킷"
+      },
+      "expect": "part-hb",
+      "kind": "spacing"
+    },
+    {
+      "hint": {
+        "type": "part",
+        "name": "힌지-브래킷"
+      },
+      "expect": "part-hb",
+      "kind": "punct"
+    },
+    {
+      "hint": {
+        "type": "part",
+        "name": "hinge bracket"
+      },
+      "expect": "part-hb",
+      "kind": "alias"
+    },
+    {
+      "hint": {
+        "type": "part",
+        "name": "커버글라스"
+      },
+      "expect": "part-cg",
+      "kind": "spacing"
+    },
+    {
+      "hint": {
+        "type": "part",
+        "name": "Cover-Glass"
+      },
+      "expect": "part-cg",
+      "kind": "alias"
+    },
+    {
+      "hint": {
+        "type": "part",
+        "name": "배터리 팩"
+      },
+      "expect": "part-bp",
+      "kind": "exact"
+    },
+    {
+      "hint": {
+        "type": "part",
+        "name": "힌지 커버",
+        "ext": {
+          "bom_code": "SYN-BOM-HC01"
+        }
+      },
+      "expect": "part-hc",
+      "kind": "exact"
+    },
+    {
+      "hint": {
+        "type": "product-model",
+        "name": "가상 폴드 A1"
+      },
+      "expect": "model-a1",
+      "kind": "spacing"
+    },
+    {
+      "hint": {
+        "type": "product-model",
+        "name": "SYN Fold A1"
+      },
+      "expect": "model-a1",
+      "kind": "alias"
+    },
+    {
+      "hint": {
+        "type": "product-model",
+        "name": "Virtual Bar B2",
+        "ext": {
+          "sp_model": "SYN-M-B2"
+        }
+      },
+      "expect": "model-b2",
+      "kind": "ext"
+    },
+    {
+      "hint": {
+        "type": "sim-type",
+        "name": "전 각도 낙하"
+      },
+      "expect": "simt-ad",
+      "kind": "spacing"
+    },
+    {
+      "hint": {
+        "type": "failure-mode",
+        "name": "배터리스웰링"
+      },
+      "expect": "fm-swell",
+      "kind": "spacing"
+    },
+    {
+      "hint": {
+        "type": "material",
+        "name": "SUS 301"
+      },
+      "expect": "mat-301",
+      "kind": "spacing"
+    },
+    {
+      "hint": {
+        "type": "part",
+        "name": "힌지 브라켓"
+      },
+      "expect": "part-hb",
+      "kind": "typo"
+    },
+    {
+      "hint": {
+        "type": "part",
+        "name": "힌지브래킷 assy"
+      },
+      "expect": "part-hb",
+      "kind": "suffix"
+    },
+    {
+      "hint": {
+        "type": "part",
+        "name": "Hinge Bracket Assy"
+      },
+      "expect": "part-hb",
+      "kind": "suffix"
+    },
+    {
+      "hint": {
+        "type": "failure-mode",
+        "name": "힌지 브래킷 크랙"
+      },
+      "expect": "fm-crack",
+      "kind": "synonym"
+    },
+    {
+      "hint": {
+        "type": "failure-mode",
+        "name": "커버 글라스 파손"
+      },
+      "expect": "fm-glass",
+      "kind": "synonym"
+    },
+    {
+      "hint": {
+        "type": "failure-mode",
+        "name": "배터리 부풀음"
+      },
+      "expect": "fm-swell",
+      "kind": "synonym"
+    },
+    {
+      "hint": {
+        "type": "sim-type",
+        "name": "전각도낙하 시험"
+      },
+      "expect": "simt-ad",
+      "kind": "suffix"
+    },
+    {
+      "hint": {
+        "type": "countermeasure",
+        "name": "힌지 리브 보강"
+      },
+      "expect": "cm-rib",
+      "kind": "synonym"
+    },
+    {
+      "hint": {
+        "type": "product-model",
+        "name": "가상폴드A1 5G"
+      },
+      "expect": "model-a1",
+      "kind": "suffix"
+    },
+    {
+      "hint": {
+        "type": "product-model",
+        "name": "가상폴드 A2"
+      },
+      "expect": "new",
+      "kind": "near-miss"
+    },
+    {
+      "hint": {
+        "type": "failure-mode",
+        "name": "힌지 브래킷 변형"
+      },
+      "expect": "new",
+      "kind": "near-miss"
+    },
+    {
+      "hint": {
+        "type": "material",
+        "name": "SUS304"
+      },
+      "expect": "new",
+      "kind": "near-miss"
+    },
+    {
+      "hint": {
+        "type": "part",
+        "name": "카메라 데코"
+      },
+      "expect": "new",
+      "kind": "new"
+    },
+    {
+      "hint": {
+        "type": "sim-type",
+        "name": "충격 해석"
+      },
+      "expect": "new",
+      "kind": "new"
+    }
+  ]
+}
