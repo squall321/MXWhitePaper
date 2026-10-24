@@ -336,6 +336,13 @@ Replay guard 는 DB 표 `portal_launch_jti`(C6, `0050`) — `_claim_jti` 가 `IN
 비상 관리자 표시). 켜면 그 계정은 웹으로 못 들어온다 — 같은 이메일로 포털에서 들어오면 그 계정에 이어진다. `.env` 는 리포 밖이라 배포가
 저절로 켜지 않는다 — 박스마다 사람이 목록을 보고 켠다. 시험 [[apps/api/tests/test_sso_only.py]].
 
+화면 — 부팅 때 `/auth/mode` 를 받아 저장소에 둔다(`ssoOnly` · `launchUrl`, 못 받으면 지금처럼 비밀번호 화면). 로그인 · 가입 화면은
+[[src/features/auth/PortalEntry.tsx#PortalEntryPanel]] 하나(`/login?local=1` 은 비상 관리자 폼 · 가입 링크 숨김). 세션이 없으면 보호 경로
+(AuthGuard)와 401 훅이 진입 링크로 저절로 다녀온다 — 돌아올 자리는 sessionStorage `mxwp.return_to`, 착지 뒤
+`ReturnAfterPortalEntry` 가 되돌린다. 1분 안에 다시 오면(다녀왔는데 세션이 안 이어짐) 저절로 보내지 않고 로그인 화면의 단추만
+([[src/features/auth/portalEntry.ts#goToPortalEntry]]). e2e 도우미는 `/login?local=1` 로 들어간다. `/auth/mode` 는 속도 제한에서
+뺐다(`healthz` 처럼 — 페이지마다 묻는 고정 응답이 같은 IP 의 익명 몫을 먹어 refresh 가 429 를 받았다).
+
 테스트 [[apps/api/tests/test_portal_sso.py]] — disabled 404 + malformed 401 +
 no_key 401 + happy 303(+ 스냅숏) + replay 401(DB) + 필수 클레임(실제 RS256 서명 — aud · jti · exp · sub 가 빠지면
 invalid_token 401) + 스냅숏 덮어쓰기 + 소속→팀 = 8 묶음 (cycle 19 의 test_sso.py 와는

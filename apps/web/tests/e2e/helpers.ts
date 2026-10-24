@@ -19,7 +19,8 @@ export interface LoginResult {
  * Reuse for tests that exercise the login flow itself.
  */
 export async function loginAsAdmin(page: Page): Promise<void> {
-  await page.goto('/login')
+  // ?local=1 — SSO 전용 박스에서도 비상 관리자(MXWP_LOCAL_LOGIN_ALLOW) 폼이 나온다(꺼져 있으면 무시)
+  await page.goto('/login?local=1')
   await page.getByLabel('이메일').fill(ADMIN_EMAIL)
   await page.getByLabel('비밀번호').fill(ADMIN_PASSWORD)
   await page.getByRole('button', { name: '로그인' }).click()
@@ -67,7 +68,8 @@ export async function loginViaApi(): Promise<LoginRaw> {
  * not satisfy reliably across origins.
  */
 export async function ensureLoggedIn(page: Page): Promise<void> {
-  await page.goto('/login')
+  // ?local=1 — SSO 전용 박스에서도 비상 관리자(MXWP_LOCAL_LOGIN_ALLOW) 폼이 나온다(꺼져 있으면 무시)
+  await page.goto('/login?local=1')
   await page.getByLabel('이메일').fill(ADMIN_EMAIL)
   await page.getByLabel('비밀번호').fill(ADMIN_PASSWORD)
   await page.getByRole('button', { name: '로그인' }).click()

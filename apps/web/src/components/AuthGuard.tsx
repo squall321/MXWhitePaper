@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react'
 import { Navigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/features/auth/store'
+import { PortalReentry } from '@/features/auth/PortalEntry'
 
 interface AuthGuardProps {
   children: ReactNode
@@ -20,6 +21,7 @@ interface AuthGuardProps {
 export function AuthGuard({ children }: AuthGuardProps) {
   const user = useAuthStore((s) => s.user)
   const hydrating = useAuthStore((s) => s.hydrating)
+  const ssoOnly = useAuthStore((s) => s.ssoOnly)
   const location = useLocation()
   const [params] = useSearchParams()
 
@@ -37,6 +39,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   if (!user) {
     const here = location.pathname + location.search
+    // SSO 전용이면 로그인 화면 대신 포털 진입 링크로 저절로(모드를 아직 모르면 기다린다)
+    if (ssoOnly === null) return <div className="px-6 py-3 text-sm text-gray-500">세션 확인 중…</div>
+    if (ssoOnly) return <PortalReentry here={here} />
     return <Navigate to={`/login?return=${encodeURIComponent(here)}`} replace />
   }
 

@@ -61,6 +61,8 @@ from .rate_limit import get_limiter, is_strict_auth_path
 # Endpoint paths skipped by rate limiting (operational health probes).
 _RATE_LIMIT_EXEMPT: tuple[str, ...] = (
     "/api/v1/healthz",
+    # 화면이 열릴 때마다 묻는 로그인 꼴(SSO 전용인가) — 설정 두 값의 고정 응답이라 익명 몫(분당 60)을 쓰지 않게
+    "/api/v1/auth/mode",
 )
 
 

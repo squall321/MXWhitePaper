@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { register as registerAccount } from '@/features/auth/api'
+import { PortalEntryPanel } from '@/features/auth/PortalEntry'
+import { useAuthStore } from '@/features/auth/store'
 import { Button, Card, Field, Input } from '@/components/ui'
 
 const schema = z.object({
@@ -21,6 +23,7 @@ type FormValues = z.infer<typeof schema>
  */
 export function SignupPage() {
   const navigate = useNavigate()
+  const ssoOnly = useAuthStore((s) => s.ssoOnly)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const {
     register,
@@ -49,6 +52,18 @@ export function SignupPage() {
       }
     }
   })
+
+  if (ssoOnly) {
+    // SSO 전용 — 가입은 없다(서버도 403 SSO_ONLY). 포털로 들어오면 그 사람으로 이어진다.
+    return (
+      <div className="mx-auto max-w-sm px-4 py-16">
+        <Card padded="lg">
+          <h1 className="mb-3 text-base font-semibold">계정 만들기</h1>
+          <PortalEntryPanel returnTo="/" />
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-sm px-4 py-16">

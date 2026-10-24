@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { login, loginTotp, TotpRequiredError } from '@/features/auth/api'
 import { useAuthStore } from '@/features/auth/store'
+import { PortalEntryPanel } from '@/features/auth/PortalEntry'
 import { Button, Card, Field, Input } from '@/components/ui'
 import { toast } from '@/components/ui/Toast'
 import { discoverSsoProvider, type SsoDiscoverResult } from '@/features/sso/api'
@@ -85,6 +86,9 @@ export function LoginPage() {
   const [ssoChecking, setSsoChecking] = useState(false)
   const user = useAuthStore((s) => s.user)
   const hydrating = useAuthStore((s) => s.hydrating)
+  // SSO 전용이면 '포털로 들어가기' 하나 — `?local=1` 은 비상 관리자(MXWP_LOCAL_LOGIN_ALLOW)의 비밀번호 폼
+  const ssoOnly = useAuthStore((s) => s.ssoOnly)
+  const portalOnly = ssoOnly === true && !params.has('local')
 
   const {
     register,
@@ -244,7 +248,9 @@ export function LoginPage() {
           <h2 className="mb-1 text-base font-semibold text-smsg-900 dark:text-gray-100">{t('login.heading')}</h2>
           <p className="mb-5 text-xs text-gray-500 dark:text-gray-400">{t('login.helper')}</p>
 
-          {partialToken ? (
+          {portalOnly ? (
+            <PortalEntryPanel returnTo={returnTo} />
+          ) : partialToken ? (
             <form
               className="space-y-4"
               onSubmit={onTotpSubmit}
@@ -358,13 +364,15 @@ export function LoginPage() {
                 {t('login.remember')}
               </label>
               <div className="flex items-center gap-3">
-                <Link
-                  to="/signup"
-                  data-testid="login-signup"
-                  className="text-xs text-link hover:underline"
-                >
-                  계정 만들기
-                </Link>
+                {!ssoOnly && (
+                  <Link
+                    to="/signup"
+                    data-testid="login-signup"
+                    className="text-xs text-link hover:underline"
+                  >
+                    계정 만들기
+                  </Link>
+                )}
                 <Link
                   to="/auth/forgot"
                   data-testid="login-forgot"

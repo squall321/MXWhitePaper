@@ -10,6 +10,7 @@ import { RouteBoundary } from './components/RouteBoundary'
 import { BootBanner } from './components/BootBanner'
 import { ThemeProvider } from './features/theme/ThemeProvider'
 import { bootstrapAuth } from './bootstrap'
+import { ReturnAfterPortalEntry } from '@/features/auth/PortalEntry'
 import { withBase } from './lib/basePath'
 import './styles/tokens.css'
 
@@ -364,6 +365,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <ThemeProvider>
         <BrowserRouter basename={import.meta.env.BASE_URL}>
           <BootBanner />
+          <ReturnAfterPortalEntry />
           <Suspense fallback={<PageFallback />}>
             <Routes>
               <Route

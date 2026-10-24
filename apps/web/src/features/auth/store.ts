@@ -22,6 +22,10 @@ export interface AuthSnapshot {
   expiresAt: number | null
   /** True between the first call to `refresh()` and its resolution. */
   hydrating: boolean
+  /** SSO 전용인가(`GET /auth/mode`) — null 이면 아직 모른다. 켜져 있으면 사람은 포털 진입 링크로만 들어온다. */
+  ssoOnly: boolean | null
+  /** 포털의 MX 백서 진입 링크(같은 오리진 상대 주소). 포털 SSO 가 꺼져 있으면 null. */
+  launchUrl: string | null
 }
 
 export interface AuthActions {
@@ -32,6 +36,7 @@ export interface AuthActions {
   }): void
   setUser(user: AuthUser | null): void
   setHydrating(on: boolean): void
+  setMode(mode: { ssoOnly: boolean; launchUrl: string | null }): void
   clear(): void
 }
 
@@ -61,6 +66,8 @@ const initial: AuthSnapshot = {
   accessToken: readStoredToken(),
   expiresAt: null,
   hydrating: false,
+  ssoOnly: null,
+  launchUrl: null,
 }
 
 export const useAuthStore = create<AuthSnapshot & AuthActions>((set) => ({
@@ -71,6 +78,7 @@ export const useAuthStore = create<AuthSnapshot & AuthActions>((set) => ({
   },
   setUser: (user) => set({ user }),
   setHydrating: (on) => set({ hydrating: on }),
+  setMode: ({ ssoOnly, launchUrl }) => set({ ssoOnly, launchUrl }),
   clear: () => {
     writeStoredToken(null)
     set({ user: null, accessToken: null, expiresAt: null, hydrating: false })

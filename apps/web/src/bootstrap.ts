@@ -5,7 +5,8 @@ import {
 } from '@/lib/api/client'
 import { toast } from '@/components/ui/Toast'
 import { getAccessToken, useAuthStore } from '@/features/auth/store'
-import { refresh } from '@/features/auth/api'
+import { getAuthMode, refresh } from '@/features/auth/api'
+import { appPath, goToPortalEntry } from '@/features/auth/portalEntry'
 import { useConnectionStore } from '@/features/auth/connectionStore'
 import { startConnectionTracking } from '@/features/editor/connectionStore'
 import { registerServiceWorker } from '@/features/pwa/swRegistration'
@@ -83,6 +84,8 @@ export function bootstrapAuth() {
       // 비교/이동해야 standalone(BASE_URL='/') 과 portal 양쪽 모두 동작.
       const loginPath = `${import.meta.env.BASE_URL}login`
       if (window.location.pathname === loginPath) return
+      // SSO 전용 — 세션이 끝나면(포털 사진이 낡은 refresh 401 포함) 진입 링크로 저절로 다녀온다
+      if (useAuthStore.getState().ssoOnly && goToPortalEntry(appPath(window.location.pathname, window.location.search))) return
       const here = window.location.pathname + window.location.search
       window.location.assign(`${loginPath}?return=${encodeURIComponent(here)}`)
     },
@@ -91,6 +94,11 @@ export function bootstrapAuth() {
     beginRehydrating: () => useAuthStore.getState().setHydrating(true),
     endRehydrating: () => useAuthStore.getState().setHydrating(false),
   })
+
+  // 로그인 꼴(SSO 전용인가 · 진입 링크) — 못 받으면 지금처럼 비밀번호 화면
+  void getAuthMode()
+    .then((m) => useAuthStore.getState().setMode({ ssoOnly: m.sso_only, launchUrl: m.launch_url }))
+    .catch(() => useAuthStore.getState().setMode({ ssoOnly: false, launchUrl: null }))
 
   registerConnectionHooks({
     onSuccess: () => useConnectionStore.getState().markSuccess(),

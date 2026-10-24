@@ -395,3 +395,23 @@ test.describe('visual: AI 위키 (light · dark)', () => {
     await expect(page.getByText('Request failed with status code')).toHaveCount(0)
   })
 })
+
+// SSO 전용(사용자 결정 10-25) — 로그인 화면은 '포털로 들어가기' 하나. 서버 모드 · 세션은 고정 응답이라 로그인 없이 돈다.
+test.describe('visual: SSO 전용 로그인 (light · dark)', () => {
+  test('renders the portal entry panel consistently in light and dark', async ({ page }) => {
+    await page.route('**/api/v1/auth/mode', (r) => r.fulfill({ json: { data: { sso_only: true, launch_url: '/launch/mx-white-paper' }, meta: null, error: null } }))
+    await page.route('**/api/v1/auth/refresh', (r) => r.fulfill({ status: 401, json: { data: null, meta: null, error: { code: 'PORTAL_REENTRY', message: 'x' } } }))
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.goto('/login')
+    await page.getByTestId('portal-entry').waitFor()
+    for (const scheme of ['light', 'dark'] as const) {
+      if (scheme === 'dark') {
+        await page.emulateMedia({ colorScheme: 'dark' })
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+      }
+      await expect(page.getByTestId('portal-entry')).toHaveScreenshot(`login-sso-only-${scheme}.png`, {
+        maxDiffPixelRatio: 0.02, animations: 'disabled',
+      })
+    }
+  })
+})

@@ -181,6 +181,12 @@ export async function logout(): Promise<void> {
   useAuthStore.getState().clear()
 }
 
+/** GET /auth/mode — 공개. SSO 전용이면 로그인 · 가입 화면은 '포털로 들어가기' 하나고, 세션이 끝나면 진입 링크로 다녀온다. */
+export async function getAuthMode(): Promise<{ sso_only: boolean; launch_url: string | null }> {
+  const res = await apiClient.get<ApiEnvelope<{ sso_only: boolean; launch_url: string | null }>>('/auth/mode')
+  return res.data?.data ?? { sso_only: false, launch_url: null }
+}
+
 export async function me(): Promise<AuthUser | null> {
   try {
     const res = await apiClient.get<ApiEnvelope<AuthUser>>('/me')
