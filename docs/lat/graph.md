@@ -144,6 +144,11 @@ triple 은 런타임 제외.
 
 ## Gotchas
 
+- **보이기 범위(docs/llm-wiki W2)** — 세 그래프 모두 읽는 사람의 범위로 거른다([[wiki#Audience]]). 링크 그래프는 간선의 양 끝 ·
+  노드를, 의존 그래프는 본문 색인을, triple 은 주어 · 목적어(`audience.slug_visible_sql`)를 본다. **범위 밖 문서는 `status='missing'`
+  노드로도 그리지 않고 뺀다** — missing 은 '그 slug 의 문서가 아예 없다'(미작성 링크)일 때만이다. 의존 그래프 5분 캐시의 열쇠에
+  읽는 사람의 범위가 들어간다(admin · system 은 하나로).
+
 - **3 그래프 데이터 원천 다름** — links_graph 는 `links` 테이블, dep_graph 는
   `content_json` 직접 walk. `[[slug]]` 추가 직후 links_graph 에 안 보이면
   resync 가 안 된 것 (dep_graph 는 즉시 반영).

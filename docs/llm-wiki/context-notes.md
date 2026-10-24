@@ -85,6 +85,29 @@
   살아나 브라우저 세션 · PAT 가 막힌 자료를 본다.
 - **WK-D25 진입 토큰 jti 원장을 DB(`portal_launch_jti`)로.** `_verify_portal_token` 은 서명 · 클레임만, jti 는 `_claim_jti` 가 `INSERT … ON CONFLICT`.
 
+## 2026-10-24 — W2 보이기 범위(MXWP 세션)
+
+- **WK-D26 '읽는 사람' 은 요청 문맥(ContextVar)이고 저장소 층이 그것으로 거른다(`app/wiki/audience.py`).** 인증(`get_current_user`)이
+  채우고 미들웨어가 요청마다 비운다. 문맥이 비어 있으면 술어를 짓지 않고 `ViewerMissing` — 인증 없는 길 · 배경 작업은 `acting_as(SYSTEM)`
+  · `acting_as(ANONYMOUS)` 를 스스로 고른다. 까닭 — 문서 한 장 읽기가 `get_document_or_404`(28) · `find_by_slug`(17) 로 흩어져 있고 서비스의
+  변경 함수들은 사용자 dict 를 받지 않는다. 인자를 45 자리에 끼우는 대신 한 곳에서 거르고, 빠뜨린 길은 조용히 새지 않고 깨지게 했다.
+- **WK-D27 restricted 를 읽는 사람 = 작성자(`owner_id`) · `document_reviewers` · metadata owners/reviewers 에 이메일로 적힌 사람 · admin.**
+  dev 의 restricted 2 장은 owners 가 사람 id 가 아닌 글(`u-pm-lead`)이라 그 칸만으로는 아무도 못 읽는다 — 작성자 · 검토자 표를 함께 본다.
+- **WK-D28 공유 링크 · oEmbed 는 익명(`["org"]` · restricted 아님)으로 읽는다.** 그 범위 밖 문서는 링크를 만들 수 없고(403), 만든 뒤 범위가
+  좁아지면 링크가 닫힌다(410). oEmbed 는 보관 · restricted 에 지금처럼 403, 좁은 위키 문서는 404(있는지도 말하지 않는다).
+
+- **WK-D29 검색은 색인 칸 `aud1~3`(위키 audience 를 정렬해 셋, 빈 칸 `*`) · `readers`(restricted 를 읽을 사람)로 거른다.** 까닭 — Meili
+  거르기로는 배열 칸이 '모두 가졌나'(그리고)를 못 쓰고, 읽는 사람 토큰의 부분집합을 늘어놓으면 `plat:` 이 많은 사람에서 2^n 으로 폭발한다.
+  범위는 지금 생산자 기준 둘까지라 셋 칸이면 넉넉하다(넘으면 admin 만). 옛 색인 줄은 `NOT EXISTS` 로 지금처럼 보이게 해 배포 직후 검색이
+  비지 않게 했다 — 재색인해야 restricted 가 빠진다.
+- **WK-D30 홈 히어로(전역 5분 캐시)는 익명 기준(`["org"]` · restricted 아님)으로 센다.** 사람마다 다른 값을 전역 캐시에 둘 수 없다 —
+  사람별로 다르게 하려면 캐시를 사람별로 쪼개야 하는데, 영역 타일은 넓게 보이는 문서로 충분하다.
+
+- **WK-D31 앱 안 알림은 읽을 때 한 곳에서, 메일은 보낼 때 받는 사람별로 거른다.** 알림 생산자가 아홉 곳이라 하나씩 막으면 새 생산자가
+  빠진다 — payload `slug` 로 목록 · 안 읽은 수에서 뺀다. 메일은 나간 뒤 되돌릴 수 없으니 보내기 전에 판정한다.
+- dev 검색 색인에 DB 에서 이미 지워진 문서 100 장(그중 restricted 4)이 남아 제목이 검색에 뜨고 있었다(시험 · 초기화 잔재). 재색인이
+  뷰에 없는 줄을 지우게 고치고 dev 를 다시 색인했다(427 장).
+
 ## 조사 메모(2026-10-24, W1)
 
 - dev API 는 `uvicorn --reload` 다 — 코드를 저장하는 순간 살아 있는 API 가 바뀐다. 이번에 `users.portal_*` 를 읽는 코드가 `0050` 보다 몇 분

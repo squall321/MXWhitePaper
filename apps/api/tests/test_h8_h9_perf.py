@@ -22,6 +22,7 @@ from sqlalchemy import text
 from app.core.db import session_scope
 from app.main import app
 from app.services import document_service
+from app.wiki import audience
 
 SAMPLES = Path("/workspace/packages/shared/samples")
 if not SAMPLES.exists():
@@ -238,18 +239,20 @@ async def test_h9_backwards_compat_no_background_tasks() -> None:
         ) as rm, patch.object(
             document_service, "refresh_search_view", new=AsyncMock()
         ) as rv:
-            async with session_scope() as s2:
-                # 같은 content 그대로 PUT — replace_document 직접 호출
-                from app.repos import document_repo as repo
-                doc = await repo.find_by_slug(s2, slug)
-                _doc, _w = await document_service.replace_document(
-                    s2,
-                    slug=slug,
-                    payload=doc["content_json"],
-                    if_match=etag,
-                    actor_id=doc["owner_id"],
-                    # background_tasks=None (default)
-                )
+            # 요청 밖에서 서비스를 직접 부른다 — 읽는 사람을 시스템으로 고른다(app/wiki/audience.py).
+            with audience.acting_as(audience.SYSTEM):
+                async with session_scope() as s2:
+                    # 같은 content 그대로 PUT — replace_document 직접 호출
+                    from app.repos import document_repo as repo
+                    doc = await repo.find_by_slug(s2, slug)
+                    _doc, _w = await document_service.replace_document(
+                        s2,
+                        slug=slug,
+                        payload=doc["content_json"],
+                        if_match=etag,
+                        actor_id=doc["owner_id"],
+                        # background_tasks=None (default)
+                    )
             # 동기 경로: 3 hook 모두 await 되었어야 함
             assert rm.await_count == 1
             assert rv.await_count == 1

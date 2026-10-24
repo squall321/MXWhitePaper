@@ -26,6 +26,7 @@ from app.core.errors import Conflict, Forbidden, NotFound, ValidationFailed, env
 from app.lib import relationship_types
 from app.lib.super_domains import by_id
 from app.services.triple_extractor import TripleExtractor
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1/triples", tags=["triples"])
 
@@ -68,6 +69,13 @@ async def list_predicate_types(
 _SUBGRAPH_MAX_NODES = 200
 
 
+# 주어 · 목적어 문서가 범위 밖이면 그 관계를 뺀다(없는 slug 는 남긴다) — 관계 줄만으로도 이름이 샌다.
+_VISIBLE_ENDS = (
+    f"{audience.slug_visible_sql('doc_triples.subject_slug', '_ts')} "
+    f"AND {audience.slug_visible_sql('doc_triples.object_slug', '_to')}"
+)
+
+
 @router.get("/subgraph")
 async def get_subgraph(
     root: str = Query(min_length=1, max_length=100),
@@ -94,9 +102,10 @@ async def get_subgraph(
             text(f"""
                 SELECT {_SELECT_COLS}
                 FROM doc_triples
-                WHERE subject_slug = ANY(:frontier) OR object_slug = ANY(:frontier)
+                WHERE (subject_slug = ANY(:frontier) OR object_slug = ANY(:frontier))
+                  AND {_VISIBLE_ENDS}
             """),
-            {"frontier": frontier},
+            {"frontier": frontier, **audience.sql_params()},
         )).all()
         next_frontier: set[str] = set()
         for r in rows:
@@ -149,7 +158,9 @@ async def list_triples(
         where.append("source = :source")
         params["source"] = source
 
-    clause = f"WHERE {' AND '.join(where)}" if where else ""
+    where.append(_VISIBLE_ENDS)
+    params.update(audience.sql_params())
+    clause = f"WHERE {' AND '.join(where)}"
     rows = (await s.execute(
         text(f"SELECT {_SELECT_COLS} FROM doc_triples {clause} "
              "ORDER BY created_at DESC"),

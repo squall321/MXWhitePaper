@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.db import session_scope
 from app.repos import document_repo
+from app.wiki import audience
 from app.services.docx_export import DocxOptions, render_docx
 from app.services.html_renderer import render_namuwiki_html
 from app.services.markdown_export import render_markdown
@@ -206,7 +207,9 @@ async def run_backup(
             # Manifest helps recovery — we know what was attempted vs missed.
             manifest: list[dict[str, Any]] = []
             for did in doc_ids:
-                doc = await document_repo.find_by_id(s, did)
+                # 백업 결과는 admin 만 받는다(run-now · download 모두 admin) — 범위로 거르지 않고 시스템으로 읽는다.
+                with audience.acting_as(audience.SYSTEM):
+                    doc = await document_repo.find_by_id(s, did)
                 if not doc:
                     continue
                 slug = doc.get("slug") or did

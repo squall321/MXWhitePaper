@@ -1,6 +1,7 @@
 """FastAPI application entrypoint (Sprint 0 — health check only)."""
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -16,6 +17,7 @@ from .core.errors import (
     validation_error_handler,
 )
 from .middleware.security import RateLimitMiddleware, SecurityHeadersMiddleware
+from .wiki.audience import ViewerContextMiddleware
 from .routers.activity import router as activity_router
 from .routers.admin import router as admin_router
 from .routers.ai import router as ai_router
@@ -406,6 +408,16 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     cron_task: _asyncio.Task[None] | None = None
     audit_pruner_task: _asyncio.Task[None] | None = None
     maintenance_task: _asyncio.Task[None] | None = None
+
+    # 검색 색인 설정(filterable 칸)을 코드와 맞춘다 — 보이기 범위 칸(aud1~3 · readers)이 filterable 이 아니면 거르기가
+    # 오류를 낸다(docs/llm-wiki W2). 멱등이고 Meili 가 죽어 있어도 기동은 막지 않는다.
+    try:
+        from .search import meili_indexer
+
+        await _asyncio.to_thread(meili_indexer.ensure_index)
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).warning("Meilisearch ensure_index 실패 — 검색 거르기 칸이 아직일 수 있다", exc_info=True)
+
     if settings.backup_enabled:
         from .services.backup_runner import backup_ticker
 
@@ -512,6 +524,8 @@ def create_app() -> FastAPI:
     # outermost, so we add CORS last to ensure CORS headers are emitted on
     # 429 / hardening-bypass paths too. Order at request time:
     #   CORS → SecurityHeaders → RateLimit → app
+    # 보이기 범위 — 요청마다 '읽는 사람' 문맥을 비우고 끝나면 되돌린다(app/wiki/audience.py). 인증이 채운다.
+    app.add_middleware(ViewerContextMiddleware)
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(

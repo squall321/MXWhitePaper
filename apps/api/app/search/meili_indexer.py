@@ -161,6 +161,12 @@ FILTERABLE_ATTRS = [
     # H6 — author filter. Owner email (lower-cased) for the documents-side
     # `?author=` chip. Future: extend to created_by once that column lands.
     "author",
+    # 보이기 범위(docs/llm-wiki W2) — 위키 audience 를 정렬해 세 칸에(빈 칸 '*'), restricted 를 읽을 사람은 readers 에.
+    # 거르기는 audience_filter_exprs(). 칸 하나에 토큰 목록을 두면 '모두 가졌나'(그리고)를 Meili 거르기로 못 쓴다.
+    "aud1",
+    "aud2",
+    "aud3",
+    "readers",
 ]
 SORTABLE_ATTRS = ["updated_at", "title"]
 
@@ -276,6 +282,47 @@ def _max_permission_required(content_json: Any) -> str:
 
 
 # ── DB → Meilisearch 도큐먼트 변환 ────────────────────────────────────
+_AUD_SLOTS = 3
+
+
+def audience_fields(
+    wiki_audience: list[str] | None, confidentiality: str | None, owner_id: str | None,
+    reviewer_ids: list[str] | None, content_json: Any,
+) -> dict[str, Any]:
+    """색인 줄의 보이기 범위 칸 — app/wiki/audience.py 의 SQL 술어와 같은 규칙을 Meili 거르기 꼴로."""
+    aud = sorted(wiki_audience) if wiki_audience else ["org"]
+    if len(aud) > _AUD_SLOTS:  # 셋을 넘는 범위는 아무도 못 맞추게(admin 만) — 지금 생산자는 둘까지다.
+        aud = ["#overflow"] * _AUD_SLOTS
+    slots = aud + ["*"] * (_AUD_SLOTS - len(aud))
+    readers = ["*"]
+    if (confidentiality or "").lower() == "restricted":
+        meta = content_json.get("metadata") if isinstance(content_json, dict) else None
+        names: list[str] = []
+        for key in ("owners", "reviewers"):
+            vals = meta.get(key) if isinstance(meta, dict) else None
+            if isinstance(vals, list):
+                names.extend(str(v).lower() for v in vals if isinstance(v, str))
+        readers = sorted({f"user:{owner_id}"} | {f"user:{r}" for r in reviewer_ids or []}
+                         | {f"email:{n}" for n in names}) if owner_id else sorted({f"email:{n}" for n in names})
+        readers = readers or ["#nobody"]
+    return {"aud1": slots[0], "aud2": slots[1], "aud3": slots[2], "readers": readers}
+
+
+def audience_filter_exprs(viewer: Any) -> list[str]:
+    """읽는 사람 → Meili 거르기 식. admin · system 은 []. 범위 칸이 없는 옛 색인 줄은 지금처럼 보인다(재색인 전 이행기)."""
+    if viewer.sees_all:
+        return []
+
+    def _quoted(values: list[str]) -> str:
+        return ", ".join('"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"' for v in values)
+
+    allowed = _quoted(sorted(set(viewer.tokens) | {"*"}))
+    who = ["*"] + ([f"user:{viewer.user_id}"] if viewer.user_id else []) + ([f"email:{viewer.email}"] if viewer.email else [])
+    exprs = [f"(aud{i} NOT EXISTS OR aud{i} IN [{allowed}])" for i in range(1, _AUD_SLOTS + 1)]
+    exprs.append(f"(readers NOT EXISTS OR readers IN [{_quoted(who)}])")
+    return exprs
+
+
 async def _fetch_flat_row(s: AsyncSession, doc_id: str) -> dict[str, Any] | None:
     """documents_flat_v + documents 메타에서 인덱싱용 row 1건 fetch.
 
@@ -300,7 +347,11 @@ async def _fetch_flat_row(s: AsyncSession, doc_id: str) -> dict[str, Any] | None
               d.status,
               COALESCE(d.content_json->'metadata'->>'confidentiality', 'internal') AS confidentiality,
               d.content_json,
-              LOWER(COALESCE(u.email, '')) AS author_email
+              LOWER(COALESCE(u.email, '')) AS author_email,
+              wp.audience,
+              d.owner_id::text,
+              (SELECT array_agg(dr.reviewer_user_id::text) FROM document_reviewers dr
+                WHERE dr.document_id = d.id) AS reviewer_ids
             FROM documents_flat_v v
             JOIN documents d ON d.id = v.id
             LEFT JOIN parts p ON p.id = d.part_id
@@ -308,6 +359,7 @@ async def _fetch_flat_row(s: AsyncSession, doc_id: str) -> dict[str, Any] | None
             LEFT JOIN teams t ON t.id = g.team_id
             LEFT JOIN divisions dv ON dv.id = t.division_id
             LEFT JOIN users u ON u.id = d.owner_id
+            LEFT JOIN wiki_pages wp ON wp.doc_id = d.id
             WHERE v.id = CAST(:id AS uuid)
         """),
         {"id": doc_id},
@@ -338,6 +390,7 @@ async def _fetch_flat_row(s: AsyncSession, doc_id: str) -> dict[str, Any] | None
         # H6 — owner email (lowercased). Empty string if no owner — Meili
         # accepts it as a value but filters require exact match.
         "author": row[15] or "",
+        **audience_fields(row[16], row[13], row[17], row[18], row[14]),
     }
 
 
@@ -360,7 +413,11 @@ async def _fetch_all_flat_rows(s: AsyncSession) -> list[dict[str, Any]]:
               d.status,
               COALESCE(d.content_json->'metadata'->>'confidentiality', 'internal') AS confidentiality,
               d.content_json,
-              LOWER(COALESCE(u.email, '')) AS author_email
+              LOWER(COALESCE(u.email, '')) AS author_email,
+              wp.audience,
+              d.owner_id::text,
+              (SELECT array_agg(dr.reviewer_user_id::text) FROM document_reviewers dr
+                WHERE dr.document_id = d.id) AS reviewer_ids
             FROM documents_flat_v v
             JOIN documents d ON d.id = v.id
             LEFT JOIN parts p ON p.id = d.part_id
@@ -368,6 +425,7 @@ async def _fetch_all_flat_rows(s: AsyncSession) -> list[dict[str, Any]]:
             LEFT JOIN teams t ON t.id = g.team_id
             LEFT JOIN divisions dv ON dv.id = t.division_id
             LEFT JOIN users u ON u.id = d.owner_id
+            LEFT JOIN wiki_pages wp ON wp.doc_id = d.id
         """)
     )).all()
     return [
@@ -391,6 +449,7 @@ async def _fetch_all_flat_rows(s: AsyncSession) -> list[dict[str, Any]]:
             "confidentiality": r[13],
             "min_role_required": _max_permission_required(r[14]),
             "author": r[15] or "",
+            **audience_fields(r[16], r[13], r[17], r[18], r[14]),
         }
         for r in rows
     ]
@@ -454,11 +513,39 @@ async def reindex_all(s: AsyncSession, *, wait: bool = True) -> dict[str, Any]:
                     cli.wait_for_task(tid, timeout_in_ms=10000)
             except Exception as e:
                 logger.warning("wait_for_task failed: %s", e)
+    removed = _delete_stale(cli, {r["id"] for r in rows}, wait=wait)
     stats = cli.index(INDEX_UID).get_stats()
     n = getattr(stats, "number_of_documents", None)
     if n is None and isinstance(stats, dict):
         n = stats.get("numberOfDocuments")
-    return {"indexed": len(rows), "stats_count": n}
+    return {"indexed": len(rows), "removed_stale": removed, "stats_count": n}
+
+
+def _delete_stale(cli: meilisearch.Client, keep: set[str], *, wait: bool) -> int:
+    """뷰에 없는 색인 줄(지워진 · 내려간 문서)을 지운다 — 남겨 두면 범위 칸 없이 이행기 규칙(NOT EXISTS)으로 제목이 계속
+    검색에 뜬다(dev 에서 지워진 restricted 문서 4 장이 그랬다, docs/llm-wiki W2)."""
+    idx = cli.index(INDEX_UID)
+    stale: list[str] = []
+    offset = 0
+    while True:
+        page = idx.get_documents({"fields": ["id"], "limit": 1000, "offset": offset})
+        results = getattr(page, "results", None) or (page.get("results") if isinstance(page, dict) else []) or []
+        for d in results:
+            doc_id = getattr(d, "id", None) or (d.get("id") if isinstance(d, dict) else None)
+            if doc_id and doc_id not in keep:
+                stale.append(str(doc_id))
+        if len(results) < 1000:
+            break
+        offset += 1000
+    last = None
+    for doc_id in stale:
+        last = idx.delete_document(doc_id)
+    if wait and last is not None:
+        try:
+            cli.wait_for_task(last.task_uid, timeout_in_ms=30000)
+        except Exception as e:
+            logger.warning("wait_for_task (stale delete) failed: %s", e)
+    return len(stale)
 
 
 # ── H5: role → filter helper ──────────────────────────────────────────

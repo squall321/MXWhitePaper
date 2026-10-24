@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.search import meili_indexer
 from app.services import document_service, llm_client
+from app.wiki import audience
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,8 @@ async def _tool_search_corpus(
     try:
         res = meili_indexer.search(
             q=query, limit=limit, offset=0, filters={},
-            raw_filter_exprs=meili_indexer.role_filter_exprs(ctx.get("role")),
+            raw_filter_exprs=meili_indexer.role_filter_exprs(ctx.get("role"))
+            + meili_indexer.audience_filter_exprs(audience.current_viewer()),
         )
     except Exception as exc:  # noqa: BLE001 — 검색 인덱스 장애 시 빈 결과.
         logger.warning("chat search_corpus 실패: %s", exc)

@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import require_admin, require_reader
 from app.core.db import get_db
 from app.core.errors import envelope
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1/dep-graph", tags=["dep-graph"])
 
@@ -75,10 +76,10 @@ def extract_slugs(content_json: Any) -> list[str]:
 # 아니므로 허용 가능하다.
 # ---------------------------------------------------------------------------
 _CACHE_TTL_S = 300.0
-_cache: dict[tuple[str, int], tuple[float, dict[str, Any]]] = {}
+_cache: dict[tuple[Any, ...], tuple[float, dict[str, Any]]] = {}
 
 
-def _cache_get(key: tuple[str, int]) -> dict[str, Any] | None:
+def _cache_get(key: tuple[Any, ...]) -> dict[str, Any] | None:
     entry = _cache.get(key)
     if not entry:
         return None
@@ -89,7 +90,7 @@ def _cache_get(key: tuple[str, int]) -> dict[str, Any] | None:
     return data
 
 
-def _cache_set(key: tuple[str, int], data: dict[str, Any]) -> None:
+def _cache_set(key: tuple[Any, ...], data: dict[str, Any]) -> None:
     _cache[key] = (time.monotonic() + _CACHE_TTL_S, data)
 
 
@@ -103,18 +104,25 @@ async def _load_doc_index(
     """문서 슬러그 → 제목 / 슬러그 → outgoing slug 리스트 인덱스를 만든다.
 
     archived 문서는 제외한다. 결과는 caller 가 BFS 에서 사용한다.
+    읽는 사람의 범위 밖 문서는 색인에서 빼고, 보이는 문서가 그쪽으로 거는 링크도 지운다 — BFS 가 닿지 않게
+    (닿으면 제목 대신 slug 로 그려 이름이 샌다). 아예 없는 slug(미작성)는 지금처럼 남긴다.
     """
     rows = (await s.execute(
         text(
-            "SELECT slug, title, content_json FROM documents "
-            "WHERE status != 'archived'"
+            "SELECT d.slug, d.title, d.content_json, "
+            f"{audience.visible_sql('d')} AS visible FROM documents d "
+            "WHERE d.status != 'archived'"
         ),
+        audience.sql_params(),
     )).all()
+    hidden = {slug for slug, _title, _content, visible in rows if not visible}
     title_by_slug: dict[str, str] = {}
     outgoing: dict[str, list[str]] = {}
-    for slug, title, content_json in rows:
+    for slug, title, content_json, visible in rows:
+        if not visible:
+            continue
         title_by_slug[slug] = title
-        outgoing[slug] = extract_slugs(content_json)
+        outgoing[slug] = [t for t in extract_slugs(content_json) if t not in hidden]
     return title_by_slug, outgoing
 
 
@@ -200,7 +208,9 @@ async def get_dep_graph(
     s: AsyncSession = Depends(get_db),
     _user: dict = Depends(require_reader),
 ) -> dict[str, Any]:
-    cache_key = (root_slug, depth)
+    # 결과가 읽는 사람마다 다르다 — 캐시 열쇠에 범위를 넣는다(admin · system 은 하나로).
+    viewer = audience.current_viewer()
+    cache_key = (root_slug, depth, ("*",) if viewer.sees_all else viewer.tokens)
     cached = _cache_get(cache_key)
     if cached is not None:
         return envelope(data=cached, meta={"cached": True, "depth": depth})

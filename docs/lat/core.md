@@ -51,6 +51,8 @@ chain 의 최상위. 우선순위:
 > request.headers 에서 사용자를 바꿔치는 별도 helper — 인증이 아니라 작성자
 > 표기다.
 
+`get_current_user` 는 해소한 사람을 이 요청의 '읽는 사람'(보이기 범위 문맥 — [[wiki#Audience]])으로도 둔다.
+
 dict 형태: `{id, email, role, ..., portal_affiliation, portal_plat, portal_access_at}` — `portal_*` 는 포털 진입 토큰이
 남긴 스냅숏(users 칸)이고, 위임 호출이면 그 호출의 증명값으로 바뀌며 `auth_via: "delegated:<client>"` 가 붙는다.
 

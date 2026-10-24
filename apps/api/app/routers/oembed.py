@@ -33,6 +33,7 @@ from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import APIError, Forbidden, NotFound
 from app.repos import document_repo
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1", tags=["oembed"])
 
@@ -304,7 +305,9 @@ async def oembed_endpoint(
     settings = get_settings()
     slug, anchor = _parse_doc_url(url, settings.web_base_url)
 
-    doc = await document_repo.find_by_slug(s, slug)
+    # 로그인 없는 길 — 보관 · restricted 는 지금처럼 403 으로 답하고, 범위가 좁은 위키 문서는 있는지도 말하지 않는다(404).
+    with audience.acting_as(audience.SYSTEM):
+        doc = await document_repo.find_by_slug(s, slug)
     if not doc:
         raise NotFound(f"document not found: {slug}")
     if doc.get("status") == "archived":
@@ -315,6 +318,9 @@ async def oembed_endpoint(
     confidentiality = (metadata.get("confidentiality") or "").strip().lower()
     if confidentiality == "restricted":
         raise Forbidden("document is restricted")
+    with audience.acting_as(audience.ANONYMOUS):
+        if await document_repo.find_by_id(s, doc["id"]) is None:
+            raise NotFound(f"document not found: {slug}")
 
     # Build canonical doc URL (strip trailing slash; preserve anchor).
     base = settings.web_base_url.rstrip("/")

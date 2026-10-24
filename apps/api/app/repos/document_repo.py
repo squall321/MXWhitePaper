@@ -12,17 +12,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict
+from app.wiki import audience
 
 
 async def find_by_slug(s: AsyncSession, slug: str) -> dict[str, Any] | None:
     row = (await s.execute(
-        text("""
+        text(f"""
             SELECT id, slug, part_id, title, summary, status,
                    content_json, schema_ver, version, owner_id,
                    created_at, updated_at
-            FROM documents WHERE slug = :slug
+            FROM documents d WHERE slug = :slug AND {audience.visible_sql("d")}
         """),
-        {"slug": slug},
+        {"slug": slug, **audience.sql_params()},
     )).first()
     if not row:
         return None
@@ -31,13 +32,13 @@ async def find_by_slug(s: AsyncSession, slug: str) -> dict[str, Any] | None:
 
 async def find_by_id(s: AsyncSession, doc_id: str) -> dict[str, Any] | None:
     row = (await s.execute(
-        text("""
+        text(f"""
             SELECT id, slug, part_id, title, summary, status,
                    content_json, schema_ver, version, owner_id,
                    created_at, updated_at
-            FROM documents WHERE id = :id
+            FROM documents d WHERE id = :id AND {audience.visible_sql("d")}
         """),
-        {"id": doc_id},
+        {"id": doc_id, **audience.sql_params()},
     )).first()
     if not row:
         return None
@@ -75,9 +76,12 @@ async def list_documents(
     where: list[str] = ["d.status != 'archived'"]
     if status_filter and status_filter != "all":
         where = [f"d.status = '{status_filter}'"]  # 상수만 들어옴
+    # 보이기 범위(위키 audience · restricted) — 저장소 층 한 곳에서 거른다(app/wiki/audience.py).
+    where.append(audience.visible_sql("d"))
     params: dict[str, Any] = {
         "limit": min(max(limit, 1), 100),
         "offset": max(0, int(offset)),
+        **audience.sql_params(),
     }
     join = ""
 
@@ -439,7 +443,7 @@ async def list_backlinks(
     if target_doc_id is None and target_slug is None:
         return []
     rows = (await s.execute(
-        text("""
+        text(f"""
             SELECT
               d.slug,
               d.title,
@@ -453,10 +457,11 @@ async def list_backlinks(
                 OR (CAST(:tslug AS text) IS NOT NULL AND L.target_slug = CAST(:tslug AS text))
               )
               AND d.status != 'archived'
+              AND {audience.visible_sql("d")}
             GROUP BY d.id, d.slug, d.title, d.summary
             ORDER BY d.title
         """),
-        {"tid": target_doc_id, "tslug": target_slug},
+        {"tid": target_doc_id, "tslug": target_slug, **audience.sql_params()},
     )).all()
     return [
         {

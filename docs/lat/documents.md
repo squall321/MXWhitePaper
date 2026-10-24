@@ -437,6 +437,10 @@ Repository (DB I/O) 는 [[src/app/repos/document_repo.py]]:
 - `upsert_tag()`, `replace_document_tags()` — 태그
 - `insert_audit()` — 감사 로그
 
+★ 조회 넷(`find_by_slug` · `find_by_id` · `list_documents` · `list_backlinks`)은 **보이기 범위로 거른다**(위키 `audience` ·
+`confidentiality=restricted`) — 요청 문맥의 '읽는 사람' 으로, 없으면 `ViewerMissing`. 보이지 않는 문서는 '없는 문서'(404)다.
+요청 밖에서 부르면 `audience.acting_as(SYSTEM)`. 자세히는 [[wiki#Audience]].
+
 ## Section numbering ★
 
 `validate_documentjson()` → `renumber_sections()` ([[src/app/services/section_numbering.py#renumber_sections]])
@@ -559,6 +563,15 @@ network blip 만 잡는다. 결과적으로 최악의 경우 단일 PUT 의 인�
 
 테스트 환경에선 5번이 **비활성화** (`MXWP_SKIP_VIEW_REFRESH=1` 가
 [[src/tests/conftest.py]] 에서 자동 세팅) — async engine reset 과 충돌 방지.
+
+### 보이기 범위 거르기 (docs/llm-wiki W2)
+
+색인 줄에 `aud1` · `aud2` · `aud3`(위키 `audience` 를 정렬해 셋, 빈 칸 `*`, 일반 문서는 `org`)와 `readers`(restricted 를 읽을
+`user:<id>` · `email:<이메일>`, 아니면 `*`)를 싣는다(`meili_indexer.audience_fields`). 검색 · suggest · 챗 `search_corpus` 는
+`audience_filter_exprs(viewer)` 를 AND 한다 — 각 칸이 '읽는 사람 토큰 ∪ *' 안, readers 가 `*` 또는 그 사람. 칸 하나에 토큰 목록을
+두지 않은 까닭은 Meili 거르기로 '모두 가졌나'(그리고)를 못 쓰고 부분집합을 늘어놓으면 `plat:` 이 많은 사람에서 폭발해서다.
+칸이 없는 옛 색인 줄은 `NOT EXISTS` 로 지금처럼 보인다(이행기) — **배포 뒤 `python -m app.scripts.reindex` 로 다시 색인해야 restricted 가
+검색에서 빠진다.** filterable 설정은 API 기동(lifespan)이 `ensure_index()` 로 맞춘다 — 설정 전 거르기는 'not filterable' 오류다.
 
 ### 한국어 부분 매칭 (M1 — Meilisearch native)
 

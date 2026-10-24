@@ -56,6 +56,7 @@ for _candidate in (
 from app.core.db import session_scope
 from app.repos import document_repo
 from app.services import document_service
+from app.wiki import audience
 
 
 async def _resolve_path(s, doc: dict) -> str:
@@ -83,6 +84,8 @@ async def import_one(path: Path) -> dict:
     slug = payload.get("slug")
     if not slug:
         raise SystemExit("payload.slug 가 없습니다.")
+    # CLI 는 요청이 없다 — 보이기 범위를 거르지 않는 시스템으로 읽고 쓴다(app/wiki/audience.py).
+    audience.set_viewer(audience.SYSTEM)
     async with session_scope() as s:
         owner_id = await document_repo.fetch_admin_owner_id(s)
         existing = await document_repo.find_by_slug(s, slug)

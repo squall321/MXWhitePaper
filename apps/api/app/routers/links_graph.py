@@ -31,22 +31,28 @@ from app.core.auth import require_reader
 from app.core.db import get_db
 from app.core.errors import envelope
 from app.lib.super_domains import NOISE_TAGS, by_id
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1/links", tags=["links"])
 
 
 async def _aggregate_edges(s: AsyncSession) -> list[tuple[str, str, int]]:
     """links 테이블을 (source_slug, target_slug, count) 로 집계."""
+    # 보이기 범위 — 범위 밖 문서에서 나가거나 들어가는 간선은 뺀다(대상이 아예 없는 링크는 남긴다 — 미작성 문서).
     rows = (await s.execute(
-        text("""
+        text(f"""
             SELECT d.slug AS src,
                    l.target_slug AS tgt,
                    COUNT(*) AS cnt
             FROM links l
             JOIN documents d ON d.id = l.source_doc_id
+            LEFT JOIN documents td ON td.slug = l.target_slug
             WHERE d.status != 'archived'
+              AND {audience.visible_sql("d")}
+              AND (td.id IS NULL OR {audience.visible_sql("td")})
             GROUP BY d.slug, l.target_slug
         """),
+        audience.sql_params(),
     )).all()
     return [(r[0], r[1], int(r[2])) for r in rows]
 
@@ -57,16 +63,16 @@ async def _fetch_nodes(
     if not slugs:
         return {}
     rows = (await s.execute(
-        text("""
+        text(f"""
             SELECT d.slug, d.title, d.status,
                    COALESCE(t.slug, '') AS team_slug
             FROM documents d
             LEFT JOIN parts p  ON p.id = d.part_id
             LEFT JOIN groups g ON g.id = p.group_id
             LEFT JOIN teams t  ON t.id = g.team_id
-            WHERE d.slug = ANY(:slugs) AND d.status != 'archived'
+            WHERE d.slug = ANY(:slugs) AND d.status != 'archived' AND {audience.visible_sql("d")}
         """),
-        {"slugs": list(slugs)},
+        {"slugs": list(slugs), **audience.sql_params()},
     )).all()
     out: dict[str, dict[str, Any]] = {}
     for r in rows:
@@ -74,10 +80,16 @@ async def _fetch_nodes(
             "slug": r[0], "title": r[1], "status": r[2],
             "group": r[3] or None,
         }
-    # missing slugs (no document) → status='missing'
-    for s_ in slugs:
-        if s_ not in out:
-            out[s_] = {"slug": s_, "title": s_, "status": "missing", "group": None}
+    # missing slugs (no document) → status='missing'. 문서는 있는데 범위 밖이면 노드째 뺀다 — 'missing' 으로 그리면
+    # slug(이름)가 새고 '여기 무언가 있다' 도 드러난다(request §5-12).
+    unseen = [s_ for s_ in slugs if s_ not in out]
+    if unseen:
+        existing = set((await s.execute(
+            text("SELECT slug FROM documents WHERE slug = ANY(:slugs)"), {"slugs": unseen},
+        )).scalars().all())
+        for s_ in unseen:
+            if s_ not in existing:
+                out[s_] = {"slug": s_, "title": s_, "status": "missing", "group": None}
     return out
 
 
@@ -220,7 +232,7 @@ async def _domain_subgraph(
 
     # --- 도메인에 속한 doc slug 집합 ---
     doc_rows = (await s.execute(
-        text("""
+        text(f"""
             SELECT DISTINCT d.slug, d.title, d.status,
                    COALESCE(t2.slug, '') AS team_slug
             FROM documents d
@@ -232,8 +244,9 @@ async def _domain_subgraph(
             WHERE tg.name = ANY(:tags)
               AND tg.name != ALL(:noise)
               AND d.status = 'published'
+              AND {audience.visible_sql("d")}
         """),
-        {"tags": tag_names, "noise": noise},
+        {"tags": tag_names, "noise": noise, **audience.sql_params()},
     )).all()
 
     domain_slugs: set[str] = {r[0] for r in doc_rows}

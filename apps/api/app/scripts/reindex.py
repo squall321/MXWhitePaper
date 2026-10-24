@@ -24,7 +24,7 @@ async def _main() -> None:
             print(f"⚠ matview refresh failed (continuing): {e}")
         result = await meili_indexer.reindex_all(s)
     print(f"✓ reindex complete — pushed {result['indexed']} docs, "
-          f"index size: {result['stats_count']}")
+          f"removed {result['removed_stale']} stale, index size: {result['stats_count']}")
 
 
 if __name__ == "__main__":

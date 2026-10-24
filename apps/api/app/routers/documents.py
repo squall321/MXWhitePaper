@@ -23,6 +23,7 @@ from app.repos import document_repo
 from app.services import document_service
 from app.services.html_renderer import RenderOptions, render_namuwiki_html
 from app.storage import minio_adapter
+from app.wiki import audience
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,11 @@ async def list_documents(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0, description="Sprint 3 — limit/offset 페이지네이션 (AIDataHub 통합용)"),
     cursor: str | None = Query(default=None),  # Sprint 2+ 에서 구현
+    audience_scope: str = Query(
+        default="mine", alias="audience", pattern="^(mine|org)$",
+        description="mine = 부른 사람이 보는 문서 · org = 로그인 없이도 보일 문서만(['org'] 범위 · restricted 아님) — "
+                    "바깥으로 밀어낼 때(AIDataHub) 쓴다",
+    ),
     s: AsyncSession = Depends(get_db),
     _user: dict = Depends(require_reader),
 ) -> dict[str, Any]:
@@ -73,17 +79,19 @@ async def list_documents(
             "GET /documents 의 ?part= 쿼리는 deprecated. ?part_slug= 를 사용하세요."
         )
         part_slug = part
-    items = await document_repo.list_documents(
-        s,
-        part_slug=part_slug,
-        team_slug=team,
-        division_slug=division,
-        group_slug=group,
-        tag=tag,
-        q=q,
-        limit=limit,
-        offset=offset,
-    )
+    viewer = audience.ANONYMOUS if audience_scope == "org" else audience.current_viewer()
+    with audience.acting_as(viewer):
+        items = await document_repo.list_documents(
+            s,
+            part_slug=part_slug,
+            team_slug=team,
+            division_slug=division,
+            group_slug=group,
+            tag=tag,
+            q=q,
+            limit=limit,
+            offset=offset,
+        )
     # next_offset: 한 페이지 가득 채워졌으면 다음 offset 제공
     next_offset = offset + limit if len(items) == limit else None
     return envelope(

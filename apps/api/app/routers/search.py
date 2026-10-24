@@ -38,6 +38,7 @@ from app.core.errors import envelope
 from app.repos import document_repo
 from app.search import knowledge_indexer, meili_indexer
 from app.services import search_audit
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1", tags=["search"])
 
@@ -128,6 +129,8 @@ async def search(
     # overridden by the FE) so a reader never sees an editor-only doc's text
     # in a snippet.
     raw_exprs.extend(meili_indexer.role_filter_exprs(user.get("role")))
+    # 보이기 범위(위키 audience · restricted) — 범위 밖 문서는 제목 · 스니펫째 빠진다(app/wiki/audience.py).
+    raw_exprs.extend(meili_indexer.audience_filter_exprs(audience.current_viewer()))
 
     try:
         result = meili_indexer.search(
@@ -319,7 +322,8 @@ async def search_suggest(
             q=needle,
             limit=limit,
             filters={},
-            raw_filter_exprs=meili_indexer.role_filter_exprs(_user.get("role")),
+            raw_filter_exprs=meili_indexer.role_filter_exprs(_user.get("role"))
+            + meili_indexer.audience_filter_exprs(audience.current_viewer()),
         )
         for h in (result.get("hits") or []) if isinstance(result, dict) else []:
             documents.append({

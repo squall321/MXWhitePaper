@@ -253,6 +253,9 @@ async def fetch_document_list(
     params: dict[str, Any] = {
         "limit": min(int(limit), 100),
         "offset": max(0, int(offset)),
+        # 바깥(AIDataHub)으로는 로그인 없이도 보일 문서만 — ["org"] 범위 · restricted 아님(MXWP docs/llm-wiki §5-12).
+        # 토큰이 admin 이어도 위키의 소속 · 플랫폼 문서가 넘어가지 않게 MXWP 가 그 기준으로 거른다.
+        "audience": "org",
     }
     headers = {"X-API-Key": api_key} if api_key else {}
     resp = await client.get(

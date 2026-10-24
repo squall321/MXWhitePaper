@@ -21,6 +21,7 @@ from app.main import app
 from app.repos import document_repo
 from app.routers import chat as chat_mod
 from app.services import chat_agent, document_service
+from app.wiki import audience
 
 
 @pytest.fixture(autouse=True)
@@ -199,6 +200,8 @@ def _events(frames: list[str]) -> list[tuple[str, dict]]:
 # ── 도구 단위 테스트 (실 DB) ────────────────────────────────────────
 @pytest.mark.asyncio
 async def test_tool_append_section_increments(monkeypatch) -> None:
+    # 도구를 요청(POST /chat) 밖에서 직접 부른다 — 읽는 사람을 시스템으로 고른다(app/wiki/audience.py).
+    audience.set_viewer(audience.SYSTEM)
     monkeypatch.setenv("CHAT_ENABLED", "true")
     monkeypatch.setenv("LLM_BACKEND", "mock")
     get_settings.cache_clear()

@@ -15,6 +15,7 @@ from app.core.auth import get_current_user
 from app.core.db import get_db
 from app.main import app
 from app.search import meili_indexer
+from app.wiki import audience
 
 
 class _StubSession:
@@ -43,7 +44,10 @@ class _StubSession:
 @pytest.fixture(autouse=True)
 def _override_deps() -> Any:
     async def fake_user() -> dict[str, Any]:
-        return {"id": "test-user", "email": "t@e.x", "role": "admin"}
+        # 진짜 get_current_user 처럼 이 요청의 '읽는 사람' 도 둔다(app/wiki/audience.py).
+        user = {"id": "test-user", "email": "t@e.x", "role": "admin"}
+        audience.set_viewer(audience.viewer_from_user(user))
+        return user
 
     async def fake_db() -> Any:
         yield _StubSession()

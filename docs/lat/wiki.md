@@ -14,7 +14,8 @@
 | --- | --- | --- |
 | W0 준비 | 봉투 모델 · 합성 원천 20 · 가짜 LLM · 설정 자리 | [[#Envelope]] · [[#Test bundle]] · [[#Fake LLM]] · [[#Settings]] |
 | W1 연결 · 신원 | 위임 창구 · 위임 토큰(세대) · 소속 · 플랫폼 증명 · 진입 토큰 스냅숏 · jti 원장 · 소속→팀 표(API · 화면 `/admin/aff-team-map`) | [[core#게이트웨이 · 포털 위임]] |
-| W2 보이기 범위 ~ W8 cae00 | (아직) | — |
+| W2 보이기 범위 | 짓는 중 — 저장소 층 · 공유 · oEmbed · 홈 · 그래프 셋 · 검색 · 챗 검색 · 알림 · 메일 · AIDataHub 됨, 활동 · 북마크 · 태그 · 반응 · 시리즈 · 저장된 보기 · 분석 · 위젯 · 댓글 목록 남음 | [[#Audience]] |
+| W3 원천 · 작업 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
 
@@ -34,7 +35,7 @@
 | 무엇 | 어디 | 상태 |
 | --- | --- | --- |
 | 원천 봉투(종류별 body) · 범위 토큰 정규화 · payload 해시 | [[src/app/wiki/envelope.py#SourceEnvelope]] · `normalize_audience` | W0 |
-| 범위 계산 · 저장소 층 필터 | `app/wiki/audience.py` | W2 |
+| 범위 계산 · 저장소 층 필터 · 읽는 사람 문맥 | [[src/app/wiki/audience.py]] · 표 `wiki_pages`(0051) | W2 |
 | 받기 · 멱등 · 철회 · DB 큐 · 워커 | `app/wiki/{sources,jobs,worker}.py` | W3 |
 | LLM(구조화 출력) · 해석 · 계획 · 쓰기 · 검증 · 반영 | `app/wiki/{llm,resolve,plan,write,validate,apply}.py` | W4 |
 | REST | `app/routers/wiki.py`(`/api/v1/wiki/*`) | W3~ |
@@ -51,6 +52,30 @@
 - 멱등 열쇠의 한 칸 `payload_sha256` = 정규화한 body(빈 선택 칸 뺌)의 정규 JSON(키 정렬 · 공백 없음) sha256.
 - CONTRACTS §3 표에 꼴이 없던 셋은 이렇게 정했다 — `document{doc_slug, version}` · `note{text}` · `report.figures[{name, caption?,
   upload_id?}]`(그리고 `card.claims[].evidence` 는 글 · `inquiry_answer.confidence` 는 0~1).
+
+## Audience
+
+보이기 범위(CONTRACTS §2-11 · WK-D15 · D26~D28). 문서는 둘 다 맞아야 보인다 — ① `wiki_pages` 줄이 있으면 그 `audience` 토큰을 모두
+가진 사람 ② `confidentiality=restricted` 면 작성자 · `document_reviewers` · metadata owners/reviewers 의 이메일 · admin.
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 읽는 사람 | `Viewer`(user · system · anonymous). `get_current_user` 가 `viewer_from_user` 로 요청 문맥(ContextVar)에 두고, `ViewerContextMiddleware` 가 요청마다 비운다 |
+| 토큰 | `org` · `user:<id>` 늘, `aff:` · `plat:` 은 `portal_access_at` 이 `ACCESS_MAX_AGE_H`(24) 안일 때만(위임 호출은 그 호출의 증명값) |
+| 술어 | `visible_sql(alias)` + `sql_params()` — `documents` 별칭 하나에 붙인다. admin · system 은 `_aud_all` 로 통과 |
+| 빠뜨림 | 문맥이 비면 `ViewerMissing`(조용히 새지 않고 깨진다). 배경 작업 `acting_as(SYSTEM)`, 공개 길 `acting_as(ANONYMOUS)`(`["org"]` · restricted 아님) |
+
+거르는 자리(지금) — `document_repo.find_by_slug` · `find_by_id` · `list_documents` · `list_backlinks`(→ GET · 목록 · 판 · 내보내기 · 패치가 모두
+`get_document_or_404` 로 지난다) · 공유 링크(만들기 403 · 열기 410) · oEmbed(좁은 위키 404) · 홈 히어로(전역 캐시라 익명 기준) · 오늘의
+문서(사람 기준) · 링크 그래프(간선 · 노드 · 도메인 — 범위 밖은 `missing` 으로도 그리지 않고 뺀다) · 의존 그래프(캐시 열쇠에 범위) ·
+triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `aud1~3` · `readers` — [[documents#보이기 범위 거르기 (docs/llm-wiki W2)]]).
+알림 · 메일 — 앱 안 알림은 **읽을 때 한 곳**(`GET /notifications` — payload `slug` 의 문서가 지금 보이나)에서 거르고(생산자 아홉 곳을 하나씩
+막지 않는다), 메일은 보낼 때 받는 사람별로 `viewer_for_user` + `can_see`(구독 이벤트 · 결재 요청 · 자동화 · 알림 예약). 공유 링크 메일은
+익명이 보는 문서만 링크가 생기므로 따로 막지 않는다. 바깥 밀어내기(AIDataHub)는 `GET /documents?audience=org`(익명 기준 목록).
+재색인(`app.scripts.reindex`)은 뷰에 없는 색인 줄도 지운다 — 남으면 범위 칸 없이 이행기 규칙으로 제목이 뜬다.
+
+시험 [[apps/api/tests/test_wiki_audience.py]] — 문서 여섯(org · aff · plat · aff+plat 위키, restricted, 보통) × 읽는 사람 여섯(소속 ·
+플랫폼 · 없음 · 오래된 소속 · 작성자 · admin) × 길.
 
 ## Test bundle
 
@@ -81,3 +106,6 @@ API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 —
   둘 다 없다. jsonschema 는 pyproject `dev` 에 적어 두었다.
 - 이 리포의 시험은 **dev DB 를 그대로 쓴다** — 위키 시험이 만든 줄은 시험이 지운다(conftest 의 `sup-*` 정리와 같은 자세).
 - `pytest -q` 는 addopts 의 `-q` 와 겹쳐 요약 줄이 숨는다 — 결과 줄을 남기려면 `-q` 없이 돌린다.
+- **요청 밖에서 서비스 · 저장소를 직접 부르는 코드(시험 · CLI · 배경 작업)는 읽는 사람을 골라야 한다** — 안 고르면 `ViewerMissing`.
+  시험은 `audience.set_viewer(audience.SYSTEM)` 또는 `with audience.acting_as(...)`. CLI(`scripts/import_one.py`)는 시작할 때 시스템으로.
+- 시험 문서는 SQL 로 직접 넣는다 — `document_service.create_document` 는 dev Meili 색인 · 웹훅까지 부른다.

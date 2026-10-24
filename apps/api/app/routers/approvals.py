@@ -50,6 +50,7 @@ from app.core.errors import Forbidden, NotFound, ValidationFailed, envelope
 from app.repos import document_repo
 from app.services import notification_prefs as prefs_svc
 from app.services.document_service import fire_webhook
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1", tags=["approvals"])
 
@@ -260,6 +261,10 @@ async def add_reviewers(
                     continue
                 addr = it.get("reviewer_email")
                 if not addr:
+                    continue
+                # 위키 범위 밖 검토자에게는 제목을 메일로 보내지 않는다(docs/llm-wiki W2).
+                viewer = await audience.viewer_for_user(s, it["reviewer_user_id"])
+                if not await audience.can_see(s, viewer, doc["id"]):
                     continue
                 # Honour the reviewer's email channel preference.
                 if not await prefs_svc.is_channel_enabled(

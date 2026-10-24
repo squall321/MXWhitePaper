@@ -22,6 +22,7 @@ from app.core.auth import require_reader
 from app.core.db import get_db
 from app.core.errors import envelope
 from app.lib.super_domains import NOISE_TAGS, SUPER_DOMAINS
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1/home", tags=["home"])
 
@@ -67,7 +68,7 @@ async def _build_hero_data(s: AsyncSession) -> dict[str, Any]:
 
         # --- 1) 현재 doc_count ---
         count_row = (await s.execute(
-            text("""
+            text(f"""
                 SELECT COUNT(DISTINCT d.id)
                 FROM documents d
                 JOIN document_tags dt ON dt.document_id = d.id
@@ -75,8 +76,9 @@ async def _build_hero_data(s: AsyncSession) -> dict[str, Any]:
                 WHERE t.name = ANY(:tags)
                   AND t.name != ALL(:noise)
                   AND d.status = 'published'
+                  AND {audience.visible_sql("d")}
             """),
-            {"tags": tag_names, "noise": noise},
+            {"tags": tag_names, "noise": noise, **audience.sql_params(audience.ANONYMOUS)},
         )).scalar_one()
         doc_count = int(count_row)
 
@@ -85,7 +87,7 @@ async def _build_hero_data(s: AsyncSession) -> dict[str, Any]:
 
         # --- 2) trend_7d (7일치 누적 카운트) ---
         trend_rows = (await s.execute(
-            text("""
+            text(f"""
                 WITH days AS (
                     SELECT generate_series(
                         current_date - interval '6 days',
@@ -101,6 +103,7 @@ async def _build_hero_data(s: AsyncSession) -> dict[str, Any]:
                     WHERE t.name = ANY(:tags)
                       AND t.name != ALL(:noise)
                       AND d.status = 'published'
+                      AND {audience.visible_sql("d")}
                 )
                 SELECT
                     days.day,
@@ -110,7 +113,7 @@ async def _build_hero_data(s: AsyncSession) -> dict[str, Any]:
                 GROUP BY days.day
                 ORDER BY days.day
             """),
-            {"tags": tag_names, "noise": noise},
+            {"tags": tag_names, "noise": noise, **audience.sql_params(audience.ANONYMOUS)},
         )).all()
 
         trend_7d = [int(r[1]) for r in trend_rows]
@@ -118,7 +121,7 @@ async def _build_hero_data(s: AsyncSession) -> dict[str, Any]:
 
         # --- 3) top_docs (indegree DESC 상위 3) ---
         top_rows = (await s.execute(
-            text("""
+            text(f"""
                 SELECT slug, title, indegree FROM (
                     SELECT DISTINCT d.slug, d.title, d.indegree, d.updated_at
                     FROM documents d
@@ -127,11 +130,12 @@ async def _build_hero_data(s: AsyncSession) -> dict[str, Any]:
                     WHERE t.name = ANY(:tags)
                       AND t.name != ALL(:noise)
                       AND d.status = 'published'
+                      AND {audience.visible_sql("d")}
                 ) sub
                 ORDER BY indegree DESC, updated_at DESC
                 LIMIT 3
             """),
-            {"tags": tag_names, "noise": noise},
+            {"tags": tag_names, "noise": noise, **audience.sql_params(audience.ANONYMOUS)},
         )).all()
 
         top_docs = [
@@ -218,7 +222,7 @@ async def _build_today_data(s: AsyncSession) -> dict[str, Any]:
 
     # --- (2) 전역 indegree top 5 ---
     cand_rows = (await s.execute(
-        text("""
+        text(f"""
             SELECT d.slug, d.title, d.indegree, d.updated_at,
                    d.content_json,
                    COALESCE(t.id::text, '') AS team_id
@@ -226,16 +230,17 @@ async def _build_today_data(s: AsyncSession) -> dict[str, Any]:
             LEFT JOIN parts p  ON p.id = d.part_id
             LEFT JOIN groups g ON g.id = p.group_id
             LEFT JOIN teams t  ON t.id = g.team_id
-            WHERE d.status = 'published'
+            WHERE d.status = 'published' AND {audience.visible_sql("d")}
             ORDER BY d.indegree DESC
             LIMIT 5
         """),
+        audience.sql_params(),
     )).mappings().all()
 
     if not cand_rows:
         # --- (3) 최신순 fallback ---
         cand_rows = (await s.execute(
-            text("""
+            text(f"""
                 SELECT d.slug, d.title, d.indegree, d.updated_at,
                        d.content_json,
                        COALESCE(t.id::text, '') AS team_id
@@ -243,10 +248,11 @@ async def _build_today_data(s: AsyncSession) -> dict[str, Any]:
                 LEFT JOIN parts p  ON p.id = d.part_id
                 LEFT JOIN groups g ON g.id = p.group_id
                 LEFT JOIN teams t  ON t.id = g.team_id
-                WHERE d.status = 'published'
+                WHERE d.status = 'published' AND {audience.visible_sql("d")}
                 ORDER BY d.updated_at DESC
                 LIMIT 5
             """),
+            audience.sql_params(),
         )).mappings().all()
 
     if not cand_rows:
@@ -277,12 +283,13 @@ async def _build_today_data(s: AsyncSession) -> dict[str, Any]:
 
     # wiki neighbors (links 테이블, 양방향)
     wiki_rows = (await s.execute(
-        text("""
+        text(f"""
             SELECT n.slug, n.title, SUM(w) AS weight FROM (
                 SELECT d2.slug, d2.title, COUNT(*) AS w
                 FROM links l
                 JOIN documents src ON src.id = l.source_doc_id AND src.slug = :slug
                 JOIN documents d2  ON d2.slug = l.target_slug  AND d2.status = 'published'
+                                  AND {audience.visible_sql("d2")}
                 GROUP BY d2.slug, d2.title
 
                 UNION ALL
@@ -291,12 +298,13 @@ async def _build_today_data(s: AsyncSession) -> dict[str, Any]:
                 FROM links l
                 JOIN documents tgt ON tgt.slug = l.target_slug AND tgt.slug = :slug
                 JOIN documents src2 ON src2.id = l.source_doc_id AND src2.status = 'published'
+                                   AND {audience.visible_sql("src2")}
                 GROUP BY src2.slug, src2.title
             ) n
             GROUP BY n.slug, n.title
             ORDER BY weight DESC
         """),
-        {"slug": doc_slug},
+        {"slug": doc_slug, **audience.sql_params()},
     )).all()
 
     # tag neighbors (document_tags + tags, NOISE_TAGS 제외)
@@ -342,16 +350,16 @@ async def _build_today_data(s: AsyncSession) -> dict[str, Any]:
             graph_slugs.add(nb["slug"])
 
     node_rows = (await s.execute(
-        text("""
+        text(f"""
             SELECT d.slug, d.title, d.status,
                    COALESCE(t.slug, '') AS team_slug
             FROM documents d
             LEFT JOIN parts p  ON p.id = d.part_id
             LEFT JOIN groups g ON g.id = p.group_id
             LEFT JOIN teams t  ON t.id = g.team_id
-            WHERE d.slug = ANY(:slugs)
+            WHERE d.slug = ANY(:slugs) AND {audience.visible_sql("d")}
         """),
-        {"slugs": list(graph_slugs)},
+        {"slugs": list(graph_slugs), **audience.sql_params()},
     )).all()
 
     graph_nodes: list[dict] = [

@@ -19,6 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..services.api_token_scopes import check_scope, required_scope_for
+from ..wiki import audience
 from .config import get_settings
 from .db import get_db
 from .errors import Forbidden, Unauthorized
@@ -234,6 +235,13 @@ async def _resolve_api_token(
 async def get_current_user(
     request: Request, s: AsyncSession = Depends(get_db)
 ) -> dict[str, Any]:
+    """사람을 해소하고, 이 요청의 '읽는 사람'(보이기 범위 문맥 — app/wiki/audience.py)으로 둔다."""
+    user = await _resolve_current_user(request, s)
+    audience.set_viewer(audience.viewer_from_user(user))
+    return user
+
+
+async def _resolve_current_user(request: Request, s: AsyncSession) -> dict[str, Any]:
     settings = get_settings()
     auth_header = request.headers.get("authorization") or request.headers.get(
         "Authorization"

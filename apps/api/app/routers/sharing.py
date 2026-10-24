@@ -35,6 +35,7 @@ from app.core.errors import Forbidden, Gone, NotFound, Unauthorized, envelope
 from app.core.security import hash_password, verify_password
 from app.repos import document_repo
 from app.services import document_service
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1", tags=["sharing"])
 
@@ -143,6 +144,10 @@ async def create_share_link(
     doc = await document_repo.find_by_slug(s, slug)
     if not doc or doc.get("status") == "archived":
         raise NotFound(f"document not found: {slug}")
+    # 공유 링크는 로그인 없이 열린다 — 익명이 볼 수 있는 문서(["org"] 범위 · restricted 아님)만 링크를 만든다(request §5-12).
+    with audience.acting_as(audience.ANONYMOUS):
+        if await document_repo.find_by_id(s, doc["id"]) is None:
+            raise Forbidden("이 문서는 범위가 좁아(위키 audience · restricted) 공유 링크를 만들 수 없다")
 
     if body.expires_at is not None:
         # Normalise naive → UTC; reject past timestamps so revoked links
@@ -414,7 +419,9 @@ async def read_shared_document(
         if not verify_password(provided, pwd_hash):
             raise Unauthorized("invalid share password")
 
-    doc = await document_repo.find_by_id(s, str(row[2]))
+    # 로그인 없이 여는 길 — 익명으로 읽는다. 링크를 만든 뒤 범위가 좁아진 문서도 여기서 막힌다.
+    with audience.acting_as(audience.ANONYMOUS):
+        doc = await document_repo.find_by_id(s, str(row[2]))
     if not doc or doc.get("status") == "archived":
         # The doc was hard/soft deleted. Treat as gone so the FE can show a
         # consistent "더 이상 사용할 수 없는 링크" message.

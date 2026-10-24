@@ -8452,6 +8452,19 @@
               ],
               "title": "Cursor"
             }
+          },
+          {
+            "description": "mine = 부른 사람이 보는 문서 · org = 로그인 없이도 보일 문서만(['org'] 범위 · restricted 아님) — 바깥으로 밀어낼 때(AIDataHub) 쓴다",
+            "in": "query",
+            "name": "audience",
+            "required": false,
+            "schema": {
+              "default": "mine",
+              "description": "mine = 부른 사람이 보는 문서 · org = 로그인 없이도 보일 문서만(['org'] 범위 · restricted 아님) — 바깥으로 밀어낼 때(AIDataHub) 쓴다",
+              "pattern": "^(mine|org)$",
+              "title": "Audience",
+              "type": "string"
+            }
           }
         ],
         "responses": {

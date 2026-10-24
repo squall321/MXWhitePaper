@@ -44,6 +44,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import session_factory
+from app.wiki import audience
 
 logger = logging.getLogger(__name__)
 
@@ -370,7 +371,7 @@ async def _action_email_subscribers(
     rows = (await s.execute(
         text(
             """
-            SELECT u.email
+            SELECT u.email, u.id::text
             FROM subscriptions sub
             JOIN users u ON u.id = sub.user_id
             WHERE sub.document_id = CAST(:d AS uuid)
@@ -386,6 +387,9 @@ async def _action_email_subscribers(
     for r in rows:
         addr = r[0]
         if not isinstance(addr, str) or not addr:
+            continue
+        # 구독자라도 지금 그 문서를 볼 수 없으면 메일(본문에 slug)을 보내지 않는다(docs/llm-wiki W2).
+        if not await audience.can_see(s, await audience.viewer_for_user(s, r[1]), doc_id):
             continue
         try:
             ok = await send_email(addr, subject, body)

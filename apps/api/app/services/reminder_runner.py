@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.db import session_scope
 from app.services import notification_prefs as prefs_svc
+from app.wiki import audience
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,9 @@ async def _fire_one(
     email_enabled = await prefs_svc.is_channel_enabled(
         s, user_id=user_id, kind="reminder", channel="email"
     )
+    # 예약한 뒤 그 문서의 범위가 좁아졌으면 제목을 메일로 보내지 않는다(앱 안 알림은 목록이 읽을 때 거른다 — W2).
+    if email_enabled and not await audience.can_see(s, await audience.viewer_for_user(s, user_id), document_id):
+        email_enabled = False
     if email_enabled:
         try:
             await _maybe_send_reminder_email(

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import get_current_user
 from app.core.db import get_db
 from app.core.errors import NotFound, envelope
+from app.wiki import audience
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
 
@@ -39,6 +40,9 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
     }
 
 
+_VISIBLE_PAYLOAD_DOC = audience.slug_visible_sql("(notifications.payload->>'slug')", "_ns")
+
+
 @router.get(
     "",
     summary="내 알림 목록 — 최신순",
@@ -49,7 +53,9 @@ async def list_notifications(
     s: AsyncSession = Depends(get_db),
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    where = ["user_id = CAST(:uid AS uuid)"]
+    # 알림은 만들 때의 제목을 payload 에 담는다 — 지금 그 문서를 볼 수 없으면(범위가 좁아짐 · 처음부터 범위 밖 멘션)
+    # 읽을 때 뺀다. 생산자 아홉 곳을 하나씩 막는 대신 여기 한 곳에서(docs/llm-wiki W2).
+    where = ["user_id = CAST(:uid AS uuid)", _VISIBLE_PAYLOAD_DOC]
     if unread:
         where.append("read_at IS NULL")
     rows = (await s.execute(
@@ -60,16 +66,16 @@ async def list_notifications(
             ORDER BY created_at DESC
             LIMIT :lim
         """),
-        {"uid": user["id"], "lim": limit},
+        {"uid": user["id"], "lim": limit, **audience.sql_params()},
     )).all()
     items = [_row_to_dict(r) for r in rows]
 
     unread_count = (await s.execute(
-        text("""
+        text(f"""
             SELECT COUNT(*) FROM notifications
-            WHERE user_id = CAST(:uid AS uuid) AND read_at IS NULL
+            WHERE user_id = CAST(:uid AS uuid) AND read_at IS NULL AND {_VISIBLE_PAYLOAD_DOC}
         """),
-        {"uid": user["id"]},
+        {"uid": user["id"], **audience.sql_params()},
     )).scalar_one()
 
     return envelope(

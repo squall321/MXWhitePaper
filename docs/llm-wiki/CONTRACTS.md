@@ -35,6 +35,8 @@ DocumentJSON v1.0(`packages/shared/schemas/document.json` → datamodel-codegen)
 | `stale_since` | timestamptz null | 점검이 '낡음' 을 본 때. 고치면 비운다 |
 | `created_at` · `updated_at` | timestamptz | |
 
+구현 — alembic `0051`(W2, 범위가 사는 자리라 원천 · 작업 표보다 먼저). `entity_id` 의 외래 키는 `wiki_entities` 가 생길 때(W5) 단다.
+
 ### 2-2. `wiki_sources` — 원천(불변)
 
 | 칸 | 꼴 | 뜻 |
@@ -167,6 +169,8 @@ finding — `id` · `run_id` · `rule`(request §5-8 표의 열쇠) · `severity
   한다(V4). 서로 다른 `aff:` 둘 · 서로 다른 `user:` 둘이 섞이면 만족하는 사람이 없으므로 반영을 거부하고 사람에게 넘긴다.
 - **넓히지 않는다** — 넓히기(예 — 소속 문서를 `["org"]` 로)는 **사람만** 한다. 원천 주인 또는 그 범위의 검토자가 `POST /wiki/pages/{slug}/audience` 로,
   기록에 남긴다. `plat:` 토큰을 빼는 넓히기는 admin 만(포털 권한표가 막는 자료를 위키가 풀어 주는 길이 되기 때문).
+- **restricted(사용자 결정 Q4 — WK-D15 · D27)** — 위키든 아니든 `confidentiality=restricted` 는 작성자(`owner_id`) · `document_reviewers` ·
+  metadata owners/reviewers 에 이메일로 적힌 사람 · admin 만 본다. 구현 — `app/wiki/audience.py`(`docs/lat/wiki.md` §Audience 가 정본).
 - 엔티티 문서처럼 여러 범위의 원천이 모이는 문서는 **범위별로 나눈다** — `ent-part-hinge-bracket`(org 사실만) 과
   `ent-part-hinge-bracket--plmdefect`(PLM 결함 사실, 범위 `["plat:plmdefect"]`). 넓은 문서는 좁은 문서가 있다는 것도 말하지 않는다(제목이 새는 것을
   막는다 — 링크는 좁은 문서 쪽에서 넓은 문서로만).

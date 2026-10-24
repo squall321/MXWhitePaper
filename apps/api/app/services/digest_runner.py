@@ -41,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.db import session_factory, session_scope
 from app.services import notification_prefs as prefs_svc
+from app.wiki import audience
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,10 @@ async def _dispatch_inner(
         user_id = str(r[1])
         cadence = r[2]
         if actor_user_id and user_id == actor_user_id:
+            continue
+        # 구독은 했어도 지금 그 문서를 볼 수 없으면(범위가 좁아짐 · restricted) 알림도 요약 메일 줄도 만들지 않는다 —
+        # 메일 본문으로 제목이 샌다(docs/llm-wiki W2).
+        if not await audience.can_see(s, await audience.viewer_for_user(s, user_id), document_id):
             continue
         if cadence == "instant":
             # Honour subscription_event in-app preference. Daily/weekly buffers
