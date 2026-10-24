@@ -16,6 +16,7 @@ import {
   approveWikiCandidate, discardWikiCandidate, kst, listWikiCandidates, type WikiCandidate,
 } from '@/features/wiki/api'
 import { WikiError, WikiShell } from '@/features/wiki/WikiNav'
+import { toApiError } from '@/lib/api/envelope'
 
 const KIND: Record<string, string> = { qa: '문답', deliberation: '심의', note: '메모' }
 
@@ -28,7 +29,7 @@ function Row({ c, me }: { c: WikiCandidate; me: string }) {
   const options = [c.suggested_audience, [me]].filter((a, i, all) => all.findIndex((b) => b.join() === a.join()) === i)
   const [pick, setPick] = useState(0)
   const done = () => void qc.invalidateQueries({ queryKey: ['wiki', 'candidates'] })
-  const fail = (err: unknown) => toast.error(err instanceof Error ? err.message : '처리 실패')
+  const fail = (err: unknown) => toast.error(toApiError(err).message)
   const approve = useMutation({
     mutationFn: () => approveWikiCandidate(c.id, options[pick]),
     onSuccess: (res) => { toast.success(`들인다 — ${res.short} · ${scopeLabel(res.audience, me)}`); done() },

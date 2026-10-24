@@ -17,6 +17,7 @@ import {
   type WikiEntity,
 } from '@/features/wiki/api'
 import { WikiError, WikiShell } from '@/features/wiki/WikiNav'
+import { toApiError } from '@/lib/api/envelope'
 
 // 위키 화면의 입력칸 — 공용 Input 은 어두운 화면에서 흰 바탕이라 다른 위키 입력칸(검토 까닭)과 꼴을 맞춘다
 const FIELD = 'w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-600'
@@ -36,7 +37,7 @@ function Duplicates() {
   const merge = useMutation({
     mutationFn: ({ from, into }: { from: string; into: string }) => proposeWikiMerge(from, into, '중복 후보에서'),
     onSuccess: (cs) => toast.success(`합치기 제안 ${cs.short} — 검토 큐에서 승인한다`),
-    onError: (err) => toast.error(err instanceof Error ? err.message : '제안 실패'),
+    onError: (err) => toast.error(toApiError(err).message),
   })
   if (!q.isSuccess || q.data.length === 0) return null // 검토자가 아니면 403 — 칸을 숨긴다
   return (
@@ -133,7 +134,7 @@ function EditNames({ e }: { e: WikiEntity }) {
       void qc.invalidateQueries({ queryKey: ['wiki', 'entities'] })
       void qc.invalidateQueries({ queryKey: ['wiki', 'entity', e.id] })
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : '고치지 못했다'),
+    onError: (err) => toast.error(toApiError(err).message),
   })
   const area = 'mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 font-mono text-sm dark:border-gray-700 dark:bg-gray-900'
   return (
@@ -158,7 +159,7 @@ function MergeInto({ e }: { e: WikiEntity }) {
   const m = useMutation({
     mutationFn: () => proposeWikiMerge(e.id, into, note.trim()),
     onSuccess: (cs) => toast.success(`합치기 제안 ${cs.short}${cs.status === 'failed' ? ' — 검증에 걸렸다' : ' — 검토 큐에서 승인한다'}`),
-    onError: (err) => toast.error(err instanceof Error ? err.message : '제안 실패'),
+    onError: (err) => toast.error(toApiError(err).message),
   })
   return (
     <form className="flex flex-wrap items-end gap-2" onSubmit={(ev) => { ev.preventDefault(); m.mutate() }}>

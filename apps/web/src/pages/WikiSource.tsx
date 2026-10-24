@@ -9,6 +9,7 @@ import { toast } from '@/components/ui/Toast'
 import { getWikiSource, kst, withdrawWikiSource } from '@/features/wiki/api'
 import { sourceKindLabel } from '@/features/wiki/WikiCitations'
 import { WikiError, WikiShell } from '@/features/wiki/WikiNav'
+import { toApiError } from '@/lib/api/envelope'
 
 function cell(v: unknown): string {
   if (v && typeof v === 'object' && 'value' in v && 'unit' in v) {
@@ -71,7 +72,7 @@ export function WikiSourcePage() {
       toast.success('철회했다 — 줄에 선 들이기를 거두고 원천 문서를 보관했다')
       void qc.invalidateQueries({ queryKey: ['wiki', 'source', id] })
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : '철회 실패'),
+    onError: (err) => toast.error(toApiError(err).message),
   })
 
   if (q.isError) {

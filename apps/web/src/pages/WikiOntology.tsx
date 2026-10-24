@@ -15,6 +15,7 @@ import {
   decideWikiOntology, getWikiOntology, proposeWikiPredicate, proposeWikiType, type OntologyStatus,
 } from '@/features/wiki/api'
 import { WikiError, WikiShell } from '@/features/wiki/WikiNav'
+import { toApiError } from '@/lib/api/envelope'
 
 // 위키 화면의 입력칸 — 공용 Input 은 어두운 화면에서 흰 바탕이라 다른 위키 입력칸(검토 까닭)과 꼴을 맞춘다
 const FIELD = 'w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-600'
@@ -33,7 +34,7 @@ function Decide({ kind, keyName }: { kind: 'types' | 'predicates'; keyName: stri
       toast.success(`${keyName} → ${STATUS[res.status][0]}`)
       void qc.invalidateQueries({ queryKey: ['wiki', 'ontology'] })
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : '처리 실패'),
+    onError: (err) => toast.error(toApiError(err).message),
   })
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -58,7 +59,7 @@ function ProposeForms() {
     toast.success(`${what} 제안 — admin 이 승인하면 들이기가 쓴다`)
     void qc.invalidateQueries({ queryKey: ['wiki', 'ontology'] })
   }
-  const fail = (err: unknown) => toast.error(err instanceof Error ? err.message : '제안 실패')
+  const fail = (err: unknown) => toast.error(toApiError(err).message)
   const list = (v: string) => v.split(',').map((x) => x.trim()).filter(Boolean)
   const t = useMutation({ mutationFn: () => proposeWikiType(type), onSuccess: () => done('유형'), onError: fail })
   const p = useMutation({

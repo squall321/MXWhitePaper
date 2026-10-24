@@ -109,6 +109,8 @@ CI 통합 시에는 별도 playwright 이미지 (`mcr.microsoft.com/playwright`)
   표지 · ✕ 없음)을 찍는다. 검토 한 건 고정 응답에는 관계 둘(코드 · AI)이 있다(W5). 챗 위키 모드(`wiki-chat-*`, W6)는
   `/wiki/query` 를 고정 SSE 로 돌려(물음에 '배터리' 가 있으면 MISS) 답 · MISS 둘을 찍고, 찍은 뒤 '위키에 남기기' 가 보내는 몸통
   (`{n, slug, block_id}` · `done.scope`)을 본다.
+  실패 알림 시험(그림 없음)은 '내 후보' 승인을 403 으로 돌려 알림에 서버의 까닭이 뜨고 axios 의 'Request failed with status
+  code' 가 안 뜨는지 본다(10-24 — 위키 화면 여섯이 서버 까닭을 가렸다).
 - **임시 설정을 다른 디렉터리에 두면 base 의 상대 경로가 그 자리 기준으로 풀린다** — `testDir` 은 절대 경로로 다시 주고, html 보고서
   (`../../infra/logs/e2e-report`)는 `apps/infra/` 를 새로 만든다(10-24 — 지웠다). 쓰고 나서 둘 다 지운다.
 - **AI 위키 묶음은 로그인을 한 번만** — `/auth/*` 는 IP 당 분에 10번이라 시험마다 `loginAsAdmin` 하면 찬다. 묶음 앞(`beforeAll`)에서

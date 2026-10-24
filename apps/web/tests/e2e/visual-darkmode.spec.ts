@@ -382,4 +382,16 @@ test.describe('visual: AI 위키 (light · dark)', () => {
       outcome: 'solved', audience: ['org'],
     })
   })
+
+  // 위키 화면의 실패 알림은 서버가 준 까닭을 보인다 — axios 의 'Request failed with status code 403' 만 보이면 사람이 고칠 길을 모른다.
+  test('shows the server reason when a wiki action fails', async ({ page }) => {
+    const reason = '보낸 사람이 갖지 않은 범위 토큰이다 — 못 볼 원천은 들이지 않는다. 포털을 거쳐 다시 들어오거나(진입 뒤 24시간), 잠시 뒤 다시 하라.'
+    await page.route('**/api/v1/wiki/candidates/*/approve', (r) => r.fulfill({ status: 403, json: {
+      data: null, meta: null, error: { code: 'FORBIDDEN', message: reason, details: { missing: ['aff:SYN-CAE1'] } } } }))
+    await page.goto('/wiki/candidates')
+    await page.getByTestId('wiki-candidates').waitFor()
+    await page.getByRole('button', { name: '승인 · 들이기' }).first().click()
+    await expect(page.getByText(reason, { exact: false })).toBeVisible()
+    await expect(page.getByText('Request failed with status code')).toHaveCount(0)
+  })
 })

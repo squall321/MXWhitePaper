@@ -17,6 +17,7 @@ import {
   decideWikiChange, getWikiChange, kst, listWikiChanges, type WikiChange, type WikiChangeOp, type WikiVerdict,
 } from '@/features/wiki/api'
 import { WikiError, WikiShell } from '@/features/wiki/WikiNav'
+import { toApiError } from '@/lib/api/envelope'
 
 const STATUSES = [
   ['pending_review', '검토 대기'], ['failed', '실패'], ['auto_applied', '자동 반영'], ['applied', '승인 반영'],
@@ -187,7 +188,7 @@ export function WikiChangePage() {
       setNote('')
       void qc.invalidateQueries({ queryKey: ['wiki'] })
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : '처리 실패'),
+    onError: (err) => toast.error(toApiError(err).message),
   })
 
   if (q.isError) {
