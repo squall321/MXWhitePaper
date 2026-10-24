@@ -60,7 +60,7 @@
 - [x] `wiki_citations` · 읽기 응답에 근거 붙이기(`?with=citations`)
 - [x] 화면 — 위키 홈 · 문서 배지 · 각주 · 원천 카드 · 검토 큐 · 기록(+ 원천 화면 · 다크 모드 시각 회귀 4 — 위키 API 는 고정 응답)
 - [x] `index.md` · `log.md`(원문 꼴) — 저장해 두는 `wiki-index` 문서는 아직(창구가 늘 새로 짓는다)
-- [ ] 규칙서 `wiki-schema` 문서 · YAML 검증 · 판(검증 · 판 · admin 만 · 올리기 `PUT /schema` 는 됨 — 사람 재검토 뒤 dev 에 v1 로 올린다)
+- [x] 규칙서 `wiki-schema` 문서 · YAML 검증 · 판 — 사용자 결정(10-24, 권장안)으로 첫 판을 dev 에 v1 로 올렸다(검증 · 판 · admin 만 · `PUT /schema`)
 - [x] 완료 기준 — 합성 20 → 문서 · 틀린 가짜 답 여섯 가지가 다 걸림 · 되돌리기 복원(`tests/test_wiki_ingest.py`)
 
 ## W5 온톨로지
