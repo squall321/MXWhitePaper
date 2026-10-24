@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     portal_audience: str = Field(default="mx-white-paper")   # token `aud` we accept
     portal_sso_default_role: str = Field(default="editor")   # role for auto-created SSO users
     portal_sso_landing: str = Field(default="/mx-white-paper/")  # where to send the browser after login
+    # SSO 전용(사용자 결정 10-25) — 켜면 사람은 포털 진입으로만 들어온다. 가입 · 비밀번호 로그인 등을 닫고(비상 관리자 빼고),
+    # 포털 진입 세션은 소속 사진 수명(24시간) 안에서만 산다. 기본 꺼짐 — 박스마다 사람이 목록(app.scripts.sso_only_check)을 보고 켠다.
+    mxwp_sso_only: bool = Field(default=False)
+    mxwp_local_login_allow: str = Field(default="")   # 쉼표 이메일 — SSO 전용이어도 비밀번호로 들어오는 비상 관리자
+    portal_launch_url: str = Field(default="/launch/mx-white-paper")  # 포털의 MX 백서 진입 링크(같은 오리진 상대 주소)
 
     # ── 게이트웨이 · 포털 위임(docs/llm-wiki C1~C4) ───────────────────────────────────────────────
     # 게이트웨이 · 포털과만 나눠 갖는 비밀. 비면 POST /api/v1/auth/sso 가 404(꺼짐)이고 소속 · 플랫폼 증명도

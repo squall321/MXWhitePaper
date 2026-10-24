@@ -7170,6 +7170,30 @@
         ]
       }
     },
+    "/api/v1/auth/mode": {
+      "get": {
+        "description": "화면이 로그인 꼴을 고른다 — SSO 전용이면 '포털로 들어가기' 하나. 진입 링크는 포털 SSO 가 켜졌을 때만.",
+        "operationId": "auth_mode_api_v1_auth_mode_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Auth Mode Api V1 Auth Mode Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Auth Mode",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/auth/password/forgot": {
       "post": {
         "description": "Always returns 200 to avoid leaking whether ``email`` exists.\n\nBehaviour:\n  - email matches an active user → mint reset token + send email.\n  - email unknown / inactive → no-op, but the same response shape is\n    returned so attackers can't enumerate the user table.",

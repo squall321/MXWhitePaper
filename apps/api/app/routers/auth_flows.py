@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import sso_only
 from app.core.auth import get_current_user
 from app.core.config import get_settings
 from app.core.db import get_db
@@ -146,6 +147,10 @@ async def _consume_token(
     return None
 
 
+async def _email_of(s: AsyncSession, user_id: str) -> str | None:
+    return (await s.execute(text("SELECT email FROM users WHERE id = CAST(:u AS uuid)"), {"u": user_id})).scalar()
+
+
 # ── Email verification ─────────────────────────────────────────────────────
 
 
@@ -159,6 +164,7 @@ async def send_verification(
     Idempotent — a user with multiple unverified clicks just gets a new
     token; old ones quietly expire.
     """
+    sso_only.guard(user.get("email"))
     plain = await _mint_token(
         s, user_id=user["id"], kind="email_verify", ttl_seconds=_VERIFY_TTL_SECONDS
     )
@@ -177,6 +183,7 @@ async def verify_email(
     match = await _consume_token(s, plaintext=payload.token, kind="email_verify")
     if not match:
         raise Unauthorized("Invalid or expired verification token")
+    sso_only.guard(await _email_of(s, match["user_id"]))
 
     await s.execute(
         text(
@@ -204,6 +211,7 @@ async def forgot_password(
       - email unknown / inactive → no-op, but the same response shape is
         returned so attackers can't enumerate the user table.
     """
+    sso_only.guard(payload.email)
     row = (
         await s.execute(
             text(
@@ -243,6 +251,7 @@ async def reset_password(
     match = await _consume_token(s, plaintext=payload.token, kind="password_reset")
     if not match:
         raise Unauthorized("Invalid or expired reset token")
+    sso_only.guard(await _email_of(s, match["user_id"]))
 
     new_hash = hash_password(payload.new_password)
     await s.execute(

@@ -12,10 +12,16 @@ email/password login still works as a fallback.
 
 The launch token also carries the portal's view of the person (docs/llm-wiki C4): an `affiliation` claim
 (absent when the portal has none) and `plat:` entries inside `groups`. We store that snapshot on the user
-(`portal_*`) on every launch, and a first-time user lands in the team mapped to that affiliation (C5).
+(`portal_*`) on every launch, and the user lands in the team mapped to that affiliation (C5) — on every
+launch, not just the first (사용자 결정 10-25: 포털의 소속이 그대로 간다). 팀은 문서 권한을 가르지 않는다(역할 · 범위가
+가른다) — 팀 공유 스니펫 · 템플릿 · 홈 기본값만 따라 바뀐다.
+
+SSO 전용(`MXWP_SSO_ONLY`, app/core/sso_only.py)이면 이 진입이 사람이 들어오는 유일한 길이고, 세션(refresh)은 소속 사진
+수명(24시간) 이하다 — 사진이 낡으면 화면이 진입 링크로 다시 다녀온다.
 """
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 import time
@@ -29,6 +35,7 @@ from jose import jwt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import sso_only
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import APIError
@@ -152,8 +159,32 @@ async def _find_user(s: AsyncSession, email: str) -> dict[str, Any] | None:
 async def _upsert_user(s: AsyncSession, *, email: str, name: str, affiliation: str | None = None) -> dict[str, Any]:
     found = await _find_user(s, email)
     if found:
-        return found
+        return await _sync_team(s, found, affiliation)
     return await _create_user(s, email=email, name=name, affiliation=affiliation)
+
+
+async def _sync_team(s: AsyncSession, user: dict[str, Any], affiliation: str | None) -> dict[str, Any]:
+    """소속 → 팀 표에 있으면 그 팀으로 옮긴다 — 표에 없거나 소속이 없으면 그대로(관리자가 둔 팀을 지우지 않는다)."""
+    if not affiliation:
+        return user
+    team = (await s.execute(
+        text("SELECT team_id FROM wiki_aff_team_map WHERE affiliation = :a"), {"a": affiliation},
+    )).scalar()
+    if team is None or str(team) == user["team_id"]:
+        return user
+    # 다른 팀의 그룹은 비운다 — 그룹은 팀 아래에 있다
+    await s.execute(text("""
+        UPDATE users SET team_id = CAST(:t AS uuid),
+               group_id = CASE WHEN group_id IN (SELECT id FROM groups WHERE team_id = CAST(:t AS uuid)) THEN group_id END
+         WHERE id = CAST(:id AS uuid)
+    """), {"t": str(team), "id": user["id"]})
+    await s.execute(text("""
+        INSERT INTO audit_logs (user_id, action, target, payload)
+        VALUES (CAST(:id AS uuid), 'auth.portal.team_sync', :tg, CAST(:p AS JSONB))
+    """), {"id": user["id"], "tg": f"user:{user['id']}",
+            "p": json.dumps({"affiliation": affiliation, "from": user["team_id"], "to": str(team)})})
+    await s.commit()
+    return {**user, "team_id": str(team)}
 
 
 async def _create_user(s: AsyncSession, *, email: str, name: str, affiliation: str | None) -> dict[str, Any]:
@@ -219,5 +250,6 @@ async def portal_callback(
     # app; its bootstrap calls /auth/refresh on load, which reads this cookie and mints the access
     # token — so the user lands logged in with no second login and no token in any URL.
     resp = RedirectResponse(url=cfg.portal_sso_landing, status_code=303)
-    await _set_refresh_cookie(resp, make_refresh_token(user["id"]))
+    ttl = sso_only.session_ttl_seconds()
+    await _set_refresh_cookie(resp, make_refresh_token(user["id"], ttl_seconds=ttl), max_age=ttl)
     return resp

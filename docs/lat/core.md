@@ -314,6 +314,28 @@ Replay guard 는 DB 표 `portal_launch_jti`(C6, `0050`) — `_claim_jti` 가 `IN
 `users.portal_affiliation` · `portal_plat` · `portal_access_at` 에 **덮어쓴다**(`claims_portal_access` — 클레임이 없으면 NULL, plat 이 없으면
 빈 배열 = '없음을 안다'). 처음 들어온 사람의 팀은 `wiki_aff_team_map`(관리자가 채운다)이 정하고 없으면 지금처럼 첫 팀.
 
+**진입마다 소속 → 팀(10-25)** — 이미 있는 사람도 진입 때마다 표에 있으면 그 팀으로 옮긴다(`_sync_team` — 다른 팀의 그룹은 비우고 감사
+`auth.portal.team_sync`). 표에 없는 소속 · 소속 없음이면 팀을 그대로 둔다. 팀은 문서 권한을 가르지 않는다(역할 · 범위가 가른다) — 팀
+공유 스니펫 · 템플릿 · 홈 기본값만 따라 바뀐다.
+
+### SSO 전용 — 사람은 포털로만(사용자 결정 10-25)
+
+[[src/app/core/sso_only.py]] · 설정 `MXWP_SSO_ONLY`(기본 꺼짐) · `MXWP_LOCAL_LOGIN_ALLOW`(비상 관리자, 쉼표 이메일 · 대소문자 무시) ·
+`PORTAL_LAUNCH_URL`(기본 `/launch/mx-white-paper`). 켜지면 —
+
+| 길 | 어떻게 |
+| --- | --- |
+| 가입 · 등록 | 늘 403 `SSO_ONLY`(비상 관리자도) — `details.launch_url` |
+| 비밀번호 로그인 · TOTP · 비밀번호 찾기 · 재설정 · 이메일 인증 | 비상 관리자만 — 나머지는 403. 로그인은 **비밀번호를 보기 전에** 막는다(뒤에 막으면 막힌 사람에게 비밀번호가 맞았는지 알려 준다). 토큰 길(재설정 · 인증)은 토큰을 쓴 뒤 주인을 보고 막는다 — 막힌 사람의 토큰은 어차피 쓸모없다 |
+| refresh | 포털 사진(`portal_access_at`)이 24시간(`ACCESS_MAX_AGE_H`) 안일 때만 — 낡거나 없으면 401 `PORTAL_REENTRY`(비상 관리자 빼고). 켜기 전에 비밀번호로 연 7일 세션도 여기서 끝난다 |
+| 포털 진입 세션 | refresh 수명 = min(`jwt_refresh_ttl`, 24시간) — 쿠키 Max-Age 도 같다 |
+| `GET /api/v1/auth/mode` | 공개 — `{sso_only, launch_url}`(포털 SSO 가 꺼져 있으면 `launch_url` 은 null). 화면이 로그인 꼴을 고른다 |
+| API 토큰 · 위임 | 그대로 — 사람 웹 로그인만 바뀐다 |
+
+켜기 전 목록 — `python -m app.scripts.sso_only_check`(컨테이너 안, 읽기만): 살아 있고 포털로 들어온 적 없는 사람 계정(서비스 계정 뺌 ·
+비상 관리자 표시). 켜면 그 계정은 웹으로 못 들어온다 — 같은 이메일로 포털에서 들어오면 그 계정에 이어진다. `.env` 는 리포 밖이라 배포가
+저절로 켜지 않는다 — 박스마다 사람이 목록을 보고 켠다. 시험 [[apps/api/tests/test_sso_only.py]].
+
 테스트 [[apps/api/tests/test_portal_sso.py]] — disabled 404 + malformed 401 +
 no_key 401 + happy 303(+ 스냅숏) + replay 401(DB) + 필수 클레임(실제 RS256 서명 — aud · jti · exp · sub 가 빠지면
 invalid_token 401) + 스냅숏 덮어쓰기 + 소속→팀 = 8 묶음 (cycle 19 의 test_sso.py 와는

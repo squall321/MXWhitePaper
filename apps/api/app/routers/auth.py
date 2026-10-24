@@ -6,7 +6,11 @@ POST /api/v1/auth/refresh      cookie: mxwp_refresh
 POST /api/v1/auth/logout
 POST /api/v1/auth/signup       body: {email, name, password, team_id, group_id?}
 POST /api/v1/auth/register     body: {email, name, password}  (self-signup + auto-login)
+GET  /api/v1/auth/mode         SSO 전용인가 · 포털 진입 링크(공개)
 GET  /api/v1/me
+
+SSO 전용(`MXWP_SSO_ONLY`, app/core/sso_only.py)이면 가입 · 등록은 403, 비밀번호 로그인 · TOTP 는 비상 관리자만,
+refresh 는 포털 사진이 살아 있을 때만이다.
 """
 from __future__ import annotations
 
@@ -23,6 +27,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import sso_only
 from app.core.auth import get_current_user
 from app.core.config import get_settings
 from app.core.db import get_db
@@ -104,12 +109,12 @@ def _user_payload(row: Any) -> dict[str, Any]:
     }
 
 
-async def _set_refresh_cookie(response: Response, token: str) -> None:
+async def _set_refresh_cookie(response: Response, token: str, max_age: int | None = None) -> None:
     s = get_settings()
     response.set_cookie(
         key=REFRESH_COOKIE,
         value=token,
-        max_age=s.jwt_refresh_ttl_seconds,
+        max_age=max_age or s.jwt_refresh_ttl_seconds,
         httponly=True,
         secure=(s.app_env != "development"),
         samesite="lax",
@@ -184,6 +189,7 @@ async def login(
     response: Response,
     s: AsyncSession = Depends(get_db),
 ) -> Any:
+    sso_only.guard(payload.email)  # 비밀번호를 보기 전에 — 뒤에 막으면 비밀번호가 맞았는지를 알려 준다
     ip = request.client.host if request.client else None
     row = (await s.execute(
         text("""
@@ -266,6 +272,7 @@ async def login_totp(
     )).first()
     if not row or not bool(row[6]):
         raise Unauthorized("User no longer active")
+    sso_only.guard(row[1])
     if row[7] is None:
         # 2FA was disabled between the password step and now — refuse to
         # exchange so the FE re-runs the plain login flow.
@@ -315,13 +322,14 @@ async def refresh(
 
     row = (await s.execute(
         text("""
-            SELECT id, email, name, role, team_id, password_hash, is_active
+            SELECT id, email, name, role, team_id, password_hash, is_active, portal_access_at
             FROM users WHERE id = CAST(:id AS uuid)
         """),
         {"id": sub},
     )).first()
     if not row or not bool(row[6]):
         raise Unauthorized("User no longer active")
+    sso_only.check_refresh(row[1], row[7])
 
     user = _user_payload(row)
     access = make_access_token(user["id"], extra={"role": user["role"]})
@@ -355,6 +363,14 @@ async def logout(request: Request, response: Response) -> None:
 @router.get("/me")
 async def me(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
     return envelope(data=user)
+
+
+@router.get("/auth/mode")
+async def auth_mode() -> dict[str, Any]:
+    """화면이 로그인 꼴을 고른다 — SSO 전용이면 '포털로 들어가기' 하나. 진입 링크는 포털 SSO 가 켜졌을 때만."""
+    cfg = get_settings()
+    return envelope(data={"sso_only": cfg.mxwp_sso_only,
+                          "launch_url": cfg.portal_launch_url if cfg.portal_jwks_url else None})
 
 
 # ── Signup ──────────────────────────────────────────────────────────
@@ -408,6 +424,7 @@ async def signup(
     request: Request,
     s: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
+    sso_only.guard(None, local_ok=False)
     if not _signup_rate_ok(_signup_ip_key(request)):
         raise _SignupRateLimited()
     user = await create_user_account(
@@ -438,6 +455,7 @@ async def register(
     response: Response,
     s: AsyncSession = Depends(get_db),
 ) -> Any:
+    sso_only.guard(None, local_ok=False)
     if not _signup_rate_ok(_signup_ip_key(request)):
         raise _SignupRateLimited()
     user = await create_user_account_self_team(

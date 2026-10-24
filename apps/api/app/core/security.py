@@ -38,13 +38,13 @@ def make_access_token(sub: str, extra: dict[str, Any] | None = None) -> str:
     return jwt.encode(payload, s.jwt_secret, algorithm=s.jwt_algorithm)
 
 
-def make_refresh_token(sub: str) -> str:
+def make_refresh_token(sub: str, ttl_seconds: int | None = None) -> str:
     s = get_settings()
     now = datetime.now(UTC)
     payload: dict[str, Any] = {
         "sub": sub,
         "iat": int(now.timestamp()),
-        "exp": int((now + timedelta(seconds=s.jwt_refresh_ttl_seconds)).timestamp()),
+        "exp": int((now + timedelta(seconds=ttl_seconds or s.jwt_refresh_ttl_seconds)).timestamp()),
         "typ": "refresh",
     }
     return jwt.encode(payload, s.jwt_secret, algorithm=s.jwt_algorithm)
