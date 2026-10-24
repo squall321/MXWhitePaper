@@ -34,5 +34,15 @@
 ## `scenarios/` — 가짜 LLM(`tests/fakes/fake_llm.py`) 시나리오
 
 어느 요청에나 맞는 전송 시나리오 넷 — `disconnect`(연결 끊김) · `malformed`(형식 틀림) · `slow`(30초 뒤) · `server_error`(500).
-들이기의 쓰기 답(정상 · 지어낸 숫자 · 근거 없음 · 잠긴 블록 · 범위 섞임 · 계획 밖 문서 · 300자 넘는 인용)은 쓰기 단계의 출력 스키마와
-함께 W4 에서 더한다 — 스키마보다 먼저 지으면 답의 꼴을 짐작으로 정하게 된다.
+들이기(W4)의 답 일곱 — 계획(`wiki_plan`)은 모두 첫 후보를 고르고, 쓰기(`wiki_write`)가 갈린다. 실행 때 정해지는 값은 `capture` 로
+프롬프트에서 뽑는다(`후보:` · `문서:` · `<<<원천` · `요약:` · `## … (AI)` · `- 블록 …`).
+
+| 파일 | 답 | 잡을 규칙 |
+| --- | --- | --- |
+| `ingest-normal` | 첫 AI 절에 원천 요약 · 근거 | — (자동 반영) |
+| `ingest-invented-number` | 원천에 없는 999 MPa | V3 → failed |
+| `ingest-no-cite` | 근거 없는 사실 블록 | V2 → failed |
+| `ingest-locked-block` | 있는 문서의 첫 블록을 고침(그 블록이 잠겼으면) | V5 → 검토 |
+| `ingest-mixed-scope` | 다른 범위 원천도 인용 — `{{foreign_sid}}` 는 시험이 채운다 | V4 → failed |
+| `ingest-off-plan` | 계획에 없는 문서도 건드림 | V6 → 검토 |
+| `ingest-long-quote` | 301자 인용 | V10 → failed |

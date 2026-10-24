@@ -13,7 +13,7 @@
 | Method | Path | 인증 | 역할 |
 |---|---|---|---|
 | GET | `/` | reader+ | 목록 (필터/페이지네이션) |
-| GET | `/{slug}` | reader+ | 단일 조회 (role 별 block redaction 적용) |
+| GET | `/{slug}` | reader+ | 단일 조회 (role 별 block redaction 적용). `?with=citations` 면 위키 근거를 블록 id 별로 `data.citations` 에(볼 수 있는 원천만 — [[wiki#Apply · Revert]]) |
 | GET | `/{slug}/export.html` | reader+ | 서버 사이드 HTML 렌더 (PDF/외부 임베드 용. `?style=namuwiki&inline_images=1&katex=cdn&mermaid=cdn` 쿼리 지원) |
 | POST | `/` | editor+ | 신규 생성 |
 | PUT | `/{slug}` | editor+ | 전체 교체 — 버전 INSERT |
@@ -418,7 +418,7 @@ lost-update 가 발생하지 않는다 ([[#gotchas]] 17, adversarial-verify).
 | `create_document()` | [[src/app/services/document_service.py#create_document]] | POST `/` 의 본체. `wiki={kind, audience}` 면 위키 문서 — 범위 줄(`wiki_pages`)을 같은 커밋에 넣고, 범위가 `["org"]` 보다 좁으면 `doc_created` 웹훅을 보내지 않는다([[wiki#Intake]]) |
 | `replace_document()` | [[src/app/services/document_service.py#replace_document]] | PUT `/{slug}` — 새 버전 INSERT |
 | `archive_document()` | [[src/app/services/document_service.py#archive_document]] | soft-delete |
-| `validate_documentjson()` | [[src/app/services/document_service.py#validate_documentjson]] | 스키마 + 정규화 (renumber, columns widths) + **전역 unique-id 검사** ([[#gotchas]] 16) |
+| `validate_documentjson()` | [[src/app/services/document_service.py#validate_documentjson]] | 스키마 + 정규화 (renumber, columns widths) + **전역 unique-id 검사** ([[#gotchas]] 16). slug `wiki-schema` 면 위키 규칙서 YAML 도 검사([[wiki#Rule book]]) |
 | `make_etag()` / `parse_if_match()` | [[src/app/services/document_service.py#make_etag]] | ETag 발급/검증 |
 | `scrub_for_response()` | [[src/app/services/document_service.py#scrub_for_response]] | 응답 직전 role-기반 redaction |
 | `patch_section()`, `patch_block()`, … | [[src/app/services/document_service.py#patch_section]] 부근 | 부분 수정 패밀리 |
@@ -494,6 +494,9 @@ toolbar 에서 즉시 override 후 "💾 저장" 으로 영구 반영. FE 진입
 - ETag 는 `(doc_id, version)` 기반이라 새 버전 = 새 ETag.
 
 ## Webhooks + Meilisearch + Glossary
+
+★ `fire_webhook` 은 범위가 `["org"]` 보다 좁은 위키 문서(payload `document_id` 의 `wiki_pages` 줄)면 아무 데도 알리지 않는다 —
+웹훅 · 구독 · 자동화 모두(WK-D34 · D40). 받는 쪽은 범위를 모른다. 범위를 못 읽으면 알리지 않는 쪽으로 닫는다.
 
 매 저장/패치 flush 시:
 1. `update_links_for_document()` — 본문에서 `[[…]]` 추출 → `resolve_term_aliases()`

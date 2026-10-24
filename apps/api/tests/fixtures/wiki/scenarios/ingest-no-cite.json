@@ -1,0 +1,62 @@
+{
+  "_note": "근거 없음 — 사실 블록에 cites 가 없다(V2)",
+  "model": "fake-wiki",
+  "rules": [
+    {
+      "match": {
+        "schema": "wiki_plan"
+      },
+      "reply": {
+        "json": {
+          "summary": "{{summary}}",
+          "pages": [
+            {
+              "slug": "{{cand}}",
+              "why": "원천의 사실을 담는다."
+            }
+          ]
+        },
+        "capture": {
+          "cand": "후보: ([a-z0-9-]+)",
+          "summary": "\\n요약: ([^\\n]*)"
+        },
+        "usage": {
+          "prompt_tokens": 1200,
+          "completion_tokens": 80
+        }
+      }
+    },
+    {
+      "match": {
+        "schema": "wiki_write"
+      },
+      "reply": {
+        "json": {
+          "ops": [
+            {
+              "op": "block.insert",
+              "doc": "{{doc}}",
+              "section": "{{sec}}",
+              "block": {
+                "type": "paragraph",
+                "text": "{{summary}}"
+              },
+              "cites": [],
+              "why": "원천을 옮긴다."
+            }
+          ]
+        },
+        "capture": {
+          "doc": "\\n문서: ([a-z0-9-]+)",
+          "sid": "<<<원천 (src_[0-9a-f]+)",
+          "summary": "\\n요약: ([^\\n]*)",
+          "sec": "\\n## ([^\\n(]+?) \\(AI\\)"
+        },
+        "usage": {
+          "prompt_tokens": 1500,
+          "completion_tokens": 200
+        }
+      }
+    }
+  ]
+}

@@ -32,6 +32,9 @@ reader < editor < owner < admin
 `require_role(*roles)` ([[src/app/core/auth.py#require_role]]) 가 위 세 dependency
 의 팩토리. 새 권한 만들 때 직접 호출.
 
+역할 밖 표지 — `users.wiki_reviewer`(0055 · 위키 검토 큐를 보고 승인 · 거절 · 되돌린다, 사용자 결정 Q7). admin 은 표지 없이도
+검토자다. 관리자가 `PATCH /api/v1/admin/users/{id}` 의 `wiki_reviewer` 로 켠다([[wiki#Review]]).
+
 ### 현재 사용자 해소
 
 `get_current_user()` ([[src/app/core/auth.py#get_current_user]]) 는 dependency

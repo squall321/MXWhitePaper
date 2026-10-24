@@ -23,13 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.db import session_scope
-from app.wiki import audience, jobs
+from app.wiki import audience, ingest, jobs, llm
 
 log = logging.getLogger("mxwp.wiki.worker")
 
 Handler = Callable[[AsyncSession, jobs.Job], Awaitable[dict[str, Any] | None]]
 HANDLERS: dict[str, Handler] = {}
 LEASE_S = 300
+DEFER_S = 120  # LLM 이 닿지 않을 때 다시 볼 때까지
 
 
 def handler(op: str) -> Callable[[Handler], Handler]:
@@ -47,6 +48,9 @@ async def _noop(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
     if job.args.get("fail"):
         raise RuntimeError(str(job.args["fail"]))
     return {"ok": True}
+
+
+handler("ingest")(ingest.run)
 
 
 async def _touch(worker_id: str, state: str, job_id: str | None = None) -> None:
@@ -70,10 +74,10 @@ async def _heartbeat(job: jobs.Job, worker_id: str, lease_s: int, done: asyncio.
         await _touch(worker_id, "running", job.id)
 
 
-async def run_once(worker_id: str, *, lease_s: int = LEASE_S) -> bool:
-    """작업 하나를 집어 끝까지 돈다. 집을 것이 없으면 False."""
+async def run_once(worker_id: str, *, lease_s: int = LEASE_S, ops: list[str] | None = None) -> bool:
+    """작업 하나를 집어 끝까지 돈다. 집을 것이 없으면 False. `ops` 는 집을 op(기본 — 처리기가 있는 것 모두)."""
     async with session_scope() as s:
-        job = await jobs.claim(s, worker_id, list(HANDLERS), lease_s=lease_s)
+        job = await jobs.claim(s, worker_id, ops or list(HANDLERS), lease_s=lease_s)
     if job is None:
         return False
     await _touch(worker_id, "running", job.id)
@@ -85,6 +89,14 @@ async def run_once(worker_id: str, *, lease_s: int = LEASE_S) -> bool:
         async with session_scope() as s:
             await jobs.complete(s, job.id, worker_id, result=result)
         log.info("job %s (%s) done", job.id, job.op)
+    except llm.LLMUnavailable as e:
+        async with session_scope() as s:
+            await jobs.defer(s, job.id, worker_id, delay_s=DEFER_S, reason=f"{job.op} 미룸 — {e}")
+        log.warning("job %s (%s) deferred: %s", job.id, job.op, e)
+    except ingest.BudgetExceeded as e:
+        async with session_scope() as s:
+            await jobs.hold(s, job.id, worker_id, str(e))
+        log.warning("job %s (%s) held: %s", job.id, job.op, e)
     except Exception as e:  # 어떤 실패든 작업에 적고 다음으로 간다
         async with session_scope() as s:
             state = await jobs.fail(s, job.id, worker_id, f"{job.op} 실패 — {type(e).__name__}: {str(e)[:300]}")
@@ -95,7 +107,8 @@ async def run_once(worker_id: str, *, lease_s: int = LEASE_S) -> bool:
     return True
 
 
-async def serve(stop: asyncio.Event, *, worker_id: str, idle_s: float = 2.0, lease_s: int = LEASE_S) -> None:
+async def serve(stop: asyncio.Event, *, worker_id: str, idle_s: float = 2.0, lease_s: int = LEASE_S,
+                ops: list[str] | None = None) -> None:
     audience.set_viewer(audience.SYSTEM)
     while not stop.is_set():
         if not get_settings().wiki_enabled:
@@ -103,7 +116,7 @@ async def serve(stop: asyncio.Event, *, worker_id: str, idle_s: float = 2.0, lea
             delay = 30.0
         else:
             await _touch(worker_id, "idle")
-            delay = 0.0 if await run_once(worker_id, lease_s=lease_s) else idle_s
+            delay = 0.0 if await run_once(worker_id, lease_s=lease_s, ops=ops) else idle_s
         if delay:
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=delay)

@@ -103,13 +103,13 @@ async def test_repeated_lease_expiry_ends_in_failed() -> None:
 
 async def test_run_once_noop_done_and_failure_recorded() -> None:
     ok = await _enqueue()
-    assert await worker.run_once("test-w") is True
+    assert await worker.run_once("test-w", ops=["noop"]) is True
     assert (await _state(ok))[0] == "done"
     bad = await _enqueue(args={"fail": "일부러"})
-    assert await worker.run_once("test-w") is True
+    assert await worker.run_once("test-w", ops=["noop"]) is True
     state, _, error = await _state(bad)
     assert state == "queued" and error and "일부러" in error  # 재시도 차례로 돌아간다
-    assert await worker.run_once("test-w") is False  # 뒤로 미뤄져 지금은 집을 것이 없다
+    assert await worker.run_once("test-w", ops=["noop"]) is False  # 뒤로 미뤄져 지금은 집을 것이 없다
 
 
 async def test_serve_loop_processes_and_stops(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -118,7 +118,7 @@ async def test_serve_loop_processes_and_stops(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(get_settings(), "wiki_enabled", True)
     job_id = await _enqueue(args={"sleep_s": 0.2})
     stop = asyncio.Event()
-    task = asyncio.create_task(worker.serve(stop, worker_id="test-serve", idle_s=0.1, lease_s=3))
+    task = asyncio.create_task(worker.serve(stop, worker_id="test-serve", idle_s=0.1, lease_s=3, ops=["noop"]))
     for _ in range(50):
         if (await _state(job_id))[0] == "done":
             break
@@ -137,7 +137,7 @@ async def test_disabled_worker_does_not_claim(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(get_settings(), "wiki_enabled", False)
     job_id = await _enqueue()
     stop = asyncio.Event()
-    task = asyncio.create_task(worker.serve(stop, worker_id="test-off", idle_s=0.1))
+    task = asyncio.create_task(worker.serve(stop, worker_id="test-off", idle_s=0.1, ops=["noop"]))
     await asyncio.sleep(0.3)
     stop.set()
     await asyncio.wait_for(task, timeout=40)

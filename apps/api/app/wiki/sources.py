@@ -435,3 +435,41 @@ def log_markdown(entries: list[dict[str, Any]]) -> str:
         if e["detail"]:
             out.append("- " + " · ".join(f"{k} {_cell(v)}" for k, v in e["detail"].items()))
     return "\n".join(out) + "\n" if out else ""
+
+
+async def citations_for_doc(s: AsyncSession, doc_id: str) -> dict[str, list[dict[str, Any]]]:
+    """블록 id → 근거들(읽는 사람이 볼 수 있는 원천만). 읽기 응답에 붙인다 — DocumentJSON 에는 넣지 않는다(CONTRACTS §2-3)."""
+    rows = (await s.execute(text(f"""
+        SELECT c.block_id, ws.id, ws.kind, ws.title, ws.origin_system, ws.origin_url, ws.captured_at, ws.status,
+               c.locator, c.quote, d.slug
+          FROM wiki_citations c JOIN wiki_sources ws ON ws.id = c.source_id LEFT JOIN documents d ON d.id = ws.doc_id
+         WHERE c.doc_id = CAST(:d AS uuid) AND {visible_sql("ws")}
+         ORDER BY c.block_id, ws.captured_at
+    """), {"d": doc_id, **audience.sql_params()})).all()
+    out: dict[str, list[dict[str, Any]]] = {}
+    for r in rows:
+        out.setdefault(r[0], []).append({
+            "source_id": str(r[1]), "short": short_id(str(r[1])), "kind": r[2], "title": r[3], "system": r[4],
+            "url": r[5], "captured_at": r[6].isoformat(), "status": r[7], "locator": _json(r[8]) or {}, "quote": r[9],
+            "doc_slug": r[10],
+        })
+    return out
+
+
+async def enqueue_ingest(s: AsyncSession, source_ids: list[str], *, caller: dict[str, Any]) -> list[dict[str, Any]]:
+    """다시 들이기 — 보이고 활성인 원천만 작업을 줄 세운다(활성이 아니면 까닭과 함께 건너뛴다)."""
+    out: list[dict[str, Any]] = []
+    for source_id in source_ids:
+        row = (await s.execute(text(f"SELECT ws.status FROM wiki_sources ws WHERE ws.id = CAST(:i AS uuid) AND {visible_sql('ws')}"),
+                               {"i": source_id, **audience.sql_params()})).first()
+        if row is None:
+            raise NotFound(f"원천이 없다: {source_id}")
+        if row[0] != "active":
+            out.append({"id": source_id, "queued": False, "why": f"원천이 {row[0]}"})
+            continue
+        job_id = await jobs.enqueue(s, "ingest", {"source_id": source_id}, created_by=str(caller["id"]))
+        await s.execute(text("UPDATE wiki_sources SET ingest_state = 'queued' WHERE id = CAST(:i AS uuid)"),
+                        {"i": source_id})
+        out.append({"id": source_id, "queued": True, "job_id": job_id})
+    await s.commit()
+    return out

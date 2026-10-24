@@ -65,7 +65,7 @@ async def list_users(
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
     sql = f"""
         SELECT u.id, u.email, u.name, u.role, u.team_id, u.is_active,
-               u.created_at, u.last_login_at
+               u.created_at, u.last_login_at, u.wiki_reviewer
         FROM users u
         {where_sql}
         ORDER BY u.created_at DESC
@@ -82,6 +82,7 @@ async def list_users(
             "is_active": bool(r[5]),
             "created_at": r[6].isoformat() if r[6] else None,
             "last_login_at": r[7].isoformat() if r[7] else None,
+            "wiki_reviewer": bool(r[8]),
         }
         for r in rows
     ]
@@ -91,6 +92,7 @@ async def list_users(
 class UserPatch(BaseModel):
     role: str | None = Field(default=None, pattern=r"^(reader|editor|owner|admin)$")
     is_active: bool | None = None
+    wiki_reviewer: bool | None = None  # 위키 검토자 표지(docs/llm-wiki Q7)
 
 
 @router.patch("/users/{user_id}", summary="유저 role/활성 갱신")
@@ -115,6 +117,9 @@ async def patch_user(
     if payload.is_active is not None:
         fields.append("is_active = :active")
         params["active"] = payload.is_active
+    if payload.wiki_reviewer is not None:
+        fields.append("wiki_reviewer = :wiki_reviewer")
+        params["wiki_reviewer"] = payload.wiki_reviewer
     if fields:
         await s.execute(
             text(f"UPDATE users SET {', '.join(fields)} WHERE id = CAST(:id AS uuid)"),
@@ -131,7 +136,7 @@ async def patch_user(
 
     out = (await s.execute(
         text("""
-            SELECT id, email, name, role, team_id, is_active, last_login_at
+            SELECT id, email, name, role, team_id, is_active, last_login_at, wiki_reviewer
             FROM users WHERE id = CAST(:id AS uuid)
         """),
         {"id": user_id},
@@ -145,6 +150,7 @@ async def patch_user(
         "team_id": str(out[4]) if out[4] else None,
         "is_active": bool(out[5]),
         "last_login_at": out[6].isoformat() if out[6] else None,
+        "wiki_reviewer": bool(out[7]),
     })
 
 

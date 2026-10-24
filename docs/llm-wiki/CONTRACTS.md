@@ -271,6 +271,10 @@ DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
 자동 반영 조건(규칙서 `policy.auto_apply` 기본값) — V1~V10 이 모두 `pass`(V9 는 가림 뒤 `warn` 허용) **이고** 대상이 모두 `managed='ai'` ·
 `review_lock=false` **이고** 지우는 연산이 없을 때. 하나라도 어긋나면 `pending_review`.
 
+구현(W4)에서 정한 것 — `docs/lat/wiki.md` §Validation 이 정본. V4 는 `failed`(그대로 승인하면 좁은 사실이 넓은 문서로 샌다 — 사람은 실패
+목록에서 본다) · V3 은 원천 제목의 숫자도 원천 값으로 본다 · V8 은 더 좁은 문서로의 링크도 막는다 · V9 는 모든 원천에 · fail 이 있는 묶음은
+승인하지 않는다(거절하고 다시 들인다) · 계획 밖 문서의 연산은 승인해도 반영하지 않는다.
+
 ## 6. REST(`/api/v1/wiki`)
 
 | 메서드 · 경로 | 권한 | 무엇 |
@@ -295,7 +299,9 @@ DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
 
 모든 읽기는 §2-11 범위로 거른다 — 목록 · 검색 · 그래프 · 내보내기를 포함해서(request §5-12 의 전수 목록).
 
-지은 것(W3) — `/sources` · `/sources/{id}` · `/sources/{id}/withdraw` · `/log` · `/log.md` · `/health`. 꼴은 `docs/lat/wiki.md` §REST 가 정본.
+지은 것(W3 · W4) — `/sources` · `/sources/{id}` · `/sources/{id}/withdraw` · `/ingest` · `/changes` · `/changes/{id}` · `/approve` ·
+`/reject` · `/revert` · `/log` · `/log.md` · `/health`, 그리고 `GET /api/v1/documents/{slug}?with=citations`. 꼴은 `docs/lat/wiki.md`
+§REST 가 정본. 검토자 표지는 `users.wiki_reviewer`(0055 — 관리자 `PATCH /api/v1/admin/users/{id}`).
 
 ## 7. MCP 도구(`dist/llm-docx-toolkit/mcp/server.py` 에 더한다)
 

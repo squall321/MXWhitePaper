@@ -794,6 +794,19 @@ async def refresh_search_view_debounced(
             await refresh_search_view(s)
 
 
+async def _is_narrow_wiki_doc(doc_id: str) -> bool:
+    """위키 문서이고 범위가 ["org"] 가 아니면 참. 못 보면 참(알리지 않는 쪽으로 닫는다)."""
+    try:
+        async with session_scope() as s:
+            row = (await s.execute(
+                text("SELECT audience FROM wiki_pages WHERE doc_id = CAST(:d AS uuid)"), {"d": doc_id}
+            )).first()
+    except Exception:
+        logger.warning("wiki audience lookup for webhook failed — not notifying", exc_info=True)
+        return True
+    return row is not None and list(row[0]) != ["org"]
+
+
 async def fire_webhook(
     event_kind: str,
     payload: dict[str, Any],
@@ -807,6 +820,9 @@ async def fire_webhook(
     write that triggered the event. Also fans out to subscription dispatcher
     (Cycle 0018) for the kinds subscribers can ask about.
     """
+    if payload.get("document_id") and await _is_narrow_wiki_doc(str(payload["document_id"])):
+        # 범위가 ["org"] 보다 좁은 위키 문서는 바깥(웹훅 · 구독 · 자동화)에 알리지 않는다 — 받는 쪽은 범위를 모른다(WK-D34).
+        return
     try:
         await webhook_dispatcher.dispatch(
             event_kind, payload, target_part_id=target_part_id
@@ -1170,7 +1186,7 @@ async def create_document(
     wiki: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """`wiki={kind, audience, managed?}` 면 위키 문서로 만든다(docs/llm-wiki) — 범위 줄을 첫 커밋에 함께 넣는다(나중에 달면 그 사이
-    보통 문서로 커밋 · 색인돼 모두에게 보인다). 범위가 `["org"]` 보다 좁으면 바깥 웹훅에 알리지 않는다(받는 쪽은 범위를 모른다)."""
+    보통 문서로 커밋 · 색인돼 모두에게 보인다). 범위가 좁으면 웹훅을 보내지 않는 것은 `fire_webhook` 이 정한다."""
     validated = validate_documentjson(payload)
     slug = validated["slug"]
     title = validated["title"]
@@ -1226,8 +1242,6 @@ async def create_document(
     await refresh_search_view(s)
     await reindex_meili(s, doc_id=inserted["id"])
     doc = await get_document_or_404(s, slug)
-    if wiki is not None and list(wiki["audience"]) != ["org"]:
-        return doc, warnings
     await fire_webhook(
         "doc_created",
         {

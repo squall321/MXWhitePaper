@@ -32,6 +32,7 @@ class Job:
     attempts: int = 0
     max_attempts: int = 3
     budget: dict[str, Any] = field(default_factory=dict)
+    created_by: str | None = None
 
 
 def _json(v: Any) -> Any:
@@ -72,13 +73,13 @@ async def claim(s: AsyncSession, worker: str, ops: Sequence[str], *, lease_s: in
                     ORDER BY priority, not_before, created_at
                     FOR UPDATE SKIP LOCKED
                     LIMIT 1)
-            RETURNING j.id, j.op, j.args, j.attempts, j.max_attempts, j.budget
+            RETURNING j.id, j.op, j.args, j.attempts, j.max_attempts, j.budget, j.created_by
         """), {"w": worker, "lease": lease_s, "ops": list(ops)})).first()
         await s.commit()
         if row is None:
             return None
         job = Job(id=str(row[0]), op=row[1], args=_json(row[2]), attempts=int(row[3]), max_attempts=int(row[4]),
-                  budget=_json(row[5]))
+                  budget=_json(row[5]), created_by=str(row[6]) if row[6] else None)
         if job.attempts <= job.max_attempts:
             return job
         await _finish(s, job.id, worker, "failed", error="lease 만료가 거듭됐다 — 워커가 이 작업 중에 거듭 죽었다")
@@ -116,6 +117,18 @@ async def complete(
     usage: dict[str, Any] | None = None,
 ) -> bool:
     return await _finish(s, job_id, worker, "done", result=result, usage=usage)
+
+
+async def defer(s: AsyncSession, job_id: str, worker: str, *, delay_s: int, reason: str) -> bool:
+    """바깥(LLM)이 닿지 않는다 — 시도 수를 쓰지 않고 뒤로 미뤄 다시 줄에(CONTRACTS §11 '들이기는 queued 로 남는다')."""
+    row = (await s.execute(text("""
+        UPDATE wiki_jobs
+           SET state = 'queued', attempts = GREATEST(attempts - 1, 0), worker = NULL, lease_until = NULL,
+               not_before = NOW() + CAST(:delay AS integer) * INTERVAL '1 second', error = :reason
+         WHERE id = CAST(:id AS uuid) AND worker = :w AND state = 'running'
+        RETURNING id
+    """), {"delay": delay_s, "reason": reason[:_ERROR_MAX], "id": job_id, "w": worker})).first()
+    return row is not None
 
 
 async def hold(s: AsyncSession, job_id: str, worker: str, reason: str) -> bool:

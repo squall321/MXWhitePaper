@@ -13,7 +13,7 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, Body, Depends, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,7 @@ from app.core.auth import require_editor, require_reader
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import APIError, ValidationFailed, envelope, format_pydantic_errors
-from app.wiki import jobs, sources
+from app.wiki import jobs, review, sources
 from app.wiki.envelope import SourceEnvelope
 
 
@@ -113,6 +113,64 @@ async def withdraw_source(
     source_id: UUID, user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     return envelope(data=await sources.withdraw(s, str(source_id), caller=user))
+
+
+class _IngestBody(BaseModel):
+    source_ids: list[UUID] = Field(min_length=1, max_length=50)
+
+
+class _Decision(BaseModel):
+    note: str | None = Field(default=None, max_length=1000)
+
+
+@router.post("/ingest")
+async def post_ingest(
+    body: _IngestBody, user: dict[str, Any] = Depends(require_editor), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await sources.enqueue_ingest(s, [str(x) for x in body.source_ids], caller=user))
+
+
+@router.get("/changes")
+async def get_changes(
+    status: str | None = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user: dict[str, Any] = Depends(require_reader),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    await review.require_reviewer(s, user)
+    rows, total = await review.list_changes(s, status=status, limit=limit, offset=offset)
+    return envelope(data=rows, meta={"total": total, "limit": limit, "offset": offset})
+
+
+@router.get("/changes/{cs_id}")
+async def get_change(
+    cs_id: UUID, user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    await review.require_reviewer(s, user)
+    return envelope(data=await review.get_change(s, str(cs_id)))
+
+
+@router.post("/changes/{cs_id}/approve")
+async def approve_change(
+    cs_id: UUID, body: _Decision | None = None, user: dict[str, Any] = Depends(require_reader),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await review.approve(s, str(cs_id), user=user, note=body.note if body else None))
+
+
+@router.post("/changes/{cs_id}/reject")
+async def reject_change(
+    cs_id: UUID, body: _Decision, user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await review.reject(s, str(cs_id), user=user, note=body.note))
+
+
+@router.post("/changes/{cs_id}/revert")
+async def revert_change(
+    cs_id: UUID, user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await review.revert(s, str(cs_id), user=user))
 
 
 @router.get("/log")

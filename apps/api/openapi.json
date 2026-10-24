@@ -3431,6 +3431,17 @@
               }
             ],
             "title": "Role"
+          },
+          "wiki_reviewer": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wiki Reviewer"
           }
         },
         "title": "UserPatch",
@@ -3604,6 +3615,43 @@
           }
         },
         "title": "WebhookPatch",
+        "type": "object"
+      },
+      "_Decision": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "_Decision",
+        "type": "object"
+      },
+      "_IngestBody": {
+        "properties": {
+          "source_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Source Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_ids"
+        ],
+        "title": "_IngestBody",
         "type": "object"
       },
       "app__routers__backups__RunNowIn": {
@@ -8621,6 +8669,24 @@
             "schema": {
               "title": "Slug",
               "type": "string"
+            }
+          },
+          {
+            "description": "citations — 위키 근거를 블록 id 별로 붙인다",
+            "in": "query",
+            "name": "with",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "citations — 위키 근거를 블록 id 별로 붙인다",
+              "title": "With"
             }
           }
         ],
@@ -19257,6 +19323,287 @@
         ]
       }
     },
+    "/api/v1/wiki/changes": {
+      "get": {
+        "operationId": "get_changes_api_v1_wiki_changes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Changes Api V1 Wiki Changes Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Changes",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/changes/{cs_id}": {
+      "get": {
+        "operationId": "get_change_api_v1_wiki_changes__cs_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cs_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Cs Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Change Api V1 Wiki Changes  Cs Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Change",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/changes/{cs_id}/approve": {
+      "post": {
+        "operationId": "approve_change_api_v1_wiki_changes__cs_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cs_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Cs Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/_Decision"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Approve Change Api V1 Wiki Changes  Cs Id  Approve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Change",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/changes/{cs_id}/reject": {
+      "post": {
+        "operationId": "reject_change_api_v1_wiki_changes__cs_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cs_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Cs Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Decision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reject Change Api V1 Wiki Changes  Cs Id  Reject Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reject Change",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/changes/{cs_id}/revert": {
+      "post": {
+        "operationId": "revert_change_api_v1_wiki_changes__cs_id__revert_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cs_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Cs Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Revert Change Api V1 Wiki Changes  Cs Id  Revert Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revert Change",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
     "/api/v1/wiki/health": {
       "get": {
         "operationId": "wiki_health_api_v1_wiki_health_get",
@@ -19275,6 +19622,49 @@
           }
         },
         "summary": "Wiki Health",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/ingest": {
+      "post": {
+        "operationId": "post_ingest_api_v1_wiki_ingest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_IngestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Ingest Api V1 Wiki Ingest Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Ingest",
         "tags": [
           "wiki"
         ]

@@ -16,7 +16,7 @@
 | W1 연결 · 신원 | 위임 창구 · 위임 토큰(세대) · 소속 · 플랫폼 증명 · 진입 토큰 스냅숏 · jti 원장 · 소속→팀 표(API · 화면 `/admin/aff-team-map`) | [[core#게이트웨이 · 포털 위임]] |
 | W2 보이기 범위 | 읽기 길 전수(아래 표) · 길마다 시험 · admin 범위 밖 읽기 감사. 남은 것 — cae00 배포 · 재색인 | [[#Audience]] |
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
-| W4 들이기 · 검토 · 근거 | (짓는 중) 표 — 변경 묶음 · 근거 · 엔티티 유형(첫 판 14) · 엔티티(0054) · 규칙서(YAML 검증) · LLM 클라이언트 | [[#Rule book]] · [[#LLM]] |
+| W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 남은 것 — `index.md` · 규칙서 문서 · 화면 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
 | W5 온톨로지 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -42,7 +42,12 @@
 | 받기 · 멱등 · 철회 · 원천 문서 · 기록 | [[src/app/wiki/sources.py#receive]] · 문서 만들기 `document_service.create_document(wiki=…)` | W3 |
 | 규칙서(YAML 검증 · 판) | [[src/app/wiki/schema.py#RuleBook]] · 저장 검사 `document_service.validate_documentjson` | W4 |
 | LLM(구조화 출력) | [[src/app/wiki/llm.py#structured]] | W4 |
-| 해석 · 계획 · 쓰기 · 검증 · 반영 | `app/wiki/{resolve,ingest,validate,apply}.py` | W4 |
+| 해석 · 후보 문서 | [[src/app/wiki/resolve.py#targets]] · 표 `wiki_entity_types` · `wiki_entities`(0054) | W4 |
+| 들이기(계획 · 쓰기 · 묶음 짓기) | [[src/app/wiki/ingest.py#run]](워커 처리기 `ingest`) | W4 |
+| 검증 V1~V11 · 판정 | [[src/app/wiki/validate.py#run]] · `decide` | W4 |
+| 문서 내용(빈 꼴 · 연산 적용 · 자동 절) | [[src/app/wiki/pages.py#apply_ops]] | W4 |
+| 반영 · 되돌리기 · 근거 | [[src/app/wiki/apply.py#apply]] · `revert` · 표 `wiki_changesets` · `wiki_citations`(0054) | W4 |
+| 검토 큐 | [[src/app/wiki/review.py]] · 표지 `users.wiki_reviewer`(0055) | W4 |
 | REST | [[src/app/routers/wiki.py]](`/api/v1/wiki/*`) | W3~ |
 | 위임 창구 · 회수 · 소속→팀 표 | [[src/app/routers/auth_sso.py]] · 검증 `core/auth._resolve_delegated` · 증명 `core/portal_identity.py` | W1 |
 
@@ -131,6 +136,9 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | `GET /sources/{id}` | reader | 위 + `payload` · `blobs` · `subject_hints` · `consent_mode`. 범위 밖은 404 |
 | `POST /sources/{id}/withdraw` | 주인 · admin | `{status, changed, cancelled_jobs}` — 두 번째는 `changed:false` |
 | `GET /log` · `GET /log.md` | reader | 범위 토큰을 모두 가진 줄. md 는 옛것부터 `## [YYYY-MM-DD HH:MM] op \| 제목`(KST) + detail 한 줄 |
+| `POST /ingest` | editor | `{source_ids[≤50]}` — 보이고 활성인 원천을 다시 줄 세운다(아니면 `queued:false` + 까닭) |
+| `GET /changes` · `GET /changes/{id}` | 검토자 | 목록(`status` · `limit` · `offset` → `meta.total`) · 한 건([[#Review]]) |
+| `POST /changes/{id}/approve` · `/reject` · `/revert` | 검토자 | 승인(→ applied) · 거절(`note` 꼭) · 되돌리기 |
 | `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(W7). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
 
 ## Rule book
@@ -152,6 +160,65 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 | 다시 묻기 | 받은 글을 pydantic 으로 검사 — 틀리면 무엇이 틀렸는지 붙여 한 번 다시, 또 틀리면 `LLMFormatError` |
 | 오류 | 429 · 5xx · 연결 · 끊김 · 시간 초과(연결 10초) → `LLMUnavailable`, 그 밖 4xx → `LLMError`. 오류 본문 셋(OpenAI · 옛 vLLM · `--api-key`)을 다 읽는다 |
 | 쓴 양 | `Usage`(prompt · completion 토큰 · 부른 수 · 초) — 부를 때마다 더한다 |
+
+## Ingest
+
+[[src/app/wiki/ingest.py#run]] — 원천 하나 = 작업 하나(op `ingest`). 단계는 코드가 이끌고 LLM 은 정해진 칸만 채운다.
+
+| 단계 | 무엇 |
+| --- | --- |
+| 거르기 | 활성이 아닌 원천(새 판에 밀림 · 철회)과 `restricted`(WK-D37)는 들이지 않는다 — 원천 `skipped`, 기록에 까닭. LLM 을 부르지 않는다 |
+| 해석 | [[src/app/wiki/resolve.py#targets]] — 힌트마다 외부 id → 별칭 → 정규화 이름(공백 없앰 · casefold)으로 등록부를 찾고, 없으면 새 엔티티(승인된 유형만). 문서는 범위마다 한 장 — `["org"]` 는 기본 slug, 그 밖은 `<기본>--<범위 꼬리>`. 기본 slug(`ent-<약어>-<외부 id>` 또는 `-<이름 해시 6>`)는 엔티티 `attrs.slug` 에 적어 두고 다시 짓지 않는다. 사례 문서 `case-sim-<짧은 id>` · `case-field-<짧은 id>`(W4 는 엔티티를 잇지 않는다) |
+| 계획 | `wiki_plan` — 후보 안에서 고칠 문서와 까닭, 원천 문서 요약 · 물음 · 모순. 후보 밖 slug 는 버리고 `plan.unknown` 에 남긴다. 문서 수는 규칙서 `ingest.max_pages_per_source` |
+| 쓰기 | 문서마다 `wiki_write` — 그 문서의 절(누가 쓰나 표시)과 블록 id 를 보여 주고 `block.insert`(절 이름) · `block.update` · `block.delete` 와 근거(sid · loc · quote)를 받는다. 블록 종류는 문단 · 목록 · 표 · 알림 상자. 새 블록 id · 근거의 원천 id(sid 앞자리로 찾음)는 코드가 정한다 |
+| 검증 → 판정 | [[#Validation]] → `auto_applied`(바로 반영) · `pending_review` · `failed`. 반영 중 판 충돌이면 `pending_review` |
+| 남기기 | 묶음(plan — 문서 · 판 · 새 문서의 빈 꼴 / ops / validation / usage / prompt_hash / 규칙서 판 / 모델) · 기록 `ingest`(묶음 · 판정 · 문서 수 · 걸린 규칙 · 토큰) · 원천 `done` |
+
+- 프롬프트 — 원천은 `<<<원천 src_… >>>` 구획 안에만(원천 속 `>>>` 는 흩뜨린다), 시스템 글에 규칙서 판과 규칙 열 줄. 가짜 LLM 시나리오의
+  `capture` 가 읽는 줄 — `후보: <slug>` · `문서: <slug>` · `요약: …` · `## <절> (AI)` · `- 블록 <id> <종류>: …`.
+- LLM 이 닿지 않거나 설정이 비면 작업을 시도 수를 쓰지 않고 120초 뒤로(`jobs.defer` — 원천 `queued`). 예산(`budget.ingest_tokens`)을 넘으면
+  작업 `held` · 원천 `held` · 기록. 그 밖의 예외는 재시도(남으면 원천 `queued`, 다 쓰면 `failed`).
+- 묶음의 `created_by` = 원천을 보낸 사람(작업의 `created_by`), 문서의 지은이 = 시스템(첫 admin — `apply.wiki_author`).
+
+## Validation
+
+[[src/app/wiki/validate.py#run]] — 규칙마다 판정 하나(`pass` · `warn` · `review` · `fail`)와 까닭. `decide` 가 묶음의 판정을 낸다.
+
+| 규칙 | 무엇을 | 걸리면 |
+| --- | --- | --- |
+| V1 schema | 블록이 `Block` 에 맞나 · 연산이 문서에 맞나(없는 절 · 블록) · 문서 2MB | fail |
+| V2 cited | 사실 블록(문단 · 목록 · 표 · 알림 …)에 근거 · 근거의 원천을 찾았나 | fail |
+| V3 numbers | 블록의 숫자(+단위)가 인용한 원천의 payload(숫자 칸 · 글 속 숫자) · 제목에 있나. 단위는 접두어만 맞추고(mm ↔ m · MPa ↔ Pa), 반올림은 블록에 적힌 자릿수까지. `계산: 식 = 값` 은 셈해 맞추고 식의 수가 원천에 있어야. 날짜(YYYY-MM-DD)는 원천 글 · 생긴 날에 있어야. 시각은 보지 않는다. 식별자 속 숫자(A1 · SUS304 · JOB-0001)는 숫자가 아니다 | fail |
+| V4 audience | 인용한 원천의 범위 토큰(org 뺌)이 문서 범위에 다 있나 | fail — 그대로 승인하면 좁은 사실이 넓은 문서로 샌다 |
+| V5 locked | 잠긴 블록 · AI 가 쓰지 않는 절(`(자동)` · `(사람)`) · 사람 문서 · 검토 잠금 · `always_review_kinds` | review |
+| V6 scope | 계획에 없던 문서 · 지우기(늘 검토) · 묶음 크기(문서 · 블록 — 규칙서 `policy.auto_apply`) | review |
+| V7 ontology | 새 엔티티의 유형이 approved 인가 | fail |
+| V8 links | `[[slug]]` 가 있거나 같은 묶음에서 생기나 · **더 좁은 문서로 링크하지 않나**(넓은 문서가 좁은 문서를 드러내지 않게) | fail |
+| V9 privacy | 이메일 · 전화 · 사번 꼴 — 가린다(`[가림]`, 연산의 블록을 고친다). 문답 · 심의만이 아니라 모든 원천에 | warn |
+| V10 quote | 근거 인용 300자(규칙서 `ingest.quote_max_chars`) · 원천 본문(300자 넘는 글)을 통째 옮김 | fail |
+| V11 style | 문단 끝 마침표 · SI 아닌 단위 · `MM/DD/YYYY` 날짜 | warn |
+
+자동 반영 = fail · review 가 없고 지우는 연산이 없고 `policy.auto_apply.enabled`. 하나라도 어긋나면 `pending_review`, fail 이 있으면 `failed`.
+
+## Apply · Revert
+
+[[src/app/wiki/apply.py#apply]] — 계획의 문서마다 연산을 얹어 저장한다.
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 새 문서 | 계획에 둔 빈 꼴(규칙서 sections) + 연산 → `create_document(wiki={kind, audience, managed:'ai'})`(범위 줄이 첫 커밋에). 새 엔티티는 `ON CONFLICT … DO UPDATE` 로 만들고 `wiki_pages.entity_id` 를 잇는다 |
+| 있는 문서 | 지금 판이 계획이 읽은 판과 같아야 — 아니면 `ApplyConflict`(409 · 묶음은 `pending_review`). `replace_document(If-Match)` · 판 메모 `wiki cs_xxxxxxxx` |
+| 자동 절 | 문서의 '원천' 을 같은 판에 다시 짓는다(이 문서가 인용한 원천 문서 링크). 원천 문서의 '이 원천을 인용한 문서' 는 **원천과 범위가 같은 문서만** 싣는다 — 더 좁은 문서 제목이 넓은 원천 문서에 새지 않게 |
+| 근거 | 블록마다 `wiki_citations`(update 는 그 블록 근거를 갈고, delete 는 지운다). 읽기는 `GET /documents/{slug}?with=citations` — 볼 수 있는 원천만 |
+| 함께 반영 | 저장은 문서마다 커밋된다 — 중간에 깨지면 저장한 문서를 판 복원 · 보관으로 되감고 이 묶음 근거를 지우고, 이 묶음이 만든 엔티티 중 살아 있는 문서가 없는 것을 retired |
+| 되돌리기 | `applied` 의 판 위에 더 고친 것이 없을 때만(있으면 409). 새 문서 보관 · 있던 문서 from 판 복원 · 근거 지움 · 기록 `revert` |
+
+## Review
+
+[[src/app/wiki/review.py]] — 검토자 = `users.wiki_reviewer` 또는 admin(Q7). 묶음은 그 범위 토큰을 다 가진 사람에게만 보인다(아니면 404).
+한 건 상세는 문서마다 연산의 앞(계획이 읽은 판 — `document_versions`) · 뒤 글 · 까닭 · 근거(볼 수 있는 원천만 제목). 승인은
+`pending_review` 만, fail 이 있으면 409 · 반영은 `applied`. 거절은 까닭 한 줄이 꼭 있어야(422). 기록 `review`(승인 · 거절).
+**계획 밖 문서의 연산은 승인해도 반영되지 않는다**(그 문서의 판도 꼴도 계획에 없다 — V6 로 사람에게 보일 뿐).
 
 ## Test bundle
 
@@ -188,6 +255,9 @@ API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 —
   시험은 `audience.set_viewer(audience.SYSTEM)` 또는 `with audience.acting_as(...)`. CLI(`scripts/import_one.py`)는 시작할 때 시스템으로.
 - 시험 문서는 SQL 로 직접 넣는다 — `document_service.create_document` 는 dev Meili 색인 · 웹훅까지 부른다. 받기 시험처럼 그 길을
   꼭 지나야 하면 끝에 `meili_indexer.delete_document` 로 색인 줄까지 지운다.
+- **판 메모(change_log)는 ASCII 80자까지**(`[A-Za-z0-9._:-\s]`) — 반영 · 원천 문서 갱신이 쓰는 메모는 `wiki cs_xxxxxxxx` ·
+  `wiki source cited-by`. 한글을 넣으면 `replace_document` 가 거부한다.
+- 시험에서 워커를 돌릴 때는 `run_once(…, ops=[…])` · `serve(…, ops=[…])` 로 집을 op 를 좁힌다 — 같은 dev DB 의 다른 작업을 집지 않게.
 - **워커는 `--reload` 가 없다** — 위키 코드를 고치면 `mxwp_wiki` 를 다시 띄워야 새 코드로 돈다(update.sh · sync-from-drive.sh 는
   알아서 한다). dev 에서 손으로 — `apptainer instance stop mxwp_wiki && ./infra/scripts/start.sh`.
 - **dev 에서 위키를 켠 채(`WIKI_ENABLED=1`) 시험을 돌리면 살아 있는 워커가 시험 작업(`noop` · `ingest`)을 집는다** — 같은 dev DB 다.

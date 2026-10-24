@@ -1,0 +1,70 @@
+{
+  "_note": "잠긴 블록 — 있는 문서의 첫 블록을 고친다(그 블록이 잠겼으면 V5 → 검토)",
+  "model": "fake-wiki",
+  "rules": [
+    {
+      "match": {
+        "schema": "wiki_plan"
+      },
+      "reply": {
+        "json": {
+          "summary": "{{summary}}",
+          "pages": [
+            {
+              "slug": "{{cand}}",
+              "why": "원천의 사실을 담는다."
+            }
+          ]
+        },
+        "capture": {
+          "cand": "후보: ([a-z0-9-]+)",
+          "summary": "\\n요약: ([^\\n]*)"
+        },
+        "usage": {
+          "prompt_tokens": 1200,
+          "completion_tokens": 80
+        }
+      }
+    },
+    {
+      "match": {
+        "schema": "wiki_write"
+      },
+      "reply": {
+        "json": {
+          "ops": [
+            {
+              "op": "block.update",
+              "doc": "{{doc}}",
+              "block_id": "{{block}}",
+              "block": {
+                "type": "paragraph",
+                "text": "{{summary}}"
+              },
+              "cites": [
+                {
+                  "sid": "{{sid}}",
+                  "loc": {
+                    "path": "/"
+                  }
+                }
+              ],
+              "why": "새 원천으로 고친다."
+            }
+          ]
+        },
+        "capture": {
+          "doc": "\\n문서: ([a-z0-9-]+)",
+          "sid": "<<<원천 (src_[0-9a-f]+)",
+          "summary": "\\n요약: ([^\\n]*)",
+          "sec": "\\n## ([^\\n(]+?) \\(AI\\)",
+          "block": "- 블록 ([0-9A-HJKMNP-TV-Z]{26}) "
+        },
+        "usage": {
+          "prompt_tokens": 1500,
+          "completion_tokens": 200
+        }
+      }
+    }
+  ]
+}

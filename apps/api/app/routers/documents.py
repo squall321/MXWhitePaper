@@ -24,6 +24,7 @@ from app.services import document_service
 from app.services.html_renderer import RenderOptions, render_namuwiki_html
 from app.storage import minio_adapter
 from app.wiki import audience
+from app.wiki import sources as wiki_sources
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +117,7 @@ async def list_documents(
 async def get_document(
     slug: str,
     response: Response,
+    with_: str | None = Query(default=None, alias="with", description="citations — 위키 근거를 블록 id 별로 붙인다"),
     s: AsyncSession = Depends(get_db),
     _user: dict = Depends(require_reader),
 ) -> dict[str, Any]:
@@ -128,23 +130,24 @@ async def get_document(
     content = document_service.scrub_for_response(
         doc["content_json"], role=_user.get("role")
     )
-    return envelope(
-        data={
-            "id": doc["id"],
-            "slug": doc["slug"],
-            "title": doc["title"],
-            "summary": doc["summary"],
-            "status": doc["status"],
-            "version": doc["version"],
-            "schema_ver": doc["schema_ver"],
-            "owner_id": doc["owner_id"],
-            "part_id": doc["part_id"],
-            "created_at": doc["created_at"],
-            "updated_at": doc["updated_at"],
-            "content": content,
-        },
-        meta={"etag": etag},
-    )
+    data = {
+        "id": doc["id"],
+        "slug": doc["slug"],
+        "title": doc["title"],
+        "summary": doc["summary"],
+        "status": doc["status"],
+        "version": doc["version"],
+        "schema_ver": doc["schema_ver"],
+        "owner_id": doc["owner_id"],
+        "part_id": doc["part_id"],
+        "created_at": doc["created_at"],
+        "updated_at": doc["updated_at"],
+        "content": content,
+    }
+    if with_ and "citations" in with_.split(","):
+        # 위키 근거는 DocumentJSON 밖 옆 표에 있다 — 읽는 사람이 볼 수 있는 원천만 블록 id 별로(CONTRACTS §2-3).
+        data["citations"] = await wiki_sources.citations_for_doc(s, doc["id"])
+    return envelope(data=data, meta={"etag": etag})
 
 
 # ── HTML export (Cycle 14) ──────────────────────────────────────────
