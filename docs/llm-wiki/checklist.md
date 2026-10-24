@@ -43,7 +43,7 @@
 - [ ] 배포 — cae00 에 0050 · 0051 · 재색인(`python -m app.scripts.reindex`). 재색인 전엔 restricted 가 검색에 남는다
 
 ## W3 원천 · 작업 실행기
-- [ ] 표 — `wiki_sources`(불변 트리거) · `wiki_jobs` · `wiki_log`(덧붙이기만) · `wiki_pages`
+- [x] 표 — `wiki_sources`(불변 트리거) · `wiki_jobs` · `wiki_log`(덧붙이기만) · `wiki_pages`(0051 · 0052 — 워커 심장박동 `wiki_workers` 더함)
 - [ ] 봉투 검증(종류별 body) · 첨부(업로드 파이프라인) · 버킷 `wiki-sources`
 - [ ] `POST /sources` 멱등 · 철회 · 원천 문서(`src-…`)
 - [ ] 워커 `python -m app.wiki.worker` · 인스턴스 `mxwp_wiki` · start · stop · status · update(여섯) · diag · sync-from-drive

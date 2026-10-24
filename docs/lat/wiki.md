@@ -15,7 +15,8 @@
 | W0 준비 | 봉투 모델 · 합성 원천 20 · 가짜 LLM · 설정 자리 | [[#Envelope]] · [[#Test bundle]] · [[#Fake LLM]] · [[#Settings]] |
 | W1 연결 · 신원 | 위임 창구 · 위임 토큰(세대) · 소속 · 플랫폼 증명 · 진입 토큰 스냅숏 · jti 원장 · 소속→팀 표(API · 화면 `/admin/aff-team-map`) | [[core#게이트웨이 · 포털 위임]] |
 | W2 보이기 범위 | 읽기 길 전수(아래 표) · 길마다 시험 · admin 범위 밖 읽기 감사. 남은 것 — cae00 배포 · 재색인 | [[#Audience]] |
-| W3 원천 · 작업 ~ W8 cae00 | (아직) | — |
+| W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052). 남은 것 — 받기 REST · 원천 문서 · /health · 인스턴스 | [[#Sources · Jobs]] |
+| W4 들이기 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
 
@@ -36,7 +37,8 @@
 | --- | --- | --- |
 | 원천 봉투(종류별 body) · 범위 토큰 정규화 · payload 해시 | [[src/app/wiki/envelope.py#SourceEnvelope]] · `normalize_audience` | W0 |
 | 범위 계산 · 저장소 층 필터 · 읽는 사람 문맥 | [[src/app/wiki/audience.py]] · 표 `wiki_pages`(0051) | W2 |
-| 받기 · 멱등 · 철회 · DB 큐 · 워커 | `app/wiki/{sources,jobs,worker}.py` | W3 |
+| DB 큐 · 워커(처리기 등록부) | [[src/app/wiki/jobs.py]] · [[src/app/wiki/worker.py#run_once]] · 표 `wiki_sources` · `wiki_jobs` · `wiki_log` · `wiki_workers`(0052) | W3 |
+| 받기 · 멱등 · 철회 · 원천 문서 | `app/wiki/sources.py` | W3 |
 | LLM(구조화 출력) · 해석 · 계획 · 쓰기 · 검증 · 반영 | `app/wiki/{llm,resolve,plan,write,validate,apply}.py` | W4 |
 | REST | `app/routers/wiki.py`(`/api/v1/wiki/*`) | W3~ |
 | 위임 창구 · 회수 · 소속→팀 표 | [[src/app/routers/auth_sso.py]] · 검증 `core/auth._resolve_delegated` · 증명 `core/portal_identity.py` | W1 |
@@ -81,6 +83,21 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 
 시험 [[apps/api/tests/test_wiki_audience.py]] — 문서 여섯(org · aff · plat · aff+plat 위키, restricted, 보통) × 읽는 사람 여섯(소속 ·
 플랫폼 · 없음 · 오래된 소속 · 작성자 · admin) × 길.
+
+## Sources · Jobs
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 원천 불변 | 트리거 `wiki_sources_guard` — 바꿀 수 있는 칸은 `status` · `ingest_state` · `doc_id` · `owner_user_id` · `submitted_by` 뿐. DELETE 는 트랜잭션 안 `SET LOCAL mxwp.wiki_purge = 'on'` 일 때만(시험 정리 · 손 정리) |
+| 기록 | `wiki_log` 는 UPDATE 늘 거부 · DELETE 는 같은 스위치로만 |
+| 집기 | `jobs.claim` — `queued`(not_before 지남) 또는 lease 지난 `running` 을 `FOR UPDATE SKIP LOCKED` 로 하나. 순서 `priority`(작을수록 먼저 — 묻기 `PRIORITY_INTERACTIVE` 10 · 배경 100) → `not_before` → `created_at`. 집은 순간 커밋 |
+| lease | 워커가 lease 의 1/3 마다 `extend`. 못 늘리면(남이 다시 집음) 손을 뗀다. 상태를 바꾸는 쿼리는 모두 `worker = 나 AND state = 'running'` 을 본다 — lease 를 잃은 워커가 덮어쓰지 못한다 |
+| 재시도 | `fail` → 시도가 남았으면 `queued` + `not_before` = 30s × 2^(시도−1), 아니면 `failed`. lease 만료로 다시 집힌 것도 시도에 든다 — 넘으면 집는 자리에서 `failed`(그 작업에서 워커가 거듭 죽어도 끝없이 돌지 않게) |
+| 처리기 | `@worker.handler(op)` 로 등록. **처리기가 없는 op 는 집지 않는다** — 들이기(W4) 전에 받은 원천의 `ingest` 작업은 줄에서 기다린다. `noop`(args `sleep_s` · `fail`)은 점검용 |
+| 꺼짐 | `WIKI_ENABLED` 가 꺼져 있으면 집지 않고 30초씩 쉰다(`wiki_workers.state='disabled'`) |
+| 커밋 | `claim` 만 스스로 커밋한다. `enqueue` 등은 부르는 쪽이 — 원천 받기와 작업 줄 세우기를 한 트랜잭션에 넣는다 |
+
+시험 [[apps/api/tests/test_wiki_jobs.py]] — 순서 · not_before · 워커가 죽은 뒤 다른 워커가 다시 집기 · 재시도 · 거듭된 lease 만료 · 불변 · 덧붙이기만.
 
 ## Test bundle
 

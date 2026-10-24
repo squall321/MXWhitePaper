@@ -50,18 +50,22 @@ DocumentJSON v1.0(`packages/shared/schemas/document.json` → datamodel-codegen)
 | `payload` | jsonb | 봉투의 `body`(§3) — 정규화한 본문 |
 | `payload_sha256` | char(64) | 정규 JSON(키 정렬 · 공백 없음)의 해시 |
 | `blobs` | jsonb default `[]` | `[{key, name, mime, sha256, bytes, role}]` — MinIO 버킷 `wiki-sources`. role 은 `figure` · `raw` · `table` |
+| `subject_hints` | jsonb default `[]` | 봉투의 `subject_hints`(§3) 그대로 — 엔티티 해석(W4)의 첫 실마리 |
 | `audience` | text[] NOT NULL | 이 원천을 볼 수 있는 사람 |
 | `sensitivity` | text | `public` · `internal` · `restricted`(문서 `confidentiality` 와 같은 낱말) |
 | `owner_user_id` | uuid null | 원천의 주인(사람). 위임 호출이면 호출자와 같아야 한다 |
-| `submitted_by` | uuid | 들인 계정(사람 또는 서비스) |
+| `submitted_by` | uuid null | 들인 계정(사람 또는 서비스). 그 사람이 지워지면 null(`owner_user_id` 도) |
 | `via` | text | `portal-chat` · `gateway` · `connector:<이름>` · `upload` · `inquiry` |
 | `consent` | jsonb null | 문답 원천의 동의 — `{by, at, mode:'button'|'candidate'|'auto', note}` |
 | `captured_at` · `received_at` | timestamptz | 원천이 생긴 때(잡 끝난 시각 등) · 받은 때 |
 | `supersedes_id` | uuid null | 같은 원천의 새 판이면 옛 판 |
 | `status` | text | `active` · `superseded` · `withdrawn` |
 | `ingest_state` | text | `new` · `queued` · `running` · `done` · `failed` · `skipped` · `held`(사람 확인 대기) |
+| `doc_id` | uuid null | 원천 문서(`src-…` — `wiki_pages.kind='source'`). 사람이 원천을 문서로 읽는 자리 |
 
-- **불변** — `payload` · `payload_sha256` · `blobs` · `origin_*` · `audience` · `kind` 를 바꾸는 UPDATE 는 DB 트리거가 거부한다. 고침은 새 줄 + `supersedes_id`.
+- **불변** — 바꿀 수 있는 칸은 `status` · `ingest_state` · `doc_id` · `owner_user_id` · `submitted_by` 뿐이다. 나머지를 바꾸는 UPDATE 와
+  DELETE 는 DB 트리거가 거부한다(0052). 고침은 새 줄 + `supersedes_id`. 지우기는 손 정리 · 시험 정리만 — 트랜잭션 안에서
+  `SET LOCAL mxwp.wiki_purge = 'on'` 을 건 뒤(`wiki_log` 도 같다). 구현은 `docs/lat/wiki.md` §Sources · Jobs 가 정본.
 - **멱등** — UNIQUE(`origin_system`, `origin_ref`, COALESCE(`origin_rev`, ''), `payload_sha256`). 같은 것을 두 번 보내면 200 + 기존 id.
 - **철회** — `status='withdrawn'`(주인 · 관리자). 그 원천을 인용한 블록은 점검이 `stale` 로 잡고 고침 변경 묶음을 만든다(§5 V-규칙과 별개로 늘 검토).
 
@@ -105,9 +109,9 @@ DocumentJSON v1.0(`packages/shared/schemas/document.json` → datamodel-codegen)
 | 칸 | 꼴 | 뜻 |
 | --- | --- | --- |
 | `id` | uuid PK | |
-| `op` | text | `ingest` · `query` · `lint` · `inquire` · `reindex` · `apply` |
+| `op` | text | `ingest` · `query` · `lint` · `inquire` · `reindex` · `apply` · `noop`(줄 · lease · 재시도를 점검하는 빈 작업) |
 | `args` | jsonb | |
-| `state` | text | `queued` · `running` · `done` · `failed` · `cancelled` |
+| `state` | text | `queued` · `running` · `done` · `failed` · `cancelled` · `held`(예산 넘침 등 사람 확인 대기 — §8) |
 | `priority` · `not_before` | int · timestamptz | 사람이 기다리는 `query` 가 앞, 배경 `lint` · `inquire` 는 뒤 · 조용한 시간에 |
 | `attempts` · `max_attempts` | int | 기본 3 |
 | `lease_until` · `worker` | timestamptz · text | `SELECT … FOR UPDATE SKIP LOCKED` 로 집고 lease 를 늘려 가며 돈다. lease 가 지나면 다른 워커가 다시 집는다 |
@@ -147,7 +151,8 @@ finding — `id` · `run_id` · `rule`(request §5-8 표의 열쇠) · `severity
 ### 2-9. `wiki_log` — 기록(덧붙이기만)
 
 `id` bigserial · `at` timestamptz · `op`(`ingest` · `query` · `fileback` · `lint` · `inquire` · `review` · `revert` · `withdraw` · `schema`) · `title` ·
-`detail` jsonb · `actor` · `job_id` · `changeset_id` · `audience` text[]. UPDATE · DELETE 는 트리거가 거부한다(보존 정책은 request §8).
+`detail` jsonb · `actor` · `job_id` · `changeset_id` · `audience` text[]. UPDATE · DELETE 는 트리거가 거부한다(보존 정책은 request §8 —
+DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
 
 ### 2-10. 신원 · 소속 · 플랫폼 권한
 
