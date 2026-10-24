@@ -77,8 +77,10 @@ def _check_sender(env: SourceEnvelope, caller: dict[str, Any], viewer: audience.
         raise Forbidden("전사 범위 ['org'] 는 관리자 · 서비스 계정만 보낸다 — 소속 같은 좁은 범위로 보내라")
     missing = [] if viewer.sees_all else [t for t in env.audience if t not in viewer.tokens]
     if missing:
-        # 소속 · 플랫폼은 포털 권한에서 온다 — 관리자가 막 바꾸면 게이트웨이 권한 조회 캐시가 잠시 옛 값을 싣는다
-        late = " 소속 · 플랫폼 권한이 막 바뀌었으면 잠시 뒤 다시 보내라." if any(t.startswith(("aff:", "plat:")) for t in missing) else ""
+        # 소속 · 플랫폼은 포털이 알려 준 값뿐이다 — 웹 세션은 포털을 거쳐 들어온 지 24시간 안이어야 하고, 위임 호출은 관리자가 막
+        # 바꾼 권한을 게이트웨이 권한 조회 캐시가 늦게 따라온다
+        late = (" 소속 · 플랫폼 범위는 포털이 알려 준 값으로만 정한다 — 포털을 거쳐 다시 들어오거나(진입 뒤 24시간), 권한이 막 바뀌었으면"
+                " 잠시 뒤 다시 하라." if any(t.startswith(("aff:", "plat:")) for t in missing) else "")
         raise Forbidden(f"보낸 사람이 갖지 않은 범위 토큰이다 — 못 볼 원천은 들이지 않는다.{late}", details={"missing": missing})
     me = str(caller.get("email") or "").lower()
     owner = env.owner.email.lower() if env.owner else me
