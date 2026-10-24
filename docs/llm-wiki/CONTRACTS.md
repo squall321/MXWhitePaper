@@ -218,7 +218,7 @@ DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
 | `sim_result` | `summary` · `setup{solver, model, conditions{…}}` · `results[{name, value, unit, where?}]` · `verdict?` · `artifacts[{name, url}]` | 숫자는 늘 `{value, unit}`. 그림은 `attachments` 로 |
 | `field_defect` | `form:'case'|'aggregate'` · (case) `case_ref` · `symptom` · `failure_mode?` · `cause?` · `action?` · `status` · `dates{opened, closed?}` · `model?` · `part?` · `stage?` · (aggregate) `period{from,to}` · `scope{model?, part?, region?}` · `counts[{failure_mode, count, rate?, unit}]` · 공통 `dataset{name, version}` | 사례 한 건 또는 집계 한 묶음(request §6-2). **사람 이름 · 사번 · 연락처 · 고객 · 단말 식별자는 연결기가 떼고 보낸다** — 서버도 V9 로 한 번 더 본다 |
 | `qa` | `question` · `answer` · `evidence[{kind:'tool'|'doc'|'source', ref, excerpt}]` · `model` · `outcome:'solved'|'partial'|'unknown'` · `asker_note?` | 질문자 이름은 싣지 않는다(주인은 `owner` 로만). `answer` 안의 `[k]` 는 생산자 안의 표시다 — MXWP 되쌓기는 `evidence` 의 k 째 `doc` 근거, 포털 챗은 답 안의 근거 블록. 들이기는 번호를 근거로 읽지 않는다 |
-| `deliberation` | `question` · `decision` · `votes[{seat, stance}]` · `evidence[…]` · `minority?` · `job_id` | 버린 근거 · 소수 의견을 지우지 않는다(포털 심의 원칙) |
+| `deliberation` | `question` · `decision` · `votes[{seat, stance}]` · `evidence[…]` · `minority?` · `job_id` | 버린 근거 · 소수 의견을 지우지 않는다(포털 심의 원칙). 에이전트 서버 P8(HWAXAgentServer 5502825)의 시험이 이 리포의 `SourceEnvelope` 로 봉투를 직접 검증한다 — **`DeliberationBody` 를 바꾸면 포털 세션에 알린다** |
 | `report` | `ra_report_id` · `title` · `sections[{heading, text}]` · `figures[{name, caption?, upload_id?}]` | RA 는 API 로만 읽는다 |
 | `card` | `card_id` · `domain` · `title` · `claims[{text, evidence?}]` | AIDataHub 지식카드 |
 | `document` | `doc_slug` · `version` | MXWP 사람 백서를 그 판으로 원천에(request §6-4) |
@@ -304,7 +304,7 @@ W5 구현 — `entity.merge` 는 `{doc: '', from, into, why}`(사람의 `human_r
 | `GET /index` · `GET /index.md` | reader + 범위 | 목록(§10) |
 | `GET /schema` · `PUT /schema` | reader · admin | 규칙서(판 올림) |
 | `POST /pages/{slug}/audience` · `/lock` | 주인 · 검토자 | 넓히기 · 잠금 |
-| `GET /health` | 없음(내부) | 큐 길이 · 가장 오래 기다린 작업 · 최근 실패 · 마지막 점검 · LLM 닿음 — 포털 상태판이 읽는다 |
+| `GET /health` | 없음(내부) | 큐 길이 · 가장 오래 기다린 작업 · 최근 실패 · 마지막 점검 · LLM 닿음 — 포털 상태판이 읽는다. 포털 P9 가 본문 조건으로 본다(`data.workers` 하나 이상 · `workers[0].state != stopped` · `data.jobs.queued` · `failed_24h`) — **이 모양을 바꾸면 포털 세션에 알린다** |
 
 모든 읽기는 §2-11 범위로 거른다 — 목록 · 검색 · 그래프 · 내보내기를 포함해서(request §5-12 의 전수 목록).
 
@@ -316,7 +316,9 @@ W5 구현 — `entity.merge` 는 `{doc: '', from, into, why}`(사람의 `human_r
 ## 7. MCP 도구(`dist/llm-docx-toolkit/mcp/server.py` 에 더한다)
 
 게이트웨이는 한 이름 공간에 300개가 넘는 도구를 모은다 — **`wiki_` 접두**로 겹침을 피하고, 붙인 뒤 게이트웨이 `tools/list` 로 확인한다
-(이름이 다른 앱과 헷갈린 선례 — d723105 `get_section`).
+(이름이 다른 앱과 헷갈린 선례 — d723105 `get_section`). 서버에 아무것도 남기지 않는 읽기 아홉(`wiki_index` · `search` · `read` · `source` ·
+`entity` · `graph` · `log` · `lint_report` · `questions`)은 `readOnlyHint` 를 단다 — 게이트웨이가 그 표지를 그대로 넘겨 읽기 전용 PAT 에 연다.
+`wiki_ask` 는 답이 없으면 질문을 남겨 빠진다.
 
 | 도구 | 읽기/쓰기 | 인자 → 돌려줌 |
 | --- | --- | --- |

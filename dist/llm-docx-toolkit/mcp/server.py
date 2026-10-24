@@ -54,10 +54,15 @@ from typing import Any
 from urllib.parse import quote
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from rag._bm25 import BM25Retriever
 from rag.retriever import Chunk, Retriever
 
+
+# 위키 읽기 도구 표지 — 서버에 아무것도 남기지 않는 것만(wiki_ask 는 답이 없으면 질문을 남겨 빠진다). 게이트웨이는
+# 앱이 단 표지를 그대로 넘겨 읽기 전용 PAT 에 이 도구만 연다.
+_WIKI_READ = ToolAnnotations(readOnlyHint=True)
 
 # The FastMCP instance, stashed by build_server() so per-request helpers can
 # reach the active request context (http mode). None until build_server runs.
@@ -1095,6 +1100,7 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="wiki_index",
+        annotations=_WIKI_READ,
         description=(
             "AI 위키 목록(Karpathy index) — 내가 볼 수 있는 위키 문서를 갈래(엔티티 유형 · 사례 · 문답)별로. 위키로 답하기 전에 "
             "가장 먼저 읽는다. kind 로 갈래 key(part · failure-mode · sim-case · qa …)를 고른다. → 목록 마크다운"
@@ -1115,6 +1121,7 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="wiki_search",
+        annotations=_WIKI_READ,
         description=(
             "물음으로 위키 문서를 찾는다 — 물음에 이름 · 별칭이 든 엔티티의 문서(via entity)와 검색이 찾은 문서(via search). "
             "→ {pages:[{slug, title, kind, via}], entities:[{id, name, type_key}]}"
@@ -1126,6 +1133,7 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="wiki_read",
+        annotations=_WIKI_READ,
         description=(
             "위키 문서 한 장 — 절 · 블록(id · 글)과 블록마다 근거(원천 짧은 id · 위치 · 인용). 답에 쓰려면 근거를 함께 옮긴다. "
             "→ {slug, title, kind, managed, audience, entity, sections:[{title, blocks:[{id, type, text, cites}]}]}"
@@ -1151,6 +1159,7 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="wiki_source",
+        annotations=_WIKI_READ,
         description="위키 원천 한 건(볼 수 있을 때만) — 종류 · 출처 · 생긴 때 · 본문(payload) · 첨부. → 원천 JSON",
     )
     def wiki_source(id: str) -> dict[str, Any]:
@@ -1159,6 +1168,7 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="wiki_entity",
+        annotations=_WIKI_READ,
         description=(
             "엔티티(부품 · 모델 · 불량 유형 …) 한 개 — id 또는 이름(+유형)으로. 이름 · 별칭 · 외부 id(만든 범위의 사람만) · "
             "문서 · 위키 관계(깊이 1). → {entity, relations:[{subject, predicate, object}]}"
@@ -1183,6 +1193,7 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="wiki_graph",
+        annotations=_WIKI_READ,
         description=(
             "위키 문서에서 위키 관계를 따라간 이웃(깊이 1~2). predicates 로 술어 key 를 고른다(비면 모두). "
             "→ {root, nodes, edges:[{subject, predicate, predicate_key, object}]}"
@@ -1210,6 +1221,7 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="wiki_log",
+        annotations=_WIKI_READ,
         description="위키 기록(덧붙이기만 — 들이기 · 묻기 · 검토 · 되돌림 …)의 최근 n 줄. → ['[YYYY-MM-DD HH:MM] op | 제목']",
     )
     def wiki_log(n: int = 20) -> list[str]:
@@ -1218,6 +1230,7 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="wiki_lint_report",
+        annotations=_WIKI_READ,
         description="위키 점검(lint) 요약과 작업 큐 상태. 점검 보고서는 W7 에 온다 — 지금은 마지막 점검 시각 · 큐 · LLM 닿음만.",
     )
     def wiki_lint_report() -> dict[str, Any]:
@@ -1226,6 +1239,7 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="wiki_questions",
+        annotations=_WIKI_READ,
         description="위키 질문 대기열(내가 볼 수 있는 것) — 위키가 아직 답하지 못한 물음. → [{id, text, status, asked_count, mine}]",
     )
     def wiki_questions(status: str = "open", limit: int = 50) -> list[dict[str, Any]]:

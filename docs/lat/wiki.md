@@ -265,6 +265,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 ## MCP
 
 `dist/llm-docx-toolkit/mcp/server.py` 의 `wiki_*` 열넷(CONTRACTS §7) — `MxwpClient.wiki(method, path, …)` 한 길로 `/api/v1/wiki/*` 를 부른다.
+순수 읽기 아홉은 `annotations=_WIKI_READ`(`readOnlyHint`) — 게이트웨이가 읽기 전용 PAT 에 연다. `wiki_ask` 는 MISS 때 질문을 남겨 빠진다.
 
 | 도구 | 창구 |
 | --- | --- |

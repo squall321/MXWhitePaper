@@ -164,3 +164,11 @@ def test_wiki_write_tools_need_a_token(server_mod) -> None:
     _use(server_mod, {}, token=None)
     with pytest.raises(ToolError, match="MXWP_API_TOKEN"):
         _call(server_mod.build_server(), "wiki_propose", {"summary": "s", "ops": []})
+
+
+def test_only_pure_reads_are_marked_read_only(server_mod) -> None:
+    tools = {t.name: t for t in asyncio.run(server_mod.build_server().list_tools()) if t.name.startswith("wiki_")}
+    marked = {n for n, t in tools.items() if t.annotations and t.annotations.readOnlyHint}
+    assert marked == {"wiki_index", "wiki_search", "wiki_read", "wiki_source", "wiki_entity", "wiki_graph", "wiki_log",
+                      "wiki_lint_report", "wiki_questions"}  # 게이트웨이가 읽기 전용 PAT 에 여는 것
+    assert {"wiki_ask", "wiki_submit_source", "wiki_fileback", "wiki_propose", "wiki_add_question"} <= set(tools) - marked
