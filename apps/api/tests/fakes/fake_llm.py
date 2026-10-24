@@ -10,7 +10,9 @@
 - `GET /v1/models` — 시나리오의 모델 하나.
 - 진짜처럼 거부한다 — 모르는 모델 404 · JSON 아닌 본문 · 빈 messages · 틀린 스키마 400 · 키를 정했는데 Bearer 가 틀리면 401.
   오류 본문은 `error_style` 로 고른다 — `openai`(`{"error": {...}}`, 새 vLLM) · `vllm-legacy`(`{"object": "error", ...}`).
-- `stream: true` 는 아직 없다(400) — 묻기(W6)가 스트리밍을 쓰게 될 때 더한다.
+- `stream: true`(글 모드만 — W6 묻기) — vLLM 처럼 `data: {chat.completion.chunk}` 를 잇고 `data: [DONE]` 로 닫는다(첫 조각은 role,
+  끝 조각은 finish_reason, `stream_options.include_usage` 면 choices 가 빈 쓴 양 조각). 곁들임 `chunk_chars`(조각 크기, 기본 12) ·
+  `chunk_delay_s`(조각 사이 쉼).
 
 시나리오(dict 또는 JSON 파일 — 이름만 주면 `tests/fixtures/wiki/scenarios/` 에서 찾는다)::
 
@@ -235,8 +237,6 @@ class FakeLLM:
         messages = body.get("messages")
         if not isinstance(messages, list) or not messages:
             return 400, self._error_body(400, "messages 가 비었다", "BadRequestError")
-        if body.get("stream"):
-            return 400, self._error_body(400, "fake LLM: stream 은 아직 없다(W6 에서 더한다)", "BadRequestError")
         try:
             mode, target, schema = self._mode(body)
         except _BadRequest as e:
@@ -272,6 +272,25 @@ class FakeLLM:
         except ScenarioError as e:
             return 500, self._error_body(500, f"fake LLM 시나리오 결함: {e}", "InternalServerError")
 
+        usage = reply.get("usage") or {}
+        prompt_tokens = int(usage.get("prompt_tokens", max(1, len(text) // 4)))
+        completion_tokens = int(usage.get("completion_tokens", max(1, len(content) // 4)))
+        if body.get("stream"):
+            if mode != "text":
+                return 400, self._error_body(400, "fake LLM: stream 은 글 모드만", "BadRequestError")
+            size = int(reply.get("chunk_chars", 12))
+            base = {"id": f"chatcmpl-{uuid.uuid4().hex}", "object": "chat.completion.chunk", "created": int(time.time()),
+                    "model": self.model}
+            chunks = [{**base, "choices": [{"index": 0, "delta": {"role": "assistant", "content": ""}, "logprobs": None,
+                                            "finish_reason": None}]}]
+            chunks += [{**base, "choices": [{"index": 0, "delta": {"content": content[i:i + size]}, "logprobs": None,
+                                             "finish_reason": None}]} for i in range(0, len(content), size)]
+            chunks.append({**base, "choices": [{"index": 0, "delta": {}, "logprobs": None,
+                                                "finish_reason": reply.get("finish_reason", "stop"), "stop_reason": None}]})
+            if (body.get("stream_options") or {}).get("include_usage"):
+                chunks.append({**base, "choices": [], "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
+                                                                "total_tokens": prompt_tokens + completion_tokens}})
+            return 200, {"__stream__": chunks, "__delay__": float(reply.get("chunk_delay_s", 0))}
         if mode == "tools":
             message: dict[str, Any] = {
                 "role": "assistant", "reasoning_content": None, "content": None,
@@ -282,9 +301,6 @@ class FakeLLM:
         else:
             message = {"role": "assistant", "reasoning_content": None, "content": content, "tool_calls": []}
             finish = "stop"
-        usage = reply.get("usage") or {}
-        prompt_tokens = int(usage.get("prompt_tokens", max(1, len(text) // 4)))
-        completion_tokens = int(usage.get("completion_tokens", max(1, len(content) // 4)))
         return 200, {
             "id": f"chatcmpl-{uuid.uuid4().hex}", "object": "chat.completion", "created": int(time.time()),
             "model": self.model,
@@ -333,6 +349,19 @@ def _handler_for(fake: FakeLLM) -> type[BaseHTTPRequestHandler]:
             if not self._authorized():
                 return
             status, obj = fake.complete(raw)
+            if isinstance(obj, dict) and "__stream__" in obj:
+                parts = [f"data: {json.dumps(c, ensure_ascii=False)}\n\n".encode() for c in obj["__stream__"]]
+                parts.append(b"data: [DONE]\n\n")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Content-Length", str(sum(len(p) for p in parts)))
+                self.end_headers()
+                for p in parts:
+                    self.wfile.write(p)
+                    self.wfile.flush()
+                    if obj["__delay__"]:
+                        time.sleep(obj["__delay__"])
+                return
             if obj is None:
                 self.close_connection = True
                 try:

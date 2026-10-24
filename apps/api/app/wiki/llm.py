@@ -9,10 +9,13 @@
 - 닿지 않음(연결 · 끊김 · 시간 초과 · 429 · 5xx)은 `LLMUnavailable` — 워커가 시도 수를 쓰지 않고 뒤로 미룬다. 그 밖의 4xx 는 `LLMError`.
 - mock 으로 대신하지 않는다 — 설정이 비면 `background()` 가 None 이고 부르는 쪽이 멈춘다.
 - 프록시는 챗 클라이언트(`services/llm_client.py`)처럼 환경(HTTP(S)_PROXY · NO_PROXY)을 따른다.
+- 묻기(W6)는 `stream_text` — 글 조각을 받는 대로 내고(`stream: true` · `include_usage`), 조각 사이 읽기 시간 제한은 넉넉히(연결 10초는 그대로).
 """
 from __future__ import annotations
 
+import json
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -128,6 +131,45 @@ async def _call(
         return str(msg.get("content") or "")
     except (ValueError, KeyError, IndexError, TypeError) as e:
         raise LLMError(f"LLM 응답 꼴이 OpenAI 호환이 아니다 — {type(e).__name__}: {e}"[:_MESSAGE_MAX]) from e
+
+
+async def stream_text(
+    ep: Endpoint, messages: list[dict[str, Any]], *, usage: Usage, timeout_s: float = 120.0,
+) -> AsyncIterator[str]:
+    """글 답을 조각으로 — 닿지 않거나 끊기면 `LLMUnavailable`, 꼴이 틀리면 `LLMError`(이미 낸 조각은 부르는 쪽 몫)."""
+    body = {"model": ep.model, "messages": messages, "temperature": 0.2, "stream": True,
+            "stream_options": {"include_usage": True}}
+    headers = {"Authorization": f"Bearer {ep.api_key}"} if ep.api_key else {}
+    started = time.monotonic()
+    usage.calls += 1
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s, connect=_CONNECT_S)) as c, \
+                c.stream("POST", f"{ep.base_url}/chat/completions", json=body, headers=headers) as resp:
+            if resp.status_code >= 400:
+                await resp.aread()
+                cls = LLMUnavailable if resp.status_code == 429 or resp.status_code >= 500 else LLMError
+                raise cls(f"LLM {resp.status_code} — {_error_message(resp)}")
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                except ValueError as e:
+                    raise LLMError(f"스트림 조각이 JSON 이 아니다 — {data[:80]}") from e
+                used = chunk.get("usage") or {}
+                usage.prompt_tokens += int(used.get("prompt_tokens") or 0)
+                usage.completion_tokens += int(used.get("completion_tokens") or 0)
+                for choice in chunk.get("choices") or []:
+                    piece = (choice.get("delta") or {}).get("content")
+                    if piece:
+                        yield piece
+    except httpx.HTTPError as e:
+        raise LLMUnavailable(f"LLM 에 닿지 않는다 — {type(e).__name__}: {e}"[:_MESSAGE_MAX]) from e
+    finally:
+        usage.seconds += time.monotonic() - started
 
 
 async def structured[M: BaseModel](

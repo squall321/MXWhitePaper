@@ -3854,6 +3854,95 @@
         "title": "_MergeBody",
         "type": "object"
       },
+      "_Msg": {
+        "properties": {
+          "content": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "_Msg",
+        "type": "object"
+      },
+      "_QueryBody": {
+        "properties": {
+          "messages": {
+            "description": "마지막이 물음(user) — 앞은 이어지는 대화",
+            "items": {
+              "$ref": "#/components/schemas/_Msg"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "title": "_QueryBody",
+        "type": "object"
+      },
+      "_QuestionBody": {
+        "properties": {
+          "audience": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "비면 남긴 사람만(user:<id>)",
+            "title": "Audience"
+          },
+          "origin": {
+            "default": "user",
+            "enum": [
+              "user",
+              "query_miss"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "priority": {
+            "default": 3,
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "text": {
+            "maxLength": 2000,
+            "minLength": 2,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "_QuestionBody",
+        "type": "object"
+      },
       "_SchemaBody": {
         "properties": {
           "yaml": {
@@ -20647,6 +20736,161 @@
           }
         },
         "summary": "Get Page",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/query": {
+      "post": {
+        "description": "SSE — 위키로 답한다(tool_call · tool_result · token · citation · miss · error · done).",
+        "operationId": "post_query_api_v1_wiki_query_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_QueryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Query",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/questions": {
+      "get": {
+        "operationId": "get_questions_api_v1_wiki_questions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Questions Api V1 Wiki Questions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Questions",
+        "tags": [
+          "wiki"
+        ]
+      },
+      "post": {
+        "operationId": "post_question_api_v1_wiki_questions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_QuestionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Question Api V1 Wiki Questions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Question",
         "tags": [
           "wiki"
         ]

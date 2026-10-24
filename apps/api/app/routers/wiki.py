@@ -12,16 +12,27 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Body, Depends, Query
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import require_admin, require_editor, require_reader
 from app.core.config import get_settings
-from app.core.db import get_db
+from app.core.db import get_db, session_factory
 from app.core.errors import APIError, ValidationFailed, envelope, format_pydantic_errors
-from app.wiki import catalog, entities, jobs, ontology, review, schema_doc, sources
+from app.wiki import (
+    audience,
+    catalog,
+    entities,
+    jobs,
+    ontology,
+    query,
+    questions,
+    review,
+    schema_doc,
+    sources,
+)
 from app.wiki.envelope import SourceEnvelope
 
 
@@ -309,6 +320,80 @@ async def post_entity_merge(
     body: _MergeBody, user: dict[str, Any] = Depends(require_editor), s: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     return envelope(data=await entities.propose_merge(s, str(body.from_id), str(body.into_id), user=user, note=body.note))
+
+
+_QUERY_WINDOW_S, _QUERY_LIMIT = 60.0, 20
+_query_hist: dict[str, list[float]] = {}
+
+
+class _QueryRateLimited(APIError):
+    http_status = 429
+    code = "RATE_LIMITED"
+    message = "묻기 한도 초과 — 잠시 후 다시"
+
+
+class _Msg(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=20_000)
+
+
+class _QueryBody(BaseModel):
+    messages: list[_Msg] = Field(min_length=1, max_length=20, description="마지막이 물음(user) — 앞은 이어지는 대화")
+
+
+@router.post("/query")
+async def post_query(body: _QueryBody, user: dict[str, Any] = Depends(require_reader)) -> StreamingResponse:
+    """SSE — 위키로 답한다(tool_call · tool_result · token · citation · miss · error · done)."""
+    if body.messages[-1].role != "user":
+        raise ValidationFailed("마지막 말은 물음(user)이어야 한다")
+    now = time.monotonic()
+    hist = [t for t in _query_hist.get(str(user["id"]), []) if t >= now - _QUERY_WINDOW_S]
+    if len(hist) >= _QUERY_LIMIT:
+        raise _QueryRateLimited(details={"window_seconds": int(_QUERY_WINDOW_S), "limit": _QUERY_LIMIT})
+    _query_hist[str(user["id"])] = [*hist, now]
+    viewer = audience.current_viewer()
+    msgs = [{"role": m.role, "content": m.content} for m in body.messages]
+
+    async def gen() -> Any:
+        with audience.acting_as(viewer):
+            async with session_factory()() as s:
+                try:
+                    async for frame in query.run(s, user=user, messages=msgs):
+                        yield frame
+                except Exception as exc:  # 스트림 중 실패도 프레임으로
+                    yield query.sse("error", {"message": str(exc)[:300]})
+                    yield query.sse("done", {"miss": False, "cited": 0})
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
+
+
+@router.get("/questions")
+async def get_questions(
+    status: str | None = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    _: dict[str, Any] = Depends(require_reader),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    rows, total = await questions.listing(s, status=status, limit=limit, offset=offset)
+    return envelope(data=rows, meta={"total": total, "limit": limit, "offset": offset})
+
+
+class _QuestionBody(BaseModel):
+    text: str = Field(min_length=2, max_length=2000)
+    audience: list[str] | None = Field(default=None, description="비면 남긴 사람만(user:<id>)")
+    priority: int = Field(3, ge=1, le=5)
+    origin: Literal["user", "query_miss"] = "user"
+
+
+@router.post("/questions", status_code=201)
+async def post_question(
+    body: _QuestionBody, user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    out = await questions.add(s, body.text, origin=body.origin, user=user, aud=body.audience, priority=body.priority)
+    await s.commit()
+    return envelope(data=out)
 
 
 @router.get("/health")

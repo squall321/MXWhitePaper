@@ -18,7 +18,8 @@
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
 | W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
 | W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지 · 엔티티 등록부(보이기 · 별칭 · 외부 id · 중복 후보 · 합치기 — 늘 검토 · 되돌리기). 엔티티 후보 해석(열쇠 · 후보 · `wiki_resolve`) · 정답표 초안 · 평가 스크립트. 화면(온톨로지 · 엔티티 목록 · 한 건 · 합치기 카드). 남은 것 — 사람의 정답표 확인 · LLM 을 낀 정확도(진짜 LLM 이 있는 박스) | [[#Ontology]] · [[#Relations]] · [[#Entities]] · [[#Resolution]] |
-| W6 묻기 ~ W8 cae00 | (아직) | — |
+| W6 묻기 · 되쌓기 · MCP | 묻기(`/query` SSE · 근거 각주 · MISS) · 질문 대기열(0057 · `/questions`). 남은 것 — 되쌓기 · 문답 문서 · 후보 · `wiki_propose` · MCP · 챗 위키 모드 | [[#Query]] |
+| W7 점검 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
 
@@ -52,6 +53,8 @@
 | 반영 · 되돌리기 · 근거 | [[src/app/wiki/apply.py#apply]] · `revert` · 표 `wiki_changesets` · `wiki_citations`(0054) | W4 |
 | 검토 큐 | [[src/app/wiki/review.py]] · 표지 `users.wiki_reviewer`(0055) | W4 |
 | 목록(index · index.md) | [[src/app/wiki/catalog.py#build]] | W4 |
+| 묻기(근거 모으기 · 스트리밍 답 · 각주 · MISS) | [[src/app/wiki/query.py#run]] | W6 |
+| 질문 대기열 | [[src/app/wiki/questions.py#add]] · 표 `wiki_questions`(0057) | W6 |
 | 규칙서 문서 올리기 | [[src/app/wiki/schema_doc.py#put]] | W4 |
 | 화면(apps/web) | [[src/features/wiki/api.ts]] · [[src/features/wiki/WikiCitations.tsx]] · `pages/Wiki{Home,Source,Changes,Log}.tsx` | W4 |
 | REST | [[src/app/routers/wiki.py]](`/api/v1/wiki/*`) | W3~ |
@@ -156,6 +159,8 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | `PATCH /entities/{id}` | editor(`full`) | `{aliases?, ext_ids?}` 바꿔 넣기 — 같은 유형의 다른 엔티티와 겹치면 409, 칸 이름 꼴이 틀리면 422 |
 | `GET /entities/duplicates` | 검토자 | 같은 개체로 보이는 짝(이름 · 별칭 열쇠 · 같은 외부 id) — 둘 다 `full` 인 것만 |
 | `POST /entities/merge` | editor(둘 다 `full`) | `{from_id, into_id, note?}` → 201 변경 묶음(`human_request`, 늘 검토 — 검증에 걸리면 `failed`) |
+| `POST /query` | reader(분에 20) | SSE — `{messages[{role, content}] ≤20}`(마지막이 물음). 프레임 `tool_call` · `tool_result`(wiki_index · wiki_search · wiki_read) · `token` · `citation`(쓴 근거마다 `{n, slug, title, section, block_id, sources}`) · `miss` · `error` · `done{miss, cited, uncited, pages, usage}` — [[#Query]] |
+| `GET /questions` · `POST /questions` | reader | 볼 수 있는 물음(범위 토큰 ⊆ 내 토큰) · `mine` / 남기기 `{text, audience?, priority, origin: user · query_miss}` → 201 `{id, asked_count, created, audience}`. 범위는 비면 나만(`user:<id>`), 가진 토큰 밖은 403. 같은 물음(문장 부호 · 공백 무시) · 범위면 한 줄에 `asked_count` 만 |
 | `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(W7). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
 
 ## Rule book
@@ -180,6 +185,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 | 다시 묻기 | 받은 글을 pydantic 으로 검사 — 틀리면 무엇이 틀렸는지 붙여 한 번 다시, 또 틀리면 `LLMFormatError` |
 | 오류 | 429 · 5xx · 연결 · 끊김 · 시간 초과(연결 10초) → `LLMUnavailable`, 그 밖 4xx → `LLMError`. 오류 본문 셋(OpenAI · 옛 vLLM · `--api-key`)을 다 읽는다 |
 | 쓴 양 | `Usage`(prompt · completion 토큰 · 부른 수 · 초) — 부를 때마다 더한다 |
+| 흘리기 | `stream_text(ep, messages)` — `stream: true` · `include_usage`, 조각마다 낸다. 조각 사이 읽기 시간 120초(연결 10초). 4xx `LLMError` · 429 · 5xx · 끊김 `LLMUnavailable`(이미 낸 조각은 부르는 쪽 몫) |
 
 ## Ingest
 
@@ -281,7 +287,8 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 - 오류 본문은 둘 다 낼 수 있다(`error_style`) — 새 vLLM · OpenAI `{"error": {...}}` / 옛 vLLM `{"object": "error", ...}`.
   **클라이언트(W4 `llm.py`)는 둘 다 읽어야 한다** — 박스의 vLLM 판을 dev 에서 확인하지 못했다(dev 에 닿는 LLM 이 없다, 10-24).
 - 시나리오 결함은 500 — 맞는 규칙 없음 · `json` 답이 요청 스키마에 안 맞음(`conform`, 진짜의 유도 디코딩 흉내) · `capture` 실패.
-- `stream: true` 는 아직 400 — 묻기(W6)가 스트리밍을 쓸 때 더한다.
+- `stream: true` — 글 모드만(json · 도구 모드는 400). vLLM 처럼 `data: {chat.completion.chunk}` … `data: [DONE]`, `include_usage` 면 끝에
+  choices 가 빈 쓴 양 조각. 곁들임 `chunk_chars` · `chunk_delay_s`.
 
 ## Settings
 
@@ -289,6 +296,23 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 구조화 출력 꼴 `WIKI_LLM_STRUCTURED`(json_schema · tools) ·
 묻기 `WIKI_QUERY_LLM_*`(비면 배경과 같게) · 위임 `MXWP_SSO_SECRET`(비면 위임 창구 404) · `MXWP_SSO_JIT_CREATE`(기본 켬).
 API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 — 새 키에 start.sh `--env` 를 더할 필요가 없다.
+
+## Query
+
+[[src/app/wiki/query.py#run]] — 묻기 한 번. 단계는 코드가 이끌고 LLM 은 모은 근거로만 답을 흘린다(request §5-7).
+
+| 단계 | 어떻게 |
+| --- | --- |
+| 목록 | `catalog.build` — 읽는 사람의 목록. 프롬프트에 제목 `INDEX_ITEMS` 40 줄까지 |
+| 찾기 | 물음에 이름 · 별칭(열쇠)이 든 엔티티의 문서(긴 이름 먼저 · 낡음 없는 것 먼저) → Meili 검색(역할 · 범위 칸 — 위키 문서만, 원천 · 규칙서 · 목록 빼고). 검색이 죽어도 엔티티 길로 |
+| 읽기 | 문서 `MAX_PAGES` 5 · 문서마다 블록 `MAX_BLOCKS` 12 · 블록 600자를 번호 붙은 근거로 — 코드가 짓는 절(원천 목록 등)은 빼고 관계(자동)는 둔다. 근거마다 볼 수 있는 원천(각주) |
+| 원천 발췌 | 근거가 기댄 원천 앞에서 `MAX_SOURCES` 3 개의 요약 · 본문 800자(숫자 확인용) |
+| 답 | `llm.interactive()`(`WIKI_QUERY_LLM_*`, 비면 배경) · `stream_text` — 근거는 `<<<위키 근거 … >>>` 구획(데이터다), 문장마다 `[n]`. 앞 대화는 6 턴까지 |
+| MISS | 첫 줄이 `위키에 아직 없다` 면 `miss` — 화면은 질문으로 남길지 묻고, `file_question`(MCP `wiki_ask`)이면 물은 사람만 보는 질문(`query_miss`)을 바로 남긴다. 근거가 하나도 없으면 LLM 을 부르지 않고 MISS |
+| LLM 없음 | 답을 짓지 않는다 — '설정되지 않았다' 토큰 + 찾은 문서(`done.llm = unset`). 스트림 중 오류는 `error` + `done` |
+| 기록 | `query`(제목 = 물음 · 범위 = 물은 사람만 — 질문자 비공개 Q9) — 문서 · 근거 수 · 쓴 각주 · 쓴 양 |
+
+창구는 읽는 사람 문맥을 잡아 두고 제 세션으로 흘린다(스트림이 의존성 세션보다 오래 산다). 시험 [[apps/api/tests/test_wiki_query.py]].
 
 ## Resolution
 
