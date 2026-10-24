@@ -42,8 +42,10 @@
 - 게이트웨이 경유 MXWP 호출이 서비스 계정(`admin@mx.local`)인 것은 dev 감사 원장으로 확인했다(MXWP 호출에 사람 명의 모드가 없다).
 - 게이트웨이는 위임 백엔드 호출에 이미 `X-Heax-User-Affiliation` + `X-Heax-Aff-Proof`(`v1|<email>|<소속>|<exp>` HMAC-SHA256, 앱별 위임 비밀)를 싣는다
   (`HWAXMcpGateway/gateway.py` `_aff_proof`). 플랫폼 권한(`plat:`)을 싣는 헤더는 아직 없다 → 포털 쪽 P4.
-- 포털 진입 토큰 클레임은 `iss` · `sub` · `aud` · `email` · `name` · `groups`(AD 그룹) · `scope` · `iat` · `nbf` · `exp` · `jti` 다
-  (`HWAXPortal/backend/app/auth/downstream.py`). 소속 · 플랫폼 권한은 없다 → 포털 쪽 P3.
+- 포털 진입 토큰 클레임은 `iss` · `sub` · `aud` · `email` · `name` · `groups` · `scope` · `iat` · `nbf` · `exp` · `jti` 다
+  (`HWAXPortal/backend/app/auth/downstream.py`). `groups` 에는 AD 그룹과 함께 포털이 그 순간 원장으로 센 `feat:` · `plat:` 합성 그룹이
+  원래 실린다(`deps.entitled`) — 처음엔 '플랫폼 권한이 없다' 로 잘못 읽었다. 없던 것은 소속뿐이라 포털이 `affiliation` 클레임을 MXWP
+  진입 토큰에만 더했다(10-24, CONTRACTS §9).
 - 대화 저장소는 주인만 읽고, 심의 잡은 주인 · 같은 소속 · 관리자 · 신원 없는 서비스 호출이 읽는다(`HWAXAgentServer/delib_jobs.py`). 띵킹은 요약만 남는다.
 
 ## 열린 결정 — request §11 Q1~Q12(사람)
