@@ -2,7 +2,8 @@
 /**
  * request §5-5. 검토자(표지 `wiki_reviewer` · admin)만 본다 — 아니면 서버가 403. 승인은 검토 대기만, 검증 실패가 있으면 서버가 409.
  * 거절에는 까닭 한 줄이 꼭 있어야 한다. 계획 밖 문서의 연산은 승인해도 반영되지 않는다(서버가 계획의 문서만 반영한다).
- * 관계(W5)는 문서 카드 아래 따로 — 코드가 단 것 · AI 가 낸 것, 끝이 후보 밖이라 버린 것.
+ * 관계(W5)는 문서 카드 아래 따로 — 코드가 단 것 · AI 가 낸 것, 끝이 후보 밖이라 버린 것. 합치기 묶음은 두 엔티티의 제안 때 모습 ·
+ * (반영했으면) 다시 이은 문서 · 다시 들일 원천.
  */
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -138,6 +139,42 @@ function RelationsCard({ cs }: { cs: WikiChange }) {
   )
 }
 
+function MergesCard({ cs }: { cs: WikiChange }) {
+  const rows = cs.merges ?? []
+  if (rows.length === 0) return null
+  return (
+    <Card padded="lg" className="mb-4" data-testid="wiki-change-merges">
+      <h2 className="mb-2 text-sm font-semibold text-smsg-900 dark:text-gray-100">합치기</h2>
+      {rows.map((m) => (
+        <div key={m.from.id} className="space-y-2 text-sm">
+          <p className="flex flex-wrap items-center gap-1.5">
+            <Badge tone="muted">{m.from.type_key}</Badge>
+            <Link to={`/wiki/entities/${m.from.id}`} className="hover:underline">{m.from.name}</Link>
+            <span className="text-gray-400" aria-hidden>→</span>
+            <Link to={`/wiki/entities/${m.into.id}`} className="font-medium hover:underline">{m.into.name}</Link>
+            <span className="text-xs text-gray-600 dark:text-gray-400">— {m.why}</span>
+          </p>
+          <div className="grid gap-2 md:grid-cols-2">
+            {([['없어질 쪽', m.from], ['남을 쪽', m.into]] as const).map(([label, side]) => (
+              <div key={side.id} className="rounded border border-gray-200 p-2 text-xs text-gray-700 dark:border-gray-700 dark:text-gray-300">
+                <p className="mb-0.5 text-[11px] text-gray-500">{label} · {side.audience.join(', ')}</p>
+                <p>별칭 {side.aliases.join(', ') || '—'}</p>
+                <p className="font-mono">외부 id {Object.entries(side.ext_ids).map(([k, v]) => `${k}=${v}`).join(' · ') || '—'}</p>
+              </div>
+            ))}
+          </div>
+          {m.applied && (
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              다시 이은 문서 {m.applied.pages.map((p) => `${p.slug}${p.stale ? '(낡음 — 같은 범위 문서가 있다)' : ''}`).join(', ') || '없음'}
+              {m.applied.reingest.length > 0 && ` · 다시 들일 원천 ${m.applied.reingest.length}`}
+            </p>
+          )}
+        </div>
+      ))}
+    </Card>
+  )
+}
+
 export function WikiChangePage() {
   const { id = '' } = useParams<{ id: string }>()
   const qc = useQueryClient()
@@ -163,7 +200,8 @@ export function WikiChangePage() {
     <WikiShell
       title={`변경 묶음 ${cs.short}`}
       testId="wiki-change"
-      subtitle={`${cs.op} · 원천 ${cs.source.short ?? '—'} · 규칙서 v${cs.schema_version} · ${cs.model ?? ''} · ${kst(cs.created_at)} KST`}
+      subtitle={[cs.op, `원천 ${cs.source.short ?? '—'}`, `규칙서 v${cs.schema_version}`, cs.model, `${kst(cs.created_at)} KST`]
+        .filter(Boolean).join(' · ')}
     >
       <Card padded="lg" className="mb-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -205,6 +243,7 @@ export function WikiChangePage() {
       ))}
 
       <RelationsCard cs={cs} />
+      <MergesCard cs={cs} />
 
       {(cs.status === 'pending_review' || cs.status === 'failed' || cs.status === 'applied' || cs.status === 'auto_applied') && (
         <Card padded="lg" data-testid="wiki-change-actions">

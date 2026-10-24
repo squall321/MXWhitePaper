@@ -89,6 +89,45 @@ const W = {
   srcA: '11111111-1111-4111-8111-111111111111',
   srcB: '22222222-2222-4222-8222-222222222222',
   cs: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  csMerge: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  e1: 'e1e1e1e1-0000-4000-8000-000000000001',
+  e2: 'e2e2e2e2-0000-4000-8000-000000000002',
+  e3: 'e3e3e3e3-0000-4000-8000-000000000003',
+}
+// W5 — 온톨로지 · 등록부 · 합치기 고정 응답(지어낸 값)
+const AT = '2026-10-24T06:00:00+00:00'
+const ENT = (id: string, type_key: string, type_label: string, name: string, extra: Record<string, unknown> = {}) => ({
+  id, type_key, type_label, name, status: 'active', merged_into: null, created_at: AT, updated_at: AT, full: true, attrs: {},
+  aliases: [], ext_ids: {}, pages: [{ slug: `ent-${id.slice(0, 4)}`, title: name, audience: ['org'], stale_since: null }], ...extra })
+const ENTITIES = [
+  ENT(W.e1, 'part', '부품', '힌지 브래킷', { aliases: ['HB 브래킷'], ext_ids: { bom_code: 'SYN-BOM-HB01' }, merged_from: [],
+    pages: [{ slug: 'ent-part-syn-bom-hb01', title: '힌지 브래킷', audience: ['org'], stale_since: null },
+      { slug: 'ent-part-syn-bom-hb01--syn-cae1', title: '힌지 브래킷 (aff:SYN-CAE1)', audience: ['aff:SYN-CAE1'], stale_since: AT }] }),
+  ENT(W.e2, 'part', '부품', '힌지브래킷'),
+  ENT(W.e3, 'failure-mode', '불량 유형', '힌지 브래킷 균열'),
+]
+const ONTOLOGY = {
+  types: [
+    { key: 'part', label_ko: '부품', label_en: 'part', parent_key: null, abbr: 'part', description: null, status: 'approved',
+      ext_axes: { ra: '축 part · bom · 레코드 cae_part', other: 'StepForge 부품 역할 16(attrs.part_role)', ext_ids: ['bom_code', 'ra_entity'] },
+      decided_at: null, decision_note: null, created_at: AT, entities: 2 },
+    { key: 'failure-mode', label_ko: '불량 유형', label_en: 'failure mode', parent_key: null, abbr: 'fm', description: null,
+      status: 'approved', ext_axes: { ra: '축 defect · 레코드 failure_mode', ext_ids: ['ra_entity', 'fmea_item'] },
+      decided_at: null, decision_note: null, created_at: AT, entities: 1 },
+    { key: 'jig', label_ko: '지그', label_en: null, parent_key: null, abbr: 'jig', description: null, status: 'proposed', ext_axes: {},
+      decided_at: null, decision_note: null, created_at: AT, entities: 0 },
+  ],
+  predicates: [
+    { key: 'part-of', label_ko: '의 일부다', inverse_ko: '를 포함한다', domain_types: ['part'], range_types: ['part', 'product-model'],
+      symmetric: false, description: null, status: 'approved', decided_at: null, decision_note: null, created_at: AT },
+    { key: 'correlates-with', label_ko: '와 맞대 본 결과가 있다', inverse_ko: '와 맞대 본 결과가 있다', domain_types: ['sim-case', 'field-case'],
+      range_types: ['sim-case', 'field-case'], symmetric: true, description: null, status: 'approved', decided_at: null,
+      decision_note: null, created_at: AT },
+    { key: 'made-of', label_ko: '로 만든다', inverse_ko: '로 만든 것이다', domain_types: ['part'], range_types: ['material'],
+      symmetric: false, description: null, status: 'proposed', decided_at: null, decision_note: null, created_at: AT },
+    { key: 'breaks', label_ko: '를 깨뜨린다', inverse_ko: '에 의해 깨진다', domain_types: [], range_types: [], symmetric: false,
+      description: null, status: 'rejected', decided_at: AT, decision_note: 'caused-by 와 겹친다', created_at: AT },
+  ],
 }
 const WIKI_SOURCES = [
   { source_id: W.srcA, short: 'src_11111111', kind: 'sim_result', title: '가상폴드 A1 전각도 낙하 1.5 m — 힌지 브래킷 최대 응력',
@@ -144,6 +183,27 @@ async function mockWiki(page: import('@playwright/test').Page): Promise<void> {
         cites: [{ short: 'src_11111111', title: WIKI_SOURCES[0].title }] }],
     relations_dropped: [],
   })))
+  await page.route('**/api/v1/wiki/ontology', (r) => r.fulfill(ok(ONTOLOGY)))
+  await page.route('**/api/v1/wiki/entities?*', (r) => {
+    const type = new URL(r.request().url()).searchParams.get('type')
+    const rows = ENTITIES.filter((e) => !type || e.type_key === type)
+    return r.fulfill(ok(rows, { total: rows.length }))
+  })
+  await page.route('**/api/v1/wiki/entities/duplicates', (r) => r.fulfill(ok([
+    { type_key: 'part', why: 'name', a: { id: W.e1, name: '힌지 브래킷', audience: ['org'] }, b: { id: W.e2, name: '힌지브래킷', audience: ['org'] } },
+  ])))
+  await page.route(`**/api/v1/wiki/entities/${W.e1}`, (r) => r.fulfill(ok(ENTITIES[0])))
+  await page.route(`**/api/v1/wiki/changes/${W.csMerge}`, (r) => r.fulfill(ok({
+    id: W.csMerge, short: 'cs_cccccccc', op: 'human_request', status: 'pending_review', created_at: AT, schema_version: 0, model: null,
+    summary: '엔티티 합치기 — 힌지브래킷 → 힌지 브래킷', questions: [], contradictions: [], source: { id: null, short: null },
+    audience: ['org'], usage: {}, error: null, decision: { by: null, at: null, note: null }, docs: [], relations: [], relations_dropped: [],
+    validation: ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11'].map((rule) => ({
+      rule, verdict: rule === 'V6' ? 'review' : 'pass', detail: rule === 'V6' ? '합치기는 늘 검토' : '' })),
+    merges: [{ why: '띄어쓰기만 다르다', applied: null,
+      from: { id: W.e2, type_key: 'part', name: '힌지브래킷', aliases: ['HB01'], ext_ids: {}, audience: ['org'], status: 'active' },
+      into: { id: W.e1, type_key: 'part', name: '힌지 브래킷', aliases: ['HB 브래킷'], ext_ids: { bom_code: 'SYN-BOM-HB01' },
+        audience: ['org'], status: 'active' } }],
+  })))
   await page.route(`**/api/v1/wiki/sources/${W.srcA}`, (r) => r.fulfill(ok({
     id: W.srcA, short: 'src_11111111', kind: 'sim_result', title: WIKI_SOURCES[0].title,
     origin: { system: 'stcx', ref: 'SYN-JOB-0002', rev: '1', url: '/apps/smarttwin/jobs/SYN-JOB-0002' }, summary: null,
@@ -187,6 +247,10 @@ test.describe('visual: AI 위키 (light · dark)', () => {
     ['home', '/wiki', 'wiki-home'],
     ['change', `/wiki/changes/${W.cs}`, 'wiki-change'],
     ['source', `/wiki/sources/${W.srcA}`, 'wiki-source'],
+    ['ontology', '/wiki/ontology', 'wiki-ontology'],
+    ['entities', '/wiki/entities', 'wiki-entities'],
+    ['entity', `/wiki/entities/${W.e1}`, 'wiki-entity'],
+    ['merge', `/wiki/changes/${W.csMerge}`, 'wiki-change'],
   ] as const) {
     test(`renders the wiki ${name} page consistently in light and dark`, async ({ page }) => {
       // 창을 세로로 넉넉히 — 긴 화면을 찍으려 스크롤하면 위에 붙는 상단 내비(dev 의 알림 수가 든)가 덮는다.

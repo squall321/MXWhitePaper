@@ -1,4 +1,4 @@
-// AI 위키 API — 목록 · 기록 · 원천 · 검토 큐 · 위키 문서 정보(배지 · 근거) · 켜짐 여부(docs/llm-wiki W4)
+// AI 위키 API — 목록 · 기록 · 원천 · 검토 큐 · 위키 문서 정보(배지 · 근거) · 켜짐 여부(W4) · 온톨로지 · 엔티티 등록부 · 합치기(W5)
 /**
  * `apps/api/app/routers/wiki.py`(`/api/v1/wiki/*`)와 1:1. 위키가 꺼져 있으면 모두 404(`wiki_disabled`) — `useWikiEnabled` 가
  * 인증 없는 `/wiki/health` 로 본다. 범위 밖 원천 · 문서 · 묶음은 서버가 404 로 감춘다.
@@ -147,6 +147,25 @@ export interface WikiChangeRelation {
   cites: { short: string; title: string }[]
 }
 
+/** 합치기 한쪽 — 제안 때의 모습(계획에 남은 것). */
+export interface WikiMergeSide {
+  id: string
+  type_key: string
+  name: string
+  aliases: string[]
+  ext_ids: Record<string, string>
+  audience: string[]
+  status: string
+}
+
+export interface WikiChangeMerge {
+  from: WikiMergeSide
+  into: WikiMergeSide
+  why: string
+  /** 반영했으면 — 다시 이은 문서(같은 범위에 문서가 이미 있으면 낡음) · 다시 들일 원천. */
+  applied: { pages: { doc_id: string; slug: string; stale: boolean }[]; reingest: string[] } | null
+}
+
 export interface WikiChange {
   id: string
   short: string
@@ -166,6 +185,70 @@ export interface WikiChange {
   docs: WikiChangeDoc[]
   relations?: WikiChangeRelation[]
   relations_dropped?: { subject: string; predicate: string; object: string; why: string }[]
+  merges?: WikiChangeMerge[]
+}
+
+export type OntologyStatus = 'approved' | 'proposed' | 'rejected'
+
+export interface WikiEntityType {
+  key: string
+  label_ko: string
+  label_en: string | null
+  parent_key: string | null
+  abbr: string
+  description: string | null
+  ext_axes: { ra?: string; sp?: string; other?: string; ext_ids?: string[] }
+  status: OntologyStatus
+  decided_at: string | null
+  decision_note: string | null
+  created_at: string | null
+  entities: number
+}
+
+export interface WikiPredicate {
+  key: string
+  label_ko: string
+  inverse_ko: string
+  domain_types: string[]
+  range_types: string[]
+  symmetric: boolean
+  description: string | null
+  status: OntologyStatus
+  decided_at: string | null
+  decision_note: string | null
+  created_at: string | null
+}
+
+export interface WikiEntityPage {
+  slug: string
+  title: string
+  audience: string[]
+  stale_since: string | null
+}
+
+/** `full` 이 아니면(엔티티를 만든 범위의 토큰이 없으면) 별칭 · 외부 id · 속성은 비어 온다. */
+export interface WikiEntity {
+  id: string
+  type_key: string
+  type_label: string
+  name: string
+  status: 'active' | 'merged' | 'retired'
+  merged_into: string | null
+  created_at: string
+  updated_at: string
+  full: boolean
+  pages: WikiEntityPage[]
+  aliases: string[]
+  ext_ids: Record<string, string>
+  attrs: Record<string, unknown>
+  merged_from?: { id: string; name: string }[]
+}
+
+export interface WikiDuplicate {
+  type_key: string
+  why: string
+  a: { id: string; name: string; audience: string[] }
+  b: { id: string; name: string; audience: string[] }
 }
 
 export async function getWikiHealth(): Promise<unknown> {
@@ -221,6 +304,55 @@ export async function decideWikiChange(
   return unwrap(await apiClient.post<ApiEnvelope<{ status: string }>>(
     `/wiki/changes/${encodeURIComponent(id)}/${action}`,
     body,
+  ))
+}
+
+export async function getWikiOntology(): Promise<{ types: WikiEntityType[]; predicates: WikiPredicate[] }> {
+  return unwrap(await apiClient.get<ApiEnvelope<{ types: WikiEntityType[]; predicates: WikiPredicate[] }>>('/wiki/ontology'))
+}
+
+export async function proposeWikiType(body: { key: string; label_ko: string; abbr: string; description?: string }): Promise<WikiEntityType> {
+  return unwrap(await apiClient.post<ApiEnvelope<WikiEntityType>>('/wiki/ontology/types', body))
+}
+
+export async function proposeWikiPredicate(body: {
+  key: string; label_ko: string; inverse_ko: string; domain_types: string[]; range_types: string[]; symmetric: boolean
+}): Promise<WikiPredicate> {
+  return unwrap(await apiClient.post<ApiEnvelope<WikiPredicate>>('/wiki/ontology/predicates', body))
+}
+
+export async function decideWikiOntology(
+  kind: 'types' | 'predicates', key: string, action: 'approve' | 'reject', note?: string,
+): Promise<{ status: OntologyStatus }> {
+  return unwrap(await apiClient.post<ApiEnvelope<{ status: OntologyStatus }>>(
+    `/wiki/ontology/${kind}/${encodeURIComponent(key)}/${action}`, { note: note || null },
+  ))
+}
+
+export async function listWikiEntities(params: { type?: string; q?: string; status?: string; limit?: number }):
+Promise<{ rows: WikiEntity[]; total: number }> {
+  const res = await apiClient.get<ApiEnvelope<WikiEntity[]>>('/wiki/entities', {
+    params: { type: params.type || undefined, q: params.q || undefined, status: params.status || undefined,
+      limit: params.limit ?? 100 },
+  })
+  return { rows: unwrap(res) ?? [], total: Number(res.data.meta?.total ?? 0) }
+}
+
+export async function getWikiEntity(id: string): Promise<WikiEntity> {
+  return unwrap(await apiClient.get<ApiEnvelope<WikiEntity>>(`/wiki/entities/${encodeURIComponent(id)}`))
+}
+
+export async function patchWikiEntity(id: string, body: { aliases?: string[]; ext_ids?: Record<string, string> }): Promise<WikiEntity> {
+  return unwrap(await apiClient.patch<ApiEnvelope<WikiEntity>>(`/wiki/entities/${encodeURIComponent(id)}`, body))
+}
+
+export async function getWikiDuplicates(): Promise<WikiDuplicate[]> {
+  return unwrap(await apiClient.get<ApiEnvelope<WikiDuplicate[]>>('/wiki/entities/duplicates')) ?? []
+}
+
+export async function proposeWikiMerge(fromId: string, intoId: string, note?: string): Promise<{ id: string; short: string; status: string }> {
+  return unwrap(await apiClient.post<ApiEnvelope<{ id: string; short: string; status: string }>>(
+    '/wiki/entities/merge', { from_id: fromId, into_id: intoId, note: note || null },
   ))
 }
 

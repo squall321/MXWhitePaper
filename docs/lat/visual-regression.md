@@ -26,8 +26,8 @@ import) 로 검증 불가 → 실 브라우저 렌더 + baseline diff 가 유일
 ```
 apps/web/
 ├── tests/e2e/
-│   ├── visual-darkmode.spec.ts                                    # 다크모드 light + dark 2 케이스 + 소속→팀 관리자 화면 2 + AI 위키 4
-│   ├── visual-darkmode.spec.ts-snapshots/                         # baseline PNG(문서 2 · 소속→팀 2 · AI 위키 12)
+│   ├── visual-darkmode.spec.ts                                    # 다크모드 light + dark 2 케이스 + 소속→팀 관리자 화면 2 + AI 위키 8
+│   ├── visual-darkmode.spec.ts-snapshots/                         # baseline PNG(문서 2 · 소속→팀 2 · AI 위키 20)
 │   ├── visual-presentation.spec.ts                                # presentation 4 슬라이드 (NEW: presentation-layout cycle)
 │   └── visual-presentation.spec.ts-snapshots/                     # baseline 4 PNG
 └── playwright.config.ts                                            # 변경 없음 — testDir './tests/e2e' 그대로
@@ -99,6 +99,8 @@ CI 통합 시에는 별도 playwright 이미지 (`mcr.microsoft.com/playwright`)
   같은 길로 바꾸고 기준 그림을 다시 떠야 한다(아직 안 했다).
 - **dev 의 :5173 은 포털 접두판 dist 다**(base `/mx-white-paper/`, `serve -s`) — 루트로 `page.goto('/…')` 하는 이 스펙은 그대로는 거기서
   못 돈다. 새 화면 케이스(`aff-team-map-*`)의 기준 그림은 접두 없는 vite dev(:5174, 같은 API)에서 떴다.
+- **`--update-snapshots` 는 차이가 허용 오차(`maxDiffPixelRatio` 0.02) 안이면 그림을 다시 쓰지 않는다**(기본 `changed`). 입력칸 하나의
+  색처럼 작게 고친 화면은 `--update-snapshots=all` 로 떠야 기준 그림에 남는다(10-24 — 어두운 입력칸이 흰 채로 남을 뻔했다).
 - **로그인 속도 제한** — 확인 · 기준 갱신을 잇달아 돌리면 `/auth/login` 이 '너무 많은 시도' 로 막혀 `loginAsAdmin` 이 시간 초과로 깨진다
   (그림 차이가 아니다). 1분쯤 쉬고 다시.
 - **AI 위키 케이스(docs/llm-wiki W4)는 위키 API 를 `page.route` 로 고정한다** — dev 는 위키가 꺼져 있고(`WIKI_ENABLED`), 고정 응답이라
