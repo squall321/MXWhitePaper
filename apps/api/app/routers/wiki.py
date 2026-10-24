@@ -25,6 +25,7 @@ from app.wiki import (
     audience,
     catalog,
     entities,
+    fileback,
     jobs,
     ontology,
     query,
@@ -366,6 +367,15 @@ async def post_query(body: _QueryBody, user: dict[str, Any] = Depends(require_re
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
+
+
+@router.post("/fileback")
+async def post_fileback(
+    body: fileback.FilebackBody, user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """묻기의 답을 qa 원천으로 남기고 들인다 — 201(새것) · 200(같은 사람 · 물음 · 답이 이미 있다)."""
+    out = await fileback.fileback(s, body, user=user)
+    return JSONResponse(status_code=200 if out["dedup"] else 201, content=envelope(data=out))
 
 
 @router.get("/questions")

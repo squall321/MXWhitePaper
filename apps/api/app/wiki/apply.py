@@ -94,6 +94,11 @@ def _source_items(rows: dict[str, dict[str, Any]]) -> list[str]:
             for _, r in sorted(rows.items(), key=lambda kv: kv[1]["title"])]
 
 
+def _questions(rows: dict[str, dict[str, Any]]) -> list[str]:
+    """문답 문서의 '비슷한 질문(자동)' — 이 문서가 인용한 문답 원천의 물음(제목). 질문자는 싣지 않는다(Q9)."""
+    return sorted({r["title"] for r in rows.values() if r["kind"] == "qa"})
+
+
 async def _page_source_ids(s: AsyncSession, doc_id: str | None) -> set[str]:
     if doc_id is None:
         return set()
@@ -293,6 +298,7 @@ async def apply(s: AsyncSession, cs_id: str, *, status: str) -> dict[str, list[i
                     owners=[author_email], division=division), doc_ops)
                 pages.set_auto_list(content, "원천", _source_items(cited), empty="아직 원천이 없다.")
                 pages.set_auto_list(content, "관계", await relation_items(s, slug, titles), empty="아직 관계가 없다.")
+                pages.set_auto_list(content, "비슷한 질문", _questions(cited), empty="아직 없다.")
                 with audience.acting_as(audience.SYSTEM):
                     doc, _ = await document_service.create_document(
                         s, payload=content, owner_id=author_id,
@@ -314,6 +320,7 @@ async def apply(s: AsyncSession, cs_id: str, *, status: str) -> dict[str, list[i
                 cited.update(await _source_rows(s, sorted(await _page_source_ids(s, cur["id"]))))
                 pages.set_auto_list(content, "원천", _source_items(cited), empty="아직 원천이 없다.")
                 pages.set_auto_list(content, "관계", await relation_items(s, slug, titles), empty="아직 관계가 없다.")
+                pages.set_auto_list(content, "비슷한 질문", _questions(cited), empty="아직 없다.")
                 with audience.acting_as(audience.SYSTEM):
                     try:
                         doc, _ = await document_service.replace_document(

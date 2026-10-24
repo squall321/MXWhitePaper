@@ -1130,6 +1130,100 @@
         "title": "ExtractRequest",
         "type": "object"
       },
+      "FilebackBody": {
+        "properties": {
+          "answer": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Answer",
+            "type": "string"
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "비면 근거의 좁은 토큰을 합친 것",
+            "title": "Audience"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/FilebackCite"
+            },
+            "maxItems": 30,
+            "title": "Citations",
+            "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "outcome": {
+            "default": "solved",
+            "enum": [
+              "solved",
+              "partial",
+              "unknown"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "question": {
+            "maxLength": 2000,
+            "minLength": 2,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question",
+          "answer"
+        ],
+        "title": "FilebackBody",
+        "type": "object"
+      },
+      "FilebackCite": {
+        "properties": {
+          "block_id": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Id"
+          },
+          "slug": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug"
+        ],
+        "title": "FilebackCite",
+        "type": "object"
+      },
       "ForgotPasswordIn": {
         "properties": {
           "email": {
@@ -20173,6 +20267,46 @@
           }
         },
         "summary": "Patch Entity",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/fileback": {
+      "post": {
+        "description": "묻기의 답을 qa 원천으로 남기고 들인다 — 201(새것) · 200(같은 사람 · 물음 · 답이 이미 있다).",
+        "operationId": "post_fileback_api_v1_wiki_fileback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilebackBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Fileback",
         "tags": [
           "wiki"
         ]

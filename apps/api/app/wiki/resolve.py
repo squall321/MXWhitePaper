@@ -11,6 +11,8 @@
   처음 만들 때 `attrs.slug` 에 적어 두고 다시 짓지 않는다.
 - 사례 문서 — 해석 결과는 `case-sim-<원천 짧은 id>`, 시장불량 사례(case)는 `case-field-<원천 짧은 id>`.
 - 찾은 엔티티는 그 범위의 문서가 이미 있으면 그 slug 를 쓴다(합치기로 옮겨 온 문서는 slug 가 다르다 — 낡음 표시 없는 것 · 오래된 것 먼저).
+- 문답 원천(qa — W6)은 문답 문서가 먼저 — 같은 범위에 물음 열쇠(`question_key`)가 같은 문서가 있으면 그것 하나, 아니면 비슷한 문답
+  문서(제목 Dice ≥ `QA_SIMILAR` · 둘까지) + 새 문서 `qa-<열쇠 해시 8>`. 계획이 고른다(같은 물음의 묶음 — SCHEMA-DRAFT §2 `qa`).
 """
 from __future__ import annotations
 
@@ -29,6 +31,8 @@ _PUNCT = re.compile(r"[\s\-_.·/()\[\]]+")
 CANDIDATE_MIN = 0.4  # 글자쌍 Dice — 이보다 낮으면 후보가 아니다
 CANDIDATE_MAX = 5
 SMALL_REGISTRY = 12  # 비슷한 후보가 없을 때 이만큼 이하인 유형은 전부를 후보로(한글 · 영문처럼 글자쌍이 안 겹치는 이름)
+QA_SIMILAR = 0.5
+_MARKS = re.compile(r"[?？!！.。,，~…]+")
 
 
 @dataclass
@@ -80,6 +84,11 @@ def normalize(name: str) -> str:
 def strong_key(name: str) -> str:
     """중복 · 해석의 열쇠 — NFKC · casefold · 공백과 흔한 구두점(-_.·/()[]) 없앰."""
     return _PUNCT.sub("", unicodedata.normalize("NFKC", name)).casefold()
+
+
+def question_key(question: str) -> str:
+    """물음의 열쇠 — `strong_key` 에 문장 부호(?!.,~…)까지 뺀다. 질문 대기열 · 문답 문서가 같이 쓴다."""
+    return _MARKS.sub("", strong_key(question))
 
 
 def similarity(a: str, b: str) -> float:
@@ -230,6 +239,28 @@ async def _target(s: AsyncSession, slug: str, *, kind: str, type_key: str, title
     return t
 
 
+async def _qa_targets(s: AsyncSession, src: dict[str, Any], audience: list[str]) -> list[Target]:
+    question = str((src.get("payload") or {}).get("question") or src.get("title") or "").strip()
+    if not question:
+        return []
+    key = question_key(question)
+    rows = (await s.execute(text("""
+        SELECT d.slug, d.title FROM wiki_pages wp JOIN documents d ON d.id = wp.doc_id
+         WHERE wp.kind = 'qa' AND wp.audience = CAST(:a AS text[]) AND d.status <> 'archived'
+    """), {"a": audience})).all()
+    same = [slug for slug, title in rows if question_key(title) == key]
+    near = [slug for score, slug in sorted(((similarity(question, title), slug) for slug, title in rows if slug not in same),
+                                           reverse=True) if score >= QA_SIMILAR][:2]
+    picks = same[:1] or near
+    out = [await _target(s, slug, kind="qa", type_key="qa", title=question, audience=audience, entity_id=None, entity=None,
+                         label="문답") for slug in picks]
+    if not same:
+        new = f"qa-{hashlib.sha256(key.encode('utf-8')).hexdigest()[:8]}"
+        out.append(await _target(s, new, kind="qa", type_key="qa", title=question, audience=audience, entity_id=None,
+                                 entity=None, label="문답"))
+    return out
+
+
 async def targets(s: AsyncSession, src: dict[str, Any], resolutions: list[Resolution] | None = None) -> list[Target]:
     """원천 하나가 고칠 수 있는 문서들 — 사례 문서(해당하면) · 힌트마다 엔티티 문서. 같은 slug 는 한 번.
 
@@ -247,6 +278,8 @@ async def targets(s: AsyncSession, src: dict[str, Any], resolutions: list[Resolu
     elif src["kind"] == "field_defect" and body.get("form") == "case" and "field-case" in types:
         out.append(await _target(s, f"case-field-{short}", kind="case", type_key="field-case", title=src["title"],
                                  audience=audience, entity_id=None, entity=None, label=types["field-case"][1]))
+    elif src["kind"] == "qa":
+        out.extend(await _qa_targets(s, src, audience))
     for res in resolutions if resolutions is not None else await resolve_hints(s, src):
         type_key, name, ext, found = res.type_key, res.name, res.ext, res.entity
         if type_key not in types:

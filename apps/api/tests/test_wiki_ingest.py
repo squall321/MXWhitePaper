@@ -213,7 +213,7 @@ async def test_mixed_scope_is_caught(wiki: dict[str, Any]) -> None:
 
 
 async def test_locked_block_goes_to_review(wiki: dict[str, Any]) -> None:
-    first = await _receive(wiki["admin"], "17")  # org 문답 — 부품 문서를 새로 만든다
+    first = await _receive(wiki["admin"], "20")  # org 정정 — 부품 문서를 새로 만든다(문답 원천의 첫 후보는 문답 문서 — W6)
     await _drain()
     slug = (await _change(first))["plan"]["pages"][0]["slug"]
     async with session_scope() as s:
@@ -223,7 +223,7 @@ async def test_locked_block_goes_to_review(wiki: dict[str, Any]) -> None:
         await document_service.replace_document(s, slug=slug, payload=content, actor_id=wiki["admin"]["id"],
                                                 if_match=document_service.make_etag(doc["id"], doc["version"]))
     wiki["llm"].load("ingest-locked-block.json")
-    second = await _receive(wiki["admin"], "20")  # org 정정 — 같은 부품
+    second = await _receive(wiki["admin"], "20", origin={**_env("20")["origin"], "ref": f"w4-{RUN}-again"})  # 같은 부품
     await _drain()
     cs = await _change(second)
     assert cs["plan"]["pages"][0]["slug"] == slug
@@ -415,7 +415,7 @@ async def test_wrong_relations_fail_v7(wiki: dict[str, Any]) -> None:
 
 
 async def test_relation_to_existing_page_refreshes_it(wiki: dict[str, Any]) -> None:
-    first = await _receive(wiki["admin"], "17")  # org 문답 — 부품 문서를 만든다
+    first = await _receive(wiki["admin"], "20")  # org 정정 — 부품 문서를 만든다
     await _drain()
     part = (await _change(first))["plan"]["pages"][0]["slug"]
     async with session_scope() as s:
@@ -442,11 +442,11 @@ async def test_relation_to_existing_page_refreshes_it(wiki: dict[str, Any]) -> N
 # ── 엔티티 후보 고르기(W5) ────────────────────────────────────────────────────────────────────
 
 async def _typo_after_part(wiki: dict[str, Any]) -> tuple[str, str]:
-    first = await _receive(wiki["admin"], "17")  # org 문답 — 부품 '힌지 브래킷 <RUN>' 과 그 문서를 만든다
+    first = await _receive(wiki["admin"], "20")  # org 정정 — 부품 '힌지 브래킷 <RUN>' 과 그 문서를 만든다
     await _drain()
     part = (await _change(first))["plan"]["pages"][0]["slug"]
     typo = {"type": "part", "name": f"힌지 브라켓 {RUN}"}  # 오타 · 외부 id 없음 — 결정적으로는 못 찾는다
-    return part, await _receive(wiki["admin"], "14", ingest=False, subject_hints=[typo])
+    return part, await _receive(wiki["admin"], "19", ingest=False, subject_hints=[typo])  # org 심의 — 첫 후보가 그 부품
 
 
 async def test_llm_picks_a_candidate(wiki: dict[str, Any]) -> None:

@@ -18,7 +18,7 @@
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
 | W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
 | W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지 · 엔티티 등록부(보이기 · 별칭 · 외부 id · 중복 후보 · 합치기 — 늘 검토 · 되돌리기). 엔티티 후보 해석(열쇠 · 후보 · `wiki_resolve`) · 정답표 초안 · 평가 스크립트. 화면(온톨로지 · 엔티티 목록 · 한 건 · 합치기 카드). 남은 것 — 사람의 정답표 확인 · LLM 을 낀 정확도(진짜 LLM 이 있는 박스) | [[#Ontology]] · [[#Relations]] · [[#Entities]] · [[#Resolution]] |
-| W6 묻기 · 되쌓기 · MCP | 묻기(`/query` SSE · 근거 각주 · MISS) · 질문 대기열(0057 · `/questions`). 남은 것 — 되쌓기 · 문답 문서 · 후보 · `wiki_propose` · MCP · 챗 위키 모드 | [[#Query]] |
+| W6 묻기 · 되쌓기 · MCP | 묻기(`/query` SSE · 근거 각주 · MISS) · 질문 대기열(0057 · `/questions`) · 되쌓기(`/fileback` → qa 원천 → 문답 문서 · 비슷한 물음은 같은 문서에). 남은 것 — 후보 · `wiki_propose` · MCP · 챗 위키 모드 | [[#Query]] · [[#Fileback]] |
 | W7 점검 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -55,6 +55,7 @@
 | 목록(index · index.md) | [[src/app/wiki/catalog.py#build]] | W4 |
 | 묻기(근거 모으기 · 스트리밍 답 · 각주 · MISS) | [[src/app/wiki/query.py#run]] | W6 |
 | 질문 대기열 | [[src/app/wiki/questions.py#add]] · 표 `wiki_questions`(0057) | W6 |
+| 되쌓기(묻기의 답 → qa 원천) | [[src/app/wiki/fileback.py#fileback]] | W6 |
 | 규칙서 문서 올리기 | [[src/app/wiki/schema_doc.py#put]] | W4 |
 | 화면(apps/web) | [[src/features/wiki/api.ts]] · [[src/features/wiki/WikiCitations.tsx]] · `pages/Wiki{Home,Source,Changes,Log}.tsx` | W4 |
 | REST | [[src/app/routers/wiki.py]](`/api/v1/wiki/*`) | W3~ |
@@ -124,7 +125,7 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 
 | 무엇 | 어떻게 |
 | --- | --- |
-| 범위 | 보낸 사람이 토큰을 모두 가져야 한다(admin · 시스템은 다). `["org"]` 는 admin 만. 위임 호출은 admin 이 owner 로 깎여 늘 일반 규칙 |
+| 범위 | 보낸 사람이 토큰을 모두 가져야 한다(admin · 시스템은 다). `["org"]` 는 admin 만(되쌓기의 근거가 모두 전사 문서면 예외 — `org_ok`). 위임 호출은 admin 이 owner 로 깎여 늘 일반 규칙 |
 | 주인 | 비면 보낸 사람. 남의 이메일은 admin(연결기)만. `owner_email`(불변 · 0053) + `owner_user_id`(그 이메일의 사람 — 나중에 이을 수 있게 바꿀 수 있는 칸) |
 | via | 위임 `gateway` → `gateway` · `hwax-portal` → `portal-chat` · API 토큰 → `connector:<origin.system>`(인증이 `auth_via='api_token'` 을 단다) · 웹 세션 → `upload` |
 | 멱등 | 먼저 찾고(같으면 200 `dedup`), INSERT 는 `ON CONFLICT DO NOTHING` — 동시에 같은 것 둘이 와도 한 줄 |
@@ -160,6 +161,7 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | `GET /entities/duplicates` | 검토자 | 같은 개체로 보이는 짝(이름 · 별칭 열쇠 · 같은 외부 id) — 둘 다 `full` 인 것만 |
 | `POST /entities/merge` | editor(둘 다 `full`) | `{from_id, into_id, note?}` → 201 변경 묶음(`human_request`, 늘 검토 — 검증에 걸리면 `failed`) |
 | `POST /query` | reader(분에 20) | SSE — `{messages[{role, content}] ≤20}`(마지막이 물음). 프레임 `tool_call` · `tool_result`(wiki_index · wiki_search · wiki_read) · `token` · `citation`(쓴 근거마다 `{n, slug, title, section, block_id, sources}`) · `miss` · `error` · `done{miss, cited, uncited, pages, usage}` — [[#Query]] |
+| `POST /fileback` | reader | `{question, answer, citations[{slug, block_id?}], outcome, audience?, model?}` → 201(새것) · 200(멱등) `{id, short, dedup, doc_slug, ingest_state, audience}` — [[#Fileback]]. 볼 수 없는 근거 422 · 근거보다 넓은 범위 422(`details.required`) · 가진 토큰 밖 403 |
 | `GET /questions` · `POST /questions` | reader | 볼 수 있는 물음(범위 토큰 ⊆ 내 토큰) · `mine` / 남기기 `{text, audience?, priority, origin: user · query_miss}` → 201 `{id, asked_count, created, audience}`. 범위는 비면 나만(`user:<id>`), 가진 토큰 밖은 403. 같은 물음(문장 부호 · 공백 무시) · 범위면 한 줄에 `asked_count` 만 |
 | `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(W7). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
 
@@ -194,7 +196,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 | 단계 | 무엇 |
 | --- | --- |
 | 거르기 | 활성이 아닌 원천(새 판에 밀림 · 철회)과 `restricted`(WK-D37)는 들이지 않는다 — 원천 `skipped`, 기록에 까닭. LLM 을 부르지 않는다 |
-| 해석 | [[src/app/wiki/resolve.py#targets]] — 힌트마다 외부 id → 별칭 → 정규화 이름(공백 없앰 · casefold) → 열쇠로 등록부를 찾고, 못 찾으면 후보를 LLM 에게 물은 뒤([[#Resolution]]), 그래도 없으면 새 엔티티(승인된 유형만). 찾은 엔티티는 그 범위의 문서가 있으면 그 slug(합치기로 옮겨 온 문서는 slug 가 다르다 — 낡음 없는 것 · 오래된 것 먼저). 문서는 범위마다 한 장 — `["org"]` 는 기본 slug, 그 밖은 `<기본>--<범위 꼬리>`. 기본 slug(`ent-<약어>-<외부 id>` 또는 `-<이름 해시 6>`)는 엔티티 `attrs.slug` 에 적어 두고 다시 짓지 않는다. 사례 문서 `case-sim-<짧은 id>` · `case-field-<짧은 id>`(W4 는 엔티티를 잇지 않는다) |
+| 해석 | [[src/app/wiki/resolve.py#targets]] — 힌트마다 외부 id → 별칭 → 정규화 이름(공백 없앰 · casefold) → 열쇠로 등록부를 찾고, 못 찾으면 후보를 LLM 에게 물은 뒤([[#Resolution]]), 그래도 없으면 새 엔티티(승인된 유형만). 찾은 엔티티는 그 범위의 문서가 있으면 그 slug(합치기로 옮겨 온 문서는 slug 가 다르다 — 낡음 없는 것 · 오래된 것 먼저). 문답 원천은 문답 문서가 먼저 — 같은 범위에 물음 열쇠(`question_key`)가 같은 문서 하나, 아니면 비슷한 문답 문서(제목 Dice ≥ 0.5 · 둘) + 새 `qa-<열쇠 해시 8>`(계획이 고른다). 문서는 범위마다 한 장 — `["org"]` 는 기본 slug, 그 밖은 `<기본>--<범위 꼬리>`. 기본 slug(`ent-<약어>-<외부 id>` 또는 `-<이름 해시 6>`)는 엔티티 `attrs.slug` 에 적어 두고 다시 짓지 않는다. 사례 문서 `case-sim-<짧은 id>` · `case-field-<짧은 id>`(W4 는 엔티티를 잇지 않는다) |
 | 계획 | `wiki_plan` — 후보 안에서 고칠 문서와 까닭, 원천 문서 요약 · 물음 · 모순. 후보 밖 slug 는 버리고 `plan.unknown` 에 남긴다. 문서 수는 규칙서 `ingest.max_pages_per_source` |
 | 쓰기 | 문서마다 `wiki_write` — 그 문서의 절(누가 쓰나 표시)과 블록 id 를 보여 주고 `block.insert`(절 이름) · `block.update` · `block.delete` 와 근거(sid · loc · quote)를 받는다. 블록 종류는 문단 · 목록 · 표 · 알림 상자. 새 블록 id · 근거의 원천 id(sid 앞자리로 찾음)는 코드가 정한다 |
 | 검증 → 판정 | [[#Validation]] → `auto_applied`(바로 반영) · `pending_review` · `failed`. 반영 중 판 충돌이면 `pending_review` |
@@ -237,7 +239,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 | --- | --- |
 | 새 문서 | 계획에 둔 빈 꼴(규칙서 sections) + 연산 → `create_document(wiki={kind, audience, managed:'ai'})`(범위 줄이 첫 커밋에). 새 엔티티는 `ON CONFLICT … DO UPDATE` 로 만들고 `wiki_pages.entity_id` 를 잇는다 |
 | 있는 문서 | 지금 판이 계획이 읽은 판과 같아야 — 아니면 `ApplyConflict`(409 · 묶음은 `pending_review`). `replace_document(If-Match)` · 판 메모 `wiki cs_xxxxxxxx` |
-| 자동 절 | 문서의 '원천' 을 같은 판에 다시 짓는다(이 문서가 인용한 원천 문서 링크). 원천 문서의 '이 원천을 인용한 문서' 는 **원천과 범위가 같은 문서만** 싣는다 — 더 좁은 문서 제목이 넓은 원천 문서에 새지 않게 |
+| 자동 절 | 문서의 '원천' 을 같은 판에 다시 짓는다(이 문서가 인용한 원천 문서 링크). 문답 문서의 '비슷한 질문' 은 인용한 문답 원천의 물음(질문자 없음). 원천 문서의 '이 원천을 인용한 문서' 는 **원천과 범위가 같은 문서만** 싣는다 — 더 좁은 문서 제목이 넓은 원천 문서에 새지 않게 |
 | 근거 | 블록마다 `wiki_citations`(update 는 그 블록 근거를 갈고, delete 는 지운다). 읽기는 `GET /documents/{slug}?with=citations` — 볼 수 있는 원천만 |
 | 함께 반영 | 저장은 문서마다 커밋된다 — 중간에 깨지면 저장한 문서를 판 복원 · 보관으로 되감고 이 묶음 근거를 지우고, 이 묶음이 만든 엔티티 중 살아 있는 문서가 없는 것을 retired |
 | 되돌리기 | `applied` 의 판 위에 더 고친 것이 없을 때만(있으면 409). 새 문서 보관 · 있던 문서 from 판 복원 · 근거 지움 · 관계 되돌림 · 기록 `revert` |
@@ -296,6 +298,19 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 구조화 출력 꼴 `WIKI_LLM_STRUCTURED`(json_schema · tools) ·
 묻기 `WIKI_QUERY_LLM_*`(비면 배경과 같게) · 위임 `MXWP_SSO_SECRET`(비면 위임 창구 404) · `MXWP_SSO_JIT_CREATE`(기본 켬).
 API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 — 새 키에 start.sh `--env` 를 더할 필요가 없다.
+
+## Fileback
+
+[[src/app/wiki/fileback.py#fileback]] — 묻기의 답 아래 '위키에 남기기'(request §5-7). 받은 답을 그 사람 명의의 `qa` 원천으로 받고 들인다.
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 근거 | 각주로 받은 (slug · block_id) — 부른 사람이 볼 수 있는 위키 문서(원천 · 규칙서 · 목록 빼고)여야. 봉투 `evidence` 에 블록 글 발췌(300자) `doc` + 그 블록이 기댄 원천(볼 수 있는 것) `source` |
+| 범위 | 비면 근거 문서들의 좁은 토큰을 합친 것(모두 전사면 `["org"]`, 합칠 수 없으면 나만). 고르면 가진 토큰 안에서 — 근거의 좁은 토큰을 다 담거나 나만(`user:<id>`). 좁은 문서에서 온 답이 넓은 문답 문서로 새지 않게 |
+| 봉투 | `origin mxwp / wiki-fileback/<해시(사람 · 물음 열쇠 · 답)>`(멱등) · 주인 = 부른 사람 · 동의 `button` · 근거로 쓴 엔티티 문서의 엔티티를 주제 힌트로 · 질문자 이름은 본문에 없다(Q9) |
+| 문답 문서 | 들이기가 문답 문서를 첫 후보로 — 같은 물음 열쇠면 그 문서, 비슷하면 그 문서 · 새 문서 중 계획이 고른다(같은 물음의 묶음). '비슷한 질문(자동)' 절이 인용한 문답 원천의 물음을 싣는다 |
+
+시험 [[apps/api/tests/test_wiki_fileback.py]] — 문답 문서 · 멱등 · 합치기 · 비슷한 질문 · 범위(볼 수 없음 · 넓음 · 나만 · 토큰 밖).
 
 ## Query
 

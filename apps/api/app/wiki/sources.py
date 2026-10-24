@@ -66,9 +66,9 @@ def visible_sql(alias: str = "ws") -> str:
 
 # ── 받기 ─────────────────────────────────────────────────────────────────────────────────────────
 
-def _check_sender(env: SourceEnvelope, caller: dict[str, Any], viewer: audience.Viewer) -> str:
-    """범위 · 주인 규칙(CONTRACTS §3) — 통과하면 주인 이메일(소문자)."""
-    if env.audience == ["org"] and not viewer.is_admin:
+def _check_sender(env: SourceEnvelope, caller: dict[str, Any], viewer: audience.Viewer, *, org_ok: bool = False) -> str:
+    """범위 · 주인 규칙(CONTRACTS §3) — 통과하면 주인 이메일(소문자). `org_ok` — 되쌓기처럼 근거가 모두 전사인 것(W6)."""
+    if env.audience == ["org"] and not viewer.is_admin and not org_ok:
         raise Forbidden("전사 범위 ['org'] 는 관리자 · 서비스 계정만 보낸다 — 소속 같은 좁은 범위로 보내라")
     missing = [] if viewer.sees_all else [t for t in env.audience if t not in viewer.tokens]
     if missing:
@@ -146,10 +146,11 @@ async def _free_slug(s: AsyncSession, source_id: str) -> str:
     return f"src-{hexid}"
 
 
-async def receive(s: AsyncSession, env: SourceEnvelope, *, caller: dict[str, Any], ingest: bool = True) -> Received:
+async def receive(s: AsyncSession, env: SourceEnvelope, *, caller: dict[str, Any], ingest: bool = True,
+                  org_ok: bool = False) -> Received:
     """봉투 하나를 받는다 — 새것이면 원천 줄 · 원천 문서 · (ingest 면) 들이기 작업을 한 트랜잭션에. 같은 것이면 그 id(`dedup`)."""
     viewer = audience.viewer_from_user(caller)
-    owner_email = _check_sender(env, caller, viewer)
+    owner_email = _check_sender(env, caller, viewer, org_ok=org_ok)
     payload = env.payload()
     key = {"sys": env.origin.system, "ref": env.origin.ref, "rev": env.origin.rev, "sha": env.payload_sha256()}
     if (dup := await _find(s, key)) is not None:

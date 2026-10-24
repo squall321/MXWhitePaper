@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from typing import Any
 
 from sqlalchemy import text
@@ -19,14 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import Forbidden, ValidationFailed
 from app.wiki import audience
 from app.wiki.envelope import normalize_audience
-from app.wiki.resolve import strong_key
+from app.wiki.resolve import question_key
 
 ORIGINS = ("lint", "ingest", "user", "query_miss", "standing")
-_MARKS = re.compile(r"[?？!！.。,，~…]+")
 
 
 def norm_hash(question: str) -> str:
-    return hashlib.sha256(_MARKS.sub("", strong_key(question)).encode("utf-8")).hexdigest()[:32]
+    return hashlib.sha256(question_key(question).encode("utf-8")).hexdigest()[:32]
 
 
 def visible_sql(alias: str = "q") -> str:
