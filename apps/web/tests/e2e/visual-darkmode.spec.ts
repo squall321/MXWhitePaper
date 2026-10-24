@@ -42,6 +42,8 @@ test.describe('visual: darkmode regression PoC', () => {
   })
 
   test('dark mode renders the sample doc consistently', async ({ page }) => {
+    // ⚠ ThemeProvider 가 system 모드면 마운트 때 prefers-color-scheme 으로 class 를 다시 정한다 — 아래 initScript 의
+    // 'dark' 는 지워지고 doc-dark 기준 그림은 실제로 밝은 화면이다(2026-10-24 확인). 새 시험은 emulateMedia 를 쓴다.
     await page.addInitScript(() => {
       document.documentElement.classList.add('dark')
       document.documentElement.setAttribute('data-theme', 'dark')
@@ -55,4 +57,28 @@ test.describe('visual: darkmode regression PoC', () => {
       animations: 'disabled',
     })
   })
+})
+
+// docs/llm-wiki C5 — 소속 → 팀 관리자 화면. 테마는 emulateMedia 로 고른다(앱이 system 모드로 따르는 길).
+// 대응 줄 · 팀 목록은 dev 데이터라 가리고(mask) 화면 틀만 본다.
+test.describe('visual: admin aff-team-map (light · dark)', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+  })
+
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`${scheme} mode renders the aff-team-map page consistently`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme })
+      await page.goto('/admin/aff-team-map')
+      await page.getByTestId('aff-team-map-table').waitFor()
+      // 밝을 때 ThemeProvider 는 data-theme 을 지운다 — 있는지가 아니라 'dark' 인지를 본다.
+      if (scheme === 'dark') await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+      else await expect(page.locator('html')).not.toHaveAttribute('data-theme', 'dark')
+      await expect(page.getByTestId('aff-team-map-page')).toHaveScreenshot(`aff-team-map-${scheme}.png`, {
+        mask: [page.getByTestId('aff-team-map-table').locator('tbody'), page.getByTestId('team-select')],
+        maxDiffPixelRatio: 0.02,
+        animations: 'disabled',
+      })
+    })
+  }
 })

@@ -91,6 +91,9 @@
   먼저 올라가 그 사이 인증 요청이 실패했을 수 있다. 칸을 읽는 코드는 마이그레이션을 먼저 올린 뒤 저장한다.
 - `infra/scripts/migrate.sh` 는 DB 비밀을 명령줄 `--env` 로 넘긴다(START §1 이 피하라는 꼴) — 이번엔 컨테이너 안에서 `.env` 를 물려받아
   `alembic upgrade head` 를 돌렸다. 스크립트를 고칠지는 사람에게 묻는다.
+- 다크 모드 시각 회귀의 `doc-dark` 기준 그림은 실제로 **밝은 화면**이다 — `ThemeProvider`(기본 system)가 `addInitScript` 로 넣은 `dark` 를
+  마운트 때 지운다. 소속 → 팀 새 케이스는 `emulateMedia({ colorScheme })` 로 짓고 기준 그림은 vite dev(:5174)에서 떴다(dev :5173 은 포털
+  접두판 dist 라 이 스펙이 루트로 못 돈다). 기존 `doc-dark` 를 고칠지는 사람에게(lat visual-regression Gotchas).
 
 ## 조사 메모(2026-10-24, W0)
 

@@ -110,8 +110,15 @@ export function AdminDashboardPage() {
         </p>
       </header>
 
-      <div className="mb-4" data-testid="admin-quick-links">
+      <div className="mb-4 flex flex-wrap gap-2" data-testid="admin-quick-links">
         <GlossaryPendingLink />
+        <Link
+          to="/admin/aff-team-map"
+          className="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-smsg-900 shadow-sm transition-colors hover:border-smsg-500"
+          data-testid="admin-link-aff-team-map"
+        >
+          소속 → 팀
+        </Link>
       </div>
 
       <div className="mb-6" data-testid="admin-activity-widget-slot">

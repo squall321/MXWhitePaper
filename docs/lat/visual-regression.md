@@ -26,7 +26,7 @@ import) 로 검증 불가 → 실 브라우저 렌더 + baseline diff 가 유일
 ```
 apps/web/
 ├── tests/e2e/
-│   ├── visual-darkmode.spec.ts                                    # 다크모드 light + dark 2 케이스
+│   ├── visual-darkmode.spec.ts                                    # 다크모드 light + dark 2 케이스 + 소속→팀 관리자 화면 2
 │   ├── visual-darkmode.spec.ts-snapshots/                         # baseline 2 PNG
 │   ├── visual-presentation.spec.ts                                # presentation 4 슬라이드 (NEW: presentation-layout cycle)
 │   └── visual-presentation.spec.ts-snapshots/                     # baseline 4 PNG
@@ -76,7 +76,7 @@ CI 통합 시에는 별도 playwright 이미지 (`mcr.microsoft.com/playwright`)
 ## 사례 추가 가이드
 
 1. **새 spec 파일**: `tests/e2e/visual-{topic}.spec.ts`
-2. **`page.addInitScript()` 로 mount 전 상태 셋업** (테마 토글, viewport 등)
+2. **`page.addInitScript()` 로 mount 전 상태 셋업** (viewport 등). **테마는 `page.emulateMedia({ colorScheme })`** — 아래 Gotchas 첫 줄
 3. **렌더 settle 대기**: `await page.waitForSelector('article')` + `await page.waitForTimeout(2000)` (mermaid/echarts 비동기 측정)
 4. **screenshot**: `await expect(page).toHaveScreenshot('name.png', { fullPage: true, maxDiffPixelRatio: 0.02, animations: 'disabled' })`
 5. **첫 실행으로 baseline 생성**: `--update-snapshots`
@@ -93,6 +93,14 @@ CI 통합 시에는 별도 playwright 이미지 (`mcr.microsoft.com/playwright`)
 
 ## Gotchas
 
+- **`doc-dark` 기준 그림은 실제로 밝은 화면이다**(2026-10-24 확인). `ThemeProvider` 는 기본 `system` 모드라 마운트 때
+  `prefers-color-scheme` 으로 `dark` class · `data-theme` 을 다시 정한다 — `addInitScript` 로 넣은 `dark` 는 지워진다. 어두운 화면은
+  `page.emulateMedia({ colorScheme: 'dark' })` 로 앱이 따르게 한다(소속 → 팀 케이스가 이 길). `doc-dark` 를 바로잡으려면 그 시험을
+  같은 길로 바꾸고 기준 그림을 다시 떠야 한다(아직 안 했다).
+- **dev 의 :5173 은 포털 접두판 dist 다**(base `/mx-white-paper/`, `serve -s`) — 루트로 `page.goto('/…')` 하는 이 스펙은 그대로는 거기서
+  못 돈다. 새 화면 케이스(`aff-team-map-*`)의 기준 그림은 접두 없는 vite dev(:5174, 같은 API)에서 떴다.
+- **로그인 속도 제한** — 확인 · 기준 갱신을 잇달아 돌리면 `/auth/login` 이 '너무 많은 시도' 로 막혀 `loginAsAdmin` 이 시간 초과로 깨진다
+  (그림 차이가 아니다). 1분쯤 쉬고 다시.
 - **mermaid random id** — 다이어그램 SVG에 `mermaid-${random}` ID 가 들어가 baseline diff false-positive 가능. **현재 회피**: maxDiffPixelRatio 0.02 (작은 텍스트 변화 흡수). 더 엄격히 가려면 mermaid id를 deterministic 하게 mock 필요 (별도 사이클).
 - **font rendering host 의존성** — Pretendard Variable 가 host 시스템 폰트로 fallback 되는 경우 픽셀 다름. CI 안정화 시 font 결정성 docker layer 추가 필요.
 - **viewport 단일 (chromium-desktop)** — tablet/mobile 케이스는 baseline 폭증 위험 → PoC 사이클 out-of-scope.

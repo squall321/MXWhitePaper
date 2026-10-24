@@ -97,6 +97,9 @@ const AdminGlossaryPendingPage = lazyLogged('AdminGlossaryPending', () =>
     default: m.AdminGlossaryPendingPage,
   })),
 )
+const AdminAffTeamMapPage = lazyLogged('AdminAffTeamMap', () =>
+  import('./pages/AdminAffTeamMap').then((m) => ({ default: m.AdminAffTeamMapPage })),
+)
 const HealthDashboardPage = lazyLogged('HealthDashboard', () =>
   import('./pages/HealthDashboard').then((m) => ({ default: m.HealthDashboardPage })),
 )
@@ -427,6 +430,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="admin/sso" element={<Boundaried name="admin/sso"><SsoProvidersPage /></Boundaried>} />
                 <Route path="admin/retention" element={<Boundaried name="admin/retention"><RetentionPoliciesPage /></Boundaried>} />
                 <Route path="admin/glossary-pending" element={<Boundaried name="admin/glossary-pending"><AdminGlossaryPendingPage /></Boundaried>} />
+                <Route path="admin/aff-team-map" element={<Boundaried name="admin/aff-team-map"><AdminAffTeamMapPage /></Boundaried>} />
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />
                 <Route path="recent" element={<Boundaried name="recent"><RecentPage /></Boundaried>} />
                 <Route path="activity" element={<Boundaried name="activity"><ActivityFeedPage /></Boundaried>} />

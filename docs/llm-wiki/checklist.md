@@ -24,7 +24,7 @@
 - [x] C3 자동 생성 스위치 `MXWP_SSO_JIT_CREATE`
 - [x] C4 소속 증명 검증(맞음 · 만료 · 다른 이메일 · 평문만) · 진입 토큰 `affiliation` · `groups` 의 `plat:` 받기 · 플랫폼 증명 검증 · `users.portal_*`
   — 위임 호출 값은 저장하지 않고 그 호출에만(WK-D24)
-- [ ] C5 `wiki_aff_team_map` + 관리자 화면 — 표 · 관리자 API · 첫 팀 정하기는 됐다, 화면은 아직
+- [x] C5 `wiki_aff_team_map` + 관리자 화면 — `/admin/aff-team-map`(대시보드 바로가기) · 브라우저 확인 · 다크 모드 시각 회귀 두 케이스
 - [x] C6 진입 토큰 jti 재사용 막기를 DB 로 — `portal_launch_jti`
 - [x] C8 HWAX-PORTAL-INTEGRATION 을 지금 모습으로(위임 · 소속 포함) — 접두 · `serve -s`(W0) + 'Identity' 절
 - [ ] 포털 쪽 P1~P5 가 끝난 뒤 — 게이트웨이 감사 원장에서 MXWP 호출이 사람 명의(request §4-5)
