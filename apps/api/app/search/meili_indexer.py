@@ -130,7 +130,7 @@ def _strip_tag_literals(s: str | None) -> str:
         return ""
     return _RE_TAG_LIKE.sub(" ", s)
 
-INDEX_UID = "documents"
+INDEX_UID = f"{get_settings().meili_index_prefix}documents"
 PRIMARY_KEY = "id"
 
 SEARCHABLE_ATTRS = [

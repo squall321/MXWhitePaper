@@ -317,19 +317,19 @@ API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 —
 - **시험의 pytest · jsonschema 는 api.sif 안이 아니라 호스트 `~/.local` 에서 온다**(홈 마운트). `--no-mount home` 으로 sif 만 띄우면
   둘 다 없다. jsonschema 는 pyproject `dev` 에 적어 두었다. **그래서 운영 코드는 jsonschema 를 쓰지 않는다** — LLM 출력은 pydantic
   모델로 검사한다(가짜 LLM 의 `conform` 만 시험 쪽에서 jsonschema 를 쓴다). PyYAML 은 이미지에 있다(uvicorn[standard]).
-- 이 리포의 시험은 **dev DB 를 그대로 쓴다** — 위키 시험이 만든 줄은 시험이 지운다(conftest 의 `sup-*` 정리와 같은 자세).
+- 시험은 **시험 전용 DB · 색인 · 버킷**을 쓴다([[core]] 함정 8). 같은 시험 DB 를 실행마다 다시 쓰므로 위키 시험이 만든 줄은 여전히 시험이 지운다.
 - `pytest -q` 는 addopts 의 `-q` 와 겹쳐 요약 줄이 숨는다 — 결과 줄을 남기려면 `-q` 없이 돌린다.
 - **요청 밖에서 서비스 · 저장소를 직접 부르는 코드(시험 · CLI · 배경 작업)는 읽는 사람을 골라야 한다** — 안 고르면 `ViewerMissing`.
   시험은 `audience.set_viewer(audience.SYSTEM)` 또는 `with audience.acting_as(...)`. CLI(`scripts/import_one.py`)는 시작할 때 시스템으로.
-- 시험 문서는 SQL 로 직접 넣는다 — `document_service.create_document` 는 dev Meili 색인 · 웹훅까지 부른다. 받기 시험처럼 그 길을
+- 시험 문서는 SQL 로 직접 넣는다 — `document_service.create_document` 는 Meili 색인(시험은 `test_documents`) · 웹훅까지 부른다. 받기 시험처럼 그 길을
   꼭 지나야 하면 끝에 `meili_indexer.delete_document` 로 색인 줄까지 지운다.
 - **판 메모(change_log)는 ASCII 80자까지**(`[A-Za-z0-9._:-\s]`) — 반영 · 원천 문서 갱신이 쓰는 메모는 `wiki cs_xxxxxxxx` ·
   `wiki source cited-by`. 한글을 넣으면 `replace_document` 가 거부한다.
-- 시험에서 워커를 돌릴 때는 `run_once(…, ops=[…])` · `serve(…, ops=[…])` 로 집을 op 를 좁힌다 — 같은 dev DB 의 다른 작업을 집지 않게.
+- 시험에서 워커를 돌릴 때는 `run_once(…, ops=[…])` · `serve(…, ops=[…])` 로 집을 op 를 좁힌다 — 같은 시험 DB 의 다른 시험 작업을 집지 않게.
 - **워커는 `--reload` 가 없다** — 위키 코드를 고치면 `mxwp_wiki` 를 다시 띄워야 새 코드로 돈다(update.sh · sync-from-drive.sh 는
   알아서 한다). dev 에서 손으로 — `apptainer instance stop mxwp_wiki && ./infra/scripts/start.sh`.
-- **dev 에서 위키를 켠 채(`WIKI_ENABLED=1`) 시험을 돌리면 살아 있는 워커가 시험 작업(`noop` · `ingest`)을 집는다** — 같은 dev DB 다.
-  시험 전에 `mxwp_wiki` 를 내리거나 위키를 끈다(꺼져 있으면 워커는 집지 않는다).
+- **dev 의 워커(`mxwp_wiki`)는 dev DB 만 본다** — 시험 작업은 시험 DB 에 있어 위키를 켜 둔 채 시험해도 집지 않는다(10-24 까지는 같은 DB
+  라 시험 전에 워커를 내려야 했다).
 - **`apptainer exec instance://mxwp_api` 는 인스턴스의 환경을 물려받지 않는다** — `setup_buckets` 같은 스크립트는 컨테이너 안에서
   `set -a; . /workspace/.env; set +a` 를 먼저(안 하면 기본값 `minio:9000` 으로 붙으려다 멈춘다). 시험은 conftest 가 `.env` 를 읽는다.
 - 범위가 `["org"]` 보다 좁은 위키 문서는 바깥 웹훅 `doc_created` 를 보내지 않는다(WK-D34). 판 바꾸기 · 보관 웹훅은 아직 그대로 —

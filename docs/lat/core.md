@@ -132,6 +132,7 @@ return envelope(data={...}, meta={"page": 1})
 | DB | `database_url` | dev placeholder (asyncpg) |
 | Meili | `meili_host` | `http://meilisearch:7700` |
 | | `meili_master_key` | dev placeholder |
+| | `meili_index_prefix` | `""` — 색인 이름 접두(`documents` · `knowledge`). 시험은 `test_` |
 | MinIO | `minio_endpoint` | `http://minio:9000` |
 | | `minio_public_endpoint` | `http://localhost:9000` |
 | | `minio_access_key` / `_secret_key` | dev placeholder |
@@ -395,12 +396,16 @@ invalid_token 401) + 스냅숏 덮어쓰기 + 소속→팀 = 8 묶음 (cycle 19 
    `http://` prefix 가 포함된 `localhost:5173/80` URL 두 개.
 7. **JWT 알고리즘은 HS256 (대칭키)** — `jwt_secret` 만 갖고 있으면 누구나
    발급 가능. 운영에서 RS256 으로 전환 검토 시 발급/검증 양쪽 모두 코드 수정.
-8. **시험은 dev 와 같은 DB 를 쓴다** — 고정물이 표를 통째로 `DELETE` · `UPDATE` 하면
-   dev 의 진짜 행이 사라진다(10-24 — 토큰 시험이 `api_tokens` 를 비워 게이트웨이 서비스
-   토큰 · 개인 토큰이 날아갔다). 시험마다 전용 사용자를 두고 그 사람 행만 지운다
-   ([[src/tests/test_api_tokens.py#pat_user]]). 통째로 비우는 시험이 아직 남아 있다
-   (webhooks · subscriptions · sso_providers · backup_schedules 등 —
-   `grep -rnE 'DELETE FROM [a-z_]+"\)' apps/api/tests/`).
+8. **시험은 시험 전용 DB · 색인 · 버킷을 쓴다**(사용자 결정 10-24) —
+   [[src/tests/conftest.py#_use_test_resources]] 가 같은 postgres 안의 `<dev DB>_test`(dev `mxwp` →
+   `mxwp_test`)를 관리 DB `postgres` 로 붙어 만들고 alembic head · seed · setup_buckets 로 올린다.
+   Meilisearch 색인은 `test_` 접두, MinIO 버킷은 `mxwp-test-*`. 시험 DB 가 dev DB 와 같거나 이름이
+   `_test` 로 끝나지 않으면(`TEST_DATABASE_URL` 로 바꿀 수 있다) 시험을 시작하지 않는다. 시험 DB 는
+   남겨 두고 실행마다 다시 올리기만 한다 — 처음부터 하려면 그 DB 를 지운다. 시험 몇이 기대는 조직
+   고리(org_reset 의 mx → dev → he-team → cae)는 `_org_chain` 이 넣는다. 그 전엔 dev DB 를 그대로 써서
+   표를 통째로 비우는 고정물이 dev 의 진짜 행을 지웠다(토큰 시험이 `api_tokens` 를 비워 게이트웨이 서비스
+   토큰 · 개인 토큰이 날아갔다 — 그 둘은 [[src/tests/test_api_tokens.py#pat_user]] 로 고쳤다). 환경은
+   설정 캐시(`get_settings` lru_cache)보다 먼저 바꾼다 — conftest 의 다른 환경 줄 뒤에 부른다.
 
 ## Notifications 흐름 — BE INSERT → FE poll → store → drawer
 

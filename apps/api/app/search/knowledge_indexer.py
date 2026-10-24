@@ -17,11 +17,12 @@ from typing import Any
 
 import meilisearch
 
+from app.core.config import get_settings
 from app.search.meili_indexer import _call_meili_with_retry, get_client
 
 logger = logging.getLogger(__name__)
 
-INDEX_UID = "knowledge"
+INDEX_UID = f"{get_settings().meili_index_prefix}knowledge"
 PRIMARY_KEY = "id"
 
 SEARCHABLE_ATTRS = ["heading", "body", "area"]

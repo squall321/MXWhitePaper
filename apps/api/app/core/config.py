@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     # Meilisearch
     meili_host: str = Field(default="http://meilisearch:7700")
     meili_master_key: str = Field(default="meili_dev_master_key_change_me")
+    # 색인 이름 앞에 붙는다 — 시험은 `test_`(tests/conftest.py)라 dev 의 `documents` · `knowledge` 색인을 건드리지 않는다.
+    meili_index_prefix: str = Field(default="")
 
     # MinIO / S3
     minio_endpoint: str = Field(default="http://minio:9000")

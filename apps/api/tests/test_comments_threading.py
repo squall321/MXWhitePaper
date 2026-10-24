@@ -13,10 +13,22 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
-from app.core.db import session_factory
+from app.core.db import session_factory, session_scope
+from app.core.security import hash_password
 from app.main import app
 
 SEED_SLUG = "month-end-closing"
+SENDER = "editor-orgadmin@mx.local"  # 멘션을 보내는 다른 사람(X-MXWP-User) — test_org_admin 과 같은 사람
+
+
+@pytest.fixture(autouse=True)
+async def _sender() -> None:
+    # 새 시험 DB 에는 아직 없다(예전엔 dev DB 에 test_org_admin 이 남긴 줄이 있어 가려졌다).
+    async with session_scope() as s:
+        await s.execute(text("""
+            INSERT INTO users (email, name, password_hash, role)
+            SELECT :e, 'Editor (test)', :pw, 'editor' WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = :e)
+        """), {"e": SENDER, "pw": hash_password("test1234!")})
 
 
 async def _admin_user_id() -> str:
@@ -82,7 +94,7 @@ async def test_mention_inserts_notification() -> None:
         r = await ac.post(
             f"/api/v1/documents/{SEED_SLUG}/comments",
             # 자기 자신에게 보내면 skip 되므로 X-MXWP-User 로 다른 사람을 위장한다.
-            headers={"X-MXWP-User": "editor-orgadmin@mx.local"},
+            headers={"X-MXWP-User": SENDER},
             json={
                 "anchor_kind": "document",
                 "body_md": "안녕 @admin",
@@ -193,7 +205,7 @@ async def test_notifications_endpoint_returns_unread() -> None:
         # 멘션을 발생시켜서 notifications row 를 한 개 보장.
         await ac.post(
             f"/api/v1/documents/{SEED_SLUG}/comments",
-            headers={"X-MXWP-User": "editor-orgadmin@mx.local"},
+            headers={"X-MXWP-User": SENDER},
             json={
                 "anchor_kind": "document",
                 "body_md": "ping @admin",
