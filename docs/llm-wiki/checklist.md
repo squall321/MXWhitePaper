@@ -28,7 +28,8 @@
 - [x] C6 진입 토큰 jti 재사용 막기를 DB 로 — `portal_launch_jti`
 - [x] C8 HWAX-PORTAL-INTEGRATION 을 지금 모습으로(위임 · 소속 포함) — 접두 · `serve -s`(W0) + 'Identity' 절
 - [x] 포털 쪽 P1~P5 가 끝난 뒤 — 게이트웨이 감사 원장에서 MXWP 호출이 사람 명의(request §4-5) — 10-24 끝에서 끝: 게이트웨이로 만든
-  문서의 주인 · 감사 `document.create` 가 그 사람(데모 계정 · editor), 게이트웨이 감사 `mode=as-user-pat`. plat 증명 도착은 따로 확인 중
+  문서의 주인 · 감사 `document.create` 가 그 사람(데모 계정 · editor), 게이트웨이 감사 `mode=as-user-pat`. plat 증명도 끝에서 끝으로
+  닿는다(MCP 가 증명 머리글을 넘기게 고친 뒤 — 39c3c98, `plat:plmdefect` 문서가 plat 이 있으면 보이고 없으면 404)
 
 ## W2 보이기 범위
 - [x] 범위 토큰 계산(org · aff · plat · user — 그리고) · `access.max_age_h` — `app/wiki/audience.py`(규칙서 전까지 24 고정)
