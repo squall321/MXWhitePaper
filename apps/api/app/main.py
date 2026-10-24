@@ -27,6 +27,7 @@ from .routers.audit import router as audit_router
 from .routers.audit_retention import router as audit_retention_router
 from .routers.auth import router as auth_router
 from .routers.portal_sso import router as portal_sso_router
+from .routers.auth_sso import router as auth_sso_router
 from .routers.auth_flows import router as auth_flows_router
 from .routers.automation import router as automation_router
 from .routers.backups import router as backups_router
@@ -543,6 +544,8 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     # HWAX portal SSO callback (true single sign-on; no-op/404 unless portal_jwks_url is set).
     app.include_router(portal_sso_router)
+    # 게이트웨이 · 포털 위임(POST /auth/sso — MXWP_SSO_SECRET 이 비면 404) + 관리자 위임 회수 · 소속→팀 표.
+    app.include_router(auth_sso_router)
     # Cycle 0026 — email verification + password reset flows.
     app.include_router(auth_flows_router)
     app.include_router(search_router)

@@ -11,6 +11,7 @@ User dict 형태:
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import Depends, Request
@@ -21,6 +22,7 @@ from ..services.api_token_scopes import check_scope, required_scope_for
 from .config import get_settings
 from .db import get_db
 from .errors import Forbidden, Unauthorized
+from .portal_identity import secret_tag, verified_affiliation, verified_plat
 from .security import decode_token, verify_password
 
 
@@ -43,16 +45,13 @@ _API_TOKEN_NAMESPACE = "mxwp_"
 _API_TOKEN_PREFIX_LEN = 8
 
 
-async def _fetch_user_by_id(s: AsyncSession, uid: str) -> dict[str, Any] | None:
-    row = (await s.execute(
-        text("""
-            SELECT id, email, name, role, team_id, is_active, email_verified_at
-            FROM users WHERE id = CAST(:id AS uuid)
-        """),
-        {"id": uid},
-    )).first()
-    if not row or not bool(row[5]):
-        return None
+_USER_COLS = """
+    id, email, name, role, team_id, is_active, email_verified_at,
+    portal_affiliation, portal_plat, portal_access_at
+"""
+
+
+def _user_row(row: Any) -> dict[str, Any]:
     return {
         "id": str(row[0]),
         "email": row[1],
@@ -61,26 +60,86 @@ async def _fetch_user_by_id(s: AsyncSession, uid: str) -> dict[str, Any] | None:
         "team_id": str(row[4]) if row[4] else None,
         "is_active": bool(row[5]),
         "email_verified_at": row[6].isoformat() if row[6] else None,
+        # 포털 진입 토큰이 남긴 소속 · 플랫폼(CONTRACTS §2-10). 위임 호출이면 _resolve_delegated 가 그 호출의 증명값으로 바꾼다.
+        "portal_affiliation": row[7],
+        "portal_plat": list(row[8]) if row[8] is not None else None,
+        "portal_access_at": row[9].isoformat() if row[9] else None,
     }
 
 
+async def _fetch_user_by_id(s: AsyncSession, uid: str) -> dict[str, Any] | None:
+    row = (await s.execute(
+        text(f"SELECT {_USER_COLS} FROM users WHERE id = CAST(:id AS uuid)"),
+        {"id": uid},
+    )).first()
+    if not row or not bool(row[5]):
+        return None
+    return _user_row(row)
+
+
 async def _fetch_admin(s: AsyncSession) -> dict[str, Any] | None:
-    row = (await s.execute(text("""
-        SELECT id, email, name, role, team_id, is_active, email_verified_at
+    row = (await s.execute(text(f"""
+        SELECT {_USER_COLS}
         FROM users WHERE role = 'admin' AND is_active = TRUE
         ORDER BY created_at LIMIT 1
     """))).first()
     if not row:
         return None
-    return {
-        "id": str(row[0]),
-        "email": row[1],
-        "name": row[2],
-        "role": row[3],
-        "team_id": str(row[4]) if row[4] else None,
-        "is_active": bool(row[5]),
-        "email_verified_at": row[6].isoformat() if row[6] else None,
-    }
+    return _user_row(row)
+
+
+# 위임 토큰으로는 자격 증명을 다루지 않는다 — 비밀을 쥔 게이트웨이가 그 사람의 장수명 PAT 를 만들거나 2FA 를 끄는 길이 된다.
+_DELEGATION_DENIED_PREFIXES = ("/api/v1/me/api-tokens", "/api/v1/me/2fa")
+
+
+async def _resolve_delegated(
+    s: AsyncSession, payload: dict[str, Any], request: Request
+) -> dict[str, Any]:
+    """게이트웨이 · 포털 위임 토큰(typ=delegated, routers/auth_sso.py) → 사람.
+
+    산 토큰 — 위임이 켜져 있고(비밀 있음) · 비밀 지문이 지금 비밀과 같고 · 세대가 sso_delegations 와 같고 · 사람이 살아 있다.
+    범위는 read + write(`/admin/*` 아님)이고 admin 역할도 owner 로 낮춘다 — AI 가 사람 명의로 admin 승인(용어 · 온톨로지 ·
+    `plat:` 넓히기)을 하지 않게. 소속 · 플랫폼은 저장된 값이 아니라 **이 호출의 증명**으로만 정한다(없으면 없는 것 — 닫힌 쪽).
+    """
+    secret = get_settings().mxwp_sso_secret
+    if not secret:
+        raise Unauthorized("SSO delegation is disabled")
+    sub, client, gen = payload.get("sub"), payload.get("cli"), payload.get("gen")
+    if not sub or not isinstance(client, str) or not isinstance(gen, int):
+        raise Unauthorized("Malformed delegated token")
+    if payload.get("sk") != secret_tag(secret):
+        raise Unauthorized("Delegated token from a previous secret")
+    current = (await s.execute(
+        text("SELECT generation FROM sso_delegations WHERE user_id = CAST(:u AS uuid) AND client = :c"),
+        {"u": sub, "c": client},
+    )).scalar()
+    if current != gen:
+        raise Unauthorized("Delegated token revoked")
+    user = await _fetch_user_by_id(s, sub)
+    if not user:
+        raise Unauthorized("User not found or inactive")
+
+    path = request.url.path
+    if any(path == p or path.startswith(p + "/") for p in _DELEGATION_DENIED_PREFIXES):
+        raise Forbidden("위임 토큰으로는 API 토큰 · 2FA 를 다루지 않는다")
+    scopes = payload.get("scope") if isinstance(payload.get("scope"), list) else ["read"]
+    if not check_scope(scopes, request.method, path):
+        needed = required_scope_for(request.method, path)
+        raise ScopeInsufficient(
+            f"Token lacks {needed} scope",
+            details={"required_scope": needed, "granted_scopes": scopes},
+        )
+    if ROLE_ORDER.get(user["role"], 0) > ROLE_ORDER["owner"]:
+        user["role"] = "owner"
+
+    email = str(payload.get("eml") or user["email"])
+    aff = verified_affiliation(request.headers, secret=secret, email=email)
+    plat = verified_plat(request.headers, secret=secret, email=email)
+    user["portal_affiliation"] = aff
+    user["portal_plat"] = plat
+    user["portal_access_at"] = datetime.now(UTC).isoformat() if (aff or plat) else None
+    user["auth_via"] = f"delegated:{client}"
+    return user
 
 
 async def _resolve_api_token(
@@ -206,6 +265,8 @@ async def get_current_user(
             payload = decode_token(token)
         except ValueError as e:
             raise Unauthorized("Invalid or expired token") from e
+        if payload.get("typ") == "delegated":
+            return await _resolve_delegated(s, payload, request)
         if payload.get("typ") != "access":
             raise Unauthorized("Wrong token type")
         sub = payload.get("sub")

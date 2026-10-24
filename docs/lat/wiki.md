@@ -13,7 +13,7 @@
 | 단계 | 상태 | 이 문서의 절 |
 | --- | --- | --- |
 | W0 준비 | 봉투 모델 · 합성 원천 20 · 가짜 LLM · 설정 자리 | [[#Envelope]] · [[#Test bundle]] · [[#Fake LLM]] · [[#Settings]] |
-| W1 연결 · 신원 | (다음) | — |
+| W1 연결 · 신원 | 위임 창구 · 위임 토큰(세대) · 소속 · 플랫폼 증명 · 진입 토큰 스냅숏 · jti 원장 · 소속→팀 표(API) | [[core#게이트웨이 · 포털 위임]] |
 | W2 보이기 범위 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -38,7 +38,7 @@
 | 받기 · 멱등 · 철회 · DB 큐 · 워커 | `app/wiki/{sources,jobs,worker}.py` | W3 |
 | LLM(구조화 출력) · 해석 · 계획 · 쓰기 · 검증 · 반영 | `app/wiki/{llm,resolve,plan,write,validate,apply}.py` | W4 |
 | REST | `app/routers/wiki.py`(`/api/v1/wiki/*`) | W3~ |
-| 위임 창구 | `app/routers/auth_sso.py`(`POST /api/v1/auth/sso`) | W1 |
+| 위임 창구 · 회수 · 소속→팀 표 | [[src/app/routers/auth_sso.py]] · 검증 `core/auth._resolve_delegated` · 증명 `core/portal_identity.py` | W1 |
 
 ## Envelope
 

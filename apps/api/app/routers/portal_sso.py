@@ -9,9 +9,14 @@ a short-lived RS256 "launch" JWT (aud = this service) and auto-POSTs it here. We
 
 Disabled (404) unless `portal_jwks_url` is set, so standalone deploys are unaffected. The local
 email/password login still works as a fallback.
+
+The launch token also carries the portal's view of the person (docs/llm-wiki C4): an `affiliation` claim
+(absent when the portal has none) and `plat:` entries inside `groups`. We store that snapshot on the user
+(`portal_*`) on every launch, and a first-time user lands in the team mapped to that affiliation (C5).
 """
 from __future__ import annotations
 
+import logging
 import secrets
 import time
 from typing import Any
@@ -27,12 +32,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import APIError
+from app.core.portal_identity import claims_portal_access
 from app.core.security import hash_password, make_refresh_token
 # Reuse the canonical refresh-cookie setter from the auth router so the cookie name/path/flags match
 # exactly what /auth/refresh (called by the SPA bootstrap) expects.
 from app.routers.auth import _set_refresh_cookie
 
 router = APIRouter(prefix="/api/v1/auth", tags=["portal-sso"])
+log = logging.getLogger(__name__)
 
 
 # Bug fix (2026-06-09) — `APIError.__init__()` 가 `status_code`/`code` kwarg
@@ -72,10 +79,10 @@ class _NoTeamError(APIError):
     http_status = 503
     code = "no_team"
 
-# Tiny in-process JWKS cache + replay guard (single-process uvicorn). For multi-replica, back these
-# with Redis — same seam as the rest of the app.
+# Tiny in-process JWKS cache (each process fetches its own — fine). The jti replay guard lives in the DB
+# (portal_launch_jti, C6): an in-memory set is per process, so two uvicorn workers would each accept the
+# same launch token once.
 _jwks_cache: dict[str, Any] = {"keys": None, "fetched": 0.0}
-_seen_jti: dict[str, float] = {}
 
 
 async def _portal_jwks() -> list[dict[str, Any]]:
@@ -90,12 +97,6 @@ async def _portal_jwks() -> list[dict[str, Any]]:
     _jwks_cache["keys"] = keys
     _jwks_cache["fetched"] = now
     return keys
-
-
-def _gc_jti(now: float) -> None:
-    for k, exp in list(_seen_jti.items()):
-        if exp < now:
-            del _seen_jti[k]
 
 
 async def _verify_portal_token(token: str) -> dict[str, Any]:
@@ -119,26 +120,53 @@ async def _verify_portal_token(token: str) -> dict[str, Any]:
         raise _InvalidTokenError("launch token rejected") from e
     if claims.get("scope") != "launch":
         raise _WrongScopeError("not a launch token")
-    now = time.time()
-    _gc_jti(now)
-    jti = claims["jti"]
-    if jti in _seen_jti:
-        raise _ReplayError("launch token already used")
-    _seen_jti[jti] = float(claims["exp"])
     return claims
 
 
-async def _upsert_user(s: AsyncSession, *, email: str, name: str) -> dict[str, Any]:
+async def _claim_jti(s: AsyncSession, jti: str, exp: float) -> None:
+    """Spend a launch token's jti once, across processes. Expired rows go first (their tokens fail exp anyway)."""
+    await s.execute(text("DELETE FROM portal_launch_jti WHERE exp < NOW()"))
+    claimed = (await s.execute(
+        text("""
+            INSERT INTO portal_launch_jti (jti, exp) VALUES (:j, to_timestamp(:e))
+            ON CONFLICT (jti) DO NOTHING RETURNING jti
+        """),
+        {"j": jti, "e": exp},
+    )).scalar()
+    await s.commit()
+    if claimed is None:
+        raise _ReplayError("launch token already used")
+
+
+async def _find_user(s: AsyncSession, email: str) -> dict[str, Any] | None:
     row = (await s.execute(
-        text("SELECT id, email, name, role, team_id FROM users WHERE LOWER(email) = LOWER(:e)"),
+        text("SELECT id, email, name, role, team_id, is_active FROM users WHERE LOWER(email) = LOWER(:e)"),
         {"e": email},
     )).first()
-    if row:
-        return {"id": str(row[0]), "email": row[1], "name": row[2], "role": row[3], "team_id": str(row[4]) if row[4] else None}
+    if row is None:
+        return None
+    return {"id": str(row[0]), "email": row[1], "name": row[2], "role": row[3],
+            "team_id": str(row[4]) if row[4] else None, "is_active": bool(row[5])}
 
+
+async def _upsert_user(s: AsyncSession, *, email: str, name: str, affiliation: str | None = None) -> dict[str, Any]:
+    found = await _find_user(s, email)
+    if found:
+        return found
+    return await _create_user(s, email=email, name=name, affiliation=affiliation)
+
+
+async def _create_user(s: AsyncSession, *, email: str, name: str, affiliation: str | None) -> dict[str, Any]:
     # First SSO login → auto-create (matches signup_service column set). SSO users have no password,
-    # so we store a random hash the local password path can never match. Attach to the first team.
-    team = (await s.execute(text("SELECT id FROM teams LIMIT 1"))).scalar()
+    # so we store a random hash the local password path can never match. The team comes from the
+    # admin's affiliation → team map (C5); without a mapping, the first team as before.
+    team = None
+    if affiliation:
+        team = (await s.execute(
+            text("SELECT team_id FROM wiki_aff_team_map WHERE affiliation = :a"), {"a": affiliation},
+        )).scalar()
+    if team is None:
+        team = (await s.execute(text("SELECT id FROM teams LIMIT 1"))).scalar()
     if team is None:
         raise _NoTeamError("no team configured — run seed first")
     cfg = get_settings()
@@ -153,7 +181,7 @@ async def _upsert_user(s: AsyncSession, *, email: str, name: str) -> dict[str, A
          "ph": hash_password(secrets.token_urlsafe(32)), "role": role, "t": str(team)},
     )
     await s.commit()
-    return {"id": uid, "email": email, "name": name, "role": role, "team_id": str(team)}
+    return {"id": uid, "email": email, "name": name, "role": role, "team_id": str(team), "is_active": True}
 
 
 @router.post("/portal-callback")
@@ -167,12 +195,24 @@ async def portal_callback(
         raise _SsoDisabledError("portal SSO not enabled")
 
     claims = await _verify_portal_token(token)
-    user = await _upsert_user(s, email=claims["email"], name=claims.get("name") or "")
+    await _claim_jti(s, claims["jti"], float(claims["exp"]))
+    affiliation, plat = claims_portal_access(claims)
+    user = await _upsert_user(s, email=claims["email"], name=claims.get("name") or "", affiliation=affiliation)
 
+    # The launch token is the portal's whole, signed snapshot — overwrite every time (an absent affiliation
+    # claim means none now; an empty plat list means none, unlike NULL = never seen).
     try:
-        await s.execute(text("UPDATE users SET last_login_at = NOW() WHERE id = CAST(:id AS uuid)"), {"id": user["id"]})
+        await s.execute(
+            text("""
+                UPDATE users SET last_login_at = NOW(), portal_affiliation = :a,
+                       portal_plat = CAST(:p AS text[]), portal_access_at = NOW()
+                WHERE id = CAST(:id AS uuid)
+            """),
+            {"id": user["id"], "a": affiliation, "p": plat},
+        )
         await s.commit()
     except Exception:
+        log.warning("portal-callback: could not record last_login / portal access", exc_info=True)
         await s.rollback()
 
     # Set ONLY the refresh cookie (same name/path/flags as the password login). We redirect into the

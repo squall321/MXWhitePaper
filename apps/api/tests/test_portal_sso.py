@@ -11,6 +11,10 @@ Coverage:
   7. required claims — a token missing aud / jti / exp / sub is 401 invalid_token,
      signed for real with a generated RS256 key (python-jose ignores a PyJWT-style
      "require" list; with it a token without aud skipped the audience check).
+  8. portal snapshot (docs/llm-wiki C4) — `affiliation` claim + `plat:` groups land on users.portal_*,
+     an absent claim stores NULL / an empty plat list, and a first-time user joins the team mapped to
+     the affiliation (C5). The replay guard is the DB table portal_launch_jti (C6), so jti values are
+     unique per run and cleaned up.
 
 We mock the JWKS HTTP fetch + bypass JWT signature validation via
 monkeypatched ``portal_sso._verify_portal_token`` for the happy/replay paths,
@@ -21,6 +25,7 @@ from __future__ import annotations
 
 import time
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -39,7 +44,7 @@ def _client() -> AsyncClient:
 
 
 @pytest.fixture
-def _enable_sso(monkeypatch: pytest.MonkeyPatch):
+async def _enable_sso(monkeypatch: pytest.MonkeyPatch):
     """Flip the settings flag and clear in-memory caches between tests."""
     s = get_settings()
     monkeypatch.setattr(s, "portal_jwks_url", "https://portal.test/.well-known/jwks.json")
@@ -49,11 +54,15 @@ def _enable_sso(monkeypatch: pytest.MonkeyPatch):
     # Reset the module-level caches so cross-test bleed doesn't break determinism.
     sso_mod._jwks_cache["keys"] = None
     sso_mod._jwks_cache["fetched"] = 0.0
-    sso_mod._seen_jti.clear()
     yield s
     sso_mod._jwks_cache["keys"] = None
     sso_mod._jwks_cache["fetched"] = 0.0
-    sso_mod._seen_jti.clear()
+    async with session_scope() as sess:
+        await sess.execute(text("DELETE FROM portal_launch_jti WHERE jti LIKE 'jti-test-%'"))
+
+
+def _jti(tag: str) -> str:
+    return f"jti-test-{tag}-{uuid4().hex[:12]}"
 
 
 # ── 1) disabled by default ─────────────────────────────────────────────
@@ -121,7 +130,7 @@ async def test_empty_jwks_returns_401_no_key(
 async def test_happy_path_upserts_user_and_sets_cookie(
     _enable_sso, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Bypass signature verification; assert upsert + redirect + cookie."""
+    """Bypass signature verification; assert upsert + redirect + cookie + portal snapshot."""
     test_email = "sso-e2e@mx.local"
     claims: dict[str, Any] = {
         "sub": "portal-user-1",
@@ -129,15 +138,13 @@ async def test_happy_path_upserts_user_and_sets_cookie(
         "name": "SSO Test User",
         "aud": "mx-white-paper",
         "scope": "launch",
-        "jti": "jti-happy-1",
+        "jti": _jti("happy"),
         "exp": int(time.time()) + 60,
+        "affiliation": "SYN-AFF-E2E",
+        "groups": ["AD-Group-X", "feat:chat", "plat:plmdefect", "plat:mxwhitepaper"],
     }
 
     async def _verify_stub(token: str) -> dict[str, Any]:
-        # Mimic the real verifier's side-effects: dedup + jti registration.
-        if claims["jti"] in sso_mod._seen_jti:
-            raise sso_mod._ReplayError("launch token already used")
-        sso_mod._seen_jti[claims["jti"]] = float(claims["exp"])
         return claims
 
     monkeypatch.setattr(sso_mod, "_verify_portal_token", _verify_stub)
@@ -158,12 +165,16 @@ async def test_happy_path_upserts_user_and_sets_cookie(
         # User row upserted.
         async with session_scope() as s:
             row = (await s.execute(
-                text("SELECT email, role FROM users WHERE email = :e"),
+                text("""SELECT email, role, portal_affiliation, portal_plat, portal_access_at
+                        FROM users WHERE email = :e"""),
                 {"e": test_email},
             )).first()
         assert row is not None
         assert row[0] == test_email
         assert row[1] == "editor"
+        assert row[2] == "SYN-AFF-E2E"
+        assert list(row[3]) == ["plat:mxwhitepaper", "plat:plmdefect"]
+        assert row[4] is not None
     finally:
         async with session_scope() as s:
             await s.execute(text("DELETE FROM users WHERE email = :e"), {"e": test_email})
@@ -177,21 +188,18 @@ async def test_replay_second_use_returns_401(
     _enable_sso, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     test_email = "sso-replay@mx.local"
-    jti = "jti-replay-1"
     claims: dict[str, Any] = {
         "sub": "portal-user-2",
         "email": test_email,
         "name": "Replay Test User",
         "aud": "mx-white-paper",
         "scope": "launch",
-        "jti": jti,
+        "jti": _jti("replay"),
         "exp": int(time.time()) + 60,
     }
 
     async def _verify_stub(token: str) -> dict[str, Any]:
-        if claims["jti"] in sso_mod._seen_jti:
-            raise sso_mod._ReplayError("launch token already used")
-        sso_mod._seen_jti[claims["jti"]] = float(claims["exp"])
+        # The replay guard is no longer inside the verifier — portal_launch_jti (DB) catches the second use.
         return claims
 
     monkeypatch.setattr(sso_mod, "_verify_portal_token", _verify_stub)
@@ -255,3 +263,76 @@ async def test_required_claims_are_enforced(
     else:
         with pytest.raises(sso_mod._InvalidTokenError):
             await sso_mod._verify_portal_token(token)
+
+
+# ── 8) portal snapshot — affiliation · plat (C4) · team map (C5) ───────────────────────────────
+
+
+async def _callback_with(monkeypatch: pytest.MonkeyPatch, claims: dict[str, Any]) -> Any:
+    async def _verify_stub(token: str) -> dict[str, Any]:
+        return claims
+
+    monkeypatch.setattr(sso_mod, "_verify_portal_token", _verify_stub)
+    async with _client() as c:
+        return await c.post("/api/v1/auth/portal-callback", data={"token": "stub"})
+
+
+def _claims(email: str, **extra: Any) -> dict[str, Any]:
+    return {"sub": f"portal-{email}", "email": email, "name": "Snapshot User", "aud": "mx-white-paper",
+            "scope": "launch", "jti": _jti("snap"), "exp": int(time.time()) + 60, **extra}
+
+
+@pytest.mark.asyncio
+async def test_snapshot_overwrites_and_absent_claim_is_null(
+    _enable_sso, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The launch token is the whole snapshot — no affiliation claim now means none (NULL), no plat: means []."""
+    email = "sso-snapshot@mx.local"
+    async with session_scope() as s:
+        await s.execute(text("DELETE FROM users WHERE email = :e"), {"e": email})
+    try:
+        r1 = await _callback_with(monkeypatch, _claims(email, affiliation="SYN-AFF-1", groups=["plat:plmdefect"]))
+        r2 = await _callback_with(monkeypatch, _claims(email, groups=["AD-Only"]))
+        assert r1.status_code == 303 and r2.status_code == 303
+        async with session_scope() as s:
+            row = (await s.execute(
+                text("SELECT portal_affiliation, portal_plat FROM users WHERE email = :e"), {"e": email},
+            )).first()
+        assert row is not None and row[0] is None and list(row[1]) == []
+    finally:
+        async with session_scope() as s:
+            await s.execute(text("DELETE FROM users WHERE email = :e"), {"e": email})
+
+
+@pytest.mark.asyncio
+async def test_first_login_joins_mapped_team(
+    _enable_sso, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C5 — wiki_aff_team_map decides the first team; without a mapping the first team as before."""
+    email, unmapped_email = "sso-teammap@mx.local", "sso-teammap-none@mx.local"
+    aff = f"SYN-AFF-MAP-{uuid4().hex[:8]}"
+    async with session_scope() as s:
+        first = (await s.execute(text("SELECT id FROM teams LIMIT 1"))).scalar()
+        other = (await s.execute(
+            text("SELECT id FROM teams WHERE id <> CAST(:f AS uuid) ORDER BY slug LIMIT 1"), {"f": str(first)},
+        )).scalar()
+        if other is None:
+            pytest.skip("needs two teams")
+        await s.execute(text("DELETE FROM users WHERE email IN (:a, :b)"), {"a": email, "b": unmapped_email})
+        await s.execute(
+            text("INSERT INTO wiki_aff_team_map (affiliation, team_id) VALUES (:a, CAST(:t AS uuid))"),
+            {"a": aff, "t": str(other)},
+        )
+    try:
+        assert (await _callback_with(monkeypatch, _claims(email, affiliation=aff))).status_code == 303
+        assert (await _callback_with(monkeypatch, _claims(unmapped_email, affiliation="SYN-AFF-NOMAP"))).status_code == 303
+        async with session_scope() as s:
+            mapped = (await s.execute(text("SELECT team_id FROM users WHERE email = :e"), {"e": email})).scalar()
+            unmapped = (await s.execute(
+                text("SELECT team_id FROM users WHERE email = :e"), {"e": unmapped_email})).scalar()
+        assert str(mapped) == str(other)
+        assert str(unmapped) == str(first)
+    finally:
+        async with session_scope() as s:
+            await s.execute(text("DELETE FROM users WHERE email IN (:a, :b)"), {"a": email, "b": unmapped_email})
+            await s.execute(text("DELETE FROM wiki_aff_team_map WHERE affiliation = :a"), {"a": aff})

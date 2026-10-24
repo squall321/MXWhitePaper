@@ -19,13 +19,14 @@
 - [x] 완료 기준 — 가짜 LLM + 합성 묶음으로 빈 시험이 돈다(`test_wiki_w0.py` 24 passed · 전체 1228 passed, 4 skipped — 10-24)
 
 ## W1 연결 · 신원
-- [ ] C1 `POST /api/v1/auth/sso` — 404(비밀 없음) · 401 · 403 · 400 · 200, `compare_digest`
-- [ ] C2 위임 토큰 — 12시간 이상 · read + write · 클라이언트별 발급 · 세대 회수
-- [ ] C3 자동 생성 스위치 `MXWP_SSO_JIT_CREATE`
-- [ ] C4 소속 증명 검증(맞음 · 만료 · 다른 이메일 · 평문만) · 진입 토큰 `affiliation` · `groups` 의 `plat:` 받기 · 플랫폼 증명 검증 · `users.portal_*`
-- [ ] C5 `wiki_aff_team_map` + 관리자 화면
-- [ ] C6 진입 토큰 jti 재사용 막기를 DB 로
-- [ ] C8 HWAX-PORTAL-INTEGRATION 을 지금 모습으로(위임 · 소속 포함)
+- [x] C1 `POST /api/v1/auth/sso` — 404(비밀 없음) · 401 · 403 · 400 · 200, `compare_digest` — `routers/auth_sso.py`
+- [x] C2 위임 토큰 — 12시간 이상 · read + write · 클라이언트별 발급 · 세대 회수 — JWT `typ=delegated` + `sso_delegations`(WK-D22 · D23)
+- [x] C3 자동 생성 스위치 `MXWP_SSO_JIT_CREATE`
+- [x] C4 소속 증명 검증(맞음 · 만료 · 다른 이메일 · 평문만) · 진입 토큰 `affiliation` · `groups` 의 `plat:` 받기 · 플랫폼 증명 검증 · `users.portal_*`
+  — 위임 호출 값은 저장하지 않고 그 호출에만(WK-D24)
+- [ ] C5 `wiki_aff_team_map` + 관리자 화면 — 표 · 관리자 API · 첫 팀 정하기는 됐다, 화면은 아직
+- [x] C6 진입 토큰 jti 재사용 막기를 DB 로 — `portal_launch_jti`
+- [x] C8 HWAX-PORTAL-INTEGRATION 을 지금 모습으로(위임 · 소속 포함) — 접두 · `serve -s`(W0) + 'Identity' 절
 - [ ] 포털 쪽 P1~P5 가 끝난 뒤 — 게이트웨이 감사 원장에서 MXWP 호출이 사람 명의(request §4-5)
 
 ## W2 보이기 범위

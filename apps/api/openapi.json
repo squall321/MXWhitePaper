@@ -39,6 +39,20 @@
         "title": "AddReviewersIn",
         "type": "object"
       },
+      "AffTeamBody": {
+        "properties": {
+          "team_id": {
+            "format": "uuid",
+            "title": "Team Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "team_id"
+        ],
+        "title": "AffTeamBody",
+        "type": "object"
+      },
       "AnchorIn": {
         "properties": {
           "block_id": {
@@ -2119,6 +2133,24 @@
         "title": "ResponseIn",
         "type": "object"
       },
+      "RevokeBody": {
+        "properties": {
+          "client": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client"
+          }
+        },
+        "title": "RevokeBody",
+        "type": "object"
+      },
       "RuleCreate": {
         "properties": {
           "action_kind": {
@@ -3810,6 +3842,125 @@
         ]
       }
     },
+    "/api/v1/admin/aff-team-map": {
+      "get": {
+        "operationId": "list_aff_team_map_api_v1_admin_aff_team_map_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Aff Team Map Api V1 Admin Aff Team Map Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Aff Team Map",
+        "tags": [
+          "portal-delegation"
+        ]
+      }
+    },
+    "/api/v1/admin/aff-team-map/{affiliation}": {
+      "delete": {
+        "operationId": "delete_aff_team_map_api_v1_admin_aff_team_map__affiliation__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "affiliation",
+            "required": true,
+            "schema": {
+              "title": "Affiliation",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Aff Team Map Api V1 Admin Aff Team Map  Affiliation  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Aff Team Map",
+        "tags": [
+          "portal-delegation"
+        ]
+      },
+      "put": {
+        "operationId": "put_aff_team_map_api_v1_admin_aff_team_map__affiliation__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "affiliation",
+            "required": true,
+            "schema": {
+              "title": "Affiliation",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AffTeamBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Put Aff Team Map Api V1 Admin Aff Team Map  Affiliation  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Aff Team Map",
+        "tags": [
+          "portal-delegation"
+        ]
+      }
+    },
     "/api/v1/admin/archived-docs": {
       "get": {
         "operationId": "list_archived_docs_api_v1_admin_archived_docs_get",
@@ -4701,6 +4852,69 @@
         "summary": "정책 실행 로그 (admin, 최근순)",
         "tags": [
           "retention"
+        ]
+      }
+    },
+    "/api/v1/admin/sso-delegations/{user_id}/revoke": {
+      "post": {
+        "description": "세대를 올린다 — 그 사람(그 클라이언트)으로 나간 위임 토큰이 바로 죽는다. 다음 발급은 새 세대로 나간다.",
+        "operationId": "revoke_delegations_api_v1_admin_sso_delegations__user_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RevokeBody"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Revoke Delegations Api V1 Admin Sso Delegations  User Id  Revoke Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Delegations",
+        "tags": [
+          "portal-delegation"
         ]
       }
     },
@@ -6319,6 +6533,29 @@
         "summary": "Signup",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/sso": {
+      "post": {
+        "operationId": "delegate_api_v1_auth_sso_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delegate Api V1 Auth Sso Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delegate",
+        "tags": [
+          "portal-delegation"
         ]
       }
     },

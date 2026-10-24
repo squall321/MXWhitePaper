@@ -40,7 +40,8 @@ chain 의 최상위. 우선순위:
 1. **API token** (`Authorization: Bearer mxwp_…`) → `_resolve_api_token()` →
    사용자 + scopes 반환. 스코프가 verb 와 안 맞으면 `ScopeInsufficient` (403).
 2. **JWT** (`Authorization: Bearer <jwt>`) → `security.decode_jwt()` → user id →
-   `_fetch_user_by_id()`.
+   `_fetch_user_by_id()`. `typ=delegated`(게이트웨이 · 포털 위임 토큰 — [[#게이트웨이 · 포털 위임]])이면
+   `_resolve_delegated()` 로 간다 — 세대 · 비밀 지문 대조, 범위 read + write, admin → owner, 소속 · 플랫폼은 그 호출의 증명으로.
 3. **개발 환경 폴백** — 미인증이면 `_fetch_admin()` 으로 첫 admin 반환. `app_env=development`
    **와** `ALLOW_DEV_ADMIN_FALLBACK=1` 이 둘 다일 때만 열린다 — 스위치 기본은 꺼짐(`b5b199c`, 예제
    `.env` 를 복사한 운영 박스가 인증 없이 뜨던 것을 막음). 시험은 conftest 가 시험 프로세스에서만 켠다.
@@ -50,7 +51,8 @@ chain 의 최상위. 우선순위:
 > request.headers 에서 사용자를 바꿔치는 별도 helper — 인증이 아니라 작성자
 > 표기다.
 
-dict 형태: `{id, email, role, ...}`.
+dict 형태: `{id, email, role, ..., portal_affiliation, portal_plat, portal_access_at}` — `portal_*` 는 포털 진입 토큰이
+남긴 스냅숏(users 칸)이고, 위임 호출이면 그 호출의 증명값으로 바뀌며 `auth_via: "delegated:<client>"` 가 붙는다.
 
 ### API token
 
@@ -144,6 +146,9 @@ return envelope(data={...}, meta={"page": 1})
 | | `import_default_division` | `MX` |
 | | `import_default_confidentiality` | `internal` |
 | AI | `ai_enabled` | `False` |
+| 위임 | `mxwp_sso_secret` | `""` — 비면 `/auth/sso` 404 · 위임 토큰 거부 · 소속 증명 무시 |
+| | `mxwp_sso_jit_create` | `True` — 끄면 위임으로 처음 보는 사람은 403 |
+| 위키 | `wiki_enabled` · `wiki_llm_*` · `wiki_query_llm_*` | 끔 · 빈 값 — [[wiki]] |
 | Backup | `backup_enabled` | `True` |
 | Subscription | `subscription_digest_enabled` | `True` |
 
@@ -291,14 +296,46 @@ attribute (`http_status`/`code`) 패턴 적용 — 다른 라우터들의 `*Vali
 KeyError 500 이었다. 필수 클레임은 `require_exp` · `require_aud` · `require_sub` · `require_jti` 를
 칸마다 준다(`c164dda`).
 
-In-process replay guard: `_seen_jti` dict 가 max `exp` 까지 보유. 다중
-worker / 멀티 replica 시점에는 Redis 로 backed 해야 일관성 유지 (현재는 단일
-uvicorn 가정).
+Replay guard 는 DB 표 `portal_launch_jti`(C6, `0050`) — `_claim_jti` 가 `INSERT … ON CONFLICT DO NOTHING` 으로 jti 를 한 번만
+쓴다(지난 줄은 그때 지운다). 프로세스 메모리였을 때는 worker 가 둘이면 같은 토큰을 한 번씩 받았다. `_verify_portal_token` 은 서명 ·
+클레임만 보고 jti 는 쓰지 않는다.
+
+**포털 스냅숏(C4 · C5)** — 진입 토큰의 `affiliation` 클레임(없으면 칸이 없다) · `groups` 의 `plat:` 항목을 들어올 때마다
+`users.portal_affiliation` · `portal_plat` · `portal_access_at` 에 **덮어쓴다**(`claims_portal_access` — 클레임이 없으면 NULL, plat 이 없으면
+빈 배열 = '없음을 안다'). 처음 들어온 사람의 팀은 `wiki_aff_team_map`(관리자가 채운다)이 정하고 없으면 지금처럼 첫 팀.
 
 테스트 [[apps/api/tests/test_portal_sso.py]] — disabled 404 + malformed 401 +
-no_key 401 + happy 303 + replay 401 + 필수 클레임(실제 RS256 서명 — aud · jti · exp · sub 가 빠지면
-invalid_token 401) = 6 묶음 (cycle 19 의 test_sso.py 와는
-별개 — 그건 SSO providers CRUD).
+no_key 401 + happy 303(+ 스냅숏) + replay 401(DB) + 필수 클레임(실제 RS256 서명 — aud · jti · exp · sub 가 빠지면
+invalid_token 401) + 스냅숏 덮어쓰기 + 소속→팀 = 8 묶음 (cycle 19 의 test_sso.py 와는
+별개 — 그건 SSO providers CRUD). jti 는 시험마다 `jti-test-…` 로 새로 만들고 지운다(DB 원장이라 고정 jti 는 다음 실행을 막는다).
+
+### 게이트웨이 · 포털 위임
+
+★ docs/llm-wiki W1(C1~C4). [[src/app/routers/auth_sso.py]] 의 `POST /api/v1/auth/sso` — ste · HWAX Risk · 옛 RA 와 같은 계약.
+포털 챗 · 심의 · Claude 가 게이트웨이를 거쳐 MXWP 를 부를 때 서비스 계정이 아니라 **그 사람 명의**가 되게 한다.
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 문 | `MXWP_SSO_SECRET` 이 비면 404 `sso_disabled` · `X-Heax-Gateway-Secret` 이 틀리면 401(`hmac.compare_digest`) |
+| 사람 | `X-Hwax-Delegate-Email` 먼저, 없으면 `X-Heax-User-Email`(없으면 400). 처음 보는 이메일은 `_create_user`(끄면 403 `jit_disabled`) · 비활성 403 |
+| 토큰 | JWT `typ=delegated` — `sub` · `cli`(X-Heax-Client, 기본 gateway) · `gen` · `eml`(받은 이메일 글자 그대로) · `sk`(비밀 지문) · `scope [read, write]` · 12시간. 봉투 `data` 에 `{access_token, token_type:"bearer", expires_in}` |
+| 세대 | `sso_delegations`(사람 × 클라이언트). 발급은 **아무것도 회수하지 않는다**(게이트웨이 프로세스가 여럿이면 핑퐁). 회수는 `POST /api/v1/admin/sso-delegations/{user_id}/revoke {client?}` 가 세대를 올린다 |
+| 검증 | [[src/app/core/auth.py#_resolve_delegated]] — 비밀 있음 · `sk` 같음 · `gen` 같음 · 살아 있는 사람. 범위는 `check_scope`(→ `/admin/*` 막힘), admin 은 owner 로 낮춘다, `/me/api-tokens` · `/me/2fa` 는 403 |
+| 소속 · 플랫폼 | [[src/app/core/portal_identity.py]] — `X-Heax-User-Affiliation` + `X-Heax-Aff-Proof`, `X-Heax-User-Plat` + `X-Heax-Plat-Proof`(`v1.<exp>.<hmac>`, 서명 대상은 인코딩 전 `v1\|<eml>\|<값>\|<exp>`). 맞으면 그 호출의 `portal_*` 로, 평문만 · 틀림 · 만료 · 다른 이메일이면 없는 것으로. **users 칸에 저장하지 않는다** |
+
+소속→팀 표 관리자 API — `GET /api/v1/admin/aff-team-map` · `PUT|DELETE /api/v1/admin/aff-team-map/{affiliation}`(감사
+`wiki.aff_team_map.set|delete`). 발급은 감사 `auth.sso.delegate`, 회수는 `auth.sso.revoke`.
+
+함정
+
+- 발급 요청에는 소속 증명이 없다 — 게이트웨이로 **먼저** 온 사람은 소속→팀 표를 못 쓰고 첫 팀에 든다.
+- 위임 호출의 헤더를 저장하지 않는 까닭 — 헤더가 없는 것이 '권한 없음' 인지 '게이트웨이 `MXWP_SEND_PLAT` 꺼짐' 인지 모른다. 저장하면
+  옛 `plat:` 이 새 시각으로 살아난다. 저장값은 서명된 전체 스냅숏인 진입 토큰에서만.
+- 비밀을 바꾸면(`sk`) · 비우면 그 전에 나간 위임 토큰이 바로 죽는다 — 게이트웨이는 401 을 보고 한 번 다시 받는다.
+
+테스트 [[apps/api/tests/test_auth_sso.py]] — 창구 404 · 401 · 400 · 403(JIT 꺼짐 · 비활성) · 200 꼴 · 위임 헤더 우선 · 클라이언트별 세대
+회수(웹 세션은 산다) · 비밀 바꿈/비움 · 범위(admin 경로 · PAT · 2FA) · 소속 증명(맞음 · 만료 · 다른 이메일 · 평문만 · 바꿔치기) · 플랫폼
+증명 · 저장값 무시 · 소속→팀 표 CRUD.
 
 ## 7. mxwp-mcp write tools — API token 의 외부 소비자
 
@@ -373,3 +410,5 @@ switch 에 case 추가. payload 키 컨벤션: `actor_name`, `doc_title`, `slug`
 | [[src/tests/test_api_token_scopes.py]] | scope vs verb |
 | [[src/tests/test_totp.py]] | 2FA (TOTP) |
 | [[src/tests/test_sso.py]] | SSO |
+| [[src/tests/test_portal_sso.py]] | 포털 타일 SSO · 스냅숏 · jti 원장 · 소속→팀 |
+| [[src/tests/test_auth_sso.py]] | 게이트웨이 · 포털 위임 · 소속 · 플랫폼 증명 |

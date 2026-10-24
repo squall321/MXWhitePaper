@@ -71,6 +71,27 @@
   `inquiry_answer.confidence` 는 0~1. 해석 조건도 숫자는 `{value, unit}` 만(Strict). `audience` 는 받을 때 정규화(org ∧ X = X)하고 만족 불가
   조합은 거부(CONTRACTS §3 갱신).
 
+## 2026-10-24 — W1 연결 · 신원(MXWP 세션)
+
+- **WK-D22 위임 토큰은 JWT `typ=delegated`(`sub` · `cli` · `gen` · `eml` · `sk` · `scope [read, write]` · 12시간), 세대는 `sso_delegations`(사람 ×
+  클라이언트).** 발급은 아무것도 회수하지 않는다 — 회수는 관리자가 세대를 올리거나(즉시) · 사람을 비활성으로 · 비밀을 바꾸거나(`sk`) 비운다.
+  까닭 — 다른 앱처럼 '같은 이름의 직전 토큰을 발급이 회수' 하면 게이트웨이 프로세스가 여럿일 때 서로의 토큰을 죽이며 핑퐁한다. PAT 줄
+  (`api_tokens`)로 내지 않은 까닭 — 요청마다 argon2 검증 · 12시간마다 폐기 줄이 쌓이고 사용자의 '개인 API 토큰' 목록에 섞인다.
+- **WK-D23 위임으로 온 요청은 admin 역할을 owner 로 낮추고 `/me/api-tokens` · `/me/2fa` 를 403 으로 막는다.** 까닭 — 범위가 read + write(`/admin/*`
+  아님)여도 admin 역할 검사는 `/admin/*` 밖에도 있다(용어 승인 · 이후 온톨로지 승인 · `plat:` 빼는 넓히기). AI 가 사람 명의로 admin 승인을 하거나
+  비밀을 쥔 쪽이 그 사람의 장수명 PAT 를 만드는 길을 남기지 않는다.
+- **WK-D24 위임 호출의 소속 · 플랫폼 헤더는 저장하지 않고 그 호출에만 쓴다(CONTRACTS §2-10 을 바꿈).** 저장값(`users.portal_*`)은 진입 토큰
+  (서명된 전체 스냅숏)에서만. 까닭 — 헤더가 없는 것이 '권한 없음' 인지 '`MXWP_SEND_PLAT` 꺼짐' 인지 모른다. 저장하면 잃은 `plat:` 이 새 시각으로
+  살아나 브라우저 세션 · PAT 가 막힌 자료를 본다.
+- **WK-D25 진입 토큰 jti 원장을 DB(`portal_launch_jti`)로.** `_verify_portal_token` 은 서명 · 클레임만, jti 는 `_claim_jti` 가 `INSERT … ON CONFLICT`.
+
+## 조사 메모(2026-10-24, W1)
+
+- dev API 는 `uvicorn --reload` 다 — 코드를 저장하는 순간 살아 있는 API 가 바뀐다. 이번에 `users.portal_*` 를 읽는 코드가 `0050` 보다 몇 분
+  먼저 올라가 그 사이 인증 요청이 실패했을 수 있다. 칸을 읽는 코드는 마이그레이션을 먼저 올린 뒤 저장한다.
+- `infra/scripts/migrate.sh` 는 DB 비밀을 명령줄 `--env` 로 넘긴다(START §1 이 피하라는 꼴) — 이번엔 컨테이너 안에서 `.env` 를 물려받아
+  `alembic upgrade head` 를 돌렸다. 스크립트를 고칠지는 사람에게 묻는다.
+
 ## 조사 메모(2026-10-24, W0)
 
 - 시험의 pytest · jsonschema 는 api.sif 안이 아니라 호스트 `~/.local` 에서 온다(홈 마운트 — `--no-mount home` 으로 띄우면 둘 다 없다).

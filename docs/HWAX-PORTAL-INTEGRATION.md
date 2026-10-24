@@ -81,6 +81,24 @@ The portal forwards `https://hwax.sec.samsung.net/mx-white-paper/` → `127.0.0.
 `/mx-white-paper/api/` → `127.0.0.1:8800/api/` (prefix stripped). On the API side the same sub-path
 needs `REFRESH_COOKIE_PATH=/` and `PORTAL_SSO_LANDING=/mx-white-paper/` (`docs/lat/core.md`).
 
+## Identity — who MXWP thinks the caller is
+
+Two doors, both opt-in by config; with nothing set MXWP behaves as a standalone app.
+
+| Door | Turned on by | What happens |
+| --- | --- | --- |
+| Browser tile (jwt-handoff) | `PORTAL_JWKS_URL` (+ `PORTAL_AUDIENCE`, `REFRESH_COOKIE_PATH=/`, `PORTAL_SSO_LANDING`) | The portal POSTs a 90 s RS256 launch token to `POST /api/v1/auth/portal-callback`; MXWP verifies it against the portal JWKS, spends its `jti` once (DB table `portal_launch_jti`), upserts the user by email and sets the refresh cookie. The token's `affiliation` claim and the `plat:` entries of `groups` are stored on the user (`users.portal_*`) on every launch — the portal's signed snapshot. |
+| Gateway / portal delegation | `MXWP_SSO_SECRET` in MXWP `.env` **and** the same value in `HWAXMcpGateway/provision.env` (with `PER_USER_SSO_APPS` `mx-white-paper:MXWP`, `MXWP_SSO_URL=http://127.0.0.1:8800/api/v1/auth/sso`, `MXWP_SEND_PLAT=1`) | The gateway calls `POST /api/v1/auth/sso` with the shared secret and the person's email and gets a 12 h token **in that person's name** (`typ=delegated`, scope read + write). Portal chat, deliberation and Claude then call MXWP as that person instead of the service account. Empty secret → 404, and the gateway stays on the service account (the off switch). |
+
+Delegated calls also carry the person's portal affiliation and `plat:` permissions as **signed** headers
+(`X-Heax-User-Affiliation` + `X-Heax-Aff-Proof`, `X-Heax-User-Plat` + `X-Heax-Plat-Proof`, HMAC-SHA256 with the same secret, bound to
+the email, 120 s). MXWP trusts them only for that call; a plain header without a valid proof is ignored. A first-time user
+lands in the team an admin mapped to their affiliation (`/api/v1/admin/aff-team-map`), else the first team.
+
+Revoking — an admin bumps the generation (`POST /api/v1/admin/sso-delegations/{user_id}/revoke`), deactivates the user,
+or rotates/empties `MXWP_SSO_SECRET`; each kills outstanding delegated tokens at once. Changing `.env` needs an
+`mxwp_api` restart (the instance inherits `.env` at start). Details and tests: `docs/lat/core.md` §게이트웨이 · 포털 위임.
+
 ## Gotchas
 
 - The prefix must be present at **build time** as `VITE_BASE_PATH` (`make build-web` maps

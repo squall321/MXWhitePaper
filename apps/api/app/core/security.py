@@ -50,6 +50,30 @@ def make_refresh_token(sub: str) -> str:
     return jwt.encode(payload, s.jwt_secret, algorithm=s.jwt_algorithm)
 
 
+def make_delegated_token(
+    sub: str, *, client: str, generation: int, email: str, secret_tag: str, ttl_seconds: int,
+) -> str:
+    """게이트웨이 · 포털 위임 토큰(typ=delegated) — 그 사람 명의 · 범위 read + write.
+
+    검증은 core/auth `_resolve_delegated` — 세대(`gen`)가 sso_delegations 와 같고 위임 비밀 지문(`sk`)이 지금 비밀과 같을 때만
+    산다. `eml` 은 게이트웨이가 발급 때 실은 이메일 글자 그대로다(소속 · 플랫폼 증명의 서명 대상).
+    """
+    s = get_settings()
+    now = datetime.now(UTC)
+    payload: dict[str, Any] = {
+        "sub": sub,
+        "typ": "delegated",
+        "cli": client,
+        "gen": generation,
+        "eml": email,
+        "sk": secret_tag,
+        "scope": ["read", "write"],
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(seconds=ttl_seconds)).timestamp()),
+    }
+    return jwt.encode(payload, s.jwt_secret, algorithm=s.jwt_algorithm)
+
+
 def decode_token(token: str) -> dict[str, Any]:
     s = get_settings()
     try:
