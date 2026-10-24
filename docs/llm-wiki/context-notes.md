@@ -243,6 +243,20 @@
   한 규약으로 묶지 않고, 들이기 시스템 프롬프트에 '원천 안 대괄호 번호는 그 원천 안의 표시 — 근거 번호로 읽지 않고 위키 글에 옮기지
   않는다(근거는 cites 로만)' 를 넣었다. 코드는 처음부터 번호를 읽지 않는다.
 
+## 2026-10-24 — dev 위키 켬(사용자 결정 '끝에서 끝 잇기에 필요한 것을 다 하라')
+
+- `.env` 에 `WIKI_ENABLED=true` 한 줄을 더했다(비밀 줄은 안 건드림). LLM(`WIKI_LLM_*` · `WIKI_QUERY_LLM_*`)은 비워 둔다 — 들이기는 줄에서
+  기다리고 묻기는 찾은 문서만 보인다(mock 없음 — WK-D7).
+- koo.park 을 reader → editor 로(관리자 창구와 같은 `UPDATE` + 감사 `admin.user.update`). 감사의 `user_id` 는 비우고 payload 에
+  'Claude 세션 — 사용자 지시' 를 적었다 — 관리자 명의로 꾸미지 않는다.
+- dev 의 `web.sif` 가 09-13 빌드라 위키 화면이 하나도 없었다 — `make build-web` 으로 다시 구웠다(접두 `/mx-white-paper/`). Drive 로
+  보내기(`ship-web`)는 하지 않았다 — cae00 배포는 W8.
+- 다시 띄우기 — 이 스택의 `mxwp_web` · `mxwp_wiki` · `mxwp_api` 만 이름으로 내리고 `start.sh`(떠 있는 DB · 검색 · 저장소는 건너뛴다).
+  API 는 `apps/api` 에서 돌고 거기에 `.env` 가 없어 띄울 때 물려받은 환경만 읽는다 — 설정을 바꾸면 프로세스를 다시 띄워야 한다.
+  mxwp-mcp(:8765)가 `mxwp_api` 안에서 돌아 같이 내려간다 — 포털 세션에 미리 알렸고 그쪽이 다시 올린다(lat core).
+- 확인 — 위키 창구 200 · 워커 `enabled=True` · 포털 경로(`https://…/mx-white-paper/`)에서 챗 '위키에 묻기' 가 MISS 와 '질문으로
+  남기기' 를 낸다(위키 문서 0) · '내 후보' 화면이 뜬다.
+
 ## 2026-10-24 — 시험 전용 DB(사용자 결정 — 포털 세션이 전함)
 
 - **WK-D50 시험은 시험 전용 DB · 색인 · 버킷으로만 돈다.** dev DB 는 시험이 읽지도 쓰지도 않는다. conftest 가 같은 postgres 안에

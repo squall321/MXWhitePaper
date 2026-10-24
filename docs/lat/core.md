@@ -371,6 +371,9 @@ invalid_token 401) + 스냅숏 덮어쓰기 + 소속→팀 = 8 묶음 (cycle 19 
 - **http 모드(:8765)는 위임 증명 머리글 넷을 넘긴다** — 게이트웨이가 실은 `X-Heax-User-Affiliation` · `X-Heax-Aff-Proof` ·
   `X-Heax-User-Plat` · `X-Heax-Plat-Proof` 를 받은 그대로 API 호출에 싣는다(`server._request_forward_headers` →
   `MxwpClient(extra_headers=…)`). 10-24 전에는 Bearer 만 넘겨 MCP 로는 `aff:` · `plat:` 범위 문서를 아무도 못 봤다(닫힌 쪽).
+- **dev 의 http 모드는 `mxwp_api` 인스턴스 안에서 돈다**(포털 `services.sh` 가 `apptainer exec instance://mxwp_api` 로 올린다) —
+  API 인스턴스를 다시 띄우면 MCP 서버도 같이 내려간다. 다시 띄우기 전 포털 세션에 알리고, 뜬 뒤 그쪽이 mxwp-mcp · 게이트웨이를
+  다시 올린다(10-24).
 - **ETag 자동**: write 도구가 내부에서 문서 ETag (`W/"<doc_id>-<version>"`)
   를 확보해 `If-Match` 로 전송. 충돌 시 "outline 다시 읽고 재시도" 에러로
   변환 — 호출자가 If-Match 를 직접 다룰 일 없음.
