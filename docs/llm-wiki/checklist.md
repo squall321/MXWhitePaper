@@ -7,8 +7,9 @@
 - [x] request · CONTRACTS · SCHEMA-DRAFT · START · checklist · context-notes
 
 ## W0 준비(dev)
-- [ ] request §11 결정 확인(Q3 · Q5 · Q6 · Q7 은 W4 완료 전, Q4 는 W2 시작 전)
-- [ ] 낡은 문서 셋 — HWAX-PORTAL-INTEGRATION(접두 떼기 · `serve -s`) · llm-widgets-via-api(토큰 범위) · mcp-parity 체크리스트
+- [x] request §11 결정 확인(Q3 · Q5 · Q6 · Q7 은 W4 완료 전, Q4 는 W2 시작 전) — 10-24 사용자 결정 WK-D15~D18(Q1 · Q3~Q7 · Q9 · Q10)
+- [x] 낡은 문서 셋 — HWAX-PORTAL-INTEGRATION(접두 떼기 · `serve -s`) · llm-widgets-via-api(토큰 범위) · mcp-parity 체크리스트
+  (+ 같은 낡은 말의 `.env.example` · 고치다 찾은 `make build-web` 접두 결함 `8ff0d42`)
 - [ ] 가짜 LLM 서버(json_schema · 도구 호출 · 시나리오 열) — 진짜 꼴과 같게
 - [ ] 합성 원천 묶음 20(모순 · 낡음 · 빈틈 하나씩 심기)
 - [ ] 규칙서 초안 사람 검토
