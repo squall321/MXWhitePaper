@@ -23,6 +23,7 @@ from app.core.db import get_db, session_factory
 from app.core.errors import APIError, ValidationFailed, envelope, format_pydantic_errors
 from app.wiki import (
     audience,
+    candidates,
     catalog,
     entities,
     fileback,
@@ -376,6 +377,31 @@ async def post_fileback(
     """묻기의 답을 qa 원천으로 남기고 들인다 — 201(새것) · 200(같은 사람 · 물음 · 답이 이미 있다)."""
     out = await fileback.fileback(s, body, user=user)
     return JSONResponse(status_code=200 if out["dedup"] else 201, content=envelope(data=out))
+
+
+@router.get("/candidates")
+async def get_candidates(user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """내 후보 — 주인만(admin 도 남의 후보는 못 본다). 기한이 지난 것은 이때 철회한다."""
+    return envelope(data=await candidates.mine(s, user=user))
+
+
+class _ApproveBody(BaseModel):
+    audience: list[str] | None = Field(default=None, description="비면 보낸 범위")
+
+
+@router.post("/candidates/{source_id}/approve")
+async def approve_candidate(
+    source_id: UUID, body: _ApproveBody | None = None, user: dict[str, Any] = Depends(require_reader),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await candidates.approve(s, str(source_id), user=user, aud=body.audience if body else None))
+
+
+@router.post("/candidates/{source_id}/discard")
+async def discard_candidate(
+    source_id: UUID, user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(data=await candidates.discard(s, str(source_id), user=user))
 
 
 @router.get("/questions")

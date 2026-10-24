@@ -18,7 +18,7 @@
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
 | W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
 | W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지 · 엔티티 등록부(보이기 · 별칭 · 외부 id · 중복 후보 · 합치기 — 늘 검토 · 되돌리기). 엔티티 후보 해석(열쇠 · 후보 · `wiki_resolve`) · 정답표 초안 · 평가 스크립트. 화면(온톨로지 · 엔티티 목록 · 한 건 · 합치기 카드). 남은 것 — 사람의 정답표 확인 · LLM 을 낀 정확도(진짜 LLM 이 있는 박스) | [[#Ontology]] · [[#Relations]] · [[#Entities]] · [[#Resolution]] |
-| W6 묻기 · 되쌓기 · MCP | 묻기(`/query` SSE · 근거 각주 · MISS) · 질문 대기열(0057 · `/questions`) · 되쌓기(`/fileback` → qa 원천 → 문답 문서 · 비슷한 물음은 같은 문서에). 남은 것 — 후보 · `wiki_propose` · MCP · 챗 위키 모드 | [[#Query]] · [[#Fileback]] |
+| W6 묻기 · 되쌓기 · MCP | 묻기(`/query` SSE · 근거 각주 · MISS) · 질문 대기열(0057 · `/questions`) · 되쌓기(`/fileback` → qa 원천 → 문답 문서 · 비슷한 물음은 같은 문서에) · 후보(주인만 보는 held 원천 · `/candidates` · 화면 '내 후보' · 0058). 남은 것 — `wiki_propose` · MCP · 챗 위키 모드 | [[#Query]] · [[#Fileback]] · [[#Candidates]] |
 | W7 점검 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -56,6 +56,7 @@
 | 묻기(근거 모으기 · 스트리밍 답 · 각주 · MISS) | [[src/app/wiki/query.py#run]] | W6 |
 | 질문 대기열 | [[src/app/wiki/questions.py#add]] · 표 `wiki_questions`(0057) | W6 |
 | 되쌓기(묻기의 답 → qa 원천) | [[src/app/wiki/fileback.py#fileback]] | W6 |
+| 후보('내 후보' — 승인 · 버림 · 기한) | [[src/app/wiki/candidates.py]] · 받기의 후보 길 `sources.receive(held=…)` | W6 |
 | 규칙서 문서 올리기 | [[src/app/wiki/schema_doc.py#put]] | W4 |
 | 화면(apps/web) | [[src/features/wiki/api.ts]] · [[src/features/wiki/WikiCitations.tsx]] · `pages/Wiki{Home,Source,Changes,Log}.tsx` | W4 |
 | REST | [[src/app/routers/wiki.py]](`/api/v1/wiki/*`) | W3~ |
@@ -69,7 +70,7 @@
 - `audience` 정규화 — 중복 제거 · 정렬 · 다른 토큰과 함께인 `org` 는 뺀다(org ∧ X = X). 빈 목록 · 틀린 꼴 · 서로 다른 `aff:` 둘 ·
   `user:` 둘은 거부(만족하는 사람이 없다).
 - `origin.url` 은 `/` 로 시작하는 상대 경로만(박스마다 호스트가 다르다). `captured_at` 은 시간대가 있어야 한다.
-- 멱등 열쇠의 한 칸 `payload_sha256` = 정규화한 body(빈 선택 칸 뺌)의 정규 JSON(키 정렬 · 공백 없음) sha256.
+- 멱등 열쇠 = (시스템 · ref · 판 · `payload_sha256` · 범위) — 범위는 0058 부터(후보를 고른 범위로 승인하면 새 줄). `payload_sha256` = 정규화한 body(빈 선택 칸 뺌)의 정규 JSON(키 정렬 · 공백 없음) sha256.
 - CONTRACTS §3 표에 꼴이 없던 셋은 이렇게 정했다 — `document{doc_slug, version}` · `note{text}` · `report.figures[{name, caption?,
   upload_id?}]`(그리고 `card.claims[].evidence` 는 글 · `inquiry_answer.confidence` 는 0~1).
 
@@ -133,8 +134,9 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | 첨부 | `upload_id` = 이미지(id · ulid → `storage_keys.orig`, role `figure`) 또는 파일(id → `storage_key`, role `raw`). 바이트의 sha256 → 버킷 `mxwp-wiki-sources` 의 `<sha 앞 2>/<sha>`(있으면 그대로). 이미지 원본은 webp 라 blob mime 이 `image/webp`. 못 찾으면 422 |
 | 원천 문서 | slug `src-<id 앞 8>`(겹치면 12 · 전체). 절 — 요약 · 핵심 값(본문을 표로 — 숫자 그대로, 객체 목록은 목록마다 표) · 그림(이미지 첨부) · 출처 · 이 원천을 인용한 문서(W4 가 채운다). 기밀 = 원천 sensitivity, 지은이 = 보낸 사람, `metadata.owners` = 원천 주인. 시스템으로 짓는다(서비스 계정이 보낼 때마다 admin 범위 밖 읽기 감사가 쌓이지 않게) |
 | 트랜잭션 | 원천 줄 · 들이기 작업 · 문서 · 범위 줄이 `create_document` 의 커밋 하나에 든다(`wiki=` 는 범위 줄을 첫 커밋에 — 나중에 달면 그 사이 모두에게 보인다). `doc_id` 만 그 뒤 따로 |
-| 철회 | 주인 · admin. `status=withdrawn` · 줄에 선 들이기 `cancelled` · `ingest_state` new/queued → `skipped` · 기록 `withdraw`(detail `source_id` · `by` · `cancelled_jobs`, actor `user:<id>`) · 원천 문서 보관. 못 보는 원천은 404. **돌고 있는 들이기(W4)는 반영 전에 원천 상태를 다시 봐야 한다** |
-| 원천 보기 | `sources.visible_sql` — 범위 토큰 ⊆ 내 토큰, restricted 면 주인 · 들인 사람만(admin 은 다) |
+| 후보 | 동의 `candidate` 로 받으면 범위를 주인만(`user:<주인 id>`) · `held` 로 두고 들이지 않는다. 보낸 범위는 동의 칸 `suggested_audience` 로. 주인이 MXWP 사용자가 아니면 422 — [[#Candidates]] |
+| 철회 | 주인 · admin. `status=withdrawn` · 줄에 선 들이기 `cancelled` · `ingest_state` new/queued/held → `skipped` · 기록 `withdraw`(detail `source_id` · `by` · `cancelled_jobs`, actor `user:<id>`) · 원천 문서 보관. 못 보는 원천은 404. **돌고 있는 들이기(W4)는 반영 전에 원천 상태를 다시 봐야 한다** |
+| 원천 보기 | `sources.visible_sql` — 범위 토큰 ⊆ 내 토큰, restricted 면 주인 · 들인 사람만(admin 은 다). 승인 전 후보는 주인만 — admin 도 못 본다 |
 
 ## REST
 
@@ -162,6 +164,7 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | `POST /entities/merge` | editor(둘 다 `full`) | `{from_id, into_id, note?}` → 201 변경 묶음(`human_request`, 늘 검토 — 검증에 걸리면 `failed`) |
 | `POST /query` | reader(분에 20) | SSE — `{messages[{role, content}] ≤20}`(마지막이 물음). 프레임 `tool_call` · `tool_result`(wiki_index · wiki_search · wiki_read) · `token` · `citation`(쓴 근거마다 `{n, slug, title, section, block_id, sources}`) · `miss` · `error` · `done{miss, cited, uncited, pages, usage}` — [[#Query]] |
 | `POST /fileback` | reader | `{question, answer, citations[{slug, block_id?}], outcome, audience?, model?}` → 201(새것) · 200(멱등) `{id, short, dedup, doc_slug, ingest_state, audience}` — [[#Fileback]]. 볼 수 없는 근거 422 · 근거보다 넓은 범위 422(`details.required`) · 가진 토큰 밖 403 |
+| `GET /candidates` · `POST /candidates/{id}/approve` · `/discard` | 주인(reader) | 내 후보(기한이 지난 것은 이때 철회) · 승인 `{audience?}`(비면 보낸 범위 → 그 범위의 새 원천을 들이고 후보는 superseded, 나만이면 그 줄을 들인다 → `{id, short, candidate, audience, dedup}`) · 버림(철회). 남의 후보 404 |
 | `GET /questions` · `POST /questions` | reader | 볼 수 있는 물음(범위 토큰 ⊆ 내 토큰) · `mine` / 남기기 `{text, audience?, priority, origin: user · query_miss}` → 201 `{id, asked_count, created, audience}`. 범위는 비면 나만(`user:<id>`), 가진 토큰 밖은 403. 같은 물음(문장 부호 · 공백 무시) · 범위면 한 줄에 `asked_count` 만 |
 | `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(W7). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
 
@@ -267,11 +270,12 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 | `/wiki/changes` · `/wiki/changes/:id` | 검토 큐(상태 탭) · 한 건(요약 · 검증 표 · 문서마다 연산의 앞 · 뒤 · 까닭 · 근거 · 관계 카드(코드 · AI) · 승인 · 거절(까닭 꼭) · 되돌리기) |
 | 의미 관계 패널(문서 오른쪽 레일) | 위키 관계는 '위키' 표지 · 지우기 단추 없음(묶음으로만 — [[graph#FE — triple 표시 + 입력]]) |
 | `/wiki/log` | 기록 — log.md 꼴 · 작업으로 거르기 · 묶음으로 잇기 |
+| `/wiki/candidates` | 내 후보 — 종류 · 제목(원천 문서) · 받은 때 · 기한 · 범위 고르기(보낸 범위 · 나만) · 승인 · 들이기 · 버림 |
 | `/wiki/ontology` | 유형 표(key · 이름 · 약어 · 바깥 어휘 · 외부 id 칸 · 엔티티 수 · 상태) · 술어 표('A 는 B ○○' · 역 · 주어 → 목적어 · 대칭 · 상태) · 제안 폼(editor) · 승인 · 거절(admin, 까닭 꼭) |
 | `/wiki/entities` · `/wiki/entities/:id` | 등록부(유형 · 이름 찾기 · 중복 후보 — 검토자만, '뒤의 것을 앞의 것으로 합치기 제안') · 한 건(문서 · 범위 · 낡음, `full` 이면 별칭 · 외부 id 고치기 · 합칠 곳 골라 제안) |
 | 검토 한 건의 합치기 카드 | 없어질 쪽 · 남을 쪽의 그때 모습(범위 · 별칭 · 외부 id) · 까닭 · 반영했으면 다시 이은 문서(낡음) · 다시 들일 원천 수 |
 
-꺼지면(404 `wiki_disabled`) 화면은 '여기에는 없다' 를 보인다(`WikiError`). 다크 모드 시각 회귀 8 케이스 · 그림 20([[visual-regression]]). 위키 화면의 입력칸은 공용 `Input` 이 아니라 어두운 화면 꼴을 가진 칸(`FIELD`).
+꺼지면(404 `wiki_disabled`) 화면은 '여기에는 없다' 를 보인다(`WikiError`). 다크 모드 시각 회귀 9 케이스 · 그림 22([[visual-regression]]). 위키 화면의 입력칸은 공용 `Input` 이 아니라 어두운 화면 꼴을 가진 칸(`FIELD`).
 
 ## Test bundle
 
@@ -298,6 +302,19 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 구조화 출력 꼴 `WIKI_LLM_STRUCTURED`(json_schema · tools) ·
 묻기 `WIKI_QUERY_LLM_*`(비면 배경과 같게) · 위임 `MXWP_SSO_SECRET`(비면 위임 창구 404) · `MXWP_SSO_JIT_CREATE`(기본 켬).
 API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 — 새 키에 start.sh `--env` 를 더할 필요가 없다.
+
+## Candidates
+
+[[src/app/wiki/candidates.py]] — 포털 챗이 '해결된 턴' 을 보내는 길(P7 · 사람 결정 Q1 — B 후보 + 한 번 승인, request §6-3).
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 받기 | `POST /sources` 에 동의 `{mode: candidate}` — 생산자는 사람 대신 동의하지 못한다. 받기가 범위를 주인만으로 · `held` 로 두고 보낸 범위를 `suggested_audience` 로 남긴다 |
+| 보이기 | 주인만 — 목록(`/sources`) · 한 건 · 원천 문서. admin 도 원천 목록 · 한 건에서 못 본다(`visible_sql`). 원천 문서는 범위가 주인만이라 admin 은 범위 밖 읽기(감사)로만 |
+| 승인 | 범위를 고른다(보낸 범위 · 나만, 가진 토큰 안 · `["org"]` 는 admin). 고른 범위로 같은 봉투를 다시 받아 새 줄 · 들이기 — 후보 줄은 superseded(새 줄의 `supersedes_id`). 나만이면 그 줄을 그대로 `queued` + 작업. 첨부는 다시 싣지 않는다. 기록 `fileback`(고른 범위) |
+| 버림 · 기한 | 버리면 철회. 규칙서 `qa.candidate_ttl_days`(기본 7) 가 지나면 목록 · 승인 때 철회(`withdraw` 기록 · 까닭 기한). 자동 승인은 없다 |
+
+시험 [[apps/api/tests/test_wiki_candidates.py]] — 주인만(admin 도 못 봄) · 승인 → 새 원천 · 작업 · superseded · 나만 · 버림 · 전사는 admin · 기한 · 주인은 사용자.
 
 ## Fileback
 

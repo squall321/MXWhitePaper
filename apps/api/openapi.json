@@ -3879,6 +3879,27 @@
         "title": "WebhookPatch",
         "type": "object"
       },
+      "_ApproveBody": {
+        "properties": {
+          "audience": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "비면 보낸 범위",
+            "title": "Audience"
+          }
+        },
+        "title": "_ApproveBody",
+        "type": "object"
+      },
       "_Decision": {
         "properties": {
           "note": {
@@ -19718,6 +19739,137 @@
         "summary": "Widget Not Implemented",
         "tags": [
           "widgets"
+        ]
+      }
+    },
+    "/api/v1/wiki/candidates": {
+      "get": {
+        "description": "내 후보 — 주인만(admin 도 남의 후보는 못 본다). 기한이 지난 것은 이때 철회한다.",
+        "operationId": "get_candidates_api_v1_wiki_candidates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Candidates Api V1 Wiki Candidates Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Candidates",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/candidates/{source_id}/approve": {
+      "post": {
+        "operationId": "approve_candidate_api_v1_wiki_candidates__source_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/_ApproveBody"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Approve Candidate Api V1 Wiki Candidates  Source Id  Approve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Candidate",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/candidates/{source_id}/discard": {
+      "post": {
+        "operationId": "discard_candidate_api_v1_wiki_candidates__source_id__discard_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Discard Candidate Api V1 Wiki Candidates  Source Id  Discard Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discard Candidate",
+        "tags": [
+          "wiki"
         ]
       }
     },

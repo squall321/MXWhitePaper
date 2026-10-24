@@ -53,14 +53,19 @@ def short_id(source_id: str) -> str:
 
 
 def visible_sql(alias: str = "ws") -> str:
-    """원천 표 별칭 하나에 붙일 술어 — 범위 토큰을 모두 가졌고, restricted 면 주인 · 들인 사람. admin · 시스템은 다. 값은 `audience.sql_params()`."""
+    """원천 표 별칭 하나에 붙일 술어 — 범위 토큰을 모두 가졌고, restricted 면 주인 · 들인 사람. admin · 시스템은 다. 값은 `audience.sql_params()`.
+
+    승인 전 후보(W6 — held · 동의 candidate)는 주인만 본다 — admin 도 못 본다(아직 원천이 아니다 · '후보는 주인만').
+    """
     return f"""(
-        CAST(:_aud_all AS boolean)
-        OR ({alias}.audience <@ CAST(:_aud_tokens AS text[])
-            AND ({alias}.sensitivity <> 'restricted'
-                 OR {alias}.owner_user_id = CAST(:_aud_uid AS uuid)
-                 OR {alias}.submitted_by = CAST(:_aud_uid AS uuid)
-                 OR {alias}.owner_email = :_aud_email))
+        (NOT ({alias}.ingest_state = 'held' AND {alias}.consent ->> 'mode' = 'candidate')
+         OR {alias}.owner_user_id = CAST(:_aud_uid AS uuid))
+        AND (CAST(:_aud_all AS boolean)
+            OR ({alias}.audience <@ CAST(:_aud_tokens AS text[])
+                AND ({alias}.sensitivity <> 'restricted'
+                     OR {alias}.owner_user_id = CAST(:_aud_uid AS uuid)
+                     OR {alias}.submitted_by = CAST(:_aud_uid AS uuid)
+                     OR {alias}.owner_email = :_aud_email)))
     )"""
 
 
@@ -94,6 +99,7 @@ async def _find(s: AsyncSession, key: dict[str, Any]) -> Received | None:
         SELECT ws.id, ws.ingest_state, d.slug FROM wiki_sources ws LEFT JOIN documents d ON d.id = ws.doc_id
          WHERE ws.origin_system = :sys AND ws.origin_ref = :ref
            AND COALESCE(ws.origin_rev, '') = COALESCE(CAST(:rev AS text), '') AND ws.payload_sha256 = :sha
+           AND ws.audience = CAST(:aud AS text[])
     """), key)).first()
     return Received(id=str(row[0]), dedup=True, doc_slug=row[2], ingest_state=row[1]) if row else None
 
@@ -147,12 +153,26 @@ async def _free_slug(s: AsyncSession, source_id: str) -> str:
 
 
 async def receive(s: AsyncSession, env: SourceEnvelope, *, caller: dict[str, Any], ingest: bool = True,
-                  org_ok: bool = False) -> Received:
-    """봉투 하나를 받는다 — 새것이면 원천 줄 · 원천 문서 · (ingest 면) 들이기 작업을 한 트랜잭션에. 같은 것이면 그 id(`dedup`)."""
+                  org_ok: bool = False, held: bool | None = None) -> Received:
+    """봉투 하나를 받는다 — 새것이면 원천 줄 · 원천 문서 · (ingest 면) 들이기 작업을 한 트랜잭션에. 같은 것이면 그 id(`dedup`).
+
+    후보(동의 `candidate` — 포털 챗의 '해결된 턴', `held` 가 비면 동의를 따른다)는 주인만 보는 범위(`user:<주인 id>`) · `held` 로
+    두고 들이지 않는다. 보낸 범위는 동의 칸의 `suggested_audience` 로 남긴다 — 주인이 '내 후보' 에서 고른다(app/wiki/candidates.py).
+    """
     viewer = audience.viewer_from_user(caller)
     owner_email = _check_sender(env, caller, viewer, org_ok=org_ok)
+    consent = env.consent.model_dump(mode="json") if env.consent else None
+    if held if held is not None else (env.consent is not None and env.consent.mode == "candidate"):
+        owner_id = (await s.execute(text("SELECT id FROM users WHERE lower(email) = :e ORDER BY created_at LIMIT 1"),
+                                    {"e": owner_email})).scalar()
+        if owner_id is None:
+            raise ValidationFailed("후보는 주인이 MXWP 사용자여야 한다 — 주인만 보는 범위를 지을 수 없다")
+        consent = {**(consent or {}), "suggested_audience": env.audience}
+        env = env.model_copy(update={"audience": [f"user:{owner_id}"]})
+        ingest = False
     payload = env.payload()
-    key = {"sys": env.origin.system, "ref": env.origin.ref, "rev": env.origin.rev, "sha": env.payload_sha256()}
+    key = {"sys": env.origin.system, "ref": env.origin.ref, "rev": env.origin.rev, "sha": env.payload_sha256(),
+           "aud": env.audience}
     if (dup := await _find(s, key)) is not None:
         return dup
     blobs, figures = await _attachments(s, env)
@@ -161,7 +181,7 @@ async def receive(s: AsyncSession, env: SourceEnvelope, *, caller: dict[str, Any
          ORDER BY received_at DESC LIMIT 1 FOR UPDATE
     """), {"sys": key["sys"], "ref": key["ref"]})).scalar()
     summary = _summary(env, payload)
-    state = "queued" if ingest else "new"
+    state = "queued" if ingest else "held" if consent and "suggested_audience" in consent else "new"
     new_id = (await s.execute(text("""
         INSERT INTO wiki_sources (kind, origin_system, origin_ref, origin_rev, origin_url, title, summary, payload,
                                   payload_sha256, blobs, subject_hints, audience, sensitivity, owner_user_id, owner_email,
@@ -170,7 +190,7 @@ async def receive(s: AsyncSession, env: SourceEnvelope, *, caller: dict[str, Any
                 CAST(:hints AS jsonb), CAST(:aud AS text[]), :sens,
                 (SELECT id FROM users WHERE lower(email) = :owner ORDER BY created_at LIMIT 1), :owner,
                 CAST(:by AS uuid), :via, CAST(:consent AS jsonb), :cap, CAST(:prev AS uuid), :state)
-        ON CONFLICT (origin_system, origin_ref, (COALESCE(origin_rev, '')), payload_sha256) DO NOTHING
+        ON CONFLICT (origin_system, origin_ref, (COALESCE(origin_rev, '')), payload_sha256, audience) DO NOTHING
         RETURNING id
     """), {
         **key, "kind": env.kind, "url": env.origin.url, "title": env.title, "summary": summary,
@@ -178,7 +198,7 @@ async def receive(s: AsyncSession, env: SourceEnvelope, *, caller: dict[str, Any
         "hints": json.dumps([h.model_dump(mode="json", exclude_none=True) for h in env.subject_hints], ensure_ascii=False),
         "aud": env.audience, "sens": env.sensitivity, "owner": owner_email, "by": str(caller["id"]),
         "via": _via(caller, env),
-        "consent": json.dumps(env.consent.model_dump(mode="json"), ensure_ascii=False) if env.consent else None,
+        "consent": json.dumps(consent, ensure_ascii=False) if consent else None,
         "cap": env.captured_at, "prev": str(prev) if prev else None, "state": state,
     })).scalar()
     if new_id is None:  # 같은 것이 동시에 들어와 먼저 커밋됐다
@@ -387,7 +407,7 @@ async def withdraw(s: AsyncSession, source_id: str, *, caller: dict[str, Any]) -
     await s.execute(text("""
         UPDATE wiki_sources
            SET status = 'withdrawn',
-               ingest_state = CASE WHEN ingest_state IN ('new', 'queued') THEN 'skipped' ELSE ingest_state END
+               ingest_state = CASE WHEN ingest_state IN ('new', 'queued', 'held') THEN 'skipped' ELSE ingest_state END
          WHERE id = CAST(:id AS uuid)
     """), {"id": source_id})
     cancelled = (await s.execute(text("""

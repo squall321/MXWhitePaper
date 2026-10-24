@@ -57,7 +57,7 @@ DocumentJSON v1.0(`packages/shared/schemas/document.json` → datamodel-codegen)
 | `owner_email` | text null | 봉투의 `owner.email`(소문자 · 비면 보낸 사람) — 불변. `owner_user_id` 는 이 이메일의 사람(아직 없으면 null) |
 | `submitted_by` | uuid null | 들인 계정(사람 또는 서비스). 그 사람이 지워지면 null(`owner_user_id` 도) |
 | `via` | text | `portal-chat` · `gateway` · `connector:<이름>` · `upload` · `inquiry` |
-| `consent` | jsonb null | 문답 원천의 동의 — `{by, at, mode:'button'|'candidate'|'auto', note}` |
+| `consent` | jsonb null | 문답 원천의 동의 — `{by, at, mode:'button'|'candidate'|'auto', note}`. W6 — 받을 때 `candidate` 면 주인 승인을 기다리는 후보(주인만 · held · 받기가 `suggested_audience` 를 더한다). 멱등 열쇠에 범위가 든다(0058) |
 | `captured_at` · `received_at` | timestamptz | 원천이 생긴 때(잡 끝난 시각 등) · 받은 때 |
 | `supersedes_id` | uuid null | 같은 원천의 새 판이면 옛 판 |
 | `status` | text | `active` · `superseded` · `withdrawn` |

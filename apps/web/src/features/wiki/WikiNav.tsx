@@ -1,4 +1,4 @@
-// AI 위키 화면들의 머리 — 제목 · 위키 안 내비(홈 · 엔티티 · 온톨로지 · 검토 큐 · 기록) · 꺼짐 · 오류 상태(docs/llm-wiki W4 · W5)
+// AI 위키 화면들의 머리 — 제목 · 위키 안 내비(홈 · 엔티티 · 온톨로지 · 검토 큐 · 내 후보 · 기록) · 꺼짐 · 오류 상태(docs/llm-wiki W4~W6)
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -10,6 +10,7 @@ const LINKS = [
   { to: '/wiki/entities', label: '엔티티', end: false },
   { to: '/wiki/ontology', label: '온톨로지', end: false },
   { to: '/wiki/changes', label: '검토 큐', end: false },
+  { to: '/wiki/candidates', label: '내 후보', end: false },
   { to: '/wiki/log', label: '기록', end: false },
 ]
 

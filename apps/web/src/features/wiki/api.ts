@@ -356,6 +356,34 @@ export async function proposeWikiMerge(fromId: string, intoId: string, note?: st
   ))
 }
 
+/** 내 후보(W6) — 포털 챗이 보낸 주인만 보는 원천. 승인하면 고른 범위로 들이고, 기한이 지나면 서버가 철회한다. */
+export interface WikiCandidate {
+  id: string
+  short: string
+  kind: string
+  title: string
+  summary: string
+  received_at: string
+  expires_at: string
+  suggested_audience: string[]
+  system: string
+  doc_slug: string | null
+}
+
+export async function listWikiCandidates(): Promise<WikiCandidate[]> {
+  return unwrap(await apiClient.get<ApiEnvelope<WikiCandidate[]>>('/wiki/candidates')) ?? []
+}
+
+export async function approveWikiCandidate(id: string, audience?: string[]): Promise<{ id: string; short: string; audience: string[] }> {
+  return unwrap(await apiClient.post<ApiEnvelope<{ id: string; short: string; audience: string[] }>>(
+    `/wiki/candidates/${encodeURIComponent(id)}/approve`, { audience: audience ?? null },
+  ))
+}
+
+export async function discardWikiCandidate(id: string): Promise<{ status: string }> {
+  return unwrap(await apiClient.post<ApiEnvelope<{ status: string }>>(`/wiki/candidates/${encodeURIComponent(id)}/discard`))
+}
+
 /** ISO 시각 → `YYYY-MM-DD HH:MM`(KST) — 규칙서의 날짜 꼴. */
 export function kst(iso: string | null | undefined): string {
   if (!iso) return ''

@@ -47,7 +47,7 @@
   "consent": {
     "by": "syn.quality1@example.com",
     "at": "2026-10-01T16:20:00+09:00",
-    "mode": "candidate",
+    "mode": "button",
     "note": null
   }
 }

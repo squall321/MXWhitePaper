@@ -26,8 +26,8 @@ import) 로 검증 불가 → 실 브라우저 렌더 + baseline diff 가 유일
 ```
 apps/web/
 ├── tests/e2e/
-│   ├── visual-darkmode.spec.ts                                    # 다크모드 light + dark 2 케이스 + 소속→팀 관리자 화면 2 + AI 위키 8
-│   ├── visual-darkmode.spec.ts-snapshots/                         # baseline PNG(문서 2 · 소속→팀 2 · AI 위키 20)
+│   ├── visual-darkmode.spec.ts                                    # 다크모드 light + dark 2 케이스 + 소속→팀 관리자 화면 2 + AI 위키 9
+│   ├── visual-darkmode.spec.ts-snapshots/                         # baseline PNG(문서 2 · 소속→팀 2 · AI 위키 22)
 │   ├── visual-presentation.spec.ts                                # presentation 4 슬라이드 (NEW: presentation-layout cycle)
 │   └── visual-presentation.spec.ts-snapshots/                     # baseline 4 PNG
 └── playwright.config.ts                                            # 변경 없음 — testDir './tests/e2e' 그대로

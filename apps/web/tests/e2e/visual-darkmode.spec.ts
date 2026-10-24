@@ -184,6 +184,14 @@ async function mockWiki(page: import('@playwright/test').Page): Promise<void> {
     relations_dropped: [],
   })))
   await page.route('**/api/v1/wiki/ontology', (r) => r.fulfill(ok(ONTOLOGY)))
+  await page.route('**/api/v1/wiki/candidates', (r) => r.fulfill(ok([
+    { id: 'cand0001-0000-4000-8000-000000000001', short: 'src_cand0001', kind: 'qa', title: '힌지 브래킷 균열은 어디서 시작하나',
+      summary: '', received_at: AT, expires_at: '2026-10-31T06:00:00+00:00', suggested_audience: ['aff:SYN-CAE1'],
+      system: 'hwax-portal', doc_slug: 'src-cand0001' },
+    { id: 'cand0002-0000-4000-8000-000000000002', short: 'src_cand0002', kind: 'deliberation', title: '리브 추가안 채택 심의',
+      summary: '', received_at: AT, expires_at: '2026-10-31T06:00:00+00:00', suggested_audience: ['aff:SYN-CAE1', 'plat:plmdefect'],
+      system: 'hwax-portal', doc_slug: null },
+  ])))
   await page.route('**/api/v1/wiki/entities?*', (r) => {
     const type = new URL(r.request().url()).searchParams.get('type')
     const rows = ENTITIES.filter((e) => !type || e.type_key === type)
@@ -251,6 +259,7 @@ test.describe('visual: AI 위키 (light · dark)', () => {
     ['entities', '/wiki/entities', 'wiki-entities'],
     ['entity', `/wiki/entities/${W.e1}`, 'wiki-entity'],
     ['merge', `/wiki/changes/${W.csMerge}`, 'wiki-change'],
+    ['candidates', '/wiki/candidates', 'wiki-candidates'],
   ] as const) {
     test(`renders the wiki ${name} page consistently in light and dark`, async ({ page }) => {
       // 창을 세로로 넉넉히 — 긴 화면을 찍으려 스크롤하면 위에 붙는 상단 내비(dev 의 알림 수가 든)가 덮는다.

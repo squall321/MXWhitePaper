@@ -100,12 +100,15 @@ const AdminGlossaryPendingPage = lazyLogged('AdminGlossaryPending', () =>
 const AdminAffTeamMapPage = lazyLogged('AdminAffTeamMap', () =>
   import('./pages/AdminAffTeamMap').then((m) => ({ default: m.AdminAffTeamMapPage })),
 )
-// AI 위키(docs/llm-wiki W4 · W5) — 홈 · 원천 · 검토 큐 · 기록 · 온톨로지 · 엔티티
+// AI 위키(docs/llm-wiki W4~W6) — 홈 · 원천 · 검토 큐 · 기록 · 온톨로지 · 엔티티 · 내 후보
 const WikiHomePage = lazyLogged('WikiHome', () =>
   import('./pages/WikiHome').then((m) => ({ default: m.WikiHomePage })),
 )
 const WikiSourcePage = lazyLogged('WikiSource', () =>
   import('./pages/WikiSource').then((m) => ({ default: m.WikiSourcePage })),
+)
+const WikiCandidatesPage = lazyLogged('WikiCandidates', () =>
+  import('./pages/WikiCandidates').then((m) => ({ default: m.WikiCandidatesPage })),
 )
 const WikiOntologyPage = lazyLogged('WikiOntology', () =>
   import('./pages/WikiOntology').then((m) => ({ default: m.WikiOntologyPage })),
@@ -462,6 +465,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="wiki/changes/:id" element={<Boundaried name="wiki/changes/:id"><WikiChangePage /></Boundaried>} />
                 <Route path="wiki/log" element={<Boundaried name="wiki/log"><WikiLogPage /></Boundaried>} />
                 <Route path="wiki/ontology" element={<Boundaried name="wiki/ontology"><WikiOntologyPage /></Boundaried>} />
+                <Route path="wiki/candidates" element={<Boundaried name="wiki/candidates"><WikiCandidatesPage /></Boundaried>} />
                 <Route path="wiki/entities" element={<Boundaried name="wiki/entities"><WikiEntitiesPage /></Boundaried>} />
                 <Route path="wiki/entities/:id" element={<Boundaried name="wiki/entities/:id"><WikiEntityPage /></Boundaried>} />
                 <Route path="analytics" element={<Boundaried name="analytics"><AnalyticsPage /></Boundaried>} />

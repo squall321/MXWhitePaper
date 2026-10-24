@@ -53,7 +53,7 @@
   "consent": {
     "by": "syn.analyst1@example.com",
     "at": "2026-08-06T10:30:00+09:00",
-    "mode": "candidate",
+    "mode": "button",
     "note": null
   }
 }
