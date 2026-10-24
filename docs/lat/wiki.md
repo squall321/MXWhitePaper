@@ -15,13 +15,13 @@
 | W0 준비 | 봉투 모델 · 합성 원천 20 · 가짜 LLM · 설정 자리 | [[#Envelope]] · [[#Test bundle]] · [[#Fake LLM]] · [[#Settings]] |
 | W1 연결 · 신원 | 위임 창구 · 위임 토큰(세대) · 소속 · 플랫폼 증명 · 진입 토큰 스냅숏 · jti 원장 · 소속→팀 표(API · 화면 `/admin/aff-team-map`) | [[core#게이트웨이 · 포털 위임]] |
 | W2 보이기 범위 | 읽기 길 전수(아래 표) · 길마다 시험 · admin 범위 밖 읽기 감사. 남은 것 — cae00 배포 · 재색인 | [[#Audience]] |
-| W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052). 남은 것 — 받기 REST · 원천 문서 · /health · 인스턴스 | [[#Sources · Jobs]] |
+| W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 남은 것 — 워커 인스턴스 · 덤프 제외 · 스냅숏 확인 | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
 | W4 들이기 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
 
 ```text
-생산자 ──봉투 mxwp-source/1──▶ POST /api/v1/wiki/sources ──▶ wiki_sources(불변) + 버킷 wiki-sources
+생산자 ──봉투 mxwp-source/1──▶ POST /api/v1/wiki/sources ──▶ wiki_sources(불변) + 버킷 mxwp-wiki-sources
 (포털 · 연결기 · 사람)          envelope.py 검증 · 멱등        │
                                                              ▼ wiki_jobs(DB 큐 · SKIP LOCKED)
                                           python -m app.wiki.worker(인스턴스 mxwp_wiki — API 와 다른 프로세스)
@@ -38,9 +38,9 @@
 | 원천 봉투(종류별 body) · 범위 토큰 정규화 · payload 해시 | [[src/app/wiki/envelope.py#SourceEnvelope]] · `normalize_audience` | W0 |
 | 범위 계산 · 저장소 층 필터 · 읽는 사람 문맥 | [[src/app/wiki/audience.py]] · 표 `wiki_pages`(0051) | W2 |
 | DB 큐 · 워커(처리기 등록부) | [[src/app/wiki/jobs.py]] · [[src/app/wiki/worker.py#run_once]] · 표 `wiki_sources` · `wiki_jobs` · `wiki_log` · `wiki_workers`(0052) | W3 |
-| 받기 · 멱등 · 철회 · 원천 문서 | `app/wiki/sources.py` | W3 |
+| 받기 · 멱등 · 철회 · 원천 문서 · 기록 | [[src/app/wiki/sources.py#receive]] · 문서 만들기 `document_service.create_document(wiki=…)` | W3 |
 | LLM(구조화 출력) · 해석 · 계획 · 쓰기 · 검증 · 반영 | `app/wiki/{llm,resolve,plan,write,validate,apply}.py` | W4 |
-| REST | `app/routers/wiki.py`(`/api/v1/wiki/*`) | W3~ |
+| REST | [[src/app/routers/wiki.py]](`/api/v1/wiki/*`) | W3~ |
 | 위임 창구 · 회수 · 소속→팀 표 | [[src/app/routers/auth_sso.py]] · 검증 `core/auth._resolve_delegated` · 증명 `core/portal_identity.py` | W1 |
 
 ## Envelope
@@ -99,6 +99,36 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 
 시험 [[apps/api/tests/test_wiki_jobs.py]] — 순서 · not_before · 워커가 죽은 뒤 다른 워커가 다시 집기 · 재시도 · 거듭된 lease 만료 · 불변 · 덧붙이기만.
 
+## Intake
+
+[[src/app/wiki/sources.py#receive]] — `POST /sources` 와 연결기(W8)가 같이 부른다.
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 범위 | 보낸 사람이 토큰을 모두 가져야 한다(admin · 시스템은 다). `["org"]` 는 admin 만. 위임 호출은 admin 이 owner 로 깎여 늘 일반 규칙 |
+| 주인 | 비면 보낸 사람. 남의 이메일은 admin(연결기)만. `owner_email`(불변 · 0053) + `owner_user_id`(그 이메일의 사람 — 나중에 이을 수 있게 바꿀 수 있는 칸) |
+| via | 위임 `gateway` → `gateway` · `hwax-portal` → `portal-chat` · API 토큰 → `connector:<origin.system>`(인증이 `auth_via='api_token'` 을 단다) · 웹 세션 → `upload` |
+| 멱등 | 먼저 찾고(같으면 200 `dedup`), INSERT 는 `ON CONFLICT DO NOTHING` — 동시에 같은 것 둘이 와도 한 줄 |
+| 새 판 | 같은 (시스템, ref)의 active 를 `FOR UPDATE` 로 잡아 새 줄의 `supersedes_id` 로, 옛 줄은 `superseded` |
+| 첨부 | `upload_id` = 이미지(id · ulid → `storage_keys.orig`, role `figure`) 또는 파일(id → `storage_key`, role `raw`). 바이트의 sha256 → 버킷 `mxwp-wiki-sources` 의 `<sha 앞 2>/<sha>`(있으면 그대로). 이미지 원본은 webp 라 blob mime 이 `image/webp`. 못 찾으면 422 |
+| 원천 문서 | slug `src-<id 앞 8>`(겹치면 12 · 전체). 절 — 요약 · 핵심 값(본문을 표로 — 숫자 그대로, 객체 목록은 목록마다 표) · 그림(이미지 첨부) · 출처 · 이 원천을 인용한 문서(W4 가 채운다). 기밀 = 원천 sensitivity, 지은이 = 보낸 사람, `metadata.owners` = 원천 주인. 시스템으로 짓는다(서비스 계정이 보낼 때마다 admin 범위 밖 읽기 감사가 쌓이지 않게) |
+| 트랜잭션 | 원천 줄 · 들이기 작업 · 문서 · 범위 줄이 `create_document` 의 커밋 하나에 든다(`wiki=` 는 범위 줄을 첫 커밋에 — 나중에 달면 그 사이 모두에게 보인다). `doc_id` 만 그 뒤 따로 |
+| 철회 | 주인 · admin. `status=withdrawn` · 줄에 선 들이기 `cancelled` · `ingest_state` new/queued → `skipped` · 기록 `withdraw`(detail `source_id` · `by` · `cancelled_jobs`, actor `user:<id>`) · 원천 문서 보관. 못 보는 원천은 404. **돌고 있는 들이기(W4)는 반영 전에 원천 상태를 다시 봐야 한다** |
+| 원천 보기 | `sources.visible_sql` — 범위 토큰 ⊆ 내 토큰, restricted 면 주인 · 들인 사람만(admin 은 다) |
+
+## REST
+
+[[src/app/routers/wiki.py]] — 꺼지면(`WIKI_ENABLED`) 모두 404 `wiki_disabled`(라우터 의존성).
+
+| 메서드 · 경로 | 권한 | 무엇 |
+| --- | --- | --- |
+| `POST /sources` | editor | 201 `{id, short, dedup:false, doc_slug, ingest_state}` / 200 `dedup:true`. `?ingest=0` 이면 작업 없음. 봉투 오류 422 — `details.errors[].field` 가 `body.…` 로 시작한다 |
+| `GET /sources` | reader | `kind` · `system` · `status` · `since` · `until` · `limit`(≤200) · `offset` → `meta.total`. 줄마다 `mine`(내가 주인) |
+| `GET /sources/{id}` | reader | 위 + `payload` · `blobs` · `subject_hints` · `consent_mode`. 범위 밖은 404 |
+| `POST /sources/{id}/withdraw` | 주인 · admin | `{status, changed, cancelled_jobs}` — 두 번째는 `changed:false` |
+| `GET /log` · `GET /log.md` | reader | 범위 토큰을 모두 가진 줄. md 는 옛것부터 `## [YYYY-MM-DD HH:MM] op \| 제목`(KST) + detail 한 줄 |
+| `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(W7). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
+
 ## Test bundle
 
 `apps/api/tests/fixtures/wiki/` — 합성 원천 20 장(해석 6 · 사례 4 · 집계 2 · 문답 5 · 심의 2 · 정정 1)과 일부러 심은 결함(모순 · 낡음 ·
@@ -130,4 +160,9 @@ API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 —
 - `pytest -q` 는 addopts 의 `-q` 와 겹쳐 요약 줄이 숨는다 — 결과 줄을 남기려면 `-q` 없이 돌린다.
 - **요청 밖에서 서비스 · 저장소를 직접 부르는 코드(시험 · CLI · 배경 작업)는 읽는 사람을 골라야 한다** — 안 고르면 `ViewerMissing`.
   시험은 `audience.set_viewer(audience.SYSTEM)` 또는 `with audience.acting_as(...)`. CLI(`scripts/import_one.py`)는 시작할 때 시스템으로.
-- 시험 문서는 SQL 로 직접 넣는다 — `document_service.create_document` 는 dev Meili 색인 · 웹훅까지 부른다.
+- 시험 문서는 SQL 로 직접 넣는다 — `document_service.create_document` 는 dev Meili 색인 · 웹훅까지 부른다. 받기 시험처럼 그 길을
+  꼭 지나야 하면 끝에 `meili_indexer.delete_document` 로 색인 줄까지 지운다.
+- **`apptainer exec instance://mxwp_api` 는 인스턴스의 환경을 물려받지 않는다** — `setup_buckets` 같은 스크립트는 컨테이너 안에서
+  `set -a; . /workspace/.env; set +a` 를 먼저(안 하면 기본값 `minio:9000` 으로 붙으려다 멈춘다). 시험은 conftest 가 `.env` 를 읽는다.
+- 범위가 `["org"]` 보다 좁은 위키 문서는 바깥 웹훅 `doc_created` 를 보내지 않는다(WK-D34). 판 바꾸기 · 보관 웹훅은 아직 그대로 —
+  W4 반영 경로가 `replace_document` 를 쓸 때 같은 규칙을 단다.

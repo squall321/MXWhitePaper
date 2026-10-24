@@ -73,6 +73,7 @@ from .routers.users import router as users_router
 from .routers.version_tags import router as version_tags_router
 from .routers.webhooks import router as webhooks_router
 from .routers.widgets import router as widgets_router
+from .routers.wiki import router as wiki_router
 from .routers.workflow_chains import router as workflow_chains_router
 
 # Polish D — Swagger /docs 에서 각 그룹의 의미를 한국어로 요약.
@@ -415,7 +416,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         from .search import meili_indexer
 
         await _asyncio.to_thread(meili_indexer.ensure_index)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logging.getLogger(__name__).warning("Meilisearch ensure_index 실패 — 검색 거르기 칸이 아직일 수 있다", exc_info=True)
 
     if settings.backup_enabled:
@@ -560,6 +561,7 @@ def create_app() -> FastAPI:
     app.include_router(portal_sso_router)
     # 게이트웨이 · 포털 위임(POST /auth/sso — MXWP_SSO_SECRET 이 비면 404) + 관리자 위임 회수 · 소속→팀 표.
     app.include_router(auth_sso_router)
+    app.include_router(wiki_router)
     # Cycle 0026 — email verification + password reset flows.
     app.include_router(auth_flows_router)
     app.include_router(search_router)

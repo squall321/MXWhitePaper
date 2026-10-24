@@ -30,6 +30,7 @@
 | `minio_bucket_files` | `mxwp-files` | 일반 파일 |
 | `minio_bucket_backups` | `mxwp-backups` | 스냅샷 (see [[snapshots]]) |
 | `minio_bucket_exports` | (빈값 = files 재사용) | export artifacts |
+| `minio_bucket_wiki_sources` | `mxwp-wiki-sources` | 위키 원천 첨부 — `<sha 앞 2>/<sha>` 키, 익명 읽기 없음([[wiki#Intake]]) |
 
 MinIO 클라이언트는 [[src/app/storage/minio_adapter.py]] 에서 `internal_client()` /
 `public_client()` 분리. internal 은 컨테이너 간 직접 호출 (`http://mxwp_minio:9000`),

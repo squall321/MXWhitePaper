@@ -49,11 +49,12 @@ DocumentJSON v1.0(`packages/shared/schemas/document.json` → datamodel-codegen)
 | `title` · `summary` | text · text null | |
 | `payload` | jsonb | 봉투의 `body`(§3) — 정규화한 본문 |
 | `payload_sha256` | char(64) | 정규 JSON(키 정렬 · 공백 없음)의 해시 |
-| `blobs` | jsonb default `[]` | `[{key, name, mime, sha256, bytes, role}]` — MinIO 버킷 `wiki-sources`. role 은 `figure` · `raw` · `table` |
+| `blobs` | jsonb default `[]` | `[{key, name, mime, sha256, bytes, role}]` — MinIO 버킷 `mxwp-wiki-sources`(설정 `MINIO_BUCKET_WIKI_SOURCES` — 다른 버킷처럼 `mxwp-` 접두). role 은 `figure` · `raw` · `table` |
 | `subject_hints` | jsonb default `[]` | 봉투의 `subject_hints`(§3) 그대로 — 엔티티 해석(W4)의 첫 실마리 |
 | `audience` | text[] NOT NULL | 이 원천을 볼 수 있는 사람 |
 | `sensitivity` | text | `public` · `internal` · `restricted`(문서 `confidentiality` 와 같은 낱말) |
 | `owner_user_id` | uuid null | 원천의 주인(사람). 위임 호출이면 호출자와 같아야 한다 |
+| `owner_email` | text null | 봉투의 `owner.email`(소문자 · 비면 보낸 사람) — 불변. `owner_user_id` 는 이 이메일의 사람(아직 없으면 null) |
 | `submitted_by` | uuid null | 들인 계정(사람 또는 서비스). 그 사람이 지워지면 null(`owner_user_id` 도) |
 | `via` | text | `portal-chat` · `gateway` · `connector:<이름>` · `upload` · `inquiry` |
 | `consent` | jsonb null | 문답 원천의 동의 — `{by, at, mode:'button'|'candidate'|'auto', note}` |
@@ -225,7 +226,7 @@ DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
 - 서버가 `schema` · `kind` 별 꼴을 검증하고(pydantic), 모르는 칸은 거부한다(조용히 버리지 않는다).
 - `audience` 는 보낸 사람이 볼 수 있는 범위보다 넓을 수 없다(`org` 는 서비스 계정 또는 관리자만, 또는 원천 시스템이 원래 전사 공개인 자료).
 - 위임 호출(게이트웨이 · 포털)은 `owner.email` 이 호출자와 같아야 한다. 서비스 연결기는 원천 시스템이 준 주인을 그대로 싣는다.
-- 첨부는 기존 업로드 파이프라인(init · put · finalize, sha256 중복 제거)으로 먼저 올리고 id 만 싣는다. 원천 블롭은 `wiki-sources` 버킷에 따로 둔다.
+- 첨부는 기존 업로드 파이프라인(init · put · finalize, sha256 중복 제거)으로 먼저 올리고 id 만 싣는다. 원천 블롭은 `mxwp-wiki-sources` 버킷에 따로 둔다.
 
 ## 4. 변경 묶음 연산(`ops`)
 
@@ -288,6 +289,8 @@ DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
 | `GET /health` | 없음(내부) | 큐 길이 · 가장 오래 기다린 작업 · 최근 실패 · 마지막 점검 · LLM 닿음 — 포털 상태판이 읽는다 |
 
 모든 읽기는 §2-11 범위로 거른다 — 목록 · 검색 · 그래프 · 내보내기를 포함해서(request §5-12 의 전수 목록).
+
+지은 것(W3) — `/sources` · `/sources/{id}` · `/sources/{id}/withdraw` · `/log` · `/log.md` · `/health`. 꼴은 `docs/lat/wiki.md` §REST 가 정본.
 
 ## 7. MCP 도구(`dist/llm-docx-toolkit/mcp/server.py` 에 더한다)
 

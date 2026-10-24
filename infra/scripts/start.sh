@@ -170,6 +170,7 @@ for i in $(seq 1 5); do
         mc mb -p local/${MINIO_BUCKET_IMAGES} >/dev/null 2>&1 || true
         mc mb -p local/${MINIO_BUCKET_FILES}  >/dev/null 2>&1 || true
         mc mb -p local/${MINIO_BUCKET_BACKUPS:-mxwp-backups} >/dev/null 2>&1 || true
+        mc mb -p local/${MINIO_BUCKET_WIKI_SOURCES:-mxwp-wiki-sources} >/dev/null 2>&1 || true
         mc anonymous set download local/${MINIO_BUCKET_IMAGES} >/dev/null 2>&1 || true
         mc ls local/${MINIO_BUCKET_IMAGES} >/dev/null 2>&1
       " 2>&1; then

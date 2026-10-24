@@ -35,6 +35,7 @@ def main() -> int:
         settings.minio_bucket_images,
         settings.minio_bucket_files,
         settings.minio_bucket_backups,
+        settings.minio_bucket_wiki_sources,
     ):
         try:
             cli.head_bucket(Bucket=bucket)

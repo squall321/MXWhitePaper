@@ -415,7 +415,7 @@ lost-update 가 발생하지 않는다 ([[#gotchas]] 17, adversarial-verify).
 
 | 함수 | 위치 | 책임 |
 |---|---|---|
-| `create_document()` | [[src/app/services/document_service.py#create_document]] | POST `/` 의 본체 |
+| `create_document()` | [[src/app/services/document_service.py#create_document]] | POST `/` 의 본체. `wiki={kind, audience}` 면 위키 문서 — 범위 줄(`wiki_pages`)을 같은 커밋에 넣고, 범위가 `["org"]` 보다 좁으면 `doc_created` 웹훅을 보내지 않는다([[wiki#Intake]]) |
 | `replace_document()` | [[src/app/services/document_service.py#replace_document]] | PUT `/{slug}` — 새 버전 INSERT |
 | `archive_document()` | [[src/app/services/document_service.py#archive_document]] | soft-delete |
 | `validate_documentjson()` | [[src/app/services/document_service.py#validate_documentjson]] | 스키마 + 정규화 (renumber, columns widths) + **전역 unique-id 검사** ([[#gotchas]] 16) |

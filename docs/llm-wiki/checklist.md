@@ -44,10 +44,10 @@
 
 ## W3 원천 · 작업 실행기
 - [x] 표 — `wiki_sources`(불변 트리거) · `wiki_jobs` · `wiki_log`(덧붙이기만) · `wiki_pages`(0051 · 0052 — 워커 심장박동 `wiki_workers` 더함)
-- [ ] 봉투 검증(종류별 body) · 첨부(업로드 파이프라인) · 버킷 `wiki-sources`
-- [ ] `POST /sources` 멱등 · 철회 · 원천 문서(`src-…`)
+- [x] 봉투 검증(종류별 body) · 첨부(업로드 파이프라인) · 버킷 `wiki-sources`(이름은 `mxwp-wiki-sources` — WK-D35)
+- [x] `POST /sources` 멱등 · 철회 · 원천 문서(`src-…`) · 목록 · 한 건 · 기록(`/log` · `/log.md`)
 - [ ] 워커 `python -m app.wiki.worker` · 인스턴스 `mxwp_wiki` · start · stop · status · update(여섯) · diag · sync-from-drive
-- [ ] `/api/v1/wiki/health`
+- [x] `/api/v1/wiki/health`
 - [ ] **데이터 덤프 · 합치기에서 위키 제외** · 스냅숏에는 포함 확인
 
 ## W4 들이기 · 검토 · 근거(첫 동작판)

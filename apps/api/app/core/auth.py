@@ -267,6 +267,7 @@ async def _resolve_current_user(request: Request, s: AsyncSession) -> dict[str, 
                         "granted_scopes": scopes,
                     },
                 )
+            user["auth_via"] = "api_token"
             return user
 
         try:

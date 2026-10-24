@@ -1160,7 +1160,10 @@ async def create_document(
     *,
     payload: dict[str, Any],
     owner_id: str,
+    wiki: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """`wiki={kind, audience, managed?}` 면 위키 문서로 만든다(docs/llm-wiki) — 범위 줄을 첫 커밋에 함께 넣는다(나중에 달면 그 사이
+    보통 문서로 커밋 · 색인돼 모두에게 보인다). 범위가 `["org"]` 보다 좁으면 바깥 웹훅에 알리지 않는다(받는 쪽은 범위를 모른다)."""
     validated = validate_documentjson(payload)
     slug = validated["slug"]
     title = validated["title"]
@@ -1182,6 +1185,11 @@ async def create_document(
         owner_id=owner_id,
         part_id=part_id,
     )
+    if wiki is not None:
+        await s.execute(text("""
+            INSERT INTO wiki_pages (doc_id, kind, managed, audience)
+            VALUES (CAST(:d AS uuid), :k, :m, CAST(:a AS text[]))
+        """), {"d": inserted["id"], "k": wiki["kind"], "m": wiki.get("managed", "ai"), "a": list(wiki["audience"])})
     await document_repo.insert_version(
         s,
         doc_id=inserted["id"],
@@ -1211,6 +1219,8 @@ async def create_document(
     await refresh_search_view(s)
     await reindex_meili(s, doc_id=inserted["id"])
     doc = await get_document_or_404(s, slug)
+    if wiki is not None and list(wiki["audience"]) != ["org"]:
+        return doc, warnings
     await fire_webhook(
         "doc_created",
         {

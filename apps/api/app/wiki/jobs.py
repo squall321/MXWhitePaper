@@ -141,7 +141,7 @@ async def fail(s: AsyncSession, job_id: str, worker: str, error: str) -> str | N
 
 
 async def stats(s: AsyncSession) -> dict[str, Any]:
-    """/api/v1/wiki/health 용 — 줄 길이 · 가장 오래 기다린 작업 · 최근 실패."""
+    """/api/v1/wiki/health 용 — 줄 길이 · 가장 오래 기다린 작업 · 최근 실패(op · 시각만 — 인증 없는 창구라 실패 글은 내지 않는다)."""
     row = (await s.execute(text("""
         SELECT COUNT(*) FILTER (WHERE state = 'queued'),
                COUNT(*) FILTER (WHERE state = 'running'),
@@ -151,12 +151,11 @@ async def stats(s: AsyncSession) -> dict[str, Any]:
           FROM wiki_jobs
     """))).first()
     last = (await s.execute(text("""
-        SELECT op, error, finished_at FROM wiki_jobs WHERE state = 'failed' ORDER BY finished_at DESC NULLS LAST LIMIT 1
+        SELECT op, finished_at FROM wiki_jobs WHERE state = 'failed' ORDER BY finished_at DESC NULLS LAST LIMIT 1
     """))).first()
     return {
         "queued": int(row[0]), "running": int(row[1]), "held": int(row[2]),
         "oldest_queued_s": int(row[3]) if row[3] is not None else None,
         "failed_24h": int(row[4]),
-        "last_failure": ({"op": last[0], "error": last[1], "at": last[2].isoformat() if last[2] else None}
-                         if last else None),
+        "last_failure": {"op": last[0], "at": last[1].isoformat() if last[1] else None} if last else None,
     }

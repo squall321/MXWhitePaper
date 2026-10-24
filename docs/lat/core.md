@@ -55,6 +55,7 @@ chain 의 최상위. 우선순위:
 
 dict 형태: `{id, email, role, ..., portal_affiliation, portal_plat, portal_access_at}` — `portal_*` 는 포털 진입 토큰이
 남긴 스냅숏(users 칸)이고, 위임 호출이면 그 호출의 증명값으로 바뀌며 `auth_via: "delegated:<client>"` 가 붙는다.
+API 토큰 호출에는 `auth_via: "api_token"` 이 붙는다(위키 원천의 `via` 가 이것으로 가른다 — [[wiki#Intake]]).
 
 ### API token
 
@@ -131,7 +132,7 @@ return envelope(data={...}, meta={"page": 1})
 | MinIO | `minio_endpoint` | `http://minio:9000` |
 | | `minio_public_endpoint` | `http://localhost:9000` |
 | | `minio_access_key` / `_secret_key` | dev placeholder |
-| | `minio_bucket_images` / `_files` / `_backups` / `_exports` | `mxwp-…` |
+| | `minio_bucket_images` / `_files` / `_backups` / `_exports` / `_wiki_sources` | `mxwp-…` |
 | JWT | `jwt_secret` | dev placeholder |
 | | `jwt_access_ttl_seconds` | 3600 |
 | | `jwt_refresh_ttl_seconds` | 604800 |

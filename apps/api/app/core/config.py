@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     # to a dedicated bucket name when you want to ACL them separately
     # (e.g. shorter retention than user uploads).
     minio_bucket_exports: str = Field(default="")
+    # 위키 원천의 첨부(그림 · 원자료) — sha256 키로 따로 둔다(docs/llm-wiki W3). 익명 읽기를 열지 않는다.
+    minio_bucket_wiki_sources: str = Field(default="mxwp-wiki-sources")
 
     # JWT
     jwt_secret: str = Field(default="replace_with_a_long_random_string_at_least_32_chars")
