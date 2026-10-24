@@ -2,6 +2,7 @@
 /**
  * request §5-5. 검토자(표지 `wiki_reviewer` · admin)만 본다 — 아니면 서버가 403. 승인은 검토 대기만, 검증 실패가 있으면 서버가 409.
  * 거절에는 까닭 한 줄이 꼭 있어야 한다. 계획 밖 문서의 연산은 승인해도 반영되지 않는다(서버가 계획의 문서만 반영한다).
+ * 관계(W5)는 문서 카드 아래 따로 — 코드가 단 것 · AI 가 낸 것, 끝이 후보 밖이라 버린 것.
  */
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -12,7 +13,7 @@ import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { toast } from '@/components/ui/Toast'
 import {
-  decideWikiChange, getWikiChange, kst, listWikiChanges, type WikiChangeOp, type WikiVerdict,
+  decideWikiChange, getWikiChange, kst, listWikiChanges, type WikiChange, type WikiChangeOp, type WikiVerdict,
 } from '@/features/wiki/api'
 import { WikiError, WikiShell } from '@/features/wiki/WikiNav'
 
@@ -107,6 +108,36 @@ function OpRow({ op }: { op: WikiChangeOp }) {
   )
 }
 
+function RelationsCard({ cs }: { cs: WikiChange }) {
+  const rows = cs.relations ?? []
+  const dropped = cs.relations_dropped ?? []
+  if (rows.length === 0 && dropped.length === 0) return null
+  return (
+    <Card padded="lg" className="mb-4" data-testid="wiki-change-relations">
+      <h2 className="mb-2 text-sm font-semibold text-smsg-900 dark:text-gray-100">관계</h2>
+      <ul className="space-y-1.5 text-sm">
+        {rows.map((r) => (
+          <li key={`${r.subject} ${r.predicate} ${r.object}`} className="flex flex-wrap items-center gap-1.5">
+            <Badge tone={r.origin === 'code' ? 'muted' : 'brand'}>{r.origin === 'code' ? '코드' : 'AI'}</Badge>
+            <span className="text-gray-900 dark:text-gray-100">{r.subject_title}</span>
+            <span className="text-gray-400" aria-hidden>→</span>
+            <span className="text-gray-900 dark:text-gray-100">{r.object_title}</span>
+            <span className="text-gray-700 dark:text-gray-300">{r.label}</span>
+            <span className="font-mono text-xs text-gray-400">{r.predicate}</span>
+            <span className="text-xs text-gray-600 dark:text-gray-400">— {r.why}</span>
+            {r.cites.map((c) => <span key={c.short} className="font-mono text-xs text-gray-500">{c.short}</span>)}
+          </li>
+        ))}
+      </ul>
+      {dropped.length > 0 && (
+        <p className="mt-2 text-xs text-gray-500">
+          버린 관계 — {dropped.map((d) => `${d.subject} ${d.predicate} ${d.object}(${d.why})`).join(' · ')}
+        </p>
+      )}
+    </Card>
+  )
+}
+
 export function WikiChangePage() {
   const { id = '' } = useParams<{ id: string }>()
   const qc = useQueryClient()
@@ -172,6 +203,8 @@ export function WikiChangePage() {
           </ul>
         </Card>
       ))}
+
+      <RelationsCard cs={cs} />
 
       {(cs.status === 'pending_review' || cs.status === 'failed' || cs.status === 'applied' || cs.status === 'auto_applied') && (
         <Card padded="lg" data-testid="wiki-change-actions">

@@ -26,7 +26,7 @@ function incomingLabel(t: Triple): string {
 function RelRow({ otherSlug, label, source, onDelete }: {
   otherSlug: string
   label: string
-  source: 'llm' | 'manual'
+  source: 'llm' | 'manual' | 'wiki'
   onDelete?: () => void
 }) {
   return (
@@ -54,6 +54,11 @@ function RelRow({ otherSlug, label, source, onDelete }: {
         {source === 'llm' && (
           <span title="AI 가 추출한 관계" className="text-[10px] text-gray-400" aria-label="AI 추출">
             ✨
+          </span>
+        )}
+        {source === 'wiki' && (
+          <span title="AI 위키가 원천으로 단 관계 — 변경 묶음으로만 고친다" className="text-[10px] text-gray-400" aria-label="AI 위키">
+            위키
           </span>
         )}
       </div>
@@ -219,7 +224,7 @@ export function Relationships({ slug }: RelationshipsProps) {
                     otherSlug={t.object_slug}
                     label={t.predicate}
                     source={t.source}
-                    onDelete={canEdit ? () => del.mutate(t.id) : undefined}
+                    onDelete={canEdit && t.source !== 'wiki' ? () => del.mutate(t.id) : undefined}
                   />
                 ))}
               </ul>
@@ -235,7 +240,7 @@ export function Relationships({ slug }: RelationshipsProps) {
                     otherSlug={t.subject_slug}
                     label={incomingLabel(t)}
                     source={t.source}
-                    onDelete={canEdit ? () => del.mutate(t.id) : undefined}
+                    onDelete={canEdit && t.source !== 'wiki' ? () => del.mutate(t.id) : undefined}
                   />
                 ))}
               </ul>

@@ -8,6 +8,8 @@
 - 숫자(V3) — 블록의 숫자(+단위)가 인용한 원천의 payload(숫자 칸과 글 속 숫자) · 제목에 있어야 한다. 단위는 접두어만 맞추고(mm ↔ m · MPa ↔ Pa),
   반올림은 블록에 적힌 자릿수까지 허용한다. `계산: 식 = 값` 은 식을 셈해 값을 맞추고, 식의 수가 원천에 있어야 한다. 날짜(YYYY-MM-DD)는
   원천의 글 · 생긴 날에 있어야 한다. 시각(HH:MM)은 보지 않는다.
+- 관계(`relation.add` — W5) — V7 술어가 approved 인가 · 정의역 · 치역 · 두 끝이 후보인가, V2 근거, V4 인용한 원천 범위가 두 끝 문서에
+  다 있나, V10 인용 길이, V5 사람 · 잠금 문서의 '관계(자동)' 가 바뀐다. 묶음 크기(V6)는 블록 연산만 센다.
 """
 from __future__ import annotations
 
@@ -24,6 +26,7 @@ from pydantic import ValidationError
 
 from app.schemas.document import Block
 from app.wiki import pages
+from app.wiki.ontology import Predicate
 from app.wiki.resolve import Target
 from app.wiki.schema import RuleBook
 
@@ -71,6 +74,8 @@ class Context:
     link_audience: dict[str, list[str]] = field(default_factory=dict)  # 그 문서의 범위(위키 문서가 아니면 org)
     approved_types: set[str] = field(default_factory=set)
     cited_blocks: set[tuple[str, str]] = field(default_factory=set)  # (slug, block_id) — 근거가 이미 달린 블록
+    predicates: dict[str, Predicate] = field(default_factory=dict)  # approved 술어
+    endpoints: dict[str, Target] = field(default_factory=dict)  # 관계의 끝이 될 수 있는 문서(고른 문서 + 있는 후보)
 
 
 def _num(raw: str) -> tuple[float, int]:
@@ -189,13 +194,50 @@ def _block_section(content: dict[str, Any], block_id: str) -> tuple[str | None, 
     return sec.get("title"), sec["blocks"][i]
 
 
+def _relation(op: dict[str, Any], ctx: Context, found: dict[str, list[str]], review: dict[str, list[str]],
+              quote_max: int) -> None:
+    where = f"관계 {op['subject']} {op['predicate']} {op['object']}"
+    subj, obj = ctx.endpoints.get(op["subject"]), ctx.endpoints.get(op["object"])
+    pred = ctx.predicates.get(op["predicate"])
+    if subj is None or obj is None:
+        found["V7"].append(f"{where}: 끝이 후보 문서가 아니다")
+        return
+    if pred is None:
+        found["V7"].append(f"{where}: 승인된 술어가 아니다")
+    elif not pred.fits(subj.type_key, obj.type_key):
+        found["V7"].append(f"{where}: 술어의 정의역 · 치역에 맞지 않는다({subj.type_key} → {obj.type_key})")
+    if subj.slug == obj.slug:
+        found["V7"].append(f"{where}: 자기 자신과의 관계다")
+    cites = op.get("cites") or []
+    if not cites:
+        found["V2"].append(f"{where}: 관계에 근거가 없다")
+    missing = [c.get("sid") for c in cites if c.get("source_id") not in ctx.sources]
+    if missing:
+        found["V2"].append(f"{where}: 근거 원천을 찾지 못했다 — {', '.join(str(m) for m in missing)}")
+    for c in cites:
+        src = ctx.sources.get(c.get("source_id") or "")
+        if src is not None:
+            narrow = set(src["audience"]) - {"org"}
+            for end in (subj, obj):
+                if not narrow <= set(end.audience):
+                    found["V4"].append(f"{where}: 원천 범위 {sorted(src['audience'])} 가 {end.slug} 범위 {end.audience} 에 없다")
+        if c.get("quote") and len(c["quote"]) > quote_max:
+            found["V10"].append(f"{where}: 인용이 {len(c['quote'])}자 — {quote_max}자까지")
+    for end in (subj, obj):
+        if end.managed != "ai":
+            review["V5"].append(f"{end.slug}: 사람이 관리하는 문서의 관계(자동) 절이 바뀐다")
+        if end.review_lock:
+            review["V5"].append(f"{end.slug}: 검토 잠금이 켜진 문서의 관계(자동) 절이 바뀐다")
+
+
 def run(ops: list[dict[str, Any]], ctx: Context) -> list[Check]:
     """연산 목록을 본다. V9 는 블록의 개인정보 꼴을 가린다(연산을 그 자리에서 고친다)."""
     found: dict[str, list[str]] = {f"V{i}": [] for i in range(1, 12)}
     review: dict[str, list[str]] = {"V5": [], "V6": []}
     by_doc: dict[str, list[dict[str, Any]]] = {}
     for op in ops:
-        by_doc.setdefault(op["doc"], []).append(op)
+        if op["op"].startswith("block."):
+            by_doc.setdefault(op["doc"], []).append(op)
     policy = ctx.book.spec.policy.auto_apply
     quote_max = ctx.book.spec.ingest.quote_max_chars
 
@@ -209,6 +251,9 @@ def run(ops: list[dict[str, Any]], ctx: Context) -> list[Check]:
 
     for op in ops:
         doc, kind = op["doc"], op["op"]
+        if kind.startswith("relation."):
+            _relation(op, ctx, found, review, quote_max)
+            continue
         target = ctx.targets.get(doc)
         where = f"{doc} 블록 {op.get('block_id') or (op.get('block') or {}).get('id')}"
         if target is None:

@@ -135,6 +135,14 @@ async function mockWiki(page: import('@playwright/test').Page): Promise<void> {
             quote: 'max_von_mises_stress 412 MPa' }] },
         { op: 'block.insert', block_id: '01J0000000000000000000000B', why: '판정을 옮긴다.', section: '해석에서',
           before: null, after: '판정 — 위험(허용 응력 초과).', cites: [] }] }],
+    relations: [
+      { subject: 'case-sim-11111111', subject_title: '가상폴드 A1 전각도 낙하 1.5 m', predicate: 'about-part', label: '에 관한 것이다',
+        object: 'ent-part-syn-bom-hb01', object_title: '힌지 브래킷', why: '원천의 주제 힌트(코드)', origin: 'code', confidence: 1,
+        cites: [{ short: 'src_11111111', title: WIKI_SOURCES[0].title }] },
+      { subject: 'ent-part-syn-bom-hb01', subject_title: '힌지 브래킷', predicate: 'has-failure-mode', label: '를 불량 유형으로 가진다',
+        object: 'ent-fm-3f2a1c', object_title: '힌지 브래킷 균열', why: '해석이 체결부 균열을 본다.', origin: 'llm', confidence: 0.9,
+        cites: [{ short: 'src_11111111', title: WIKI_SOURCES[0].title }] }],
+    relations_dropped: [],
   })))
   await page.route(`**/api/v1/wiki/sources/${W.srcA}`, (r) => r.fulfill(ok({
     id: W.srcA, short: 'src_11111111', kind: 'sim_result', title: WIKI_SOURCES[0].title,
@@ -214,6 +222,18 @@ test.describe('visual: AI 위키 (light · dark)', () => {
           quote: i === 0 ? 'max_von_mises_stress 412 MPa' : null })) },
       } } })
     })
+    // 의미 관계 패널(W5) — 위키 관계는 '위키' 표지 · 지우기 단추 없음, 사람이 단 관계와 나란히.
+    const triple = (id: string, subject: string, predicate: string, object: string, source: string, inverse: string | null) => ({
+      id, subject_slug: subject, predicate, object_slug: object, source, confidence: source === 'wiki' ? 0.9 : null,
+      created_by: source === 'manual' ? 'x' : null, created_at: '2026-10-24T06:00:00+00:00', inverse_predicate: inverse,
+      predicate_key: source === 'wiki' ? 'k' : null, wiki_status: source === 'wiki' ? 'accepted' : null })
+    await page.route('**/api/v1/triples?*', (r) => {
+      const q = new URL(r.request().url()).searchParams
+      r.fulfill({ json: { error: null, meta: null, data: q.get('subject') ? [
+        triple('t1', SAMPLE_SLUG, '를 불량 유형으로 가진다', 'ent-fm-3f2a1c', 'wiki', '에서 일어난다'),
+        triple('t2', SAMPLE_SLUG, '인용한다', 'white-paper-realtime-edit-design', 'manual', '에 인용된다'),
+      ] : [triple('t3', 'case-sim-11111111', '에 관한 것이다', SAMPLE_SLUG, 'wiki', '를 사례로 가진다')] } })
+    })
     await page.emulateMedia({ colorScheme: 'light' })
     await page.goto(`/docs/${encodeURIComponent(SAMPLE_SLUG)}`)
     await page.getByTestId('wiki-page-banner').waitFor()
@@ -224,6 +244,9 @@ test.describe('visual: AI 위키 (light · dark)', () => {
         maxDiffPixelRatio: 0.02, animations: 'disabled',
       })
       await expect(page.getByTestId('wiki-source-card')).toHaveScreenshot(`wiki-source-card-${scheme}.png`, {
+        maxDiffPixelRatio: 0.02, animations: 'disabled',
+      })
+      await expect(page.getByRole('region', { name: '의미 관계' })).toHaveScreenshot(`wiki-doc-relations-${scheme}.png`, {
         maxDiffPixelRatio: 0.02, animations: 'disabled',
       })
     })

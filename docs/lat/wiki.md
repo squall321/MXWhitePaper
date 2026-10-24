@@ -17,7 +17,7 @@
 | W2 보이기 범위 | 읽기 길 전수(아래 표) · 길마다 시험 · admin 범위 밖 읽기 감사. 남은 것 — cae00 배포 · 재색인 | [[#Audience]] |
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
 | W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
-| W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 남은 것 — 들이기의 관계 · 등록부 · 합치기 · LLM 후보 해석 · 화면 | [[#Ontology]] |
+| W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지. 남은 것 — 등록부 · 합치기 · LLM 후보 해석 · 온톨로지 화면 | [[#Ontology]] · [[#Relations]] |
 | W6 묻기 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -194,6 +194,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 - LLM 이 닿지 않거나 설정이 비면 작업을 시도 수를 쓰지 않고 120초 뒤로(`jobs.defer` — 원천 `queued`). 예산(`budget.ingest_tokens`)을 넘으면
   작업 `held` · 원천 `held` · 기록. 그 밖의 예외는 재시도(남으면 원천 `queued`, 다 쓰면 `failed`).
 - 묶음의 `created_by` = 원천을 보낸 사람(작업의 `created_by`), 문서의 지은이 = 시스템(첫 admin — `apply.wiki_author`).
+- 관계 — [[#Relations]]. 계획 프롬프트의 후보 줄은 `후보: <slug> · <이름>(<유형 key>) · …` 이고 그 아래 술어 표(코드가 다는 넷은 뺀다)가 붙는다.
 
 ## Validation
 
@@ -207,13 +208,15 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 | V4 audience | 인용한 원천의 범위 토큰(org 뺌)이 문서 범위에 다 있나 | fail — 그대로 승인하면 좁은 사실이 넓은 문서로 샌다 |
 | V5 locked | 잠긴 블록 · AI 가 쓰지 않는 절(`(자동)` · `(사람)`) · 사람 문서 · 검토 잠금 · `always_review_kinds` | review |
 | V6 scope | 계획에 없던 문서 · 지우기(늘 검토) · 묶음 크기(문서 · 블록 — 규칙서 `policy.auto_apply`) | review |
-| V7 ontology | 새 엔티티의 유형이 approved 인가 | fail |
+| V7 ontology | 새 엔티티의 유형이 approved 인가 · 관계의 술어가 approved 인가 · 정의역 · 치역 · 두 끝이 후보인가 · 자기 자신과의 관계 | fail |
 | V8 links | `[[slug]]` 가 있거나 같은 묶음에서 생기나 · **더 좁은 문서로 링크하지 않나**(넓은 문서가 좁은 문서를 드러내지 않게) | fail |
 | V9 privacy | 이메일 · 전화 · 사번 꼴 — 가린다(`[가림]`, 연산의 블록을 고친다). 문답 · 심의만이 아니라 모든 원천에 | warn |
 | V10 quote | 근거 인용 300자(규칙서 `ingest.quote_max_chars`) · 원천 본문(300자 넘는 글)을 통째 옮김 | fail |
 | V11 style | 문단 끝 마침표 · SI 아닌 단위 · `MM/DD/YYYY` 날짜 | warn |
 
 자동 반영 = fail · review 가 없고 지우는 연산이 없고 `policy.auto_apply.enabled`. 하나라도 어긋나면 `pending_review`, fail 이 있으면 `failed`.
+관계 연산은 V2(근거) · V4(인용한 원천 범위가 두 끝 문서에 다 있나) · V7 · V10(인용 길이) · V5(사람 · 잠금 문서의 '관계(자동)' 가 바뀜)를
+본다. 묶음 크기(V6)는 블록 연산만 센다.
 
 ## Apply · Revert
 
@@ -226,7 +229,8 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 | 자동 절 | 문서의 '원천' 을 같은 판에 다시 짓는다(이 문서가 인용한 원천 문서 링크). 원천 문서의 '이 원천을 인용한 문서' 는 **원천과 범위가 같은 문서만** 싣는다 — 더 좁은 문서 제목이 넓은 원천 문서에 새지 않게 |
 | 근거 | 블록마다 `wiki_citations`(update 는 그 블록 근거를 갈고, delete 는 지운다). 읽기는 `GET /documents/{slug}?with=citations` — 볼 수 있는 원천만 |
 | 함께 반영 | 저장은 문서마다 커밋된다 — 중간에 깨지면 저장한 문서를 판 복원 · 보관으로 되감고 이 묶음 근거를 지우고, 이 묶음이 만든 엔티티 중 살아 있는 문서가 없는 것을 retired |
-| 되돌리기 | `applied` 의 판 위에 더 고친 것이 없을 때만(있으면 409). 새 문서 보관 · 있던 문서 from 판 복원 · 근거 지움 · 기록 `revert` |
+| 되돌리기 | `applied` 의 판 위에 더 고친 것이 없을 때만(있으면 409). 새 문서 보관 · 있던 문서 from 판 복원 · 근거 지움 · 관계 되돌림 · 기록 `revert` |
+| 관계 | 문서 저장 **전에** `doc_triples` 에 쓴다 — [[#Relations]]. `applied.triples` 에 줄마다 `created` 또는 바꾸기 전 값(`prev`) |
 
 ## Review
 
@@ -234,6 +238,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 한 건 상세는 문서마다 연산의 앞(계획이 읽은 판 — `document_versions`) · 뒤 글 · 까닭 · 근거(볼 수 있는 원천만 제목). 승인은
 `pending_review` 만, fail 이 있으면 409 · 반영은 `applied`. 거절은 까닭 한 줄이 꼭 있어야(422). 기록 `review`(승인 · 거절).
 **계획 밖 문서의 연산은 승인해도 반영되지 않는다**(그 문서의 판도 꼴도 계획에 없다 — V6 로 사람에게 보일 뿐).
+한 건 상세의 `relations` — 주어 · 술어 이름 · 목적어(제목) · 까닭 · `origin`(code · llm) · 근거, `relations_dropped` — 끝이 후보 밖이라 버린 것.
 
 ## Screens
 
@@ -244,10 +249,11 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 | `/wiki` | 목록(갈래마다 카드) · 최근 기록 8 · 검토 기다림 수(검토자만 — 아니면 403 이라 숨김) |
 | 문서 `/docs/:slug` | 위키 문서면 머리띠(AI · 사람 관리 · 유형 · 범위 · 검토 잠금 · 낡음 · '이 문서가 기대는 원천 N') + 블록 끝 각주 `[n]` → 원천 카드(종류 · 출처 · 생긴 때 · 위치 · 인용 · 원천 문서 · 원본). 근거 지도는 `GET /wiki/pages/{slug}` 를 문서 화면이 컨텍스트로 내리고 `SectionRenderer` 가 블록마다 `WikiCited` 로 감싼다(컨텍스트가 없으면 그대로). 번호는 기대는 원천 차례 — 같은 원천은 어디서나 같은 번호 |
 | `/wiki/sources/:id` | 원천 — 배지 · 출처 · 생긴 때 · 원천 문서 · 첨부 · 본문(낱값 표 + 객체 목록마다 표) · 철회(주인) |
-| `/wiki/changes` · `/wiki/changes/:id` | 검토 큐(상태 탭) · 한 건(요약 · 검증 표 · 문서마다 연산의 앞 · 뒤 · 까닭 · 근거 · 승인 · 거절(까닭 꼭) · 되돌리기) |
+| `/wiki/changes` · `/wiki/changes/:id` | 검토 큐(상태 탭) · 한 건(요약 · 검증 표 · 문서마다 연산의 앞 · 뒤 · 까닭 · 근거 · 관계 카드(코드 · AI) · 승인 · 거절(까닭 꼭) · 되돌리기) |
+| 의미 관계 패널(문서 오른쪽 레일) | 위키 관계는 '위키' 표지 · 지우기 단추 없음(묶음으로만 — [[graph#FE — triple 표시 + 입력]]) |
 | `/wiki/log` | 기록 — log.md 꼴 · 작업으로 거르기 · 묶음으로 잇기 |
 
-꺼지면(404 `wiki_disabled`) 화면은 '여기에는 없다' 를 보인다(`WikiError`). 다크 모드 시각 회귀 4 케이스([[visual-regression]]).
+꺼지면(404 `wiki_disabled`) 화면은 '여기에는 없다' 를 보인다(`WikiError`). 다크 모드 시각 회귀 4 케이스 · 그림 12([[visual-regression]]).
 
 ## Test bundle
 
@@ -272,6 +278,22 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 구조화 출력 꼴 `WIKI_LLM_STRUCTURED`(json_schema · tools) ·
 묻기 `WIKI_QUERY_LLM_*`(비면 배경과 같게) · 위임 `MXWP_SSO_SECRET`(비면 위임 창구 404) · `MXWP_SSO_JIT_CREATE`(기본 켬).
 API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 — 새 키에 start.sh `--env` 를 더할 필요가 없다.
+
+## Relations
+
+들이기가 쓰는 공학 개체 사이 관계(W5). 끝(주어 · 목적어)은 **고른 문서와 이미 있는 후보** — 둘 다 그 원천의 후보라 원천과 범위가 같다.
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 코드가 단다 | 사례 문서가 끝이면 원천의 주제 힌트로 — 해석 사례 `about-model` · `about-part` · `simulated-with`, 시장 사례 `about-model` · `about-part`, 불량 유형 `observed-in` 시장 사례(`ingest._STRUCTURAL`). 근거는 그 원천(`loc {field: subject_hints}`) · 확신도 1 · `origin: code` |
+| 계획이 낸다 | `PlanOut.relations[{subject, predicate, object, cites, confidence, why}]` — 술어 표의 key · 후보 slug. 끝이 후보 밖이면 버리고 `plan.relations_dropped` 에(V7 은 술어 · 정의역 · 치역). 같은 관계는 한 번(코드 것을 남긴다). 대칭 술어는 slug 순서로 |
+| 연산 꼴 | `{op: relation.add, doc: 주어, subject, predicate, object, cites, confidence, why, origin}` — 블록 연산과 같은 `ops` 에. 계획 밖 끝점 문서는 `plan.endpoints` |
+| 쓰기 | [[src/app/wiki/apply.py#_put_relations]] — source `wiki` · `predicate`(이름) · `inverse_predicate` · `predicate_key` · `source_ids` · `changeset_id` · `accepted`. 같은 (주어, 이름, 목적어) 가 있으면 원천을 더하고 확신도는 큰 쪽 |
+| 관계(자동) 절 | [[src/app/wiki/apply.py#relation_items]] — 늘 표에서 다시 짓는다. 나가는 관계 `[[목적어|제목]] 이름`, 들어오는 관계 `[[주어|제목]] 역 이름`, 보관 · 없는 문서는 뺀다. 계획의 문서는 같은 판에, 계획 밖 끝점 문서는 `refresh_relations` 가 따로 한 판(판 메모 `wiki relations`). 절이 없는 유형(사례 · 대책 …)은 의미 관계 패널 · 그래프로만 |
+| 되돌리기 | `applied.triples` 를 거꾸로 — 만든 줄은 지우고 고친 줄은 `prev` 로. **그 뒤 다른 묶음이 같은 관계를 다시 단 줄(changeset_id 가 바뀜)은 둔다**. 계획 밖 끝점 문서의 관계(자동)도 다시 짓는다 |
+| 읽기 | `/triples` · 서브그래프 · 링크 그래프(`include_triples=1`) — 위키 관계도 같은 길, 범위는 주어 · 목적어 문서로 |
+
+시험 [[apps/api/tests/test_wiki_ingest.py]] 의 관계 셋 — 쓰기 · 관계(자동) · 검토 상세 · 되돌리기 / 틀린 관계(V7 · 버림) / 이미 있는 끝점 문서를 다시 짓기.
 
 ## Ontology
 

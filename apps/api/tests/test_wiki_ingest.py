@@ -96,7 +96,7 @@ async def _cleanup() -> None:
         cs_rows = (await s.execute(text(
             "SELECT id, applied, plan FROM wiki_changesets WHERE plan ->> 'source_id' = ANY(:ids)"), {"ids": src_ids})).all()
         cs_ids = [str(r[0]) for r in cs_rows]
-        doc_ids = {str(d) for _, d in src if d} | {d for r in cs_rows for d in (_j(r[1]) or {})}
+        doc_ids = {str(d) for _, d in src if d} | {d for r in cs_rows for d in (_j(r[1]) or {}) if d != "triples"}
         # 반영이 깨져 되감긴(보관된) 문서는 applied 에 없다 — 계획의 문서를 slug 로 함께 찾는다.
         plan_slugs = sorted({p["slug"] for r in cs_rows for p in (_j(r[2]) or {}).get("pages") or []})
         doc_ids |= {str(r[0]) for r in (await s.execute(text(
@@ -353,3 +353,87 @@ async def test_synthetic_twenty_become_pages(wiki: dict[str, Any]) -> None:
     assert len(statuses) == 19 and set(statuses) == {"auto_applied"}, bad
     assert scopes == {("org",), ("aff:SYN-CAE1",), ("plat:plmdefect",), ("aff:SYN-CAE1", "plat:plmdefect")}
     assert leaks == 0  # 어느 문서도 자기 범위 밖 원천을 인용하지 않는다
+
+
+# ── 관계(W5) ───────────────────────────────────────────────────────────────────────────────────
+
+async def _triples(slugs: list[str]) -> list[tuple[str, str, str, str]]:
+    async with session_scope() as s:
+        rows = (await s.execute(text("""
+            SELECT subject_slug, predicate_key, object_slug, changeset_id::text FROM doc_triples
+             WHERE source = 'wiki' AND (subject_slug = ANY(:s) OR object_slug = ANY(:s)) ORDER BY 1, 2, 3
+        """), {"s": slugs})).all()
+    return [tuple(r) for r in rows]
+
+
+def _section(content: dict[str, Any], title: str) -> str:
+    sec = next(sec for sec in content["sections"] if sec["title"] == title)
+    return json.dumps(sec["blocks"], ensure_ascii=False)
+
+
+async def test_relations_are_written_with_the_pages(wiki: dict[str, Any]) -> None:
+    wiki["llm"].load("ingest-relations.json")
+    sid = await _receive(wiki["admin"], "03")  # org 해석 결과 — 사례 · 부품 · 불량 유형 · 해석 종류
+    await _drain()
+    cs = await _change(sid)
+    assert cs["status"] == "auto_applied", cs["validation"]
+    slugs = {p["type_key"]: p["slug"] for p in cs["plan"]["pages"]}
+    case, part, fm, simt = slugs["sim-case"], slugs["part"], slugs["failure-mode"], slugs["sim-type"]
+    got = {(a, k, b) for a, k, b, _ in await _triples(list(slugs.values()))}
+    assert got == {(case, "about-part", part), (case, "simulated-with", simt),  # 코드가 단다(모델 문서는 고르지 않아 없다)
+                   (part, "has-failure-mode", fm), (fm, "reproduced-by", case)}  # 계획이 낸 것
+    assert len(cs["applied"]["triples"]) == 4
+    async with _client() as c:
+        part_doc = (await c.get(f"/api/v1/documents/{part}", headers=wiki["reader"]["headers"])).json()["data"]
+        fm_doc = (await c.get(f"/api/v1/documents/{fm}", headers=wiki["reader"]["headers"])).json()["data"]
+        listed = (await c.get("/api/v1/triples", params={"subject": part}, headers=wiki["reader"]["headers"])).json()["data"]
+        detail = (await c.get(f"{API}/changes/{cs['id']}", headers=wiki["reviewer"]["headers"])).json()["data"]
+    rel = _section(part_doc["content"], "관계")
+    assert f"[[{fm}|" in rel and "를 불량 유형으로 가진다" in rel and f"[[{case}|" in rel and "를 사례로 가진다" in rel
+    rel = _section(fm_doc["content"], "관계")
+    assert f"[[{part}|" in rel and "에서 일어난다" in rel and "에 의해 재현됐다" in rel
+    assert [(t["predicate_key"], t["source"]) for t in listed] == [("has-failure-mode", "wiki")]
+    assert sorted((r["predicate"], r["origin"]) for r in detail["relations"]) == [
+        ("about-part", "code"), ("has-failure-mode", "llm"), ("reproduced-by", "llm"), ("simulated-with", "code")]
+
+    async with session_scope() as s:
+        await wiki_review.revert(s, cs["id"], user=wiki["admin"])
+    assert await _triples(list(slugs.values())) == []  # 되돌리면 관계도 간다
+
+
+async def test_wrong_relations_fail_v7(wiki: dict[str, Any]) -> None:
+    wiki["llm"].load("ingest-bad-relation.json")
+    sid = await _receive(wiki["admin"], "03")
+    await _drain()
+    cs = await _change(sid)
+    assert cs["status"] == "failed" and _verdict(cs, "V7") == "fail"
+    detail = next(c["detail"] for c in cs["validation"] if c["rule"] == "V7")
+    assert "승인된 술어가 아니다" in detail and "정의역 · 치역" in detail
+    assert cs["plan"]["relations_dropped"] == [
+        {"subject": cs["plan"]["pages"][1]["slug"], "predicate": "part-of", "object": "ent-model-nowhere", "why": "끝이 후보 밖이다"}]
+    assert await _triples([p["slug"] for p in cs["plan"]["pages"]]) == []
+
+
+async def test_relation_to_existing_page_refreshes_it(wiki: dict[str, Any]) -> None:
+    first = await _receive(wiki["admin"], "17")  # org 문답 — 부품 문서를 만든다
+    await _drain()
+    part = (await _change(first))["plan"]["pages"][0]["slug"]
+    async with session_scope() as s:
+        before = (await s.execute(text("SELECT version FROM documents WHERE slug = :s"), {"s": part})).scalar_one()
+    second = await _receive(wiki["admin"], "03")  # org 해석 결과 — 사례 문서만 고르지만 부품 문서가 이미 있다
+    await _drain()
+    cs = await _change(second)
+    case = cs["plan"]["pages"][0]["slug"]
+    assert cs["status"] == "auto_applied" and [p["slug"] for p in cs["plan"]["endpoints"]] == [part]
+    assert [(a, k, b) for a, k, b, _ in await _triples([part])] == [(case, "about-part", part)]
+    async with session_scope() as s:
+        ver, content = (await s.execute(text("SELECT version, content_json FROM documents WHERE slug = :s"), {"s": part})).one()
+        memo = (await s.execute(text("""
+            SELECT change_log FROM document_versions v JOIN documents d ON d.id = v.document_id
+             WHERE d.slug = :s AND v.version = :v
+        """), {"s": part, "v": ver})).scalar_one()
+    assert ver == before + 1 and memo == "wiki relations" and f"[[{case}|" in _section(_j(content), "관계")
+    async with session_scope() as s:
+        await wiki_review.revert(s, cs["id"], user=wiki["admin"])
+        content = (await s.execute(text("SELECT content_json FROM documents WHERE slug = :s"), {"s": part})).scalar_one()
+    assert f"[[{case}|" not in _section(_j(content), "관계")  # 되돌리면 계획 밖 끝점 문서도 다시 짓는다

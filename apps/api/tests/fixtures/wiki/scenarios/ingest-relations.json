@@ -1,0 +1,117 @@
+{
+ "_note": "관계 — 사례 · 부품 · 불량 유형 · 해석 종류를 고르고, 부품→불량 유형 · 불량 유형→사례 관계를 근거와 함께 낸다(코드가 about-part · simulated-with 를 더한다)",
+ "model": "fake-wiki",
+ "rules": [
+  {
+   "match": {
+    "schema": "wiki_plan"
+   },
+   "reply": {
+    "json": {
+     "summary": "{{summary}}",
+     "pages": [
+      {
+       "slug": "{{cand}}",
+       "why": "해석 사례를 담는다."
+      },
+      {
+       "slug": "{{part}}",
+       "why": "부품에 해석 결과를 잇는다."
+      },
+      {
+       "slug": "{{fm}}",
+       "why": "불량 유형에 재현 해석을 잇는다."
+      },
+      {
+       "slug": "{{simt}}",
+       "why": "해석 종류를 잇는다."
+      }
+     ],
+     "relations": [
+      {
+       "subject": "{{part}}",
+       "predicate": "has-failure-mode",
+       "object": "{{fm}}",
+       "cites": [
+        {
+         "sid": "{{sid}}",
+         "loc": {
+          "path": "/results/0"
+         }
+        }
+       ],
+       "confidence": 0.9,
+       "why": "해석이 이 부품의 균열을 본다."
+      },
+      {
+       "subject": "{{fm}}",
+       "predicate": "reproduced-by",
+       "object": "{{cand}}",
+       "cites": [
+        {
+         "sid": "{{sid}}",
+         "loc": {
+          "path": "/results/0"
+         }
+        }
+       ],
+       "confidence": 0.8,
+       "why": "이 해석이 균열을 재현한다."
+      }
+     ]
+    },
+    "capture": {
+     "cand": "후보: (case-sim-[a-z0-9]+)",
+     "part": "후보: (ent-part-[a-z0-9-]+)",
+     "fm": "후보: (ent-fm-[a-z0-9-]+)",
+     "simt": "후보: (ent-simt-[a-z0-9-]+)",
+     "sid": "<<<원천 (src_[0-9a-f]+)",
+     "summary": "\\n요약: ([^\\n]*)"
+    },
+    "usage": {
+     "prompt_tokens": 1400,
+     "completion_tokens": 160
+    }
+   }
+  },
+  {
+   "match": {
+    "schema": "wiki_write"
+   },
+   "reply": {
+    "json": {
+     "ops": [
+      {
+       "op": "block.insert",
+       "doc": "{{doc}}",
+       "section": "{{sec}}",
+       "block": {
+        "type": "paragraph",
+        "text": "{{summary}}"
+       },
+       "cites": [
+        {
+         "sid": "{{sid}}",
+         "loc": {
+          "path": "/"
+         }
+        }
+       ],
+       "why": "원천을 옮긴다."
+      }
+     ]
+    },
+    "capture": {
+     "doc": "\\n문서: ([a-z0-9-]+)",
+     "sid": "<<<원천 (src_[0-9a-f]+)",
+     "summary": "\\n요약: ([^\\n]*)",
+     "sec": "\\n## ([^\\n(]+?) \\(AI\\)"
+    },
+    "usage": {
+     "prompt_tokens": 1500,
+     "completion_tokens": 200
+    }
+   }
+  }
+ ]
+}

@@ -8,6 +8,9 @@
 - 예산(규칙서 budget.ingest_tokens)을 넘으면 `BudgetExceeded` — 워커가 작업을 `held` 로 둔다. 계획을 줄여 일부만 쓰지 않는다.
 - LLM 이 닿지 않거나 설정이 비면 `llm.LLMUnavailable` — 워커가 시도 수를 쓰지 않고 뒤로 미룬다(원천은 `queued`).
 - 반영 중 판 충돌이면 묶음을 `pending_review` 로 둔다(사람이 본다).
+- 관계(W5) — 사례 문서가 무엇에 관한 것인지(about-model · about-part · simulated-with)와 시장 사례의 불량 관찰(observed-in)은 코드가
+  원천의 주제 힌트로 단다. 그 밖의 관계는 계획이 `relations` 로 낸다(승인된 술어 · 후보 사이 · 근거). 끝은 고른 문서와 이미 있는 후보 —
+  둘 다 원천과 범위가 같다. 끝이 그 밖이면 버리고 `plan.relations_dropped` 에 남긴다.
 """
 from __future__ import annotations
 
@@ -22,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.wiki import apply as wiki_apply
-from app.wiki import jobs, llm, pages, resolve, validate
+from app.wiki import jobs, llm, ontology, pages, resolve, validate
 from app.wiki import schema as wiki_schema
 from app.wiki.envelope import normalize_audience
 from app.wiki.sources import short_id
@@ -41,17 +44,27 @@ class PlanPage(BaseModel):
     why: str = Field(description="이 문서를 고치는 까닭 한 줄")
 
 
+class Cite(BaseModel):
+    sid: str = Field(description="원천 짧은 id — src_ 로 시작")
+    loc: dict[str, Any] = Field(default_factory=dict, description='본문(JSON) 안의 위치 — 예 {"path": "/results/0"}')
+    quote: str | None = Field(default=None, description="짧은 인용(300자까지)")
+
+
+class PlanRelation(BaseModel):
+    subject: str = Field(description="주어 — 후보 줄의 slug 그대로")
+    predicate: str = Field(description="술어 key — 술어 표에서")
+    object: str = Field(description="목적어 — 후보 줄의 slug 그대로")
+    cites: list[Cite] = Field(default_factory=list)
+    confidence: float = Field(default=0.8, ge=0, le=1)
+    why: str = Field(description="이 관계를 다는 까닭 한 줄")
+
+
 class PlanOut(BaseModel):
     summary: str = Field(description="원천 문서에 둘 요약 한 문단")
     pages: list[PlanPage] = Field(description="고칠 문서 — 후보 안에서만")
     questions: list[str] = Field(default_factory=list, description="원천만으로 답할 수 없는 물음")
     contradictions: list[str] = Field(default_factory=list, description="이미 있는 문서와 다르게 말하는 곳")
-
-
-class Cite(BaseModel):
-    sid: str = Field(description="원천 짧은 id — src_ 로 시작")
-    loc: dict[str, Any] = Field(default_factory=dict, description='본문(JSON) 안의 위치 — 예 {"path": "/results/0"}')
-    quote: str | None = Field(default=None, description="짧은 인용(300자까지)")
+    relations: list[PlanRelation] = Field(default_factory=list, description="후보 문서 사이의 관계 — 원천이 뒷받침하는 것만")
 
 
 class NewBlock(BaseModel):
@@ -128,14 +141,21 @@ def _source_block(src: dict[str, Any]) -> str:
             f"본문(JSON):\n{body}\n>>>")
 
 
-def plan_messages(book: wiki_schema.RuleBook, src: dict[str, Any], targets: list[resolve.Target]) -> list[dict[str, str]]:
-    lines = "\n".join(f"후보: {t.slug} · {t.labels.get('type', t.type_key)} · {t.title} · "
+def plan_messages(book: wiki_schema.RuleBook, src: dict[str, Any], targets: list[resolve.Target],
+                  preds: dict[str, ontology.Predicate] | None = None) -> list[dict[str, str]]:
+    lines = "\n".join(f"후보: {t.slug} · {t.labels.get('type', t.type_key)}({t.type_key}) · {t.title} · "
                       f"{f'있음(판 {t.version})' if t.exists else '새로'}" for t in targets) or "(후보가 없다)"
+    rels = "\n".join(f"- {p.key}: A 는 B {p.label_ko} ({' · '.join(p.domain_types) or '아무 유형'} → "
+                     f"{' · '.join(p.range_types) or '아무 유형'})" for p in (preds or {}).values()
+                     if p.key not in _CODE_PREDICATES) or "(없다)"
     limit = book.spec.ingest.max_pages_per_source
     return [_system(book), {"role": "user", "content": (
         f"{_source_block(src)}\n\n후보 문서 — 이 안에서만 고른다(최대 {limit}장):\n{lines}\n\n"
+        f"술어 — key: 읽는 법(주어 유형 → 목적어 유형):\n{rels}\n\n"
         "할 일 — 이 원천의 사실을 담을 문서를 후보 안에서 고르고, 고른 문서마다 까닭(why)을 한 줄로 적는다. "
-        "summary 에는 원천 문서에 둘 요약을 한 문단으로 적는다.")}]
+        "summary 에는 원천 문서에 둘 요약을 한 문단으로 적는다. "
+        "relations 에는 이 원천이 뒷받침하는 후보 사이의 관계만 적는다(subject · object 는 후보 slug, predicate 는 위 key, "
+        "근거 cites). 사례가 무엇에 관한 것인지와 시장 사례의 불량 관찰은 코드가 단다 — 적지 않는다.")}]
 
 
 def _outline(book: wiki_schema.RuleBook, t: resolve.Target, content: dict[str, Any]) -> str:
@@ -164,6 +184,57 @@ def write_messages(book: wiki_schema.RuleBook, src: dict[str, Any], t: resolve.T
         f"- 사실 블록마다 cites 를 단다 — sid 는 \"{src['sid']}\", loc 은 본문(JSON) 안의 경로, quote 는 300자까지.\n"
         "- 숫자는 원천 값 그대로 단위와 함께. 계산한 수는 `계산: 식 = 값` 을 단다.\n"
         f"- doc 는 늘 \"{t.slug}\".")}]
+
+
+# ── 관계 ────────────────────────────────────────────────────────────────────────────────────────
+
+# (사례 유형, 끝 유형) → (술어, 사례가 주어인가) — 원천의 주제 힌트로 코드가 단다
+_STRUCTURAL = {
+    ("sim-case", "product-model"): ("about-model", True), ("sim-case", "part"): ("about-part", True),
+    ("sim-case", "sim-type"): ("simulated-with", True), ("field-case", "product-model"): ("about-model", True),
+    ("field-case", "part"): ("about-part", True), ("field-case", "failure-mode"): ("observed-in", False),
+}
+_CODE_PREDICATES = {pred for pred, _ in _STRUCTURAL.values()}
+
+
+def _relation_op(subject: str, predicate: str, obj: str, cites: list[dict[str, Any]], confidence: float, why: str,
+                 origin: str, preds: dict[str, ontology.Predicate]) -> dict[str, Any]:
+    pred = preds.get(predicate)
+    if pred is not None and pred.symmetric and obj < subject:
+        subject, obj = obj, subject
+    return {"op": "relation.add", "doc": subject, "subject": subject, "predicate": predicate, "object": obj,
+            "cites": cites, "confidence": confidence, "why": why, "origin": origin}
+
+
+async def relation_ops(s: AsyncSession, src: dict[str, Any], raw: list[PlanRelation], endpoints: dict[str, resolve.Target],
+                       preds: dict[str, ontology.Predicate]) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """코드가 다는 관계 + 계획의 관계 → 묶음의 연산. 같은 관계는 한 번(코드 것을 남긴다), 끝이 후보 밖이면 버린다."""
+    out: dict[tuple[str, str, str], dict[str, Any]] = {}
+    case = next((t for t in endpoints.values() if t.kind == "case"), None)
+    if case is not None:
+        cite = [{"sid": src["sid"], "source_id": src["id"], "loc": {"field": "subject_hints"}, "quote": None}]
+        for t in endpoints.values():
+            rule = _STRUCTURAL.get((case.type_key, t.type_key))
+            if rule is None:
+                continue
+            pred, case_first = rule
+            subj, obj = (case.slug, t.slug) if case_first else (t.slug, case.slug)
+            op = _relation_op(subj, pred, obj, cite, 1.0, "원천의 주제 힌트(코드)", "code", preds)
+            out[(op["subject"], op["predicate"], op["object"])] = op
+    dropped: list[dict[str, str]] = []
+    sids: dict[str, str | None] = {}
+    for r in raw:
+        if r.subject not in endpoints or r.object not in endpoints:
+            dropped.append({"subject": r.subject, "predicate": r.predicate, "object": r.object, "why": "끝이 후보 밖이다"})
+            continue
+        cites = []
+        for c in r.cites:
+            if c.sid not in sids:
+                sids[c.sid] = await _resolve_sid(s, c.sid)
+            cites.append({"sid": c.sid, "source_id": sids[c.sid], "loc": c.loc, "quote": c.quote})
+        op = _relation_op(r.subject, r.predicate, r.object, cites, r.confidence, r.why, "llm", preds)
+        out.setdefault((op["subject"], op["predicate"], op["object"]), op)
+    return list(out.values()), dropped
 
 
 # ── 들이기 ──────────────────────────────────────────────────────────────────────────────────────
@@ -234,7 +305,9 @@ async def normalize_ops(s: AsyncSession, raw: list[InsertOp | UpdateOp | DeleteO
 
 
 async def build_context(s: AsyncSession, book: wiki_schema.RuleBook, chosen: list[resolve.Target],
-                        base: dict[str, dict[str, Any]], ops: list[dict[str, Any]]) -> validate.Context:
+                        base: dict[str, dict[str, Any]], ops: list[dict[str, Any]], *,
+                        endpoints: dict[str, resolve.Target] | None = None,
+                        preds: dict[str, ontology.Predicate] | None = None) -> validate.Context:
     source_ids = sorted({c["source_id"] for op in ops for c in op.get("cites") or [] if c.get("source_id")})
     rows = (await s.execute(text("""
         SELECT id, payload, audience, kind, captured_at, title FROM wiki_sources WHERE id = ANY(CAST(:ids AS uuid[]))
@@ -252,11 +325,11 @@ async def build_context(s: AsyncSession, book: wiki_schema.RuleBook, chosen: lis
         if t.doc_id:
             cited |= {(t.slug, r[0]) for r in (await s.execute(text(
                 "SELECT DISTINCT block_id FROM wiki_citations WHERE doc_id = CAST(:d AS uuid)"), {"d": t.doc_id})).all()}
-    approved = {r[0] for r in (await s.execute(text(
-        "SELECT key FROM wiki_entity_types WHERE status = 'approved'"))).all()}
     return validate.Context(book=book, targets={t.slug: t for t in chosen}, base=base, sources=sources,
-                            existing_slugs=set(existing), link_audience=existing, approved_types=approved,
-                            cited_blocks=cited)
+                            existing_slugs=set(existing), link_audience=existing,
+                            approved_types=await ontology.approved_types(s), cited_blocks=cited,
+                            predicates=preds if preds is not None else await ontology.predicates(s),
+                            endpoints=endpoints or {t.slug: t for t in chosen})
 
 
 def _audience(chosen: list[resolve.Target], src: dict[str, Any]) -> list[str]:
@@ -283,6 +356,7 @@ async def run(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
         raise llm.LLMUnavailable("WIKI_LLM_BASE_URL · WIKI_LLM_MODEL 이 비었다")
     book = await wiki_schema.load(s)
     targets = await resolve.targets(s, src)
+    preds = await ontology.predicates(s)
     _, author_email = await wiki_apply.wiki_author(s)
     division = get_settings().import_default_division
     await _set_state(s, source_id, "running")
@@ -291,7 +365,7 @@ async def run(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
     usage = llm.Usage()
     prompts: list[Any] = []
     try:
-        messages = plan_messages(book, src, targets)
+        messages = plan_messages(book, src, targets, preds)
         prompts.append(messages)
         plan = await llm.structured(ep, messages, PlanOut, name="wiki_plan", usage=usage)
         _check_budget(book, usage)
@@ -325,8 +399,10 @@ async def run(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
         await s.commit()
         raise
 
-    ops = await normalize_ops(s, raw)
-    ctx = await build_context(s, book, chosen, base, ops)
+    endpoints = {t.slug: t for t in targets if t.exists or t in chosen}
+    rel_ops, dropped = await relation_ops(s, src, plan.relations, endpoints, preds)
+    ops = await normalize_ops(s, raw) + rel_ops
+    ctx = await build_context(s, book, chosen, base, ops, endpoints=endpoints, preds=preds)
     checks = validate.run(ops, ctx)
     status = validate.decide(checks, ops, book)
     why = {p.slug: p.why for p in plan.pages}
@@ -334,6 +410,9 @@ async def run(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
         "summary": plan.summary, "questions": plan.questions, "contradictions": plan.contradictions,
         "source_id": source_id, "sid": src["sid"],
         "unknown": [p.slug for p in plan.pages if p.slug not in by_slug],
+        "relations_dropped": dropped,
+        "endpoints": [{"slug": t.slug, "type_key": t.type_key, "title": t.title} for t in endpoints.values()
+                      if t not in chosen],
         "pages": [{"slug": t.slug, "kind": t.kind, "type_key": t.type_key, "title": t.title, "audience": t.audience,
                    "new": not t.exists, "version": t.version, "doc_id": t.doc_id, "entity_id": t.entity_id,
                    "entity": t.entity, "why": why.get(t.slug, ""),

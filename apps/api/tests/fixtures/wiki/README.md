@@ -46,3 +46,5 @@
 | `ingest-mixed-scope` | 다른 범위 원천도 인용 — `{{foreign_sid}}` 는 시험이 채운다 | V4 → failed |
 | `ingest-off-plan` | 계획에 없는 문서도 건드림 | V6 → 검토 |
 | `ingest-long-quote` | 301자 인용 | V10 → failed |
+| `ingest-relations` | 사례 · 부품 · 불량 유형 · 해석 종류를 고르고 관계 둘(부품 → 불량 유형 · 불량 유형 → 사례)을 근거와 함께(W5) | — (자동 반영 · 코드가 둘을 더한다) |
+| `ingest-bad-relation` | 없는 술어 · 정의역 밖 · 후보 밖 끝 | V7 → failed · 후보 밖은 버린다 |

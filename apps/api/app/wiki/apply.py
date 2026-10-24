@@ -5,6 +5,9 @@
   (If-Match = 계획이 읽은 판 — 그 사이 바뀌었으면 `ApplyConflict`, 묶음은 사람이 본다). 자동 절 '원천' 은 같은 판에 다시 짓는다.
   저장은 문서마다 커밋되므로, 중간에 깨지면 이미 저장한 문서를 판 복원 · 보관으로 되감고 이 묶음의 근거를 지운다 — '함께 반영'.
 - 원천 문서의 '이 원천을 인용한 문서' 에는 원천과 범위가 같은 문서만 싣는다 — 더 좁은 문서의 제목이 넓은 원천 문서에 새지 않게.
+- 관계(`relation.add` — W5)는 문서 저장 전에 `doc_triples`(source `wiki`)에 쓴다. 같은 관계가 있으면 근거 원천을 더하고 바꾸기 전 줄을
+  `applied.triples` 에 남긴다(되돌리기가 그대로 돌린다). '관계(자동)' 절은 늘 표에서 다시 짓는다 — 계획의 문서는 같은 판에, 계획 밖
+  끝점 문서는 따로 한 판(`wiki relations`). 관계의 두 끝은 그 원천의 후보라 범위가 같다.
 - 되돌리기 — 묶음이 저장한 판 위에 더 고친 것이 없을 때만(있으면 409). 새 문서는 보관, 있던 문서는 from 판으로 복원, 이 묶음이 만든
   엔티티는 retired.
 - 지은이는 시스템(첫 admin) — 누가 불렀는지는 묶음의 created_by 가 남긴다.
@@ -14,13 +17,14 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import ulid
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.errors import APIError, Conflict, NotFound, PreconditionFailed
 from app.services import document_service
-from app.wiki import audience, pages
+from app.wiki import audience, ontology, pages
 from app.wiki import schema as wiki_schema
 
 
@@ -126,6 +130,106 @@ async def _ensure_entity(s: AsyncSession, entity: dict[str, Any], aud: list[str]
            "cs": cs_id})).scalar_one())
 
 
+def block_ops(ops: list[dict[str, Any]], slug: str) -> list[dict[str, Any]]:
+    return [op for op in ops if op["doc"] == slug and op["op"].startswith("block.")]
+
+
+def _relation_ops(ops: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [op for op in ops if op["op"] == "relation.add"]
+
+
+async def _put_relations(s: AsyncSession, ops: list[dict[str, Any]], cs_id: str) -> list[dict[str, Any]]:
+    """관계 연산 → doc_triples. 있으면 근거 원천을 더하고(바꾸기 전 줄을 남긴다), 없으면 새 줄."""
+    preds = await ontology.predicates(s)
+    done: list[dict[str, Any]] = []
+    for op in _relation_ops(ops):
+        pred = preds.get(op["predicate"])
+        if pred is None:
+            raise ApplyConflict(f"술어 {op['predicate']} 가 그 사이 승인 목록에서 빠졌다")
+        srcs = sorted({c["source_id"] for c in op.get("cites") or [] if c.get("source_id")})
+        prev = (await s.execute(text("""
+            SELECT id, source_ids, changeset_id, confidence, wiki_status FROM doc_triples
+             WHERE subject_slug = :a AND predicate = :p AND object_slug = :b AND source = 'wiki' FOR UPDATE
+        """), {"a": op["subject"], "p": pred.label_ko, "b": op["object"]})).first()
+        if prev is None:
+            tid = str(ulid.new())
+            await s.execute(text("""
+                INSERT INTO doc_triples (id, subject_slug, predicate, object_slug, source, confidence, inverse_predicate,
+                                         predicate_key, source_ids, changeset_id, wiki_status)
+                VALUES (:id, :a, :p, :b, 'wiki', :c, :inv, :k, CAST(:srcs AS uuid[]), CAST(:cs AS uuid), 'accepted')
+            """), {"id": tid, "a": op["subject"], "p": pred.label_ko, "b": op["object"], "c": op.get("confidence"),
+                   "inv": pred.inverse_ko, "k": pred.key, "srcs": srcs, "cs": cs_id})
+            done.append({"id": tid, "created": True, "subject": op["subject"], "object": op["object"]})
+            continue
+        await s.execute(text("""
+            UPDATE doc_triples SET source_ids = ARRAY(SELECT DISTINCT x FROM unnest(source_ids || CAST(:srcs AS uuid[])) x),
+                   confidence = GREATEST(COALESCE(confidence, 0), COALESCE(:c, 0)), changeset_id = CAST(:cs AS uuid),
+                   wiki_status = 'accepted', predicate_key = :k, inverse_predicate = :inv
+             WHERE id = :id
+        """), {"srcs": srcs, "c": op.get("confidence"), "cs": cs_id, "k": pred.key, "inv": pred.inverse_ko, "id": prev[0]})
+        done.append({"id": prev[0], "created": False, "subject": op["subject"], "object": op["object"],
+                     "prev": {"source_ids": [str(x) for x in prev[1]], "changeset_id": str(prev[2]) if prev[2] else None,
+                              "confidence": prev[3], "wiki_status": prev[4]}})
+    return done
+
+
+async def _undo_relations(s: AsyncSession, done: list[dict[str, Any]], cs_id: str) -> None:
+    """반영 전으로 — 그 뒤 다른 묶음이 같은 관계를 다시 단 줄(changeset_id 가 바뀜)은 그 묶음 몫이라 둔다."""
+    for t in reversed(done):
+        if t["created"]:
+            await s.execute(text("DELETE FROM doc_triples WHERE id = :id AND changeset_id = CAST(:cs AS uuid)"),
+                            {"id": t["id"], "cs": cs_id})
+            continue
+        prev = t["prev"]
+        await s.execute(text("""
+            UPDATE doc_triples SET source_ids = CAST(:srcs AS uuid[]), changeset_id = CAST(:pcs AS uuid), confidence = :c,
+                   wiki_status = :st WHERE id = :id AND changeset_id = CAST(:cs AS uuid)
+        """), {"srcs": prev["source_ids"], "pcs": prev["changeset_id"], "c": prev["confidence"], "st": prev["wiki_status"],
+               "id": t["id"], "cs": cs_id})
+
+
+async def relation_items(s: AsyncSession, slug: str, titles: dict[str, str] | None = None) -> list[str]:
+    """'관계(자동)' 절의 줄 — 나가는 관계는 `[[목적어]] 이름`, 들어오는 관계는 `[[주어]] 역 이름`. 보관 · 없는 문서는 뺀다
+    (`titles` 는 이번 묶음이 만들 문서)."""
+    titles = titles or {}
+    rows = (await s.execute(text("""
+        SELECT t.subject_slug, t.object_slug, p.label_ko, p.inverse_ko
+          FROM doc_triples t JOIN wiki_predicates p ON p.key = t.predicate_key
+         WHERE t.source = 'wiki' AND t.wiki_status = 'accepted' AND (t.subject_slug = :s OR t.object_slug = :s)
+    """), {"s": slug})).all()
+    others = sorted({r[1] if r[0] == slug else r[0] for r in rows})
+    docs = {r[0]: (r[1], r[2]) for r in (await s.execute(text(
+        "SELECT slug, title, status FROM documents WHERE slug = ANY(:o)"), {"o": others})).all()}
+    lines: list[tuple[str, str, str]] = []
+    for subj, obj, label, inverse in rows:
+        other, word = (obj, label) if subj == slug else (subj, inverse)
+        title, status = docs.get(other, (titles.get(other), None))
+        if title is None or status == "archived":
+            continue
+        lines.append((word, title, f"[[{other}|{title}]] {word}"))
+    return [line for _, _, line in sorted(set(lines))]
+
+
+async def refresh_relations(s: AsyncSession, slug: str, author_id: str) -> None:
+    """계획 밖 끝점 문서의 '관계(자동)' 를 표에서 다시 짓는다(바뀌었을 때만 한 판)."""
+    doc = await _doc(s, slug=slug)
+    if doc is None or doc["status"] == "archived":
+        return
+    content = dict(doc["content"])
+    before = json.dumps(content, sort_keys=True)
+    pages.set_auto_list(content, "관계", await relation_items(s, slug), empty="아직 관계가 없다.")
+    if json.dumps(content, sort_keys=True) == before:
+        return
+    with audience.acting_as(audience.SYSTEM):
+        await document_service.replace_document(
+            s, slug=slug, payload=content, if_match=document_service.make_etag(doc["id"], doc["version"]),
+            actor_id=author_id, change_log="wiki relations")
+
+
+def _relation_slugs(done: list[dict[str, Any]]) -> set[str]:
+    return {t[k] for t in done for k in ("subject", "object")}
+
+
 async def refresh_source_doc(s: AsyncSession, source_id: str, author_id: str) -> None:
     """원천 문서의 '이 원천을 인용한 문서' — 원천과 범위가 같은 위키 문서만(보관된 것 빼고)."""
     src = (await s.execute(text("""
@@ -165,10 +269,13 @@ async def apply(s: AsyncSession, cs_id: str, *, status: str) -> dict[str, list[i
     short = short_cs(cs_id)
     applied: dict[str, list[int]] = {}
     slugs: dict[str, str] = {}
+    triples: list[dict[str, Any]] = []
+    titles = {p["slug"]: p["title"] for p in plan.get("pages") or []}
     try:
+        triples = await _put_relations(s, ops, cs_id)
         for page in plan.get("pages") or []:
             slug = page["slug"]
-            doc_ops = [op for op in ops if op["doc"] == slug]
+            doc_ops = block_ops(ops, slug)
             cited = await _source_rows(s, sorted({c["source_id"] for op in doc_ops for c in op.get("cites") or []
                                                   if c.get("source_id")}))
             if page.get("new"):
@@ -178,6 +285,7 @@ async def apply(s: AsyncSession, cs_id: str, *, status: str) -> dict[str, list[i
                     book, slug=slug, type_key=page["type_key"], title=page["title"], summary="",
                     owners=[author_email], division=division), doc_ops)
                 pages.set_auto_list(content, "원천", _source_items(cited), empty="아직 원천이 없다.")
+                pages.set_auto_list(content, "관계", await relation_items(s, slug, titles), empty="아직 관계가 없다.")
                 with audience.acting_as(audience.SYSTEM):
                     doc, _ = await document_service.create_document(
                         s, payload=content, owner_id=author_id,
@@ -198,6 +306,7 @@ async def apply(s: AsyncSession, cs_id: str, *, status: str) -> dict[str, list[i
                 content = pages.apply_ops(cur["content"], doc_ops)
                 cited.update(await _source_rows(s, sorted(await _page_source_ids(s, cur["id"]))))
                 pages.set_auto_list(content, "원천", _source_items(cited), empty="아직 원천이 없다.")
+                pages.set_auto_list(content, "관계", await relation_items(s, slug, titles), empty="아직 관계가 없다.")
                 with audience.acting_as(audience.SYSTEM):
                     try:
                         doc, _ = await document_service.replace_document(
@@ -213,22 +322,25 @@ async def apply(s: AsyncSession, cs_id: str, *, status: str) -> dict[str, list[i
             slugs[doc["id"]] = slug
             await _set_citations(s, doc["id"], doc_ops, cs_id)
             await s.commit()
-        for source_id in sorted({c["source_id"] for op in ops for c in op.get("cites") or [] if c.get("source_id")}):
+        for source_id in sorted({c["source_id"] for op in ops if op["op"].startswith("block.")
+                                 for c in op.get("cites") or [] if c.get("source_id")}):
             await refresh_source_doc(s, source_id, author_id)
+        for slug in sorted(_relation_slugs(triples) - set(titles)):
+            await refresh_relations(s, slug, author_id)
         await s.execute(text("""
             UPDATE wiki_changesets SET status = :st, applied = CAST(:a AS jsonb), finished_at = NOW(), error = NULL
              WHERE id = CAST(:i AS uuid)
-        """), {"st": status, "a": json.dumps(applied), "i": cs_id})
+        """), {"st": status, "a": json.dumps({**applied, **({"triples": triples} if triples else {})}), "i": cs_id})
         await s.commit()
         return applied
     except Exception:
         await s.rollback()
-        await _unwind(s, cs_id, applied, slugs, author_id)
+        await _unwind(s, cs_id, applied, slugs, author_id, triples=triples, plan_slugs=set(titles))
         raise
 
 
 async def _unwind(s: AsyncSession, cs_id: str, applied: dict[str, list[int]], slugs: dict[str, str],
-                  author_id: str) -> None:
+                  author_id: str, *, triples: list[dict[str, Any]] | None = None, plan_slugs: set[str] | None = None) -> None:
     with audience.acting_as(audience.SYSTEM):
         for doc_id, (frm, _to) in applied.items():
             if frm == 0:
@@ -236,6 +348,7 @@ async def _unwind(s: AsyncSession, cs_id: str, applied: dict[str, list[int]], sl
             else:
                 await document_service.restore_version(s, slug=slugs[doc_id], version=frm, actor_id=author_id)
     await s.execute(text("DELETE FROM wiki_citations WHERE changeset_id = CAST(:i AS uuid)"), {"i": cs_id})
+    await _undo_relations(s, triples or [], cs_id)
     # 이 묶음이 만든 엔티티 — 그 뒤 다른 묶음의 문서가 쓰고 있으면 두고, 살아 있는 문서가 없을 때만 retired.
     await s.execute(text("""
         UPDATE wiki_entities e SET status = 'retired', updated_at = NOW()
@@ -244,21 +357,27 @@ async def _unwind(s: AsyncSession, cs_id: str, applied: dict[str, list[int]], sl
                             WHERE wp.entity_id = e.id AND d.status <> 'archived')
     """), {"i": cs_id})
     await s.commit()
+    for slug in sorted(_relation_slugs(triples or []) - (plan_slugs or set())):
+        await refresh_relations(s, slug, author_id)
 
 
 async def revert(s: AsyncSession, cs_id: str, *, actor_id: str) -> dict[str, Any]:
     cs = await load_changeset(s, cs_id, lock=True)
     if cs["status"] not in ("applied", "auto_applied"):
         raise Conflict(f"반영된 묶음만 되돌린다(지금 {cs['status']})")
+    triples = cs["applied"].get("triples") or []
+    applied = {k: v for k, v in cs["applied"].items() if k != "triples"}
     docs: dict[str, dict[str, Any]] = {}
-    for doc_id, (_frm, to) in cs["applied"].items():
+    for doc_id, (_frm, to) in applied.items():
         cur = await _doc(s, doc_id=doc_id)
         if cur is None or cur["version"] != to:
             raise Conflict(f"{cur['slug'] if cur else doc_id} 이 이 묶음 뒤에 또 바뀌었다 — 사람이 되돌린다")
         docs[doc_id] = cur
     author_id, _ = await wiki_author(s)
-    await _unwind(s, cs_id, dict(cs["applied"]), {d: docs[d]["slug"] for d in docs}, author_id)
-    for source_id in sorted({c["source_id"] for op in cs["ops"] for c in op.get("cites") or [] if c.get("source_id")}):
+    await _unwind(s, cs_id, applied, {d: docs[d]["slug"] for d in docs}, author_id, triples=triples,
+                  plan_slugs={p["slug"] for p in cs["plan"].get("pages") or []})
+    for source_id in sorted({c["source_id"] for op in cs["ops"] if op["op"].startswith("block.")
+                             for c in op.get("cites") or [] if c.get("source_id")}):
         await refresh_source_doc(s, source_id, author_id)
     await s.execute(text("""
         UPDATE wiki_changesets SET status = 'reverted', decided_by = CAST(:u AS uuid), decided_at = NOW()

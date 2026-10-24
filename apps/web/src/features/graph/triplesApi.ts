@@ -3,7 +3,7 @@
  *
  * BE 의 `/api/v1/triples` (graph-edge-predicates 사이클 1차) 를 감싼다.
  * triple 은 (subject, predicate, object) 형태의 의미 엣지로, source 는
- * 'llm' (자동 추출) 또는 'manual' (사용자 입력).
+ * 'llm' (자동 추출) · 'manual' (사용자 입력) · 'wiki' (LLM 위키 관계 — 읽기만, 변경 묶음으로 고친다).
  */
 import { apiClient } from '@/lib/api/client'
 import { unwrap, type ApiEnvelope } from '@/lib/api/envelope'
@@ -13,7 +13,7 @@ export interface Triple {
   subject_slug: string
   predicate: string
   object_slug: string
-  source: 'llm' | 'manual'
+  source: 'llm' | 'manual' | 'wiki'
   confidence: number | null
   created_by: string | null
   created_at: string | null
@@ -36,7 +36,7 @@ export interface TripleListParams {
   subject?: string
   object?: string
   predicate?: string
-  source?: 'llm' | 'manual'
+  source?: 'llm' | 'manual' | 'wiki'
 }
 
 export interface BulkExtractResult {

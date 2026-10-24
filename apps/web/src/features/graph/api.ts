@@ -65,7 +65,7 @@ export interface GraphEdge {
   /** triple 엣지 전용 — 술어 라벨. */
   predicate?: string
   /** triple 엣지 전용 — 출처 (llm 자동추출 / manual 사용자입력). */
-  triple_source?: 'llm' | 'manual'
+  triple_source?: 'llm' | 'manual' | 'wiki'
 }
 
 export interface GraphPayload {

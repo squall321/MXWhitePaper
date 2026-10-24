@@ -169,13 +169,13 @@ triple 은 런타임 제외.
 | --- | --- |
 | [[src/features/graph/triplesApi.ts]] | triples API 클라이언트 — `fetchTriples` / `createTriple` / `deleteTriple` / `extractBulk`. `Triple`/`TripleCreate` 에 `inverse_predicate` |
 | [[src/features/graph/useRelationships.ts]] | 문서의 양방향 관계 훅 — `subject=`(나가는)/`object=`(들어오는) 병렬 fetch, best-effort degrade |
-| [[src/components/Relationships.tsx]] | 우측 레일 "관계" 패널 — 나가는=predicate / 들어오는=inverse_predicate(없으면 '의 관련 문서' fallback), llm 관계 ✨ 배지. **editor/admin 은 인라인 편집**: `+ 관계 추가`(온톨로지 predicate picker + object slug + optional inverse → createTriple, 캐논이면 inverse 자동) + 행별 ✕ 삭제(deleteTriple). viewer/빈 관계면 패널 숨김, editor 는 추가 위해 항상 노출. [[src/components/layout/RightRail.tsx]] 의 Backlinks 아래 |
+| [[src/components/Relationships.tsx]] | 우측 레일 "관계" 패널 — 나가는=predicate / 들어오는=inverse_predicate(없으면 '의 관련 문서' fallback), llm 관계 ✨ 배지 · 위키 관계(source `wiki`)는 '위키' 표지에 ✕ 없음. **editor/admin 은 인라인 편집**: `+ 관계 추가`(온톨로지 predicate picker + object slug + optional inverse → createTriple, 캐논이면 inverse 자동) + 행별 ✕ 삭제(deleteTriple). viewer/빈 관계면 패널 숨김, editor 는 추가 위해 항상 노출. [[src/components/layout/RightRail.tsx]] 의 Backlinks 아래 |
 | [[src/features/graph/triplesApi.ts#fetchRelationshipTypes]] | `GET /triples/predicates` — 온톨로지 캐논 (편집 폼 picker) |
 | [[src/features/graph/components/KnowledgeGraph.tsx]] | `kind="triple"` 엣지를 predicate 라벨 + 출처별 스타일로 렌더 (`renderEdgeLabels`) |
 | [[src/pages/Graph.tsx]] | "🔗 triple" 표시 토글, 우클릭 "엣지 추가" dialog → `createTriple` |
 | [[src/pages/AdminDashboard.tsx]] | triple 탭 — `extractBulk` 일괄 추출 버튼 |
 
-- triple 엣지 색: 보라 (`#c084fc`). `triple_source='llm'` 흐림 / `'manual'` 진함.
+- triple 엣지 색: 보라 (`#c084fc`). `triple_source='llm'` 흐림 / `'manual'` · `'wiki'` 진함.
 - `renderEdgeLabels: true` — wiki/tag 엣지엔 label 미부여라 triple 만 라벨 보임.
 - `include_triples` 토글은 `edgeMode` (wiki/tag/모두) 와 **직교** — 어느 모드에서든
   triple on/off 가능.

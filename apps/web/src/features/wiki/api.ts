@@ -133,6 +133,20 @@ export interface WikiChangeDoc {
   ops: WikiChangeOp[]
 }
 
+/** 관계 연산(W5) — 코드가 단 것(code)과 계획이 낸 것(llm). label 은 목적어 뒤에 붙여 읽는 술어 이름. */
+export interface WikiChangeRelation {
+  subject: string
+  subject_title: string
+  predicate: string
+  label: string
+  object: string
+  object_title: string
+  why: string
+  origin: 'code' | 'llm'
+  confidence: number | null
+  cites: { short: string; title: string }[]
+}
+
 export interface WikiChange {
   id: string
   short: string
@@ -150,6 +164,8 @@ export interface WikiChange {
   error: string | null
   decision: { by: string | null; at: string | null; note: string | null }
   docs: WikiChangeDoc[]
+  relations?: WikiChangeRelation[]
+  relations_dropped?: { subject: string; predicate: string; object: string; why: string }[]
 }
 
 export async function getWikiHealth(): Promise<unknown> {

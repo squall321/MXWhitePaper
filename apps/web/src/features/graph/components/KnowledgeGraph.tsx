@@ -64,7 +64,7 @@ interface GraphEdgeTriple {
   source: string
   target: string
   predicate: string
-  triple_source: 'llm' | 'manual'
+  triple_source: 'llm' | 'manual' | 'wiki'
   confidence: number | null
 }
 
