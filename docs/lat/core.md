@@ -55,6 +55,9 @@ chain 의 최상위. 우선순위:
 > 표기다.
 
 `get_current_user` 는 해소한 사람을 이 요청의 '읽는 사람'(보이기 범위 문맥 — [[wiki#Audience]])으로도 둔다.
+기계 호출(API 토큰 · 위임 — `auth_via` 가 `api_token` · `delegated:*`)이 문서 내용을 바꾸는 길(`PUT · DELETE /documents/{slug}` · 판 복원 ·
+제목 · 정보 상자 · 변수 · CSS · 절 · 블록 · 절 순서 · 상태 전이)로 **위키 문서**를 고치려 하면 409 `WIKI_USE_PROPOSE` — 위키 문서의 쓰기는
+`POST /wiki/propose` 하나로([[src/app/core/auth.py#_guard_wiki_writes]], [[wiki#Propose]]). 사람의 웹 세션 · 위키 반영(시스템)은 그대로.
 
 dict 형태: `{id, email, role, ..., portal_affiliation, portal_plat, portal_access_at}` — `portal_*` 는 포털 진입 토큰이
 남긴 스냅숏(users 칸)이고, 위임 호출이면 그 호출의 증명값으로 바뀌며 `auth_via: "delegated:<client>"` 가 붙는다.

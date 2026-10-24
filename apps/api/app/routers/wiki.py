@@ -29,6 +29,7 @@ from app.wiki import (
     fileback,
     jobs,
     ontology,
+    propose,
     query,
     questions,
     review,
@@ -402,6 +403,14 @@ async def discard_candidate(
     source_id: UUID, user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     return envelope(data=await candidates.discard(s, str(source_id), user=user))
+
+
+@router.post("/propose", status_code=201)
+async def post_propose(
+    body: propose.ProposeBody, user: dict[str, Any] = Depends(require_editor), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """위키 문서에 블록 · 관계 연산을 제안한다 — 늘 검토하는 변경 묶음(실패가 있으면 failed). 기계 호출의 위키 쓰기는 이 길뿐이다."""
+    return envelope(data=await propose.propose(s, body, user=user))
 
 
 @router.get("/questions")

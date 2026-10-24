@@ -11,8 +11,10 @@ User dict 형태:
 """
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import unquote
 
 from fastapi import Depends, Request
 from sqlalchemy import text
@@ -22,7 +24,7 @@ from ..services.api_token_scopes import check_scope, required_scope_for
 from ..wiki import audience
 from .config import get_settings
 from .db import get_db
-from .errors import Forbidden, Unauthorized
+from .errors import Conflict, Forbidden, Unauthorized
 from .portal_identity import secret_tag, verified_affiliation, verified_plat
 from .security import decode_token, verify_password
 
@@ -31,6 +33,12 @@ class ScopeInsufficient(Forbidden):
     """Specialized Forbidden — token authenticates but its scopes are too narrow."""
 
     code = "SCOPE_INSUFFICIENT"
+
+class WikiPageWrite(Conflict):
+    """기계 호출이 위키 문서의 내용을 직접 고치려 했다 — `POST /api/v1/wiki/propose`(늘 검토)로."""
+
+    code = "WIKI_USE_PROPOSE"
+
 
 ROLE_ORDER: dict[str, int] = {
     "reader": 1,
@@ -232,12 +240,38 @@ async def _resolve_api_token(
     return user, matched_scopes
 
 
+# 문서 내용을 바꾸는 길 — 문서 라우터 · 상태 전이(approvals). 보기 기록(/view) · 댓글 · 구독 같은 곁길은 뺀다.
+_DOC_WRITE = re.compile(r"^/api/v1/documents/([^/]+)(?:/(?:versions/\d+/restore|title|infobox|variables|custom-css|"
+                        r"sections/[^/]+|blocks(?:/[^/]+(?:/move)?)?|transition))?/?$")
+
+
+async def _guard_wiki_writes(s: AsyncSession, request: Request, user: dict[str, Any]) -> None:
+    """기계 호출(API 토큰 · 위임 — 게이트웨이 · MCP · 포털 에이전트)은 위키 문서의 내용을 옆길로 고치지 못한다(CONTRACTS §7).
+
+    위키 문서의 쓰기는 `wiki_propose` 하나로 모은다 — 검증 · 근거 · 기록을 건너뛰는 길을 남기지 않는다. 사람의 웹 세션(사람 절 ·
+    사람 관리 문서)과 위키 반영(시스템)은 그대로.
+    """
+    via = str(user.get("auth_via") or "")
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE") or not (via == "api_token" or via.startswith("delegated:")):
+        return
+    m = _DOC_WRITE.match(request.url.path)
+    if m is None:
+        return
+    slug = unquote(m.group(1))
+    hit = (await s.execute(text(
+        "SELECT 1 FROM documents d JOIN wiki_pages wp ON wp.doc_id = d.id WHERE d.slug = :s"), {"s": slug})).first()
+    if hit is not None:
+        raise WikiPageWrite("위키 문서는 POST /api/v1/wiki/propose 로 고친다 — API 토큰 · 위임 호출의 직접 쓰기는 막는다",
+                            details={"slug": slug})
+
+
 async def get_current_user(
     request: Request, s: AsyncSession = Depends(get_db)
 ) -> dict[str, Any]:
     """사람을 해소하고, 이 요청의 '읽는 사람'(보이기 범위 문맥 — app/wiki/audience.py)으로 둔다."""
     user = await _resolve_current_user(request, s)
     audience.set_viewer(audience.SERVICE if audience.is_service_call(user) else audience.viewer_from_user(user))
+    await _guard_wiki_writes(s, request, user)
     return user
 
 

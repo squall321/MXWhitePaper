@@ -682,6 +682,38 @@
         "title": "ChatBody",
         "type": "object"
       },
+      "Cite": {
+        "properties": {
+          "loc": {
+            "additionalProperties": true,
+            "description": "본문(JSON) 안의 위치 — 예 {\"path\": \"/results/0\"}",
+            "title": "Loc",
+            "type": "object"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "짧은 인용(300자까지)",
+            "title": "Quote"
+          },
+          "sid": {
+            "description": "원천 짧은 id — src_ 로 시작",
+            "title": "Sid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sid"
+        ],
+        "title": "Cite",
+        "type": "object"
+      },
       "CommentIn": {
         "properties": {
           "anchor_id": {
@@ -956,6 +988,35 @@
           "status"
         ],
         "title": "DecisionIn",
+        "type": "object"
+      },
+      "DeleteOp": {
+        "properties": {
+          "block_id": {
+            "title": "Block Id",
+            "type": "string"
+          },
+          "doc": {
+            "title": "Doc",
+            "type": "string"
+          },
+          "op": {
+            "const": "block.delete",
+            "title": "Op",
+            "type": "string"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "op",
+          "doc",
+          "block_id",
+          "why"
+        ],
+        "title": "DeleteOp",
         "type": "object"
       },
       "DisableIn": {
@@ -1342,6 +1403,59 @@
         "title": "HeartbeatIn",
         "type": "object"
       },
+      "InsertOp": {
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "이 블록 뒤에(비면 절 끝)",
+            "title": "After"
+          },
+          "block": {
+            "$ref": "#/components/schemas/NewBlock"
+          },
+          "cites": {
+            "items": {
+              "$ref": "#/components/schemas/Cite"
+            },
+            "title": "Cites",
+            "type": "array"
+          },
+          "doc": {
+            "title": "Doc",
+            "type": "string"
+          },
+          "op": {
+            "const": "block.insert",
+            "title": "Op",
+            "type": "string"
+          },
+          "section": {
+            "description": "절 이름 그대로",
+            "title": "Section",
+            "type": "string"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "op",
+          "doc",
+          "section",
+          "block",
+          "why"
+        ],
+        "title": "InsertOp",
+        "type": "object"
+      },
       "LoginIn": {
         "properties": {
           "email": {
@@ -1405,6 +1519,135 @@
           "content"
         ],
         "title": "Message",
+        "type": "object"
+      },
+      "NewBlock": {
+        "properties": {
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "headers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headers"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "style": {
+            "anyOf": [
+              {
+                "enum": [
+                  "bullet",
+                  "number"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "type": {
+            "enum": [
+              "paragraph",
+              "list",
+              "table",
+              "callout"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "variant": {
+            "anyOf": [
+              {
+                "enum": [
+                  "info",
+                  "warn",
+                  "tip",
+                  "danger"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variant"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "NewBlock",
         "type": "object"
       },
       "PartCreate": {
@@ -1625,6 +1868,52 @@
           }
         },
         "title": "PatchSubscriptionIn",
+        "type": "object"
+      },
+      "PlanRelation": {
+        "properties": {
+          "cites": {
+            "items": {
+              "$ref": "#/components/schemas/Cite"
+            },
+            "title": "Cites",
+            "type": "array"
+          },
+          "confidence": {
+            "default": 0.8,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "object": {
+            "description": "목적어 — 후보 줄의 slug 그대로",
+            "title": "Object",
+            "type": "string"
+          },
+          "predicate": {
+            "description": "술어 key — 술어 표에서",
+            "title": "Predicate",
+            "type": "string"
+          },
+          "subject": {
+            "description": "주어 — 후보 줄의 slug 그대로",
+            "title": "Subject",
+            "type": "string"
+          },
+          "why": {
+            "description": "이 관계를 다는 까닭 한 줄",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "predicate",
+          "object",
+          "why"
+        ],
+        "title": "PlanRelation",
         "type": "object"
       },
       "PolicyCreate": {
@@ -1849,6 +2138,48 @@
           "inverse_ko"
         ],
         "title": "PredicateProposal",
+        "type": "object"
+      },
+      "ProposeBody": {
+        "properties": {
+          "ops": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/InsertOp"
+                },
+                {
+                  "$ref": "#/components/schemas/UpdateOp"
+                },
+                {
+                  "$ref": "#/components/schemas/DeleteOp"
+                }
+              ]
+            },
+            "maxItems": 80,
+            "title": "Ops",
+            "type": "array"
+          },
+          "relations": {
+            "items": {
+              "$ref": "#/components/schemas/PlanRelation"
+            },
+            "maxItems": 40,
+            "title": "Relations",
+            "type": "array"
+          },
+          "summary": {
+            "description": "이 제안이 무엇을 왜 고치나 한 문단",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary"
+        ],
+        "title": "ProposeBody",
         "type": "object"
       },
       "ProviderCreate": {
@@ -3667,6 +3998,46 @@
           "abbr"
         ],
         "title": "TypeProposal",
+        "type": "object"
+      },
+      "UpdateOp": {
+        "properties": {
+          "block": {
+            "$ref": "#/components/schemas/NewBlock"
+          },
+          "block_id": {
+            "title": "Block Id",
+            "type": "string"
+          },
+          "cites": {
+            "items": {
+              "$ref": "#/components/schemas/Cite"
+            },
+            "title": "Cites",
+            "type": "array"
+          },
+          "doc": {
+            "title": "Doc",
+            "type": "string"
+          },
+          "op": {
+            "const": "block.update",
+            "title": "Op",
+            "type": "string"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "op",
+          "doc",
+          "block_id",
+          "block",
+          "why"
+        ],
+        "title": "UpdateOp",
         "type": "object"
       },
       "UserPatch": {
@@ -21022,6 +21393,50 @@
           }
         },
         "summary": "Get Page",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/propose": {
+      "post": {
+        "description": "위키 문서에 블록 · 관계 연산을 제안한다 — 늘 검토하는 변경 묶음(실패가 있으면 failed). 기계 호출의 위키 쓰기는 이 길뿐이다.",
+        "operationId": "post_propose_api_v1_wiki_propose_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Propose Api V1 Wiki Propose Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Propose",
         "tags": [
           "wiki"
         ]

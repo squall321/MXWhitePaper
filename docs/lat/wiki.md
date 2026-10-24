@@ -18,7 +18,7 @@
 | W3 원천 · 작업 | 표(원천 불변 · 작업 · 기록 덧붙이기만 · 워커 심장박동) · DB 큐 · 워커(0052 · 0053) · 받기 · 원천 문서 · 철회 · 기록 · /health. 워커 인스턴스 `mxwp_wiki` · 덤프 · 합치기 제외. 남은 것 — cae00 배포(0052 · 0053 · 버킷 · wiki.sif) | [[#Sources · Jobs]] · [[#Intake]] · [[#REST]] |
 | W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
 | W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지 · 엔티티 등록부(보이기 · 별칭 · 외부 id · 중복 후보 · 합치기 — 늘 검토 · 되돌리기). 엔티티 후보 해석(열쇠 · 후보 · `wiki_resolve`) · 정답표 초안 · 평가 스크립트. 화면(온톨로지 · 엔티티 목록 · 한 건 · 합치기 카드). 남은 것 — 사람의 정답표 확인 · LLM 을 낀 정확도(진짜 LLM 이 있는 박스) | [[#Ontology]] · [[#Relations]] · [[#Entities]] · [[#Resolution]] |
-| W6 묻기 · 되쌓기 · MCP | 묻기(`/query` SSE · 근거 각주 · MISS) · 질문 대기열(0057 · `/questions`) · 되쌓기(`/fileback` → qa 원천 → 문답 문서 · 비슷한 물음은 같은 문서에) · 후보(주인만 보는 held 원천 · `/candidates` · 화면 '내 후보' · 0058). 남은 것 — `wiki_propose` · MCP · 챗 위키 모드 | [[#Query]] · [[#Fileback]] · [[#Candidates]] |
+| W6 묻기 · 되쌓기 · MCP | 묻기(`/query` SSE · 근거 각주 · MISS) · 질문 대기열(0057 · `/questions`) · 되쌓기(`/fileback` → qa 원천 → 문답 문서 · 비슷한 물음은 같은 문서에) · 후보(주인만 보는 held 원천 · `/candidates` · 화면 '내 후보' · 0058) · 제안(`/propose` — 늘 검토) · 기계 호출의 위키 문서 직접 쓰기 막음. 남은 것 — MCP · 챗 위키 모드 | [[#Query]] · [[#Fileback]] · [[#Candidates]] · [[#Propose]] |
 | W7 점검 ~ W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -57,6 +57,7 @@
 | 질문 대기열 | [[src/app/wiki/questions.py#add]] · 표 `wiki_questions`(0057) | W6 |
 | 되쌓기(묻기의 답 → qa 원천) | [[src/app/wiki/fileback.py#fileback]] | W6 |
 | 후보('내 후보' — 승인 · 버림 · 기한) | [[src/app/wiki/candidates.py]] · 받기의 후보 길 `sources.receive(held=…)` | W6 |
+| 제안(바깥 에이전트 · 사람의 위키 쓰기 — 늘 검토) · 기계 호출의 직접 쓰기 막음 | [[src/app/wiki/propose.py#propose]] · [[src/app/core/auth.py#_guard_wiki_writes]] | W6 |
 | 규칙서 문서 올리기 | [[src/app/wiki/schema_doc.py#put]] | W4 |
 | 화면(apps/web) | [[src/features/wiki/api.ts]] · [[src/features/wiki/WikiCitations.tsx]] · `pages/Wiki{Home,Source,Changes,Log}.tsx` | W4 |
 | REST | [[src/app/routers/wiki.py]](`/api/v1/wiki/*`) | W3~ |
@@ -165,6 +166,7 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 | `POST /query` | reader(분에 20) | SSE — `{messages[{role, content}] ≤20}`(마지막이 물음). 프레임 `tool_call` · `tool_result`(wiki_index · wiki_search · wiki_read) · `token` · `citation`(쓴 근거마다 `{n, slug, title, section, block_id, sources}`) · `miss` · `error` · `done{miss, cited, uncited, pages, usage}` — [[#Query]] |
 | `POST /fileback` | reader | `{question, answer, citations[{slug, block_id?}], outcome, audience?, model?}` → 201(새것) · 200(멱등) `{id, short, dedup, doc_slug, ingest_state, audience}` — [[#Fileback]]. 볼 수 없는 근거 422 · 근거보다 넓은 범위 422(`details.required`) · 가진 토큰 밖 403 |
 | `GET /candidates` · `POST /candidates/{id}/approve` · `/discard` | 주인(reader) | 내 후보(기한이 지난 것은 이때 철회) · 승인 `{audience?}`(비면 보낸 범위 → 그 범위의 새 원천을 들이고 후보는 superseded, 나만이면 그 줄을 들인다 → `{id, short, candidate, audience, dedup}`) · 버림(철회). 남의 후보 404 |
+| `POST /propose` | editor | `{summary, ops[block.insert · block.update · block.delete], relations[]}` → 201 `{id, short, status, validation}` — 늘 `pending_review`(실패가 있으면 `failed`). 고칠 문서는 이미 있고 볼 수 있는 위키 문서(아니면 422) — [[#Propose]] |
 | `GET /questions` · `POST /questions` | reader | 볼 수 있는 물음(범위 토큰 ⊆ 내 토큰) · `mine` / 남기기 `{text, audience?, priority, origin: user · query_miss}` → 201 `{id, asked_count, created, audience}`. 범위는 비면 나만(`user:<id>`), 가진 토큰 밖은 403. 같은 물음(문장 부호 · 공백 무시) · 범위면 한 줄에 `asked_count` 만 |
 | `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(W7). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
 
@@ -302,6 +304,20 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 구조화 출력 꼴 `WIKI_LLM_STRUCTURED`(json_schema · tools) ·
 묻기 `WIKI_QUERY_LLM_*`(비면 배경과 같게) · 위임 `MXWP_SSO_SECRET`(비면 위임 창구 404) · `MXWP_SSO_JIT_CREATE`(기본 켬).
 API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 — 새 키에 start.sh `--env` 를 더할 필요가 없다.
+
+## Propose
+
+[[src/app/wiki/propose.py#propose]] — 바깥 에이전트(게이트웨이 · MCP · Claude Code)와 사람이 위키 문서에 연산을 낸다(CONTRACTS §7 `wiki_propose`).
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 대상 | 이미 있는 위키 문서(원천 · 규칙서 · 목록 빼고) · 부른 사람이 볼 수 있어야. 새 문서 · 엔티티는 원천을 보내 들이기로 |
+| 연산 | 들이기의 쓰기 · 관계와 같은 꼴(`ingest.InsertOp` · `UpdateOp` · `DeleteOp` · `PlanRelation`) — 블록 id · 근거의 원천 id 는 코드가 정한다. 근거 원천은 부른 사람이 볼 수 있는 것만(못 보면 V2) |
+| 검증 | V1~V11 그대로 + V6 은 늘 검토('바깥 제안은 늘 검토'). 실패가 있으면 `failed`, 아니면 `pending_review` — 자동 반영 없음 |
+| 묶음 | `human_request` · 계획에 `via`(api_token · delegated:… · web) · 범위는 고칠 문서들의 좁은 토큰 합 · `created_by` 부른 사람 · 기록 `review`(제안 받음). 승인 · 거절 · 되돌리기는 검토 큐 그대로 |
+| 막는 길 | 기계 호출(API 토큰 · 위임)이 문서 쓰기 길로 위키 문서를 고치면 409 `WIKI_USE_PROPOSE`([[core#현재 사용자 해소]]) — 검증 · 근거 · 기록을 건너뛰는 길을 남기지 않는다 |
+
+검토 한 건의 '앞' 은 판 기록에서 — 판 기록이 없는 문서는 지금 판이 계획의 판일 때 지금 내용. 시험 [[apps/api/tests/test_wiki_propose.py]].
 
 ## Candidates
 

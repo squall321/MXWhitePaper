@@ -88,7 +88,11 @@ async def get_change(s: AsyncSession, cs_id: str) -> dict[str, Any]:
         before = page.get("skeleton") or {}
         if not page.get("new") and page.get("doc_id"):
             ver = await document_repo.find_version(s, doc_id=page["doc_id"], version=page["version"])
-            before = wiki_apply._j(ver["content_json"]) if ver else {}
+            if ver:
+                before = wiki_apply._j(ver["content_json"])
+            else:  # 판 기록이 없는 문서(옛 · 가져온) — 지금 판이 계획의 판이면 지금 내용이 '앞' 이다
+                cur = await wiki_apply._doc(s, doc_id=page["doc_id"])
+                before = cur["content"] if cur and cur["version"] == page["version"] else {}
         try:
             after = pages.apply_ops(before, doc_ops)
         except pages.PageOpError:
