@@ -292,7 +292,7 @@ W5 구현 — `entity.merge` 는 `{doc: '', from, into, why}`(사람의 `human_r
 | `GET /sources` · `GET /sources/{id}` | reader + 범위 | 목록(종류 · 시스템 · 상태 · 기간) · 한 건(+ 이 원천을 인용한 문서들) |
 | `POST /sources/{id}/withdraw` | 주인 · admin | 철회 |
 | `POST /ingest` | editor | `{source_ids}` 다시 들이기 |
-| `POST /query` | reader | SSE — 위키로 답한다(request §5-7). 프레임은 챗과 같은 `tool_call` · `tool_result` · `token` · `error` · `done` + `citation` |
+| `POST /query` | reader | SSE — 위키로 답한다(request §5-7). 프레임은 챗과 같은 `tool_call` · `tool_result` · `token` · `error` · `done` + `citation` · `miss`. 답한 `done.scope` 는 읽은 근거 모두의 범위(되쌓기 기본 범위) · 전체 시간 제한 300초(`done.timeout`) |
 | `POST /fileback` | reader | `{question, answer, citations[{slug, block_id?, n?}], outcome, audience?}` → `qa` 원천 + 들이기. 범위는 근거보다 넓지 않게(근거가 없으면 나만) · 답의 `[n]` 은 남긴 근거 차례로 |
 | `GET /changes` · `GET /changes/{id}` | 범위 안의 검토자 | 검토 큐 · 한 건(문서별 블록 diff · 검증 결과 · `why`) |
 | `POST /changes/{id}/approve` · `/reject` · `/revert` | 검토자 · admin | |
@@ -326,7 +326,7 @@ W5 구현 — `entity.merge` 는 `{doc: '', from, into, why}`(사람의 `human_r
 | `wiki_source` | 읽기 | `id` → 원천 본문(범위 안일 때만) |
 | `wiki_entity` | 읽기 | `name` 또는 `id` · `type?` → 엔티티 · 별칭 · 외부 id · 문서 slug · 관계(깊이 1) |
 | `wiki_graph` | 읽기 | `slug` · `depth≤2` · `predicates?` → 노드 · 엣지 |
-| `wiki_ask` | 읽기 | `question` → 위키로 지은 답 + 근거(서버의 묻기 연산 — request §5-7). 답이 없으면 그렇다고 말하고 `question_id` 를 준다 |
+| `wiki_ask` | 읽기 | `question` → 위키로 지은 답 + 근거 + `scope`(서버의 묻기 연산 — request §5-7). 답이 없으면 그렇다고 말하고 `question_id` 를 준다 |
 | `wiki_log` · `wiki_lint_report` · `wiki_questions` | 읽기 | 꼬리 N줄 · 최근 점검 요약 · 열린 질문 |
 | `wiki_submit_source` | 쓰기 | 봉투(§3) → 원천 id |
 | `wiki_fileback` | 쓰기 | `question` · `answer` · `citations` · `outcome` → 원천 id |

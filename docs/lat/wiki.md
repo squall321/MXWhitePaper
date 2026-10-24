@@ -378,6 +378,8 @@ API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 —
 | 답 | `llm.interactive()`(`WIKI_QUERY_LLM_*`, 비면 배경) · `stream_text` — 근거는 `<<<위키 근거 … >>>` 구획(데이터다), 문장마다 `[n]`. 앞 대화는 6 턴까지 |
 | MISS | 첫 줄이 `위키에 아직 없다` 면 `miss` — 화면은 질문으로 남길지 묻고, `file_question`(MCP `wiki_ask`)이면 물은 사람만 보는 질문(`query_miss`)을 바로 남긴다. 근거가 하나도 없으면 LLM 을 부르지 않고 MISS |
 | LLM 없음 | 답을 짓지 않는다 — '설정되지 않았다' 토큰 + 찾은 문서(`done.llm = unset`). 스트림 중 오류는 `error` + `done` |
+| 범위 | 답한 `done.scope` = 읽은 근거 문서 모두의 좁은 토큰을 합친 것(모두 전사면 `["org"]` · 합칠 수 없으면 나만, [[#Fileback]] 의 범위 규칙) — 되쌓기의 기본 범위. 각주를 덜 단 답도 읽은 좁은 문서보다 넓게 새지 않는다. `wiki_ask` 도 `scope` 를 준다 |
+| 시간 | 연결 10초 < 조각 사이 침묵 120초(`stream_text`) < 묻기 전체 `QUERY_TOTAL_S` 300초. 넘으면 받은 데까지 두고 `error`(시간 제한) + `done.timeout` — 각주 · 되쌓기 없음. 시간 재기는 조각 기다림(`anext`)만 감싼다 |
 | 기록 | `query`(제목 = 물음 · 범위 = 물은 사람만 — 질문자 비공개 Q9) — 문서 · 근거 수 · 쓴 각주 · 쓴 양 |
 
 창구는 읽는 사람 문맥을 잡아 두고 제 세션으로 흘린다(스트림이 의존성 세션보다 오래 산다). 시험 [[apps/api/tests/test_wiki_query.py]].

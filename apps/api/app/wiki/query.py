@@ -7,7 +7,9 @@
   묻고, `file_question` 이면(MCP `wiki_ask`) 물은 사람만 보는 질문으로 바로 남긴다.
 - 읽기는 모두 읽는 사람의 범위로 — 검색(Meili 범위 칸 · 역할) · 문서(`visible_sql`) · 근거(볼 수 있는 원천만).
 - 묻기 LLM(`WIKI_QUERY_LLM_*`, 비면 배경)이 없으면 답을 짓지 않고 찾은 문서만 보인다(mock 으로 메우지 않는다).
-- 프레임 — 챗과 같은 `tool_call` · `tool_result` · `token` · `error` · `done` + `citation`(쓴 근거마다) · `miss`.
+- 프레임 — 챗과 같은 `tool_call` · `tool_result` · `token` · `error` · `done` + `citation`(쓴 근거마다) · `miss`. 답한 `done` 의
+  `scope` 는 읽은 근거 문서 모두의 좁은 범위 — 되쌓기의 기본 범위로 쓰면 각주를 덜 단 답도 근거보다 넓게 새지 않는다.
+- 시간 층 — 연결 10초 < 조각 사이 침묵 120초(`llm.stream_text`) < 묻기 전체 `QUERY_TOTAL_S`. 넘으면 받은 데까지 두고 `error` · `done`.
 - 기록 `query`(물은 사람만 보는 범위 — 질문자 비공개, Q9).
 """
 from __future__ import annotations
@@ -23,7 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.search import meili_indexer
-from app.wiki import audience, catalog, llm, pages, questions
+from app.wiki import audience, catalog, fileback, llm, pages, questions
 from app.wiki import schema as wiki_schema
 from app.wiki.resolve import strong_key
 from app.wiki.sources import citations_for_doc, short_id
@@ -37,6 +39,7 @@ MAX_SOURCES = 3
 SOURCE_CHARS = 800
 INDEX_ITEMS = 40
 HISTORY_TURNS = 6
+QUERY_TOTAL_S = 300.0
 _SKIP_KINDS = ("source", "schema", "index", "lint-report")
 _CITE = re.compile(r"\[(\d{1,3})\]")
 
@@ -150,6 +153,14 @@ async def read(s: AsyncSession, book: wiki_schema.RuleBook, slugs: list[str]) ->
     return evidence, excerpts
 
 
+async def _scope(s: AsyncSession, user: dict[str, Any], slugs: list[str]) -> list[str]:
+    rows = (await s.execute(text("""
+        SELECT wp.audience FROM wiki_pages wp JOIN documents d ON d.id = wp.doc_id WHERE d.slug = ANY(:s)
+    """), {"s": slugs})).all()
+    required = {t for (aud,) in rows for t in aud if t != "org"}
+    return fileback._scope(required, None, audience.current_viewer(), f"user:{user['id']}", cited=bool(slugs))
+
+
 def _fence(value: str) -> str:
     return value.replace(">>>", ">> >")
 
@@ -201,6 +212,7 @@ async def run(s: AsyncSession, *, user: dict[str, Any], messages: list[dict[str,
     evidence, excerpts = await read(s, book, found)
     yield sse("tool_result", {"name": "wiki_read", "ok": True,
                               "summary": f"문서 {len({e.slug for e in evidence})} · 근거 {len(evidence)} · 원천 {len(excerpts)}"})
+    scope = await _scope(s, user, sorted({e.slug for e in evidence}))
     await s.rollback()  # 읽기 트랜잭션을 놓고 LLM 을 기다린다
 
     detail: dict[str, Any] = {"pages": found[:MAX_PAGES], "evidence": len(evidence)}
@@ -217,11 +229,27 @@ async def run(s: AsyncSession, *, user: dict[str, Any], messages: list[dict[str,
         return
     usage = llm.Usage()
     answer = ""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + QUERY_TOTAL_S
+    stream = llm.stream_text(ep, messages_for(book, history, question, index_lines, evidence, excerpts), usage=usage)
     try:
-        async for piece in llm.stream_text(ep, messages_for(book, history, question, index_lines, evidence, excerpts),
-                                           usage=usage):
+        while True:
+            left = deadline - loop.time()
+            if left <= 0:
+                raise TimeoutError
+            try:
+                # 시간 재기는 조각 기다림만 감싼다 — 생성기의 yield 를 timeout 안에 두면 취소가 받는 쪽 코드에 떨어진다
+                piece = await asyncio.wait_for(anext(stream), left)
+            except StopAsyncIteration:
+                break
             answer += piece
             yield sse("token", {"text": piece})
+    except TimeoutError:
+        await stream.aclose()
+        await _log(s, user, question, {**detail, "error": "timeout", "usage": usage.as_dict()})
+        yield sse("error", {"message": f"묻기 시간 제한 {QUERY_TOTAL_S:.0f}초를 넘었다 — 받은 데까지만 보인다"})
+        yield sse("done", {"miss": False, "cited": 0, "timeout": True, "usage": usage.as_dict()})
+        return
     except llm.LLMError as e:
         await _log(s, user, question, {**detail, "error": type(e).__name__})
         yield sse("error", {"message": f"묻기 LLM 오류 — {str(e)[:200]}"})
@@ -235,7 +263,7 @@ async def run(s: AsyncSession, *, user: dict[str, Any], messages: list[dict[str,
     for n in used:
         yield sse("citation", evidence[n - 1].frame())
     await _log(s, user, question, {**detail, "cited": used, "usage": usage.as_dict()})
-    yield sse("done", {"miss": False, "cited": len(used), "uncited": not used, "pages": found[:MAX_PAGES],
+    yield sse("done", {"miss": False, "cited": len(used), "uncited": not used, "pages": found[:MAX_PAGES], "scope": scope,
                        "usage": usage.as_dict()})
 
 
@@ -271,7 +299,8 @@ async def ask(s: AsyncSession, *, user: dict[str, Any], question: str) -> dict[s
         elif kind == "error":
             done = {**done, "error": payload["message"]}
     return {"answer": answer, "citations": citations, "miss": bool(done.get("miss")),
-            "question_id": done.get("question_id"), "pages": done.get("pages", []), "error": done.get("error")}
+            "question_id": done.get("question_id"), "pages": done.get("pages", []), "scope": done.get("scope"),
+            "error": done.get("error")}
 
 
 async def _miss(s: AsyncSession, user: dict[str, Any], question: str, file_question: bool,

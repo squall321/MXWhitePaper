@@ -1201,7 +1201,7 @@ def build_server() -> FastMCP:
         description=(
             "위키로 답한다(서버의 묻기 — 목록 · 엔티티 · 검색 · 문서 · 원천 순으로 근거를 모아 답에 [n] 각주). 답이 없으면 "
             "'위키에 아직 없다' 와 질문 id(나만 보는 질문으로 남긴다). → {answer, citations:[{n, slug, title, section, block_id, "
-            "sources}], miss, question_id, pages}"
+            "sources}], miss, question_id, pages, scope} — scope 는 읽은 근거 모두의 범위(wiki_fileback 의 audience 로)"
         ),
     )
     def wiki_ask(question: str) -> dict[str, Any]:
@@ -1249,7 +1249,8 @@ def build_server() -> FastMCP:
         name="wiki_fileback",
         description=(
             "wiki_ask 의 답을 위키에 남긴다(qa 원천 → 들이기 → 문답 문서). citations 는 wiki_ask 가 준 각주 {n, slug, block_id} 그대로 — "
-            "답의 [n] 을 남긴 근거 차례로 바꾼다. 범위는 비면 근거 문서들의 범위(근거가 없으면 나만) — 근거보다 넓게는 못 남긴다. "
+            "답의 [n] 을 남긴 근거 차례로 바꾼다. audience 는 wiki_ask 의 scope 를 그대로(비면 각주 문서들의 범위 · 근거가 없으면 "
+            "나만) — 근거보다 넓게는 못 남긴다. "
             "→ {id, short, dedup, audience, ingest_state}"
         ),
     )

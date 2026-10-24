@@ -203,4 +203,23 @@ async def test_search_and_ask_json(world: dict[str, Any]) -> None:
     assert [(p["slug"], p["via"]) for p in found["pages"]] == [(f"ent-part-q{RUN}", "entity")]  # 좁은 문서는 없다
     assert [e["name"] for e in found["entities"]] == [NAME]
     assert asked["answer"] == ANSWER and [x["n"] for x in asked["citations"]] == [1, 2] and asked["miss"] is False
+    assert asked["scope"] == ["org"]
     assert missed["miss"] is True and missed["question_id"]  # MCP 길은 질문을 바로 남긴다
+
+
+async def test_done_carries_the_scope_of_what_was_read(world: dict[str, Any]) -> None:
+    wide = (await _ask(world["reader"], f"{NAME} 균열은 어디서 시작하나"))[-1][1]
+    narrow = (await _ask(world["aff"], f"{NAME} 최대 응력"))[-1][1]
+    assert wide["scope"] == ["org"]
+    assert narrow["cited"] == 2 and narrow["scope"] == ["aff:SYN-CAE1"]  # 각주는 전사 문서뿐이어도 좁은 문서를 읽었으면 그 범위
+
+
+async def test_time_limit_closes_the_stream(world: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(query, "QUERY_TOTAL_S", 0.5)
+    world["llm"].load({"rules": [{"match": {"contains": "물음:"},
+                                  "reply": {"text": ANSWER, "chunk_chars": 4, "chunk_delay_s": 0.2}}]})
+    frames = await _ask(world["reader"], f"{NAME} 균열은 어디서 시작하나")
+    assert [k for k, _ in frames][-2:] == ["error", "done"] and "시간 제한" in frames[-2][1]["message"]
+    assert frames[-1][1]["timeout"] is True and not [d for k, d in frames if k == "citation"]
+    streamed = "".join(d["text"] for k, d in frames if k == "token")
+    assert 0 < len(streamed) < len(ANSWER)  # 받은 데까지만
