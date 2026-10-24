@@ -16,8 +16,8 @@ numpy>=1.26
 # RAG OpenAI backend — only needed when --backend openai is used.
 openai>=1.40
 
-# MCP server — Anthropic's official Python SDK, stdio transport.
-mcp>=1.0
+# MCP server — Anthropic's official Python SDK (stdio · streamable-http 는 1.8 부터).
+mcp>=1.8
 
 # Test-only — CI runs the rag/ + mcp/ test suites before building binaries.
 # Not consumed by the runtime binaries themselves.
