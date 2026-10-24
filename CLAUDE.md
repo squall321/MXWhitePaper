@@ -77,6 +77,7 @@ drift 가 의심되면 사용자에게 알릴 것 (수정해도 되는지 확인
 | `docs/copilot/` | Copilot 에 위임할 작업 명세 |
 | `docs/llm-document-formats.md` | 외부 LLM 이 import 될 docx/pptx 를 어떻게 만들어야 하나 |
 | `docs/llm-widgets-via-api.md` | 외부 LLM 이 풍부한 위젯 (callout/chart/tabs 등) 을 어떻게 API 로 만드나 |
+| `docs/llm-wiki/` | LLM 위키 · HWAX 포털 완전 연결(SSO 위임 포함) 개발 요청 — **`START.md` 부터** (request · CONTRACTS · SCHEMA-DRAFT · checklist · context-notes) |
 
 충돌 시 **코드가 진실**. lat 은 코드를 빠르게 탐색하기 위한 지도일 뿐.
 
