@@ -159,6 +159,10 @@ def _use_test_resources() -> None:
 # .env 가 끄더라도 시험은 켠다(setdefault 가 아니다). 닫힌 기본값 자체는 test_auth 가 따로 본다.
 os.environ["ALLOW_DEV_ADMIN_FALLBACK"] = "1"
 
+# SSO 전용은 끈다 — dev .env 가 켜도(10-27). 켜진 채면 가입 · 비밀번호 로그인 · 비밀번호 찾기 시험이 403 SSO_ONLY 로 깨진다.
+# 켠 모습은 test_sso_only 가 monkeypatch 로 따로 본다.
+os.environ["MXWP_SSO_ONLY"] = "false"
+
 # 검색용 materialized view refresh 는 단위 테스트에서 비활성화한다.
 # (동시성 commit 흐름이 conftest 의 engine reset 과 부딪히면 timeout 발생)
 os.environ.setdefault("MXWP_SKIP_VIEW_REFRESH", "1")
