@@ -18,7 +18,7 @@ from typing import Any
 from urllib.parse import unquote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -126,6 +126,17 @@ async def delegate(request: Request, s: AsyncSession = Depends(get_db)) -> dict[
         ip=request.client.host if request.client else None,
     )
     return envelope(data={"access_token": token, "token_type": "bearer", "expires_in": DELEGATED_TTL_SECONDS})
+
+
+@router.post("/auth/sso/verify", status_code=204)
+async def verify_secret(request: Request) -> Response:
+    """포털 update-all 이 위임 비밀을 견준다(HP-26, ste 와 같은 꼴) — 같으면 204 · 다르면 401. 위임이 꺼져(비밀이 비어) 있어도
+    401 이다 — 게이트웨이는 비밀을 쥐고 부르는데 404 면 포털이 '창구 없음' 으로 넘겨 사람 호출이 다 실패하는 것이 숨는다."""
+    secret = get_settings().mxwp_sso_secret
+    got = request.headers.get("x-heax-gateway-secret", "")
+    if not secret or not hmac.compare_digest(got.encode("utf-8"), secret.encode("utf-8")):
+        raise _BadSecretError("게이트웨이 비밀이 맞지 않는다")
+    return Response(status_code=204)
 
 
 class RevokeBody(BaseModel):

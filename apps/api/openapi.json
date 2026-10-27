@@ -7496,6 +7496,21 @@
         ]
       }
     },
+    "/api/v1/auth/sso/verify": {
+      "post": {
+        "description": "포털 update-all 이 위임 비밀을 견준다(HP-26, ste 와 같은 꼴) — 같으면 204 · 다르면 401. 위임이 꺼져(비밀이 비어) 있어도\n401 이다 — 게이트웨이는 비밀을 쥐고 부르는데 404 면 포털이 '창구 없음' 으로 넘겨 사람 호출이 다 실패하는 것이 숨는다.",
+        "operationId": "verify_secret_api_v1_auth_sso_verify_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Verify Secret",
+        "tags": [
+          "portal-delegation"
+        ]
+      }
+    },
     "/api/v1/auth/sso/{provider_id}/initiate": {
       "get": {
         "operationId": "initiate_api_v1_auth_sso__provider_id__initiate_get",

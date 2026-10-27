@@ -111,6 +111,19 @@ async def test_wrong_or_missing_secret_is_401(sso_on: Any) -> None:
     assert missing.status_code == 401
 
 
+async def test_verify_compares_only_the_secret(sso_on: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """포털 update-all(HP-26)이 견준다 — 같으면 204 · 다르거나 없으면 401. 위임이 꺼져도 401(포털이 '창구 없음' 으로 넘기지 않게)."""
+    async with _client() as c:
+        same = await c.post("/api/v1/auth/sso/verify", headers={"X-Heax-Gateway-Secret": SECRET})
+        other = await c.post("/api/v1/auth/sso/verify", headers={"X-Heax-Gateway-Secret": SECRET + "-x"})
+        missing = await c.post("/api/v1/auth/sso/verify")
+        monkeypatch.setattr(sso_on, "mxwp_sso_secret", "")
+        off = await c.post("/api/v1/auth/sso/verify", headers={"X-Heax-Gateway-Secret": ""})
+    assert same.status_code == 204 and same.content == b""
+    assert [other.status_code, missing.status_code, off.status_code] == [401, 401, 401]
+    assert other.json()["error"]["code"] == "bad_secret"
+
+
 async def test_missing_email_is_400(sso_on: Any) -> None:
     async with _client() as c:
         none = await c.post("/api/v1/auth/sso", headers={"X-Heax-Gateway-Secret": SECRET})

@@ -361,6 +361,7 @@ invalid_token 401) + 스냅숏 덮어쓰기 + 소속→팀 = 8 묶음 (cycle 19 
 | 무엇 | 어떻게 |
 | --- | --- |
 | 문 | `MXWP_SSO_SECRET` 이 비면 404 `sso_disabled` · `X-Heax-Gateway-Secret` 이 틀리면 401(`hmac.compare_digest`) |
+| 비밀 대조 | `POST /api/v1/auth/sso/verify`(같은 헤더 하나) — 같으면 204 · 다르면 401. **비밀이 비어도 401**(404 면 포털 update-all 이 '창구 없음 ○' 으로 넘긴다, 10-27 HP-26) |
 | 사람 | `X-Hwax-Delegate-Email` 먼저, 없으면 `X-Heax-User-Email`(없으면 400). 처음 보는 이메일은 `_create_user`(끄면 403 `jit_disabled`) · 비활성 403 |
 | 토큰 | JWT `typ=delegated` — `sub` · `cli`(X-Heax-Client, 기본 gateway) · `gen` · `eml`(받은 이메일 글자 그대로) · `sk`(비밀 지문) · `scope [read, write]` · 12시간. 봉투 `data` 에 `{access_token, token_type:"bearer", expires_in}` |
 | 세대 | `sso_delegations`(사람 × 클라이언트). 발급은 **아무것도 회수하지 않는다**(게이트웨이 프로세스가 여럿이면 핑퐁). 회수는 `POST /api/v1/admin/sso-delegations/{user_id}/revoke {client?}` 가 세대를 올린다 |
