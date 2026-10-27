@@ -275,6 +275,20 @@
 - **WK-D71 MW-05 — 포털 소속 `*` 는 팀을 고르는 데 쓰지 않는다.** 까닭 — cae00 은 소속이 `*` 하나다. 10-25 부터 진입마다 소속 → 팀
   표대로 팀을 옮기므로 표에 `*` 를 넣는 순간 모두가 한 팀으로 간다. 창구는 `*` 를 422 로 막고, 손으로 넣은 줄이 있어도 진입은 팀을
   움직이지 않는다. `aff:*` 를 보이기 토큰에서 뺄지는 소속 분할(D9)과 함께 정한다(지금은 사진 그대로).
+- **WK-D72 MW-03 — 운영 API 는 `--reload` 없이, 이관은 기동 앞에.** 까닭 — api.sif 의 startscript 가 늘 `--reload` 라 cae00 의
+  업데이트(git reset)가 이관보다 먼저 새 코드를 불러왔다. startscript 는 `APP_ENV=development` 일 때만 `--reload`(비면 development —
+  dev 는 그대로). `--reload` 만 빼면 '기동 → 이관' 사이 틈이 남아 순서를 'API 멈춤 → git reset → migrate.sh → start.sh' 로 바꾸고,
+  migrate.sh 가 멈춘 API 대신 api.sif 로 바로 이관하게 했다. 다시 지으면 무핀 `>=` 가 판을 뛰게 하므로(메모 — fastapi · starlette)
+  06-17 판의 pip freeze 를 `api-constraints.txt` 로 못 박고 바닥도 `python:3.12.13-slim` 으로. 새 판과 옛 판의 패키지가 같음을
+  확인했다(pip 줄만 다름).
+
+## 2026-10-27 — 새 api.sif · wiki.sif 로 바꿔 끼움(MW-03)
+
+- 판 고정 · `APP_ENV` 갈래를 넣어 api.sif 를 다시 짓고 그 위에 wiki.sif 를 다시 지었다. 옛 판은 세션 scratchpad 에 남겼다(api 06-17 ·
+  wiki 10-24 · web 09-13). 알린 뒤 `mxwp_api` · `mxwp_wiki` 만 다시 띄움 — dev 는 'Started reloader process' 그대로.
+- 다시 띄운 뒤 시험 13건이 403 SSO_ONLY 로 깨졌다 — conftest 가 `.env` 를 setdefault 로 읽어 dev 의 `MXWP_SSO_ONLY=true` 가 시험에 들어갔다.
+  conftest 가 끈다(켠 모습은 test_sso_only 가 monkeypatch 로). 1375 통과.
+- dev 에 재색인 표지가 없었다(637a34f 뒤 migrate.sh 를 안 돌림) — 멈춘 API 갈래를 시험하며 한 번 돌았다(427건, 지운 것 0).
 
 ## 2026-10-25 — dev SSO 전용 켬(사용자 결정 · 포털 MW-D22)
 

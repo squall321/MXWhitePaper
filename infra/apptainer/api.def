@@ -1,17 +1,22 @@
 Bootstrap: docker
-From: python:3.12-slim
+# 판을 못 박는다 — 3.12-slim 은 다시 지을 때마다 바닥이 바뀐다(06-17 판: Python 3.12.13 · Debian 13).
+From: python:3.12.13-slim
 
 %labels
     Maintainer  squall321@gmail.com
     Component   mxwp-api
-    Version     0.1.0
+    Version     0.2.0
+
+%files
+    # 패키지 판 고정(지금 이미지의 pip freeze) — 다시 지어도 판이 뛰지 않는다
+    infra/apptainer/api-constraints.txt /opt/mxwp/constraints.txt
 
 %post
     set -eux
     apt-get update
     apt-get install -y --no-install-recommends build-essential libpq-dev curl
     rm -rf /var/lib/apt/lists/*
-    pip install --upgrade pip
+    pip install "pip==26.1.2"
 
     mkdir -p /opt/mxwp
     # The repo is bind-mounted at /workspace at runtime; source code is consumed
@@ -22,7 +27,7 @@ From: python:3.12-slim
     # (런타임 라우팅은 되지만 코드/테스트가 starlette 0.x 기준 — test_presence
     # 의 SSE 라우트 검사가 실패). `>=` 로 두면 재빌드마다 major 가 점프해
     # 회귀가 재발하므로 known-good 으로 고정한다.
-    pip install --no-cache-dir \
+    pip install --no-cache-dir -c /opt/mxwp/constraints.txt \
         "fastapi==0.121.3" "uvicorn[standard]>=0.32" \
         "sqlalchemy[asyncio]>=2.0.36" "alembic>=1.14" "asyncpg>=0.30" \
         "pydantic>=2.9" "pydantic-settings>=2.6" \
@@ -52,11 +57,16 @@ From: python:3.12-slim
 %startscript
     PORT="${API_PORT:-8000}"
     cd /workspace/apps/api
+    # --reload(저장하면 바로 다시 읽기)는 개발 박스만 — APP_ENV 는 start.sh 가 넘긴다(비면 development, 예전과 같다). 운영(production)에서
+    # 켜 두면 업데이트의 git reset 이 이관보다 먼저 새 코드를 불러와 새 코드가 옛 스키마로 돈다(10-27 cae00 요청 MW-03).
     # Same rationale as %runscript — dev mode with --reload is *especially*
     # vulnerable since every file mtime change triggers a fresh shutdown.
-    exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --reload \
-        --reload-dir /workspace/apps/api/app \
-        --timeout-graceful-shutdown 5
+    if [ "${APP_ENV:-development}" = "development" ]; then
+        exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --reload \
+            --reload-dir /workspace/apps/api/app \
+            --timeout-graceful-shutdown 5
+    fi
+    exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --timeout-graceful-shutdown 5
 
 %help
     MX White Paper API container.

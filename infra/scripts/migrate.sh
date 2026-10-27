@@ -4,9 +4,14 @@ set -euo pipefail
 . "$(dirname "$0")/_common.sh"
 require_apptainer
 
-if ! instance_running "$INST_API"; then
-  echo "✗ $INST_API not running. Start the stack first: ./infra/scripts/start.sh"
-  exit 1
+# API 가 떠 있으면 그 인스턴스 안에서, 멈춰 있으면 api.sif 로 바로 돈다 — 업데이트가 'API 멈춤 → git reset → migrate → 기동' 순서로
+# 이관을 먼저 끝낼 수 있게(새 코드가 옛 스키마로 도는 틈을 닫는다, 10-27 cae00 요청 MW-03). DB · 검색은 떠 있어야 한다.
+if instance_running "$INST_API"; then
+  _TARGET=(instance://"$INST_API")
+else
+  [ -f "$API_SIF" ] || { echo "✗ $INST_API 가 멈춰 있고 $(basename "$API_SIF") 도 없다 — ./infra/scripts/images-from-drive.sh 로 받아라"; exit 1; }
+  echo "ℹ $INST_API 가 멈춰 있다 — $(basename "$API_SIF") 로 바로 이관한다"
+  _TARGET=(--bind "$REPO_ROOT:/workspace" "$API_SIF")
 fi
 
 # apptainer exec 은 instance 의 start 시점 env 를 상속하지 않는다 (instance 시작 시
@@ -30,7 +35,7 @@ _DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${_DB_
   --env POSTGRES_DB="${POSTGRES_DB}" \
   --env POSTGRES_HOST="${_DB_HOST}" \
   --env POSTGRES_PORT="${_DB_PORT}" \
-  instance://"$INST_API" \
+  "${_TARGET[@]}" \
   /bin/sh -c "cd /workspace/apps/api && alembic upgrade head"
 
 echo "✓ migrations applied"
@@ -43,7 +48,7 @@ if [ ! -f "$_REINDEX_MARK" ]; then
   echo "→ 한 번만 — 보이기 범위 칸을 색인에 싣는다(python -m app.scripts.reindex)"
   if APPTAINERENV_DATABASE_URL="$_DATABASE_URL" APPTAINERENV_MEILI_HOST="http://127.0.0.1:${MEILI_PORT}" \
      APPTAINERENV_MEILI_MASTER_KEY="${MEILI_MASTER_KEY:-}" \
-     "$APPTAINER" exec instance://"$INST_API" /bin/sh -c "cd /workspace/apps/api && python3 -m app.scripts.reindex"; then
+     "$APPTAINER" exec "${_TARGET[@]}" /bin/sh -c "cd /workspace/apps/api && python3 -m app.scripts.reindex"; then
     date -u +%FT%TZ > "$_REINDEX_MARK"
     echo "✓ reindexed (표지 $(basename "$_REINDEX_MARK"))"
   else

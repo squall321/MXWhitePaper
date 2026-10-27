@@ -358,6 +358,13 @@ MINIO_CONSOLE_PORT=9001
   `status.sh` 도 꺼진 박스의 워커 없음을 실패로 세지 않는다.
 - **재색인은 migrate.sh 가 한 번** — 보이기 범위 칸(restricted 거르기)을 색인에 싣는 `python -m app.scripts.reindex` 를 이관 뒤
   한 번 돌리고 표지 `infra/data/.reindexed-audience-v1` 를 남긴다. 실패하면 표지가 없어 다음 migrate.sh 가 다시 한다.
+- **운영 박스의 API 는 `--reload` 없이 돈다(10-27 MW-03)** — api.sif 의 startscript 가 `APP_ENV=development` 일 때만 `--reload` 를
+  붙인다(비면 development — 예전과 같다). 운영(`APP_ENV=production`)에서 켜 두면 업데이트의 git reset 이 이관보다 먼저 새 코드를
+  불러와 새 코드가 옛 스키마로 돌았다. 패키지 판은 `infra/apptainer/api-constraints.txt`(06-17 판 그대로)로 못 박아 다시 지어도
+  뛰지 않는다. 바닥 이미지도 `python:3.12.13-slim` 으로 못 박았다.
+- **업데이트 순서 — API 멈춤 → git reset → `migrate.sh` → `start.sh`** — `migrate.sh` 는 API 가 멈춰 있으면 api.sif 로 바로 이관한다
+  (DB · 검색은 떠 있어야 한다). 이관을 기동 앞에 두어야 새 코드가 옛 스키마로 도는 틈이 닫힌다 — `--reload` 를 빼도 '기동 → 이관'
+  순서면 그 사이(수 초 ~ 수십 초)가 남는다.
 - **이번 업데이트에 `sync-from-drive.sh` 는 쓰지 않는다** — `.def` 가 바뀌면(이번엔 wiki.def) `build.sh --force` 로 모든 이미지를
   다시 지으려 하고(cae00 은 못 짓는다), 이관도 돌리지 않는다(api.def 의 startscript 는 이관을 하지 않는다). 포털의 update-all
   (deploy-all-from-drive) → `migrate.sh` 순서로 한다.
