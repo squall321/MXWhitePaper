@@ -187,6 +187,7 @@ MAX = get_settings().docx_import_max_bytes
 테스트는 매 함수마다 engine 을 재생성한다 ([[src/tests/conftest.py]] 의
 `_reset_engine_per_test`) — asyncpg 의 event-loop affinity 때문. 같은 conftest 가 dev admin 폴백
 (`ALLOW_DEV_ADMIN_FALLBACK=1`)을 시험 프로세스에서만 켠다 — 시험 대부분이 토큰 없이 부른다(`051acc3`).
+SSO 전용(`MXWP_SSO_ONLY`)은 dev `.env` 가 켜도 끈다 — 켜진 채면 가입 · 비밀번호 로그인 시험이 403 으로 깨진다(10-27).
 운영 코드는 신경 쓸 필요 없음.
 
 ## 5. Security — JWT + 패스워드
@@ -335,7 +336,7 @@ Replay guard 는 DB 표 `portal_launch_jti`(C6, `0050`) — `_claim_jti` 가 `IN
 
 켜기 전 목록 — `python -m app.scripts.sso_only_check`(컨테이너 안, 읽기만): 살아 있고 포털로 들어온 적 없는 사람 계정(서비스 계정 뺌 ·
 비상 관리자 표시). 켜면 그 계정은 웹으로 못 들어온다 — 같은 이메일로 포털에서 들어오면 그 계정에 이어진다. `.env` 는 리포 밖이라 배포가
-저절로 켜지 않는다 — 박스마다 사람이 목록을 보고 켠다. 시험 [[apps/api/tests/test_sso_only.py]].
+저절로 켜지 않는다 — 박스마다 사람이 목록을 보고 켠다. 시험 [[apps/api/tests/test_sso_only.py]](conftest 가 끈 것을 monkeypatch 로 켠다).
 
 화면 — 부팅 때 `/auth/mode` 를 받아 저장소에 둔다(`ssoOnly` · `launchUrl`, 못 받으면 지금처럼 비밀번호 화면). 로그인 · 가입 화면은
 [[src/features/auth/PortalEntry.tsx#PortalEntryPanel]] 하나(`/login?local=1` 은 비상 관리자 폼 · 가입 링크 숨김). 세션이 없으면 보호 경로
