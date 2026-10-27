@@ -292,12 +292,14 @@ async def test_aff_team_map_crud() -> None:
             listed = (await c.get("/api/v1/admin/aff-team-map")).json()["data"]
             missing_team = await c.put(path, json={"team_id": str(uuid4())})
             bad_aff = await c.put("/api/v1/admin/aff-team-map/has%20space", json={"team_id": team})
+            star = await c.put("/api/v1/admin/aff-team-map/%2A", json={"team_id": team})
             deleted = await c.delete(path)
             again = await c.delete(path)
         assert put.status_code == 200 and put.json()["data"]["affiliation"] == aff
         assert any(x["affiliation"] == aff and x["team_id"] == team for x in listed)
         assert missing_team.status_code == 404
         assert bad_aff.status_code == 422
+        assert star.status_code == 422  # '*' 는 모든 사람 — 넣으면 모두가 한 팀으로 옮겨진다(MW-05)
         assert deleted.status_code == 200 and again.status_code == 404
     finally:
         async with session_scope() as s:

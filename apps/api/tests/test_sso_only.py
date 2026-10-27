@@ -203,3 +203,24 @@ async def test_listing_skips_service_accounts_and_marks_local(world: dict[str, A
     rows = {r["email"]: r for r in await never_entered()}
     assert NORMAL not in rows  # 서비스 계정은 뺀다
     assert rows[LOCAL]["local"] is True
+
+
+async def test_wildcard_affiliation_never_moves_the_team(world: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    async with session_scope() as s:
+        other = (await s.execute(text("SELECT id FROM teams WHERE id <> CAST(:t AS uuid) ORDER BY slug LIMIT 1"),
+                                 {"t": world["team"]})).scalar()
+        if other is None:
+            pytest.skip("needs two teams")
+        # 창구는 '*' 를 막지만 손으로 넣은 줄이 있어도 팀은 움직이지 않아야 한다
+        await s.execute(text("INSERT INTO wiki_aff_team_map (affiliation, team_id) VALUES ('*', CAST(:t AS uuid))"),
+                        {"t": str(other)})
+        await s.commit()
+    try:
+        assert (await _enter(monkeypatch, _claims(NORMAL, affiliation="*"))).status_code == 303
+        async with session_scope() as s:
+            team, aff = (await s.execute(text("SELECT team_id, portal_affiliation FROM users WHERE email = :e"),
+                                         {"e": NORMAL})).one()
+        assert str(team) == world["team"] and aff == "*"  # 소속 사진은 그대로 남기고 팀만 안 옮긴다
+    finally:
+        async with session_scope() as s:
+            await s.execute(text("DELETE FROM wiki_aff_team_map WHERE affiliation = '*'"))

@@ -195,6 +195,8 @@ async def put_aff_team_map(
     admin: dict[str, Any] = Depends(require_admin),
 ) -> dict[str, Any]:
     aff = _affiliation(affiliation)
+    if aff == "*":  # 포털의 '*' 는 소속이 갈리지 않은 모두 — 넣으면 포털로 들어오는 사람이 모두 이 팀으로 옮겨진다(10-27 MW-05)
+        raise _AffMapValidationError("'*' 는 모든 사람이다 — 소속 → 팀 표에 넣지 않는다", details={"got": affiliation})
     team = (await s.execute(
         text("SELECT slug, name FROM teams WHERE id = CAST(:t AS uuid)"), {"t": str(body.team_id)},
     )).first()

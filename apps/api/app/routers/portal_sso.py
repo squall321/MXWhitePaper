@@ -163,8 +163,14 @@ async def _upsert_user(s: AsyncSession, *, email: str, name: str, affiliation: s
     return await _create_user(s, email=email, name=name, affiliation=affiliation)
 
 
+def _team_affiliation(affiliation: str | None) -> str | None:
+    """팀을 고를 때 쓸 소속 — 포털의 '*'(소속이 갈리지 않은 모두)는 쓰지 않는다. 쓰면 모두가 한 팀으로 옮겨진다(10-27 MW-05)."""
+    return None if affiliation == "*" else affiliation
+
+
 async def _sync_team(s: AsyncSession, user: dict[str, Any], affiliation: str | None) -> dict[str, Any]:
     """소속 → 팀 표에 있으면 그 팀으로 옮긴다 — 표에 없거나 소속이 없으면 그대로(관리자가 둔 팀을 지우지 않는다)."""
+    affiliation = _team_affiliation(affiliation)
     if not affiliation:
         return user
     team = (await s.execute(
@@ -192,7 +198,7 @@ async def _create_user(s: AsyncSession, *, email: str, name: str, affiliation: s
     # so we store a random hash the local password path can never match. The team comes from the
     # admin's affiliation → team map (C5); without a mapping, the first team as before.
     team = None
-    if affiliation:
+    if _team_affiliation(affiliation):
         team = (await s.execute(
             text("SELECT team_id FROM wiki_aff_team_map WHERE affiliation = :a"), {"a": affiliation},
         )).scalar()
