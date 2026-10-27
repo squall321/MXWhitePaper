@@ -289,6 +289,10 @@
 - 다시 띄운 뒤 시험 13건이 403 SSO_ONLY 로 깨졌다 — conftest 가 `.env` 를 setdefault 로 읽어 dev 의 `MXWP_SSO_ONLY=true` 가 시험에 들어갔다.
   conftest 가 끈다(켠 모습은 test_sso_only 가 monkeypatch 로). 1375 통과.
 - dev 에 재색인 표지가 없었다(637a34f 뒤 migrate.sh 를 안 돌림) — 멈춘 API 갈래를 시험하며 한 번 돌았다(427건, 지운 것 0).
+- MW-07(허브 MX 카드) — dev 검색 대상 427 · 요약 빈 320 이 허브 숫자와 같다. 요약 빈 카드는 원문 탓이다(나무 가져오기는 요약이 없다).
+  본문 빈 카드 154 는 허브 탓으로 확인됐다(포털 세션이 AIDataHub 코드로) — 평탄화가 `children` 만 내려가 MXWP 의 `subsections` 를
+  놓치고, heading-4 · quote · callout · math · 인라인 table · columns · tabs 의 글을 읽지 않는다. MXWP 할 일 없음. 상세는 보관 문서도
+  200(지난 검토의 '보관은 404' 는 틀림 — `find_by_slug` 는 보이기 범위만 거른다).
 
 ## 2026-10-25 — dev SSO 전용 켬(사용자 결정 · 포털 MW-D22)
 
