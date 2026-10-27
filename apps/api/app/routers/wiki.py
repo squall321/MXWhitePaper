@@ -42,7 +42,7 @@ from app.wiki.envelope import SourceEnvelope
 class _WikiDisabledError(APIError):
     http_status = 404
     code = "wiki_disabled"
-    message = "위키가 꺼져 있다(WIKI_ENABLED)"
+    message = "MX 백서 AI 위키는 아직 열리지 않았다"  # 사람 · 에이전트가 읽는다 — 설정 이름은 싣지 않는다(10-27 MW-01)
 
 
 def _enabled() -> None:

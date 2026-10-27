@@ -141,7 +141,9 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 
 ## REST
 
-[[src/app/routers/wiki.py]] — 꺼지면(`WIKI_ENABLED`) 모두 404 `wiki_disabled`(라우터 의존성).
+[[src/app/routers/wiki.py]] — 꺼지면(`WIKI_ENABLED`) 모두 404 `wiki_disabled`(라우터 의존성). 문구는 'MX 백서 AI 위키는 아직 열리지
+않았다' — 설정 이름을 싣지 않는다(사람 · 에이전트가 읽는다, 10-27 MW-01). 503 으로 바꾸지 않는다 — 꺼짐은 잠깐의 고장이 아니고(되풀이를
+부른다) 화면 · 포털이 404 로 꺼짐을 안다.
 
 | 메서드 · 경로 | 권한 | 무엇 |
 | --- | --- | --- |
@@ -266,6 +268,8 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 
 `dist/llm-docx-toolkit/mcp/server.py` 의 `wiki_*` 열넷(CONTRACTS §7) — `MxwpClient.wiki(method, path, …)` 한 길로 `/api/v1/wiki/*` 를 부른다.
 순수 읽기 아홉은 `annotations=_WIKI_READ`(`readOnlyHint`) — 게이트웨이가 읽기 전용 PAT 에 연다. `wiki_ask` 는 MISS 때 질문을 남겨 빠진다.
+위키가 꺼진 박스는 MCP 가 뜰 때(`_wiki_switch` — `/wiki/health`) `wiki_*` 열넷을 싣지 않는다 — 꺼진 도구를 먼저 불러 404 를 맞던 것을
+막는다(10-27 MW-01). 닿지 않으면 싣고, 부를 때 꺼짐이면 'search_documents 를 쓰세요' 안내를 돌려준다.
 
 | 도구 | 창구 |
 | --- | --- |

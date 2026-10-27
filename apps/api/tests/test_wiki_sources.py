@@ -120,6 +120,7 @@ async def test_disabled_is_404(monkeypatch: pytest.MonkeyPatch) -> None:
     async with _client() as c:
         for r in (await c.get(f"{API}/health"), await c.post(f"{API}/sources", json=_env())):
             assert r.status_code == 404 and r.json()["error"]["code"] == "wiki_disabled"
+            assert "WIKI_ENABLED" not in r.json()["error"]["message"]  # 설정 이름은 사람 · 에이전트에게 보이지 않는다(MW-01)
 
 
 async def test_same_envelope_twice_is_one_row(world: dict[str, Any]) -> None:

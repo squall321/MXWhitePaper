@@ -199,7 +199,9 @@ register-once 명령**이 토큰까지 채워져 나온다 — 복사해 실행�
 ### 호스팅 (서버 운영자용)
 
 frozen 바이너리에는 HTTP 스택을 넣지 않는다 — HTTP transport 는 **컨테이너
-Python** (`instance://mxwp_api`) 으로 호스팅한다. 한 줄 실행:
+Python** (`instance://mxwp_api`) 으로 호스팅한다. http 모드는 서버 쪽 경로를 읽는 도구 셋(`import_file` · `upload_image` ·
+`extract_pptx_images`)을 싣지 않는다 — 그 경로는 부른 사람의 PC 가 아니라 서버 컨테이너다(10-27 MW-02). PC 파일은 RA
+`prepare_upload` 길로 올린다. 위키가 꺼진 박스(`/api/v1/wiki/health` 404)면 뜰 때 `wiki_*` 를 싣지 않는다(MW-01). 한 줄 실행:
 
 ```bash
 apptainer exec instance://mxwp_api bash -lc \

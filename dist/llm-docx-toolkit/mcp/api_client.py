@@ -101,6 +101,9 @@ def encode_multipart(
     return crlf.join(out), boundary
 
 
+WIKI_OFF_MESSAGE = "MX 백서 AI 위키는 아직 열리지 않았습니다 — 문서 찾기는 search_documents 를 쓰세요"
+
+
 class ApiError(RuntimeError):
     """HTTP / transport 오류. 메시지는 이미 사람이 읽을 형태."""
 
@@ -474,8 +477,16 @@ class MxwpClient:
     def wiki(
         self, method: str, path: str, *, body: dict[str, Any] | None = None, query: dict[str, Any] | None = None,
     ) -> tuple[Any, dict[str, Any]]:
-        """AI 위키 창구(`/api/v1/wiki/*` — docs/llm-wiki W6) 한 번 → (data, meta). `wiki_*` 도구가 같이 쓴다."""
-        data, meta, _h = self._request(method, f"/api/v1/wiki{path}", body=body, query=query)
+        """AI 위키 창구(`/api/v1/wiki/*` — docs/llm-wiki W6) 한 번 → (data, meta). `wiki_*` 도구가 같이 쓴다.
+
+        위키가 꺼진 박스(404 `wiki_disabled`)면 사람이 읽을 안내로 바꾼다 — 에이전트가 다른 길(search_documents)로 가게.
+        """
+        try:
+            data, meta, _h = self._request(method, f"/api/v1/wiki{path}", body=body, query=query)
+        except ApiError as e:
+            if e.status == 404 and e.code == "wiki_disabled":
+                raise ApiError(WIKI_OFF_MESSAGE, status=404, code="wiki_disabled") from e
+            raise
         return data, meta
 
     def list_predicate_types(self) -> list[dict[str, Any]]:

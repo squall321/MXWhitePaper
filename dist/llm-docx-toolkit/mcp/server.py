@@ -387,13 +387,21 @@ def _get_retriever(backend: str) -> Retriever:
 # ── server build ───────────────────────────────────────────────────
 
 
-def build_server() -> FastMCP:
+def build_server(*, http: bool = False, wiki: bool = True) -> FastMCP:
     """Construct the FastMCP server with tool/resource/prompt registered.
 
     Factored out so tests can instantiate without touching argparse / stdio.
     """
     global _MCP
     mcp = FastMCP("mxwp-rag")
+    # http 모드는 게이트웨이로 여럿이 부르는 서버다 — 서버 쪽 경로를 읽는 도구(import_file · upload_image · extract_pptx_images)를
+    # 싣지 않는다. 그 경로는 부른 사람의 PC 가 아니라 서버 컨테이너(운영 계정 홈 · /tmp · /workspace)라, 다른 플랫폼의 파일을
+    # 읽어 문서로 옮기거나 있는지 떠볼 수 있었다(10-27 cae00 요청 MW-02). PC 파일은 RA prepare_upload 길로 올린다.
+    # 위키가 꺼진 박스(wiki=False — main 이 /wiki/health 로 본다)는 wiki_* 를 싣지 않는다(MW-01).
+    def _skip(**_kw: Any) -> Any:
+        return lambda f: f
+    local_tool = _skip if http else mcp.tool
+    wiki_tool = mcp.tool if wiki else _skip
     _MCP = mcp
 
     @mcp.tool(
@@ -686,7 +694,7 @@ def build_server() -> FastMCP:
 
     # ── file / image 도구 (MXWP_API_TOKEN 필수) ─────────────────────
 
-    @mcp.tool(
+    @local_tool(
         name="import_file",
         description=(
             "로컬 파일 (docx/pptx/xlsx/pdf) 을 위젯 포함 DocumentJSON 으로 변환. "
@@ -721,7 +729,7 @@ def build_server() -> FastMCP:
             out["slug"] = data.get("slug")
         return out
 
-    @mcp.tool(
+    @local_tool(
         name="upload_image",
         description=(
             "로컬 이미지 (png/jpg/jpeg/gif/webp/svg) 를 MinIO 에 업로드 → image_id. "
@@ -789,7 +797,7 @@ def build_server() -> FastMCP:
             filename=Path(filename).name, content=content, mime_type=mime_type
         )
 
-    @mcp.tool(
+    @local_tool(
         name="extract_pptx_images",
         description=(
             "로컬 .pptx 를 zip 으로 열어 ppt/media/ 의 그림들을 각각 MinIO 에 업로드 "
@@ -1106,7 +1114,7 @@ def build_server() -> FastMCP:
     # 위키 문서(AI 가 원천으로 짓는 문서)는 create_document · insert_block … 으로 고치지 못한다(서버가 409 WIKI_USE_PROPOSE) —
     # 읽기는 wiki_*, 쓰기는 원천(wiki_submit_source · wiki_fileback)이나 제안(wiki_propose — 늘 사람이 검토)으로.
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_index",
         **_WIKI_READ,
         description=(
@@ -1127,7 +1135,7 @@ def build_server() -> FastMCP:
                 out.append(f"- … 그 밖 {sec['more']}")
         return "\n".join(out)
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_search",
         **_WIKI_READ,
         description=(
@@ -1139,7 +1147,7 @@ def build_server() -> FastMCP:
         data, _ = _make_client().wiki("GET", "/search", query={"q": query})
         return data or {"pages": [], "entities": []}
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_read",
         **_WIKI_READ,
         description=(
@@ -1165,7 +1173,7 @@ def build_server() -> FastMCP:
                 "managed": (info or {}).get("managed"), "audience": (info or {}).get("audience"),
                 "entity": (info or {}).get("entity"), "sections": sections}
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_source",
         **_WIKI_READ,
         description="위키 원천 한 건(볼 수 있을 때만) — 종류 · 출처 · 생긴 때 · 본문(payload) · 첨부. → 원천 JSON",
@@ -1174,7 +1182,7 @@ def build_server() -> FastMCP:
         data, _ = _make_client().wiki("GET", f"/sources/{quote(id, safe='')}")
         return data or {}
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_entity",
         **_WIKI_READ,
         description=(
@@ -1199,7 +1207,7 @@ def build_server() -> FastMCP:
                                           "predicate_key": t.get("predicate_key"), "object": t.get("object_slug")})
         return {"entity": ent, "relations": [dict(x) for x in {tuple(sorted(r.items())): r for r in relations}.values()]}
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_graph",
         **_WIKI_READ,
         description=(
@@ -1215,7 +1223,7 @@ def build_server() -> FastMCP:
         nodes = sorted({slug, *(e["subject"] for e in edges), *(e["object"] for e in edges)})
         return {"root": slug, "nodes": nodes, "edges": edges}
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_ask",
         description=(
             "위키로 답한다(서버의 묻기 — 목록 · 엔티티 · 검색 · 문서 · 원천 순으로 근거를 모아 답에 [n] 각주). 답이 없으면 "
@@ -1227,7 +1235,7 @@ def build_server() -> FastMCP:
         data, _ = _make_client().wiki("POST", "/ask", body={"question": question})
         return data or {}
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_log",
         **_WIKI_READ,
         description="위키 기록(덧붙이기만 — 들이기 · 묻기 · 검토 · 되돌림 …)의 최근 n 줄. → ['[YYYY-MM-DD HH:MM] op | 제목']",
@@ -1236,7 +1244,7 @@ def build_server() -> FastMCP:
         rows, _ = _make_client().wiki("GET", "/log", query={"limit": max(1, min(n, 200))})
         return [f"[{(r.get('at') or '')[:16].replace('T', ' ')}] {r.get('op')} | {r.get('title')}" for r in rows or []]
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_lint_report",
         **_WIKI_READ,
         description="위키 점검(lint) 요약과 작업 큐 상태. 점검 보고서는 W7 에 온다 — 지금은 마지막 점검 시각 · 큐 · LLM 닿음만.",
@@ -1245,7 +1253,7 @@ def build_server() -> FastMCP:
         data, _ = _make_client().wiki("GET", "/health")
         return {"last_lint": (data or {}).get("last_lint"), "jobs": (data or {}).get("jobs"), "llm": (data or {}).get("llm")}
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_questions",
         **_WIKI_READ,
         description="위키 질문 대기열(내가 볼 수 있는 것) — 위키가 아직 답하지 못한 물음. → [{id, text, status, asked_count, mine}]",
@@ -1254,7 +1262,7 @@ def build_server() -> FastMCP:
         rows, _ = _make_client().wiki("GET", "/questions", query={"status": status or None, "limit": max(1, min(limit, 200))})
         return rows or []
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_submit_source",
         description=(
             "원천 봉투(mxwp-source/1 — docs/llm-wiki CONTRACTS §3)를 보낸다. 위키에 새 사실을 들이는 길(근거가 원천에 남는다). "
@@ -1267,7 +1275,7 @@ def build_server() -> FastMCP:
         data, _ = client.wiki("POST", "/sources", body=envelope, query={"ingest": "true" if ingest else "false"})
         return data or {}
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_fileback",
         description=(
             "wiki_ask 의 답을 위키에 남긴다(qa 원천 → 들이기 → 문답 문서). citations 는 wiki_ask 가 준 각주 {n, slug, block_id} 그대로 — "
@@ -1286,7 +1294,7 @@ def build_server() -> FastMCP:
         data, _ = client.wiki("POST", "/fileback", body=body)
         return data or {}
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_propose",
         description=(
             "위키 문서를 고치는 제안 — 늘 사람이 검토한다(검토 큐). ops: [{op:'block.insert', doc, section, block, cites, why} | "
@@ -1302,7 +1310,7 @@ def build_server() -> FastMCP:
         data, _ = client.wiki("POST", "/propose", body={"summary": summary, "ops": ops or [], "relations": relations or []})
         return data or {}
 
-    @mcp.tool(
+    @wiki_tool(
         name="wiki_add_question",
         description=(
             "위키 질문 대기열에 물음을 남긴다(같은 물음이면 물은 수만 오른다). 범위는 비면 나만. → {id, asked_count, created, audience}"
@@ -1319,6 +1327,21 @@ def build_server() -> FastMCP:
 
 
 # ── entry point ────────────────────────────────────────────────────
+
+
+def _wiki_switch() -> bool:
+    """위키가 켜졌나 — 서버가 뜰 때 한 번 `GET /api/v1/wiki/health`(인증 없음). 404(꺼짐)면 False — wiki_* 를 싣지 않는다.
+
+    닿지 않거나 다른 오류면 True(지금처럼 싣는다) — API 가 늦게 떠도 도구가 빠지지 않고, 부를 때 꺼져 있으면 그렇다고 말한다
+    (api_client.wiki). mxwp-mcp 는 mxwp_api 인스턴스 안에서 같이 뜨고 지므로 WIKI_ENABLED 를 바꾸면(API 재기동) 다시 본다.
+    """
+    try:
+        _make_client().wiki("GET", "/health")
+    except _api().ApiError as e:
+        return not (e.status == 404 and e.code == "wiki_disabled")
+    except Exception:  # noqa: BLE001 — 닿지 않으면 싣는다
+        return True
+    return True
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -1357,7 +1380,7 @@ def main(argv: list[str] | None = None) -> None:
     args = p.parse_args(argv)
     _rag_dir = (args.rag_dir or _default_rag_dir()).resolve()
     _system_prompt_path = (args.system_prompt or _default_system_prompt()).resolve()
-    server = build_server()
+    server = build_server(http=args.http, wiki=_wiki_switch())
     if args.http:
         server.settings.host = args.host
         server.settings.port = args.port

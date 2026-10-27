@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import importlib.util
 import json
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Callable
@@ -172,3 +174,44 @@ def test_only_pure_reads_are_marked_read_only(server_mod) -> None:
     assert marked == {"wiki_index", "wiki_search", "wiki_read", "wiki_source", "wiki_entity", "wiki_graph", "wiki_log",
                       "wiki_lint_report", "wiki_questions"}  # 게이트웨이가 읽기 전용 PAT 에 여는 것
     assert {"wiki_ask", "wiki_submit_source", "wiki_fileback", "wiki_propose", "wiki_add_question"} <= set(tools) - marked
+
+
+_LOCAL_PATH_TOOLS = {"import_file", "upload_image", "extract_pptx_images"}
+
+
+def _names(s) -> set[str]:
+    return {t.name for t in asyncio.run(s.list_tools())}
+
+
+def test_http_mode_drops_tools_that_read_server_paths(server_mod) -> None:
+    stdio, http = _names(server_mod.build_server()), _names(server_mod.build_server(http=True))
+    assert _LOCAL_PATH_TOOLS <= stdio  # 사용자 PC 에서 도는 stdio 에서는 그대로
+    assert not (_LOCAL_PATH_TOOLS & http)  # 게이트웨이로 여럿이 부르는 서버는 서버 쪽 경로를 읽지 않는다(MW-02)
+    assert {"upload_image_from_url", "upload_image_base64"} <= http
+
+
+def test_wiki_tools_hide_when_the_wiki_is_off(server_mod) -> None:
+    on, off = _names(server_mod.build_server()), _names(server_mod.build_server(wiki=False))
+    assert len({n for n in on if n.startswith("wiki_")}) == 14
+    assert not {n for n in off if n.startswith("wiki_")} and "search_documents" in off
+
+
+def _wiki_off(req):
+    body = json.dumps({"data": None, "meta": None, "error": {"code": "wiki_disabled", "message": "MX 백서 AI 위키는 아직 열리지 않았다"}})
+    raise urllib.error.HTTPError(req.full_url, 404, "Not Found", hdrs=None, fp=io.BytesIO(body.encode("utf-8")))
+
+
+def test_wiki_switch_reads_health(server_mod) -> None:
+    _use(server_mod, {("GET", "/api/v1/wiki/health"): lambda r: _Resp({"jobs": {}})})
+    assert server_mod._wiki_switch() is True
+    _use(server_mod, {("GET", "/api/v1/wiki/health"): _wiki_off})
+    assert server_mod._wiki_switch() is False  # 꺼짐 — 도구를 싣지 않는다
+    _use(server_mod, {})  # 닿지 않음(예상 밖 요청) — 싣는다
+    assert server_mod._wiki_switch() is True
+
+
+def test_wiki_off_answer_points_elsewhere(server_mod) -> None:
+    _use(server_mod, {("GET", "/api/v1/wiki/index"): _wiki_off})
+    with pytest.raises(ToolError) as e:
+        _call(server_mod.build_server(), "wiki_index", {})
+    assert "search_documents" in str(e.value) and "WIKI_ENABLED" not in str(e.value)
