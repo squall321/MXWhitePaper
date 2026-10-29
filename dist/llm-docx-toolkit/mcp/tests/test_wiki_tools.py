@@ -123,6 +123,23 @@ def test_wiki_ask_and_search_and_log(server_mod) -> None:
     assert _call(s, "wiki_log", {"n": 5}) == ["[2026-10-24 06:00] ingest | x"]
 
 
+def test_wiki_lint_report_reads_findings(server_mod) -> None:
+    seen: list[dict[str, list[str]]] = []
+    finding = {"id": "f1", "rule": "contradiction", "severity": "error", "title": "서로 다른 말 — 힌지 브래킷", "status": "open",
+               "docs": [{"slug": "ent-part-x", "title": "힌지 브래킷"}], "question_id": "q1", "detail": {"metric": "m"}}
+
+    def findings(req):
+        seen.append(parse_qs(urlsplit(req.full_url).query))
+        return _Resp([finding], {"total": 1, "by_rule": {"contradiction": 1}, "last_run": {"scope": "full"}})
+
+    _use(server_mod, {("GET", "/api/v1/wiki/lint/findings"): findings})
+    out = _call(server_mod.build_server(), "wiki_lint_report", {"rule": "contradiction", "limit": 5})
+    assert out["by_rule"] == {"contradiction": 1} and out["last_run"] == {"scope": "full"} and out["total"] == 1
+    assert out["findings"] == [{"rule": "contradiction", "severity": "error", "title": "서로 다른 말 — 힌지 브래킷",
+                                "status": "open", "question_id": "q1", "docs": ["ent-part-x"]}]
+    assert seen == [{"rule": ["contradiction"], "limit": ["5"]}]
+
+
 def test_wiki_graph_keeps_wiki_edges_and_filters_predicates(server_mod) -> None:
     sub = {"root": "a", "nodes": ["a", "b", "c"], "edges": [
         {"subject_slug": "a", "predicate": "의 일부다", "predicate_key": "part-of", "object_slug": "b", "source": "wiki"},

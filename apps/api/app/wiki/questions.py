@@ -38,8 +38,10 @@ def _row(r: Any) -> dict[str, Any]:
 
 
 async def add(s: AsyncSession, question: str, *, origin: str, user: dict[str, Any], aud: list[str] | None = None,
-              origin_ref: str | None = None, priority: int = 3, about: list[str] | None = None) -> dict[str, Any]:
-    """물음 하나를 남긴다(같은 물음이면 그 줄의 asked_count 를 올린다). 커밋은 부르는 쪽이."""
+              origin_ref: str | None = None, priority: int = 3, about: list[str] | None = None,
+              actor: str | None = None) -> dict[str, Any]:
+    """물음 하나를 남긴다(같은 물음이면 그 줄의 asked_count 를 올린다). 커밋은 부르는 쪽이. `actor` — 기록의 행위자(비면 그 사람,
+    점검 · 지속 질의가 남기면 'wiki')."""
     question = " ".join(question.split())
     if not 2 <= len(question) <= 2000:
         raise ValidationFailed("물음은 2~2000자")
@@ -64,7 +66,7 @@ async def add(s: AsyncSession, question: str, *, origin: str, user: dict[str, An
     await s.execute(text("""
         INSERT INTO wiki_log (op, title, detail, actor, audience)
         VALUES ('query', :t, CAST(:d AS jsonb), :a, CAST(:aud AS text[]))
-    """), {"t": f"질문 {'남김' if row[2] else '다시 물음'} · {question[:80]}", "a": f"user:{user['id']}", "aud": tokens,
+    """), {"t": f"질문 {'남김' if row[2] else '다시 물음'} · {question[:80]}", "a": actor or f"user:{user['id']}", "aud": tokens,
            "d": json.dumps({"question": str(row[0]), "origin": origin, "asked_count": row[1]}, ensure_ascii=False)})
     return {"id": str(row[0]), "asked_count": int(row[1]), "created": bool(row[2]), "audience": tokens}
 

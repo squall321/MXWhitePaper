@@ -19,7 +19,7 @@
 | W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
 | W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지 · 엔티티 등록부(보이기 · 별칭 · 외부 id · 중복 후보 · 합치기 — 늘 검토 · 되돌리기). 엔티티 후보 해석(열쇠 · 후보 · `wiki_resolve`) · 정답표 초안 · 평가 스크립트. 화면(온톨로지 · 엔티티 목록 · 한 건 · 합치기 카드). 남은 것 — 사람의 정답표 확인 · LLM 을 낀 정확도(진짜 LLM 이 있는 박스) | [[#Ontology]] · [[#Relations]] · [[#Entities]] · [[#Resolution]] |
 | W6 묻기 · 되쌓기 · MCP | 묻기(`/query` SSE · 근거 각주 · MISS) · 질문 대기열(0057 · `/questions`) · 되쌓기(`/fileback` → qa 원천 → 문답 문서 · 비슷한 물음은 같은 문서에) · 후보(주인만 보는 held 원천 · `/candidates` · 화면 '내 후보' · 0058) · 제안(`/propose` — 늘 검토) · 기계 호출의 위키 문서 직접 쓰기 막음 · MCP `wiki_*` 열넷(`/search` · `/ask`) · 메인 챗 위키 모드([[chat#위키 모드]]) · 게이트웨이 `tools/list` 열넷 확인(10-24 포털 세션). 남은 것 — 포털 P6~P8 뒤 끝에서 끝 | [[#Query]] · [[#Fileback]] · [[#Candidates]] · [[#Propose]] · [[#MCP]] |
-| W7 점검 · 지속 질의 | 예산 · 조용한 시간 · 묻기 우선(0059 — LLM 쓴 양 장부 · 묻기 표지) | [[#Budget]] |
+| W7 점검 · 지속 질의 | 예산 · 조용한 시간 · 묻기 우선(0059 — LLM 쓴 양 장부 · 묻기 표지) · 점검 아홉(결함 한 줄 · 빠진 링크 자동 고침 · 숫자 모순 메모 · 질문 · 밀린 검토 알림 0060 · 보고서 `lint-YYYYMMDD` · 반영 직후 작은 점검) | [[#Budget]] · [[#Lint]] |
 | W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -45,6 +45,7 @@
 | 받기 · 멱등 · 철회 · 원천 문서 · 기록 | [[src/app/wiki/sources.py#receive]] · 문서 만들기 `document_service.create_document(wiki=…)` | W3 |
 | 규칙서(YAML 검증 · 판) | [[src/app/wiki/schema.py#RuleBook]] · 저장 검사 `document_service.validate_documentjson` | W4 |
 | LLM(구조화 출력) | [[src/app/wiki/llm.py#structured]] | W4 |
+| 점검 아홉 · 결함 · 고침 묶음 · 보고서 | [[src/app/wiki/lint.py#run]](워커 처리기 `lint`) · 표 `wiki_lint_runs` · `wiki_lint_findings`(0059) | W7 |
 | 예산 · 조용한 시간 · 묻기 우선 · 쓴 양 장부 | [[src/app/wiki/budget.py#gate]] · `background_turn` · `interactive_turn` · 표 `wiki_llm_usage` · `wiki_llm_turns`(0059) | W7 |
 | 해석 · 후보 문서 | [[src/app/wiki/resolve.py#targets]] · 표 `wiki_entity_types` · `wiki_entities`(0054) | W4 |
 | 온톨로지(유형 · 술어 · 제안 → 승인 · 정의역 · 치역) | [[src/app/wiki/ontology.py]] · 표 `wiki_predicates` · `doc_triples` 위키 칸(0056) | W5 |
@@ -176,7 +177,10 @@ LLM 이 비어도(`llm: unset`) · 워커가 없어도 200 이다.
 | `GET /search?q=` | reader | 묻기의 찾기만 — `{pages[{slug, title, kind, via: entity · search}], entities[{id, name, type_key}]}`(볼 수 있는 위키 문서) |
 | `POST /ask` | reader(묻기와 같은 분에 20) | `{question}` → 묻기 한 번을 JSON 으로 `{answer, citations, miss, question_id, pages, error}` — 답이 없으면 물은 사람만 보는 질문을 바로 남긴다(MCP `wiki_ask`) |
 | `GET /questions` · `POST /questions` | reader | 볼 수 있는 물음(범위 토큰 ⊆ 내 토큰) · `mine` / 남기기 `{text, audience?, priority, origin: user · query_miss}` → 201 `{id, asked_count, created, audience}`. 범위는 비면 나만(`user:<id>`), 가진 토큰 밖은 403. 같은 물음(문장 부호 · 공백 무시) · 범위면 한 줄에 `asked_count` 만 |
-| `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(W7). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
+| `POST /lint` | 검토자 | `{scope: full · docs, slugs?, llm?}` → 201 `{job_id}` — 워커가 돈다. `llm` 을 켜면 조용한 시간 · 하루 예산을 따른다 — [[#Lint]] |
+| `GET /lint/findings` | reader | 결함 — 범위 토큰을 다 가진 것만, `rule` · `status`(비면 open · question_raised, `all`) · `limit` · `offset` → `meta.total` · `by_rule` · `last_run`. 줄마다 볼 수 있는 문서만 |
+| `POST /lint/findings/{id}/dismiss` | 검토자 | `{note}`(꼭) — 버린 결함은 다음 점검에도 다시 열리지 않는다. 못 보는 결함 404 |
+| `GET /health` | 없음 | `jobs`(queued · running · held · oldest_queued_s · failed_24h · last_failure{op, at}) · `workers`(10분 안에 본 것) · `llm`(ok · unreachable · unset, 30초 캐시) · `last_lint`(`{scope, at, ok, open}` — 열린 결함 수만, 제목 · 범위 없음). **실패 글은 내지 않는다** — 인증 없는 창구이고 예외 꼬리에 원천 글이 섞일 수 있다 |
 
 ## Rule book
 
@@ -219,6 +223,36 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 
 시험 [[apps/api/tests/test_wiki_budget.py]] — 시간 셈 · 문지기(조용한 시간 · 하루 예산) · 미룸(시도 수 그대로) · 묻기 우선(느린 계획 호출 사이의 묻기 —
 배경의 다음 호출이 묻기 뒤에) · 동시 수 1 · 장부.
+
+## Lint
+
+[[src/app/wiki/lint.py#run]] — 점검 한 번 = 작업 하나(op `lint`). 규칙은 코드가 판정하고 LLM 은 글 모순 짝만 본다(request §5-8).
+
+| 규칙 | 무엇을 | 손쓰기(새로 보인 결함만) |
+| --- | --- | --- |
+| `orphan` | 들어오는 `[[링크]]` 가 없는 내용 문서 — 원천 · 목록 · 보고서 · 규칙서 문서의 링크는 치지 않는다(원천 문서의 '인용한 문서' 는 자동 목록). 목록(index)은 모든 문서를 싣으므로 따지지 않는다 | 보고서 |
+| `uncited` | AI 절의 사실 블록에 근거가 없음(사람이 편집기로 넣은 것) — 문서마다 한 줄 | 질문(우선순위 4) |
+| `stale` | 인용 원천이 새 판에 밀림 · 철회 · 같은 대상의 **조건이 모두 같은**(수치 설정까지) 더 새 결과가 있음 | `detail.reingest`(다시 들일 원천) |
+| `contradiction` | 숫자 — 같은 대상(모델 · 부품)의 해석 결과가 같은 시나리오에서 같은 지표를 `lint.contradiction_rel_tol`(기본 0.1) 넘게 다르게 말함. 시나리오 비교에서 수치 설정(메시 · 솔버 …)은 빼고 그 차이를 `detail.differs` 에, 설계 변형(design_variation …)이 다르면 다른 대상. 글 — 밤 점검에서 바뀐 엔티티 문서의 같은 AI 절 · 다른 근거 블록 짝(`contradiction_pairs_per_entity`)을 LLM 이 | 숫자 — 그 범위의 엔티티 문서 '서로 다른 말' 절에 두 값 · 두 근거를 쓰는 묶음(이미 적혔으면 안 씀) + 질문(2). 글 — 질문(3) |
+| `missing_page` | 원천의 힌트 · 문서 본문 `missing_page_min_mentions`(3)곳에 나오는 이름인데 그 범위에서 볼 수 있는 엔티티 문서가 없음 — 가장 넓은 범위에서 한 번 | 보고서(`detail.reingest`) |
+| `missing_link` | AI 절에 엔티티 이름 · 별칭이 있는데 그 문서로 가는 링크가 문서 어디에도 없음 — 처음 나온 곳 하나, 더 좁은 문서로는 걸지 않는다(V8) | **결정적 자동 고침** — 근거 있는 블록만, 링크만 단 `block.update`(근거는 그대로) |
+| `gap` | 불량 유형 — 시장 증거(현장 원천 · `observed-in`)가 있는데 재현(해석 원천 · `reproduced-by`)이 없음 · 그 거꾸로. 대책 — 효과 확인(해석 원천 · `verified-by`) 없음. 부품 — 시험(`tested-by` · 같은 원천의 신뢰성 시험 힌트) 없음. 범위를 건너 '있다' 면 빈틈이 아니다 | 재현 없음 · 확인 없음은 질문(3) |
+| `schema` | 종류 꼴(규칙서 sections)의 절이 문서에 없음 — `detail` 에 쓴 판 · 지금 판 | 보고서 |
+| `stuck_review` | 검토가 `stuck_review_days`(7) 넘게 밀림 | 그 묶음을 볼 수 있는 검토자(wiki_reviewer · admin)에게 앱 안 알림 `wiki_stuck_review`(0060) |
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 범위(scope) | `full`(밤 — 아홉 · 보고서) · `incremental`(반영 직후 — `apply` 가 줄 세운다. 그 묶음의 문서에 문서 하나로 닫히는 넷: uncited · stale · missing_link · schema. 점검 자신의 `lint_fix` 묶음은 다시 부르지 않는다) · `docs`(손으로 고른 문서 — 같은 넷) |
+| 한 줄 | `fingerprint` = sha256(규칙 + 대상)[:40]. 다시 보이면 `last_seen_at` 만, 이번 점검이 덮은 범위에서 안 보이면 `fixed`(글 모순은 이번에 LLM 이 본 문서의 것만). 고쳐졌던 것이 다시 보이면 다시 열리고 새 결함으로 친다. **사람이 버린 것은 그대로**(손도 안 쓴다) |
+| 범위(audience) | 대상 문서 · 원천의 좁은 토큰을 다 가진 사람 — 둘을 다 볼 사람이 없으면(소속 둘) 결함을 만들지 않는다. 제목 · 질문 글에는 그 범위 안의 이름만(원천의 힌트 이름 · 그 범위 문서의 제목). restricted · 아직 후보인 원천은 보지 않는다 |
+| 고침 묶음 | 문서 하나에 하나(`lint_fix`) — 들이기와 같은 검증(V1~V11) · 판정 · `apply`. 링크 고침은 반영되면 그 결함을 닫고, 숫자 모순 메모는 모순이 남으므로 닫지 않는다. 한 점검에 문서 30장까지 |
+| 질문 | 결함과 같은 범위 · origin `lint` · 행위자 `wiki`. 열린 질문이 `inquiry.max_open` 이면 더 남기지 않는다(한 점검에 30까지). 결함은 `question_raised` · `question_id` |
+| 보고서 | `lint-YYYYMMDD`(KST) — 종류 `lint-report` · `["org"]` · 전사 결함만(버린 것 빼고). 같은 날 다시 돌면 새 판. 좁은 결함은 제목도 수도 넓은 문서에 쓰지 않는다 — `GET /lint/findings` 가 읽는 사람의 범위로 거른다 |
+| 기록 | `lint` — 결함 범위마다 한 줄(그 범위의 열린 결함 수 · 질문 · 자동 고침 — 열쇠가 한국어라 log.md 가 '모순 2 · 낡음 5 …' 로 읽힌다). 밤 점검은 결함이 없어도 전사 줄 하나 |
+| 예산 | LLM 은 글 모순만 — 밤 점검(`llm: true`)에서 지난 LLM 점검 뒤 바뀐 엔티티 문서(밤에 40장까지), `lint_tokens` 가 차면 멈추고 남긴 수를 센다. LLM 이 없으면 코드 규칙만 돈다 |
+
+시험 [[apps/api/tests/test_wiki_lint.py]] — 손으로 지은 위키에 아홉을 하나씩 심어 다 잡힘 · 범위대로 보임(읽는 사람 · 검토자) · 버림 ·
+닫힘 · 한 줄(질문 · 메모가 늘지 않음) · 반영 직후 작은 점검 · 워커 · 끝에서 끝(합성 20 → 들이기 → 밤 점검에 묶음의 모순 · 낡음 · 빈틈).
 
 ## Ingest
 
@@ -299,7 +333,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 | `wiki_search(query)` · `wiki_ask(question)` | `GET /search` · `POST /ask` |
 | `wiki_read(slug)` | `GET /pages/{slug}` + `GET /documents/{slug}?with=citations` → 절 · 블록(id · 글 1500자) · 블록별 근거 |
 | `wiki_source(id)` · `wiki_entity(name \| id, type?)` · `wiki_graph(slug, depth≤2, predicates?)` | 원천 한 건 · 엔티티 + 위키 관계(깊이 1) · 서브그래프에서 위키 관계만 |
-| `wiki_log(n)` · `wiki_lint_report()` · `wiki_questions(status?)` | 기록 꼬리 · `/health`(점검은 W7) · 질문 대기열 |
+| `wiki_log(n)` · `wiki_lint_report(rule?, limit?)` · `wiki_questions(status?)` | 기록 꼬리 · `GET /lint/findings`(규칙별 수 · 마지막 점검 · 결함) · 질문 대기열 |
 | `wiki_submit_source` · `wiki_fileback` · `wiki_propose` · `wiki_add_question` | 쓰기(토큰 필요) — `/sources` · `/fileback` · `/propose` · `/questions` |
 
 기존 쓰기 도구의 위키 문서 거부는 서버가 한다([[#Propose]]). 시스템 프롬프트(`llm-system-prompt.md` §8)에 위키 규칙 요약. 붙인 뒤에는
@@ -492,6 +526,8 @@ dev(LLM 없음 · 10-24) — 29 사례 중 결정적 15 건 100 % · 비슷한 �
 - 시험에서 워커를 돌릴 때는 `run_once(…, ops=[…])` · `serve(…, ops=[…])` 로 집을 op 를 좁힌다 — 같은 시험 DB 의 다른 시험 작업을 집지 않게.
 - **배경 LLM 호출은 DB 를 본다**(W7) — 문지기 · 장부가 `wiki_llm_turns` · `wiki_llm_usage` 를 읽고 쓴다. 0059 전의 DB 에 새 코드를 올리면
   배경 호출이 표 없음으로 깨진다 — 이관 먼저(배포 순서 그대로).
+- **반영은 작은 점검을 줄 세운다**(W7) — 반영 시험을 돌린 시험 DB 에는 `lint` 작업이 남는다(그 묶음을 지운 뒤라도). 집으면 '점검할 문서가
+  없다' 로 끝난다. 점검 시험의 정리가 묶음이 없는 점검 작업을 함께 지운다.
 - **워커는 `--reload` 가 없다** — 위키 코드를 고치면 `mxwp_wiki` 를 다시 띄워야 새 코드로 돈다(update.sh · sync-from-drive.sh 는
   알아서 한다). dev 에서 손으로 — `apptainer instance stop mxwp_wiki && ./infra/scripts/start.sh`.
 - **dev 의 워커(`mxwp_wiki`)는 dev DB 만 본다** — 시험 작업은 시험 DB 에 있어 위키를 켜 둔 채 시험해도 집지 않는다(10-24 까지는 같은 DB

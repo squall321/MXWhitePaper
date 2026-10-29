@@ -12,10 +12,13 @@
 - 되돌리기 — 묶음이 저장한 판 위에 더 고친 것이 없을 때만(있으면 409). 새 문서는 보관, 있던 문서는 from 판으로 복원, 이 묶음이 만든
   엔티티는 retired.
 - 지은이는 시스템(첫 admin) — 누가 불렀는지는 묶음의 created_by 가 남긴다.
+- 반영이 끝나면 그 묶음의 문서에 작은 점검(lint `incremental` — LLM 없음)을 줄 세운다(W7). 점검 자신의 고침 묶음(`lint_fix`)은 빼서
+  되풀이를 막는다. 줄 세우기가 깨져도 반영은 그대로다(들이기가 다시 돌면 같은 원천이 두 번 쓰인다).
 """
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import ulid
@@ -25,8 +28,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.errors import APIError, Conflict, NotFound, PreconditionFailed
 from app.services import document_service
-from app.wiki import audience, ontology, pages
+from app.wiki import audience, jobs, ontology, pages
 from app.wiki import schema as wiki_schema
+
+log = logging.getLogger("mxwp.wiki.apply")
 
 
 class ApplyConflict(APIError):
@@ -347,11 +352,19 @@ async def apply(s: AsyncSession, cs_id: str, *, status: str) -> dict[str, list[i
         """), {"st": status, "i": cs_id, "a": json.dumps({**applied, **({"triples": triples} if triples else {}),
                                                          **({"merges": merges} if merges else {})})})
         await s.commit()
-        return applied
     except Exception:
         await s.rollback()
         await _unwind(s, cs_id, applied, slugs, author_id, triples=triples, plan_slugs=set(titles), merges=merges)
         raise
+    if cs["op"] != "lint_fix" and applied:
+        try:
+            await jobs.enqueue(s, "lint", {"scope": "incremental", "changeset_id": cs_id, "llm": False},
+                               created_by=str(cs["created_by"]) if cs["created_by"] else None)
+            await s.commit()
+        except Exception:  # 반영은 끝났다 — 점검 줄 세우기 실패로 되감지 않는다
+            await s.rollback()
+            log.warning("wiki apply %s: incremental lint enqueue failed", cs_id, exc_info=True)
+    return applied
 
 
 async def _unwind(s: AsyncSession, cs_id: str, applied: dict[str, list[int]], slugs: dict[str, str],

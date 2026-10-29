@@ -4318,6 +4318,22 @@
         "title": "_Decision",
         "type": "object"
       },
+      "_DismissBody": {
+        "properties": {
+          "note": {
+            "description": "버리는 까닭 — 다음 점검에도 다시 열리지 않는다",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "_DismissBody",
+        "type": "object"
+      },
       "_IngestBody": {
         "properties": {
           "source_ids": {
@@ -4335,6 +4351,36 @@
           "source_ids"
         ],
         "title": "_IngestBody",
+        "type": "object"
+      },
+      "_LintBody": {
+        "properties": {
+          "llm": {
+            "default": false,
+            "description": "글 모순 짝을 LLM 으로 — 켜면 조용한 시간 · 하루 예산을 따른다(밤까지 기다릴 수 있다)",
+            "title": "Llm",
+            "type": "boolean"
+          },
+          "scope": {
+            "default": "full",
+            "enum": [
+              "full",
+              "docs"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "slugs": {
+            "description": "scope=docs 일 때 점검할 문서",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Slugs",
+            "type": "array"
+          }
+        },
+        "title": "_LintBody",
         "type": "object"
       },
       "_MergeBody": {
@@ -21052,6 +21098,214 @@
           }
         },
         "summary": "Post Ingest",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/lint": {
+      "post": {
+        "description": "점검을 줄 세운다(검토자) — 워커가 돈다. LLM 을 쓰지 않으면 언제나 바로.",
+        "operationId": "post_lint_api_v1_wiki_lint_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_LintBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Lint Api V1 Wiki Lint Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Lint",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/lint/findings": {
+      "get": {
+        "description": "결함 — 범위 토큰을 다 가진 것만(비면 열린 것 · 질문 남긴 것). meta 에 규칙별 수 · 마지막 점검.",
+        "operationId": "get_lint_findings_api_v1_wiki_lint_findings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "rule",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "orphan",
+                    "uncited",
+                    "stale",
+                    "contradiction",
+                    "missing_page",
+                    "missing_link",
+                    "gap",
+                    "schema",
+                    "stuck_review"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rule"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "question_raised",
+                    "fixed",
+                    "dismissed",
+                    "all"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Lint Findings Api V1 Wiki Lint Findings Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Lint Findings",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/lint/findings/{finding_id}/dismiss": {
+      "post": {
+        "operationId": "dismiss_lint_finding_api_v1_wiki_lint_findings__finding_id__dismiss_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "finding_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Finding Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_DismissBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Dismiss Lint Finding Api V1 Wiki Lint Findings  Finding Id  Dismiss Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dismiss Lint Finding",
         "tags": [
           "wiki"
         ]

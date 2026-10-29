@@ -1247,11 +1247,19 @@ def build_server(*, http: bool = False, wiki: bool = True) -> FastMCP:
     @wiki_tool(
         name="wiki_lint_report",
         **_WIKI_READ,
-        description="위키 점검(lint) 요약과 작업 큐 상태. 점검 보고서는 W7 에 온다 — 지금은 마지막 점검 시각 · 큐 · LLM 닿음만.",
+        description=(
+            "위키 점검(lint) — 내가 볼 수 있는 열린 결함(규칙 · 제목 · 문서 · 남긴 질문)과 규칙별 수 · 마지막 점검. "
+            "rule 로 거른다(orphan · uncited · stale · contradiction · missing_page · missing_link · gap · schema · stuck_review). "
+            "→ {last_run, by_rule, total, findings[{rule, severity, title, status, docs, question_id}]}"
+        ),
     )
-    def wiki_lint_report() -> dict[str, Any]:
-        data, _ = _make_client().wiki("GET", "/health")
-        return {"last_lint": (data or {}).get("last_lint"), "jobs": (data or {}).get("jobs"), "llm": (data or {}).get("llm")}
+    def wiki_lint_report(rule: str = "", limit: int = 30) -> dict[str, Any]:
+        rows, meta = _make_client().wiki("GET", "/lint/findings",
+                                         query={"rule": rule or None, "limit": max(1, min(limit, 200))})
+        meta = meta or {}
+        return {"last_run": meta.get("last_run"), "by_rule": meta.get("by_rule") or {}, "total": meta.get("total", 0),
+                "findings": [{**{k: f.get(k) for k in ("rule", "severity", "title", "status", "question_id")},
+                              "docs": [d.get("slug") for d in f.get("docs") or []]} for f in rows or []]}
 
     @wiki_tool(
         name="wiki_questions",

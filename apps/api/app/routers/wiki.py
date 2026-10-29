@@ -28,6 +28,7 @@ from app.wiki import (
     entities,
     fileback,
     jobs,
+    lint,
     ontology,
     propose,
     query,
@@ -466,6 +467,51 @@ async def post_question(
     return envelope(data=out)
 
 
+class _LintBody(BaseModel):
+    scope: Literal["full", "docs"] = "full"
+    slugs: list[str] = Field(default_factory=list, max_length=200, description="scope=docs 일 때 점검할 문서")
+    llm: bool = Field(False, description="글 모순 짝을 LLM 으로 — 켜면 조용한 시간 · 하루 예산을 따른다(밤까지 기다릴 수 있다)")
+
+
+@router.post("/lint", status_code=201)
+async def post_lint(
+    body: _LintBody, user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """점검을 줄 세운다(검토자) — 워커가 돈다. LLM 을 쓰지 않으면 언제나 바로."""
+    await review.require_reviewer(s, user)
+    if body.scope == "docs" and not body.slugs:
+        raise ValidationFailed("scope=docs 면 slugs 가 있어야 한다")
+    job_id = await lint.enqueue(s, scope=body.scope, llm_on=body.llm, slugs=body.slugs or None, created_by=str(user["id"]))
+    await s.commit()
+    return envelope(data={"job_id": job_id, "scope": body.scope, "llm": body.llm})
+
+
+@router.get("/lint/findings")
+async def get_lint_findings(
+    rule: Literal[lint.RULES] | None = None,  # type: ignore[valid-type]
+    status: Literal["open", "question_raised", "fixed", "dismissed", "all"] | None = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    _: dict[str, Any] = Depends(require_reader),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """결함 — 범위 토큰을 다 가진 것만(비면 열린 것 · 질문 남긴 것). meta 에 규칙별 수 · 마지막 점검."""
+    rows, meta = await lint.listing(s, rule=rule, status=status, limit=limit, offset=offset)
+    return envelope(data=rows, meta=meta)
+
+
+class _DismissBody(BaseModel):
+    note: str = Field(min_length=1, max_length=500, description="버리는 까닭 — 다음 점검에도 다시 열리지 않는다")
+
+
+@router.post("/lint/findings/{finding_id}/dismiss")
+async def dismiss_lint_finding(
+    finding_id: UUID, body: _DismissBody, user: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    await review.require_reviewer(s, user)
+    return envelope(data=await lint.dismiss(s, str(finding_id), user=user, note=body.note))
+
+
 @router.get("/health")
 async def wiki_health(s: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     workers = (await s.execute(text("""
@@ -477,5 +523,5 @@ async def wiki_health(s: AsyncSession = Depends(get_db)) -> dict[str, Any]:
         "workers": [{"worker": w[0], "state": w[1], "seen_at": w[2].isoformat(), "job_id": str(w[3]) if w[3] else None}
                     for w in workers],
         "llm": await _llm_reachability(),
-        "last_lint": None,
+        "last_lint": await lint.last_run(s),
     })

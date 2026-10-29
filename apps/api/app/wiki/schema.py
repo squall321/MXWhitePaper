@@ -4,8 +4,8 @@
 - 규칙서 = MXWP 문서 `wiki-schema`(종류 `schema`, `managed='human'`) 안의 YAML 코드 블록 하나. 판은 그 문서의 판이다 — 문서가 없으면 0.
 - YAML 이 틀리면 저장을 거부한다(`document_service.validate_documentjson` 이 이 슬러그에서 `parse_document` 를 부른다).
 - 절 이름 끝의 `(자동)` 은 코드가 짓는 절, `(사람)` 은 사람만 쓰는 절이다. AI 의 쓰기는 나머지 절에만 닿는다(V5).
-- 이 판에서 코드가 읽는 칸 — rules · sections · policy.auto_apply · policy.always_review_kinds · budget.ingest_tokens · ingest.*.
-  나머지(lint · inquiry · qa · access · standing_questions)는 그 단계(W6 · W7)가 잇는다.
+- 이 판에서 코드가 읽는 칸 — rules · sections · policy.auto_apply · policy.always_review_kinds · budget.* · ingest.* · lint.* ·
+  inquiry.* · qa.candidate_ttl_days · standing_questions(W7 까지). access 는 아직 코드 상수(audience.ACCESS_MAX_AGE_H).
 """
 from __future__ import annotations
 
@@ -161,6 +161,8 @@ class Lint(_M):
     missing_page_min_mentions: int = Field(3, ge=1)
     contradiction_pairs_per_entity: int = Field(6, ge=1)
     stuck_review_days: int = Field(7, ge=1)
+    # 숫자 모순의 허용 폭(상대) — 같은 대상 · 조건의 두 값이 이보다 더 다르면 모순(W7). 첫 판 YAML 에는 없다 — 기본값.
+    contradiction_rel_tol: float = Field(0.1, ge=0, le=1)
 
 
 class Inquiry(_M):

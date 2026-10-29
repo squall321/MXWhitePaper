@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.db import session_scope
-from app.wiki import audience, budget, ingest, jobs, llm
+from app.wiki import audience, budget, ingest, jobs, lint, llm
 
 log = logging.getLogger("mxwp.wiki.worker")
 
@@ -54,6 +54,7 @@ async def _noop(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
 
 
 handler("ingest")(ingest.run)
+handler("lint")(lint.run)
 
 
 async def _touch(worker_id: str, state: str, job_id: str | None = None) -> None:
