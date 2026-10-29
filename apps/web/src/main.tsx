@@ -129,6 +129,12 @@ const WikiChangePage = lazyLogged('WikiChange', () =>
 const WikiLogPage = lazyLogged('WikiLog', () =>
   import('./pages/WikiLog').then((m) => ({ default: m.WikiLogPage })),
 )
+const WikiLintPage = lazyLogged('WikiLint', () =>
+  import('./pages/WikiLint').then((m) => ({ default: m.WikiLintPage })),
+)
+const WikiQuestionsPage = lazyLogged('WikiQuestions', () =>
+  import('./pages/WikiQuestions').then((m) => ({ default: m.WikiQuestionsPage })),
+)
 const HealthDashboardPage = lazyLogged('HealthDashboard', () =>
   import('./pages/HealthDashboard').then((m) => ({ default: m.HealthDashboardPage })),
 )
@@ -466,6 +472,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="wiki/changes" element={<Boundaried name="wiki/changes"><WikiChangesPage /></Boundaried>} />
                 <Route path="wiki/changes/:id" element={<Boundaried name="wiki/changes/:id"><WikiChangePage /></Boundaried>} />
                 <Route path="wiki/log" element={<Boundaried name="wiki/log"><WikiLogPage /></Boundaried>} />
+                <Route path="wiki/lint" element={<Boundaried name="wiki/lint"><WikiLintPage /></Boundaried>} />
+                <Route path="wiki/questions" element={<Boundaried name="wiki/questions"><WikiQuestionsPage /></Boundaried>} />
                 <Route path="wiki/ontology" element={<Boundaried name="wiki/ontology"><WikiOntologyPage /></Boundaried>} />
                 <Route path="wiki/candidates" element={<Boundaried name="wiki/candidates"><WikiCandidatesPage /></Boundaried>} />
                 <Route path="wiki/entities" element={<Boundaried name="wiki/entities"><WikiEntitiesPage /></Boundaried>} />

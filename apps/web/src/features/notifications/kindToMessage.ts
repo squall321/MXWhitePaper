@@ -24,6 +24,8 @@ export type StoreItemFromServer = Omit<
 
 const COMMENT_KINDS = new Set<string>(['comment_mention', 'comment_reply'])
 const ACTIVITY_KINDS = new Set<string>([
+  'wiki_stuck_review',
+  'wiki_question',
   'review_request',
   'review_decision',
   'reaction_added',
@@ -149,6 +151,23 @@ export function buildMessage(
           (((payload['payload'] as Record<string, unknown> | undefined) &&
             readString(payload['payload'] as Record<string, unknown>, 'message')) ||
             '자동화 알림'),
+      }
+
+    case 'wiki_stuck_review': {
+      // 위키 점검(W7) — 검토가 규칙서 기한을 넘겨 밀렸다. 그 묶음을 볼 수 있는 검토자에게만 온다.
+      const days = readNumber(payload, 'days')
+      const short = readString(payload, 'short')
+      return {
+        message: `위키 검토가 ${days != null ? `${days}일째 ` : ''}밀렸다${short ? ` — ${short}` : ''}`,
+        detail: 'AI 위키 › 검토 큐에서 본다',
+      }
+    }
+
+    case 'wiki_question':
+      // 위키 지속 질의(W7) — 위키 · 도구로 답하지 못해 사람의 답이 필요하다.
+      return {
+        message: `위키 질문에 사람의 답이 필요하다${readString(payload, 'text') ? ` — ${readString(payload, 'text')}` : ''}`,
+        detail: readString(payload, 'why') ?? 'AI 위키 › 질문판에서 답한다',
       }
 
     default:

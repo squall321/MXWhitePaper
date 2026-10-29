@@ -1,15 +1,15 @@
-// AI 위키 홈 `/wiki` — 목록(종류 · 유형별) · 최근 기록 · 내가 볼 검토 수(docs/llm-wiki request §5-14)
+// AI 위키 홈 `/wiki` — 목록(종류 · 유형별) · 최근 기록 · 내가 볼 검토 수 · 열린 질문 · 점검 요약(docs/llm-wiki request §5-14 · W7)
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { getWikiIndex, getWikiLog, kst, listWikiChanges } from '@/features/wiki/api'
+import { getWikiIndex, getWikiLog, kst, listWikiChanges, listWikiFindings, listWikiQuestions } from '@/features/wiki/api'
 import { WikiError, WikiShell } from '@/features/wiki/WikiNav'
 
 /**
  * 목록은 서버가 읽는 사람의 범위로 거른 뒤 짓는다(범위가 다른 사람은 다른 목록). 검토 수는 검토자(표지 · admin)에게만 —
- * 아니면 403 이라 칸을 숨긴다. 열린 질문 · 점검 요약은 W7 이 더한다.
+ * 아니면 403 이라 칸을 숨긴다. 열린 질문 · 점검 결함 수도 읽는 사람이 볼 수 있는 것만 센다(W7).
  */
 export function WikiHomePage() {
   const index = useQuery({ queryKey: ['wiki', 'index'], queryFn: getWikiIndex, retry: false })
@@ -19,6 +19,8 @@ export function WikiHomePage() {
     queryFn: () => listWikiChanges('pending_review'),
     retry: false,
   })
+  const asked = useQuery({ queryKey: ['wiki', 'questions', 'open'], queryFn: () => listWikiQuestions('open'), retry: false })
+  const lint = useQuery({ queryKey: ['wiki', 'lint', null, 'open'], queryFn: () => listWikiFindings({}), retry: false })
 
   if (index.isError) {
     return (
@@ -66,6 +68,31 @@ export function WikiHomePage() {
               <Link to="/wiki/changes" className="text-2xl font-bold text-smsg-700 hover:underline dark:text-smsg-300">
                 {pending.data.total.toLocaleString()}
               </Link>
+            </Card>
+          )}
+          {(asked.isSuccess || lint.isSuccess) && (
+            <Card padded="lg" data-testid="wiki-home-health">
+              <div className="grid grid-cols-2 gap-3">
+                {asked.isSuccess && (
+                  <div>
+                    <h2 className="mb-1 text-sm font-semibold text-smsg-900 dark:text-gray-100">열린 질문</h2>
+                    <Link to="/wiki/questions" className="text-2xl font-bold text-smsg-700 hover:underline dark:text-smsg-300">
+                      {asked.data.total.toLocaleString()}
+                    </Link>
+                  </div>
+                )}
+                {lint.isSuccess && (
+                  <div>
+                    <h2 className="mb-1 text-sm font-semibold text-smsg-900 dark:text-gray-100">점검 결함</h2>
+                    <Link to="/wiki/lint" className="text-2xl font-bold text-smsg-700 hover:underline dark:text-smsg-300">
+                      {lint.data.meta.total.toLocaleString()}
+                    </Link>
+                  </div>
+                )}
+              </div>
+              {lint.data?.meta.last_run && (
+                <p className="mt-2 text-xs text-gray-500">마지막 점검 {kst(lint.data.meta.last_run.finished_at)}</p>
+              )}
             </Card>
           )}
           <Card padded="lg" data-testid="wiki-home-log">

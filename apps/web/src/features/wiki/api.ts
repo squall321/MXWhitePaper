@@ -1,4 +1,4 @@
-// AI 위키 API — 목록 · 기록 · 원천 · 검토 큐 · 위키 문서 정보(배지 · 근거) · 켜짐 여부(W4) · 온톨로지 · 엔티티 등록부 · 합치기(W5) · 내 후보 · 되쌓기 · 질문(W6)
+// AI 위키 API — 목록 · 기록 · 원천 · 검토 큐 · 위키 문서 정보(배지 · 근거) · 켜짐 여부(W4) · 온톨로지 · 엔티티 등록부 · 합치기(W5) · 내 후보 · 되쌓기 · 질문(W6) · 점검 · 질문판(W7)
 /**
  * `apps/api/app/routers/wiki.py`(`/api/v1/wiki/*`)와 1:1. 위키가 꺼져 있으면 모두 404(`wiki_disabled`) — `useWikiEnabled` 가
  * 인증 없는 `/wiki/health` 로 본다. 범위 밖 원천 · 문서 · 묶음은 서버가 404 로 감춘다.
@@ -405,11 +405,93 @@ export async function filebackWikiAnswer(body: {
 }
 
 /** 질문 대기열에 남긴다 — 범위를 주지 않으면 남긴 사람만 본다. 같은 물음이면 물은 수만 오른다. */
-export async function addWikiQuestion(text: string, origin: 'user' | 'query_miss'):
+export async function addWikiQuestion(text: string, origin: 'user' | 'query_miss', audience?: string[]):
   Promise<{ id: string; asked_count: number; created: boolean; audience: string[] }> {
   return unwrap(await apiClient.post<ApiEnvelope<{ id: string; asked_count: number; created: boolean; audience: string[] }>>(
-    '/wiki/questions', { text, origin },
+    '/wiki/questions', { text, origin, ...(audience ? { audience } : {}) },
   ))
+}
+
+/** 질문판(W7) — 지속 질의가 푼 결과(답 원천 · 실험 제안 · 사람이 필요한 까닭)는 `detail`. 범위 밖 물음은 서버가 감춘다. */
+export type WikiQuestionStatus = 'open' | 'asking' | 'answered' | 'needs_human' | 'needs_experiment' | 'closed' | 'dropped'
+
+export interface WikiQuestion {
+  id: string
+  text: string
+  origin: 'lint' | 'ingest' | 'user' | 'query_miss' | 'standing'
+  audience: string[]
+  priority: number
+  status: WikiQuestionStatus
+  asked_count: number
+  last_asked_at: string
+  created_at: string
+  mine: boolean
+  attempts: number
+  detail: Record<string, unknown>
+  answer_source: { id: string; short: string } | null
+  answered_at: string | null
+}
+
+export async function listWikiQuestions(status?: WikiQuestionStatus): Promise<{ rows: WikiQuestion[]; total: number }> {
+  const res = await apiClient.get<ApiEnvelope<WikiQuestion[]>>('/wiki/questions', { params: { status: status || undefined, limit: 200 } })
+  return { rows: unwrap(res) ?? [], total: Number(res.data.meta?.total ?? 0) }
+}
+
+export async function patchWikiQuestion(id: string, body: { status?: 'open' | 'closed' | 'dropped'; priority?: number }): Promise<WikiQuestion> {
+  return unwrap(await apiClient.patch<ApiEnvelope<WikiQuestion>>(`/wiki/questions/${encodeURIComponent(id)}`, body))
+}
+
+/** 사람이 답한다 — 그 사람 명의의 원천이 되어 위키에 들어간다(전사 물음은 검토자 · admin 만). */
+export async function answerWikiQuestion(id: string, answer: string, confidence = 0.8):
+  Promise<WikiQuestion & { source: { id: string; short: string } }> {
+  return unwrap(await apiClient.post<ApiEnvelope<WikiQuestion & { source: { id: string; short: string } }>>(
+    `/wiki/questions/${encodeURIComponent(id)}/answer`, { answer, confidence },
+  ))
+}
+
+/** 점검(W7) — 결함은 한 줄로 이어진다. 범위 토큰을 다 가진 것만 보인다. */
+export type WikiLintRule =
+  | 'orphan' | 'uncited' | 'stale' | 'contradiction' | 'missing_page' | 'missing_link' | 'gap' | 'schema' | 'stuck_review'
+
+export interface WikiFinding {
+  id: string
+  rule: WikiLintRule
+  severity: 'info' | 'warn' | 'error'
+  title: string
+  status: 'open' | 'question_raised' | 'fixed' | 'dismissed'
+  docs: { slug: string; title: string }[]
+  sources: { id: string; short: string }[]
+  detail: Record<string, unknown>
+  question_id: string | null
+  fixed_by_changeset: string | null
+  first_seen_at: string
+  last_seen_at: string
+  audience: string[]
+}
+
+export interface WikiLintMeta {
+  total: number
+  by_rule: Partial<Record<WikiLintRule, number>>
+  last_run: { id: string; scope: string; llm: boolean; started_at: string; finished_at: string; error: string | null } | null
+}
+
+export async function listWikiFindings(params: { rule?: WikiLintRule; status?: 'fixed' | 'dismissed' | 'all' }):
+  Promise<{ rows: WikiFinding[]; meta: WikiLintMeta }> {
+  const res = await apiClient.get<ApiEnvelope<WikiFinding[]>>('/wiki/lint/findings', { params: { ...params, limit: 200 } })
+  const meta = (res.data.meta ?? {}) as Partial<WikiLintMeta>
+  return { rows: unwrap(res) ?? [], meta: { total: Number(meta.total ?? 0), by_rule: meta.by_rule ?? {}, last_run: meta.last_run ?? null } }
+}
+
+export async function dismissWikiFinding(id: string, note: string): Promise<{ id: string; status: string }> {
+  return unwrap(await apiClient.post<ApiEnvelope<{ id: string; status: string }>>(
+    `/wiki/lint/findings/${encodeURIComponent(id)}/dismiss`, { note },
+  ))
+}
+
+/** 점검을 줄 세운다(검토자) — 워커가 돈다. LLM 을 켜면 조용한 시간까지 기다릴 수 있다. */
+export async function runWikiLint(body: { scope: 'full' | 'docs'; slugs?: string[]; llm?: boolean } = { scope: 'full' }):
+  Promise<{ job_id: string }> {
+  return unwrap(await apiClient.post<ApiEnvelope<{ job_id: string }>>('/wiki/lint', body))
 }
 
 /** ISO 시각 → `YYYY-MM-DD HH:MM`(KST) — 규칙서의 날짜 꼴. */

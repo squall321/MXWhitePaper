@@ -26,8 +26,8 @@ import) 로 검증 불가 → 실 브라우저 렌더 + baseline diff 가 유일
 ```
 apps/web/
 ├── tests/e2e/
-│   ├── visual-darkmode.spec.ts                                    # 다크모드 light + dark 2 케이스 + 소속→팀 관리자 화면 2 + AI 위키 11 + SSO 전용 로그인 1
-│   ├── visual-darkmode.spec.ts-snapshots/                         # baseline PNG(문서 2 · 소속→팀 2 · AI 위키 24 · SSO 전용 로그인 2)
+│   ├── visual-darkmode.spec.ts                                    # 다크모드 light + dark 2 케이스 + 소속→팀 관리자 화면 2 + AI 위키 13 + SSO 전용 로그인 1
+│   ├── visual-darkmode.spec.ts-snapshots/                         # baseline PNG(문서 2 · 소속→팀 2 · AI 위키 28 · SSO 전용 로그인 2)
 │   ├── visual-presentation.spec.ts                                # presentation 4 슬라이드 (NEW: presentation-layout cycle)
 │   └── visual-presentation.spec.ts-snapshots/                     # baseline 4 PNG
 └── playwright.config.ts                                            # 변경 없음 — testDir './tests/e2e' 그대로
@@ -110,7 +110,12 @@ CI 통합 시에는 별도 playwright 이미지 (`mcr.microsoft.com/playwright`)
   `/wiki/query` 를 고정 SSE 로 돌려(물음에 '배터리' 가 있으면 MISS) 답 · MISS 둘을 찍고, 찍은 뒤 '위키에 남기기' 가 보내는 몸통
   (`{n, slug, block_id}` · `done.scope`)을 본다.
   실패 알림 시험(그림 없음)은 '내 후보' 승인을 403 으로 돌려 알림에 서버의 까닭이 뜨고 axios 의 'Request failed with status
-  code' 가 안 뜨는지 본다(10-24 — 위키 화면 여섯이 서버 까닭을 가렸다).
+  code' 가 안 뜨는지 본다(10-24 — 위키 화면 여섯이 서버 까닭을 가렸다). 점검(`wiki-lint-*`) · 질문판(`wiki-questions-*`, W7)은
+  `/wiki/lint/findings` · `/wiki/questions` 를 고정한다 — 질문판은 어느 갈래를 물어도 여러 상태를 섞어 돌려 결과 칸(답 · 제안 · 까닭 ·
+  지난 시도)을 한 그림에 담는다. 홈도 그 둘로 열린 질문 · 점검 결함 수를 보인다.
+- **빌드본(vite preview)에 돌릴 때는 서비스 워커를 막는다**(`use.serviceWorkers: 'block'`) — 빌드본의 PWA 서비스 워커가 낸 API 요청은
+  `page.route` 를 지나지 않아 진짜 dev API 로 간다(문서 머리띠 케이스가 위키 문서 404 로 깨진다). W7 의 기준 그림은 이 리포의 빌드본을
+  `vite preview --port 5175`(같은 API 프록시)로 띄우고 주소만 바꾼 임시 설정으로 떴다 — 이 박스는 파일 감시 한도(ENOSPC)로 vite dev 가 뜨지 않는다.
 - **SSO 전용 로그인(`login-sso-only-*`, 10-25)** — `/auth/mode`(sso_only) · `/auth/refresh`(401)를 고정 응답으로 바꿔 로그인 없이 '포털로
   들어가기' 판을 찍는다. 저절로 다녀오기 · 되돌아오기 · 되풀이 막기는 `tests/e2e/sso-only.spec.ts`(진입 링크도 고정 응답).
 - **임시 설정을 다른 디렉터리에 두면 base 의 상대 경로가 그 자리 기준으로 풀린다** — `testDir` 은 절대 경로로 다시 주고, html 보고서

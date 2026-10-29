@@ -137,6 +137,42 @@ const WIKI_SOURCES = [
     url: null, captured_at: '2026-09-01T05:00:00+00:00', status: 'active', doc_slug: 'src-22222222' },
 ]
 
+const FINDING = (id: string, rule: string, severity: string, title: string, extra: Record<string, unknown> = {}) => ({
+  id, rule, severity, title, status: 'open', docs: [], sources: [], detail: {}, question_id: null, fixed_by_changeset: null,
+  first_seen_at: AT, last_seen_at: AT, audience: ['org'], ...extra,
+})
+const LINT_FINDINGS = [
+  FINDING('f1', 'contradiction', 'error', '서로 다른 말 — 힌지 브래킷: max_von_mises_stress 405 MPa(src_22222222) · 296 MPa(src_44444444)', {
+    status: 'question_raised', question_id: 'q2', audience: ['aff:SYN-CAE1'],
+    docs: [{ slug: 'ent-part-syn-bom-hb01--syn-cae1', title: '힌지 브래킷 (aff:SYN-CAE1)' }],
+    detail: { kind: 'number', metric: 'max_von_mises_stress', changeset: W.cs, fix_status: 'auto_applied',
+      differs: [{ key: 'mesh_size', a: '0.5 mm', b: '1 mm' }, { key: 'setup.model', a: '가상폴드 A1 FE v3', b: '가상폴드 A1 FE v2' }] } }),
+  FINDING('f2', 'stale', 'warn', '낡음 — 가상폴드 A1 전각도 낙하 1.5 m: src_11111111 새 판에 밀림', {
+    docs: [{ slug: 'case-sim-11111111', title: '가상폴드 A1 전각도 낙하 1.5 m' }], detail: { reingest: [W.srcB] } }),
+  FINDING('f3', 'gap', 'warn', '빈틈 — 배터리 스웰링: 시장 불량 사례가 있는데 재현한 해석이 없다', {
+    status: 'question_raised', question_id: 'q3', audience: ['plat:plmdefect'] }),
+  FINDING('f4', 'missing_link', 'info', "빠진 링크 — 커버 글라스: '힌지 브래킷' → 힌지 브래킷", {
+    docs: [{ slug: 'ent-part-syn-bom-cg01', title: '커버 글라스' }] }),
+  FINDING('f5', 'orphan', 'info', '고아 — 낙하 충격: 들어오는 링크가 없다', { docs: [{ slug: 'ent-concept-a1b2c3', title: '낙하 충격' }] }),
+  FINDING('f6', 'schema', 'info', '꼴 — 낙하 충격: 절 2개가 없다(왜 중요한가, 관련 엔티티)', {
+    docs: [{ slug: 'ent-concept-a1b2c3', title: '낙하 충격' }], detail: { missing: ['왜 중요한가', '관련 엔티티'] } }),
+]
+const QUESTION = (id: string, status: string, origin: string, priority: number, text: string, extra: Record<string, unknown> = {}) => ({
+  id, text, origin, audience: ['org'], priority, status, asked_count: 1, last_asked_at: AT, created_at: AT, mine: false, attempts: 0,
+  detail: {}, answer_source: null, answered_at: null, ...extra,
+})
+const QUESTIONS = [
+  QUESTION('q1', 'open', 'user', 3, '힌지 브래킷 균열은 어느 낙하 각도에서 가장 큰가', {
+    mine: true, attempts: 1, detail: { last_try: { why: '위키에 각도별 결과가 없다' } } }),
+  QUESTION('q2', 'needs_human', 'lint', 2, '힌지 브래킷: max_von_mises_stress 가 src_22222222 는 405 MPa, src_44444444 는 296 MPa 로 다르다. 어느 쪽이 맞나', {
+    audience: ['aff:SYN-CAE1'], attempts: 3, detail: { why: '3번 물어도 위키 · 도구로 답하지 못했다 — 메시 차이를 사람이 판단해야 한다' } }),
+  QUESTION('q3', 'needs_experiment', 'lint', 3, '배터리 스웰링: 재현 해석이 필요한가', {
+    audience: ['plat:plmdefect'], attempts: 1, detail: { proposal: '셀 팽창 0.3 mm 를 주고 후면 커버 들뜸을 본다.' } }),
+  QUESTION('q4', 'answered', 'standing', 4, '힌지 브래킷: 이 부품의 주요 불량 유형마다 해석 · 시험 근거가 있는가', {
+    asked_count: 2, attempts: 1, answered_at: AT, answer_source: { id: W.srcB, short: 'src_22222222' },
+    detail: { answer: '해석 근거는 있고 시험 근거는 아직 없다 [1].', confidence: 0.8 } }),
+]
+
 async function mockWiki(page: import('@playwright/test').Page): Promise<void> {
   const ok = (data: unknown, meta: unknown = null) => ({ json: { data, meta, error: null } })
   await page.route('**/api/v1/wiki/health', (r) => r.fulfill(ok({ jobs: {}, workers: [], llm: 'ok', last_lint: null })))
@@ -212,6 +248,11 @@ async function mockWiki(page: import('@playwright/test').Page): Promise<void> {
       into: { id: W.e1, type_key: 'part', name: '힌지 브래킷', aliases: ['HB 브래킷'], ext_ids: { bom_code: 'SYN-BOM-HB01' },
         audience: ['org'], status: 'active' } }],
   })))
+  // W7 — 점검 · 질문판(지어낸 값). 질문판은 어느 갈래를 물어도 여러 상태를 섞어 돌려준다 — 결과 칸(답 · 제안 · 까닭 · 지난 시도)을 한 그림에.
+  await page.route('**/api/v1/wiki/lint/findings?*', (r) => r.fulfill(ok(LINT_FINDINGS, {
+    total: LINT_FINDINGS.length, by_rule: { contradiction: 1, stale: 1, gap: 1, missing_link: 1, orphan: 1, schema: 1 },
+    last_run: { id: 'run00001', scope: 'full', llm: true, started_at: AT, finished_at: AT, error: null } })))
+  await page.route('**/api/v1/wiki/questions?*', (r) => r.fulfill(ok(QUESTIONS, { total: QUESTIONS.length })))
   await page.route(`**/api/v1/wiki/sources/${W.srcA}`, (r) => r.fulfill(ok({
     id: W.srcA, short: 'src_11111111', kind: 'sim_result', title: WIKI_SOURCES[0].title,
     origin: { system: 'stcx', ref: 'SYN-JOB-0002', rev: '1', url: '/apps/smarttwin/jobs/SYN-JOB-0002' }, summary: null,
@@ -260,6 +301,8 @@ test.describe('visual: AI 위키 (light · dark)', () => {
     ['entity', `/wiki/entities/${W.e1}`, 'wiki-entity'],
     ['merge', `/wiki/changes/${W.csMerge}`, 'wiki-change'],
     ['candidates', '/wiki/candidates', 'wiki-candidates'],
+    ['lint', '/wiki/lint', 'wiki-lint'],
+    ['questions', '/wiki/questions', 'wiki-questions'],
   ] as const) {
     test(`renders the wiki ${name} page consistently in light and dark`, async ({ page }) => {
       // 창을 세로로 넉넉히 — 긴 화면을 찍으려 스크롤하면 위에 붙는 상단 내비(dev 의 알림 수가 든)가 덮는다.

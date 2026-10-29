@@ -26,6 +26,17 @@ describe('notifications/kindToMessage · categoryForKind', () => {
 })
 
 describe('notifications/kindToMessage · buildMessage', () => {
+  it('builds the wiki stuck-review and wiki question messages (W7)', () => {
+    expect(categoryForKind('wiki_stuck_review')).toBe('activity')
+    expect(categoryForKind('wiki_question')).toBe('activity')
+    const stuck = buildMessage('wiki_stuck_review', { changeset_id: 'x', short: 'cs_aaaaaaaa', days: 9, title: '밀린 검토' })
+    expect(stuck.message).toBe('위키 검토가 9일째 밀렸다 — cs_aaaaaaaa')
+    expect(stuck.detail).toContain('검토 큐')
+    const asked = buildMessage('wiki_question', { question_id: 'q', text: '시험 일정은', why: '담당만 안다' })
+    expect(asked.message).toBe('위키 질문에 사람의 답이 필요하다 — 시험 일정은')
+    expect(asked.detail).toBe('담당만 안다')
+  })
+
   it('builds a comment_mention message with actor + doc title', () => {
     const { message } = buildMessage('comment_mention', {
       actor_name: '홍길동',
