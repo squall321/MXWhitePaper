@@ -287,6 +287,8 @@ class ToolCallDigest(_Strict):
 class InquiryAnswerBody(_Strict):
     question_id: str
     answer: str
+    # 답이 기댄 위키 블록 · 원천의 발췌(W7) — 들이기의 숫자 대조(V3)가 이 원천 안에서 본다. 답의 [k] 는 k 째 evidence.
+    evidence: list[Evidence] = Field(default_factory=list)
     tool_calls: list[ToolCallDigest] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
 

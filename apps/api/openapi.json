@@ -4264,6 +4264,29 @@
         "title": "WebhookPatch",
         "type": "object"
       },
+      "_AnswerBody": {
+        "properties": {
+          "answer": {
+            "description": "답 — 그 사람 명의의 원천이 되어 위키에 들어간다",
+            "maxLength": 20000,
+            "minLength": 2,
+            "title": "Answer",
+            "type": "string"
+          },
+          "confidence": {
+            "default": 0.8,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          }
+        },
+        "required": [
+          "answer"
+        ],
+        "title": "_AnswerBody",
+        "type": "object"
+      },
       "_ApproveBody": {
         "properties": {
           "audience": {
@@ -4502,6 +4525,41 @@
           "text"
         ],
         "title": "_QuestionBody",
+        "type": "object"
+      },
+      "_QuestionPatch": {
+        "properties": {
+          "priority": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open",
+                  "closed",
+                  "dropped"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "title": "_QuestionPatch",
         "type": "object"
       },
       "_SchemaBody": {
@@ -21958,6 +22016,162 @@
           }
         },
         "summary": "Post Question",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/questions/{question_id}": {
+      "get": {
+        "description": "물음 한 건(범위 안) — 지속 질의의 결과(답 원천 · 실험 제안 · 사람이 필요한 까닭)는 `detail`.",
+        "operationId": "get_question_api_v1_wiki_questions__question_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "question_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Question Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Question Api V1 Wiki Questions  Question Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Question",
+        "tags": [
+          "wiki"
+        ]
+      },
+      "patch": {
+        "description": "닫기 · 버리기 · 다시 열기 · 우선순위 — 남긴 사람이나 검토자.",
+        "operationId": "patch_question_api_v1_wiki_questions__question_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "question_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Question Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_QuestionPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Question Api V1 Wiki Questions  Question Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Question",
+        "tags": [
+          "wiki"
+        ]
+      }
+    },
+    "/api/v1/wiki/questions/{question_id}/answer": {
+      "post": {
+        "description": "사람이 답한다 — inquiry_answer 원천(물음의 범위 · 그 사람 명의) → 들이기, 물음은 answered.",
+        "operationId": "answer_question_api_v1_wiki_questions__question_id__answer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "question_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Question Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_AnswerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Answer Question Api V1 Wiki Questions  Question Id  Answer Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Answer Question",
         "tags": [
           "wiki"
         ]

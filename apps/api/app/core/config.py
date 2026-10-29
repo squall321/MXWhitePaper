@@ -93,6 +93,10 @@ class Settings(BaseSettings):
     wiki_query_llm_base_url: str = Field(default="")
     wiki_query_llm_model: str = Field(default="")
     wiki_query_llm_api_key: str = Field(default="")
+    # 지속 질의의 읽기 전용 도구(W7) — 게이트웨이 MCP 끝점과 포털이 발급한 읽기 전용 PAT. 둘 중 하나가 비면 도구 단계는 없다
+    # (위키 안에서만 답한다). 부를 도구는 규칙서 inquiry.tools_allowlist 가 고른다. PAT 는 .env 로만.
+    wiki_tools_url: str = Field(default="")
+    wiki_tools_token: str = Field(default="")
 
     # CORS
     cors_origins: str = Field(default="http://localhost:5173,http://localhost:80")

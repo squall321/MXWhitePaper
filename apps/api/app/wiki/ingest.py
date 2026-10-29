@@ -12,6 +12,8 @@
 - 관계(W5) — 사례 문서가 무엇에 관한 것인지(about-model · about-part · simulated-with)와 시장 사례의 불량 관찰(observed-in)은 코드가
   원천의 주제 힌트로 단다. 그 밖의 관계는 계획이 `relations` 로 낸다(승인된 술어 · 후보 사이 · 근거). 끝은 고른 문서와 이미 있는 후보 —
   둘 다 원천과 범위가 같다. 끝이 그 밖이면 버리고 `plan.relations_dropped` 에 남긴다.
+- 물음(W7) — 계획이 낸 `questions` · `contradictions` 를 질문 대기열에 남긴다(원천의 범위 · origin `ingest` · 원천 하나에
+  `PLAN_QUESTIONS_MAX` 까지 · 열린 질문이 `inquiry.max_open` 이면 남기지 않는다). 실패한 묶음의 물음은 남기지 않는다.
 - 엔티티 후보(W5) — 결정적으로 못 찾은 힌트에 비슷한 후보가 있으면 계획 앞에 `wiki_resolve` 로 한 번 묻는다. 고른 후보는 그 엔티티로,
   `new` · 답 없음은 새 엔티티로. 확신이 규칙서 `ingest.resolve_min_confidence` 보다 낮거나 없는 후보를 고르면 V7 검토(의심). 별칭은
   배우지 않는다(잘못 고른 짝이 다음 해석으로 번지지 않게 — 사람이 등록부에서 단다). 해석은 `plan.resolve` 에 남긴다.
@@ -30,12 +32,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.wiki import apply as wiki_apply
-from app.wiki import budget, jobs, llm, ontology, pages, resolve, validate
+from app.wiki import budget, jobs, llm, ontology, pages, questions, resolve, validate
 from app.wiki import schema as wiki_schema
 from app.wiki.envelope import normalize_audience
 from app.wiki.sources import short_id
 
 KST = ZoneInfo("Asia/Seoul")
+PLAN_QUESTIONS_MAX = 5
 
 
 BudgetExceeded = budget.BudgetExceeded  # 들이기 하나의 토큰 예산을 넘었다 — 워커가 작업을 held 로 둔다
@@ -393,6 +396,25 @@ def _audience(chosen: list[resolve.Target], src: dict[str, Any]) -> list[str]:
         return list(src["audience"])
 
 
+async def _plan_questions(s: AsyncSession, book: wiki_schema.RuleBook, src: dict[str, Any], plan: PlanOut, cs_id: str,
+                          chosen: list[resolve.Target]) -> int:
+    """계획의 물음 · 모순 → 질문 대기열(원천의 범위 — 원천을 볼 수 있는 사람만 본다)."""
+    texts = [(t, 2) for t in plan.contradictions] + [(t, 3) for t in plan.questions]
+    texts = [(" ".join(t.split()), p) for t, p in texts if 2 <= len(" ".join(t.split())) <= 2000][:PLAN_QUESTIONS_MAX]
+    if not texts:
+        return 0
+    room = book.spec.inquiry.max_open - int((await s.execute(text(
+        "SELECT COUNT(*) FROM wiki_questions WHERE status IN ('open', 'asking')"))).scalar_one())
+    author_id, _ = await wiki_apply.wiki_author(s)
+    about = [t.entity_id for t in chosen if t.entity_id]
+    n = 0
+    for body, prio in texts[:max(0, room)]:
+        await questions.add(s, body, origin="ingest", user={"id": author_id}, aud=src["audience"],
+                            origin_ref=f"ingest:{cs_id}", priority=prio, about=about, actor="wiki")
+        n += 1
+    return n
+
+
 async def run(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
     source_id = str(job.args.get("source_id") or "")
     src = await _load_source(s, source_id)
@@ -504,9 +526,11 @@ async def run(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
             status, error = "pending_review", str(e.message)
             await s.execute(text("UPDATE wiki_changesets SET status = 'pending_review', error = :e WHERE id = CAST(:i AS uuid)"),
                             {"e": error, "i": cs_id})
+    asked = await _plan_questions(s, book, src, plan, cs_id, chosen) if status != "failed" else 0
     failed = [c.rule for c in checks if c.verdict in ("fail", "review")]
     await _set_state(s, source_id, "done")
     await _log(s, src, job, {"changeset": wiki_apply.short_cs(cs_id), "status": status, "docs": len(chosen),
-                             "new": sum(1 for t in chosen if not t.exists), "rules": failed, "tokens": usage.tokens},
+                             "new": sum(1 for t in chosen if not t.exists), "rules": failed, "tokens": usage.tokens,
+                             **({"questions": asked} if asked else {})},
                cs_id)
     return {"changeset": cs_id, "status": status, "rules": failed, "error": error, "usage": usage.as_dict()}

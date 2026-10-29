@@ -467,6 +467,43 @@ async def post_question(
     return envelope(data=out)
 
 
+@router.get("/questions/{question_id}")
+async def get_question(
+    question_id: UUID, _: dict[str, Any] = Depends(require_reader), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """물음 한 건(범위 안) — 지속 질의의 결과(답 원천 · 실험 제안 · 사람이 필요한 까닭)는 `detail`."""
+    return envelope(data=await questions.get(s, str(question_id)))
+
+
+class _QuestionPatch(BaseModel):
+    status: Literal["open", "closed", "dropped"] | None = None
+    priority: int | None = Field(None, ge=1, le=5)
+
+
+@router.patch("/questions/{question_id}")
+async def patch_question(
+    question_id: UUID, body: _QuestionPatch, user: dict[str, Any] = Depends(require_reader),
+    s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """닫기 · 버리기 · 다시 열기 · 우선순위 — 남긴 사람이나 검토자."""
+    return envelope(data=await questions.update(s, str(question_id), user=user, is_reviewer=await review.is_reviewer(s, user),
+                                                status=body.status, priority=body.priority))
+
+
+class _AnswerBody(BaseModel):
+    answer: str = Field(min_length=2, max_length=20_000, description="답 — 그 사람 명의의 원천이 되어 위키에 들어간다")
+    confidence: float = Field(0.8, ge=0, le=1)
+
+
+@router.post("/questions/{question_id}/answer", status_code=201)
+async def answer_question(
+    question_id: UUID, body: _AnswerBody, user: dict[str, Any] = Depends(require_editor), s: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """사람이 답한다 — inquiry_answer 원천(물음의 범위 · 그 사람 명의) → 들이기, 물음은 answered."""
+    return envelope(data=await questions.answer(s, str(question_id), user=user, is_reviewer=await review.is_reviewer(s, user),
+                                                body=body.answer, confidence=body.confidence))
+
+
 class _LintBody(BaseModel):
     scope: Literal["full", "docs"] = "full"
     slugs: list[str] = Field(default_factory=list, max_length=200, description="scope=docs 일 때 점검할 문서")

@@ -19,7 +19,7 @@
 | W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
 | W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지 · 엔티티 등록부(보이기 · 별칭 · 외부 id · 중복 후보 · 합치기 — 늘 검토 · 되돌리기). 엔티티 후보 해석(열쇠 · 후보 · `wiki_resolve`) · 정답표 초안 · 평가 스크립트. 화면(온톨로지 · 엔티티 목록 · 한 건 · 합치기 카드). 남은 것 — 사람의 정답표 확인 · LLM 을 낀 정확도(진짜 LLM 이 있는 박스) | [[#Ontology]] · [[#Relations]] · [[#Entities]] · [[#Resolution]] |
 | W6 묻기 · 되쌓기 · MCP | 묻기(`/query` SSE · 근거 각주 · MISS) · 질문 대기열(0057 · `/questions`) · 되쌓기(`/fileback` → qa 원천 → 문답 문서 · 비슷한 물음은 같은 문서에) · 후보(주인만 보는 held 원천 · `/candidates` · 화면 '내 후보' · 0058) · 제안(`/propose` — 늘 검토) · 기계 호출의 위키 문서 직접 쓰기 막음 · MCP `wiki_*` 열넷(`/search` · `/ask`) · 메인 챗 위키 모드([[chat#위키 모드]]) · 게이트웨이 `tools/list` 열넷 확인(10-24 포털 세션). 남은 것 — 포털 P6~P8 뒤 끝에서 끝 | [[#Query]] · [[#Fileback]] · [[#Candidates]] · [[#Propose]] · [[#MCP]] |
-| W7 점검 · 지속 질의 | 예산 · 조용한 시간 · 묻기 우선(0059 — LLM 쓴 양 장부 · 묻기 표지) · 점검 아홉(결함 한 줄 · 빠진 링크 자동 고침 · 숫자 모순 메모 · 질문 · 밀린 검토 알림 0060 · 보고서 `lint-YYYYMMDD` · 반영 직후 작은 점검) | [[#Budget]] · [[#Lint]] |
+| W7 점검 · 지속 질의 | 예산 · 조용한 시간 · 묻기 우선(0059 — LLM 쓴 양 장부 · 묻기 표지) · 점검 아홉(결함 한 줄 · 빠진 링크 자동 고침 · 숫자 모순 메모 · 질문 · 밀린 검토 알림 0060 · 보고서 `lint-YYYYMMDD` · 반영 직후 작은 점검) · 지속 질의(위키 → 허용된 읽기 전용 도구 → 사람 · 실험 제안, 답은 `inquiry_answer` 원천) · 일정(밤 점검 · 상시 질문 · 지속 질의) · 사람의 답 · 들이기가 남긴 물음 | [[#Budget]] · [[#Lint]] · [[#Inquiry]] |
 | W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
@@ -57,7 +57,9 @@
 | 검토 큐 | [[src/app/wiki/review.py]] · 표지 `users.wiki_reviewer`(0055) | W4 |
 | 목록(index · index.md) | [[src/app/wiki/catalog.py#build]] | W4 |
 | 묻기(근거 모으기 · 스트리밍 답 · 각주 · MISS) | [[src/app/wiki/query.py#run]] | W6 |
-| 질문 대기열 | [[src/app/wiki/questions.py#add]] · 표 `wiki_questions`(0057) | W6 |
+| 질문 대기열(남기기 · 한 건 · 바꾸기 · 사람의 답) | [[src/app/wiki/questions.py#add]] · `get` · `update` · `answer` · 표 `wiki_questions`(0057 · 0059 시도 · detail) | W6 · W7 |
+| 지속 질의 | [[src/app/wiki/inquire.py#run]](워커 처리기 `inquire`) · 읽기 전용 도구 [[src/app/wiki/tools.py#Session]] | W7 |
+| 일정(밤 점검 · 상시 질문 · 지속 질의) | [[src/app/wiki/schedule.py#tick]] · 표 `wiki_schedule`(0059) | W7 |
 | 되쌓기(묻기의 답 → qa 원천) | [[src/app/wiki/fileback.py#fileback]] | W6 |
 | 후보('내 후보' — 승인 · 버림 · 기한) | [[src/app/wiki/candidates.py]] · 받기의 후보 길 `sources.receive(held=…)` | W6 |
 | 제안(바깥 에이전트 · 사람의 위키 쓰기 — 늘 검토) · 기계 호출의 직접 쓰기 막음 | [[src/app/wiki/propose.py#propose]] · [[src/app/core/auth.py#_guard_wiki_writes]] | W6 |
@@ -76,7 +78,8 @@
 - `origin.url` 은 `/` 로 시작하는 상대 경로만(박스마다 호스트가 다르다). `captured_at` 은 시간대가 있어야 한다.
 - 멱등 열쇠 = (시스템 · ref · 판 · `payload_sha256` · 범위) — 범위는 0058 부터(후보를 고른 범위로 승인하면 새 줄). `payload_sha256` = 정규화한 body(빈 선택 칸 뺌)의 정규 JSON(키 정렬 · 공백 없음) sha256.
 - CONTRACTS §3 표에 꼴이 없던 셋은 이렇게 정했다 — `document{doc_slug, version}` · `note{text}` · `report.figures[{name, caption?,
-  upload_id?}]`(그리고 `card.claims[].evidence` 는 글 · `inquiry_answer.confidence` 는 0~1).
+  upload_id?}]`(그리고 `card.claims[].evidence` 는 글 · `inquiry_answer.confidence` 는 0~1). `inquiry_answer` 에는 W7 이 `evidence`
+  (문답과 같은 꼴 — 답의 `[k]` 는 k 째)를 더했다(비어도 된다).
 
 ## Audience
 
@@ -176,7 +179,9 @@ LLM 이 비어도(`llm: unset`) · 워커가 없어도 200 이다.
 | `POST /propose` | editor | `{summary, ops[block.insert · block.update · block.delete], relations[]}` → 201 `{id, short, status, validation}` — 늘 `pending_review`(실패가 있으면 `failed`). 고칠 문서는 이미 있고 볼 수 있는 위키 문서(아니면 422) — [[#Propose]] |
 | `GET /search?q=` | reader | 묻기의 찾기만 — `{pages[{slug, title, kind, via: entity · search}], entities[{id, name, type_key}]}`(볼 수 있는 위키 문서) |
 | `POST /ask` | reader(묻기와 같은 분에 20) | `{question}` → 묻기 한 번을 JSON 으로 `{answer, citations, miss, question_id, pages, error}` — 답이 없으면 물은 사람만 보는 질문을 바로 남긴다(MCP `wiki_ask`) |
-| `GET /questions` · `POST /questions` | reader | 볼 수 있는 물음(범위 토큰 ⊆ 내 토큰) · `mine` / 남기기 `{text, audience?, priority, origin: user · query_miss}` → 201 `{id, asked_count, created, audience}`. 범위는 비면 나만(`user:<id>`), 가진 토큰 밖은 403. 같은 물음(문장 부호 · 공백 무시) · 범위면 한 줄에 `asked_count` 만 |
+| `GET /questions` · `POST /questions` | reader | 볼 수 있는 물음(범위 토큰 ⊆ 내 토큰) · `mine` · `attempts` · `detail`(답 발췌 · 실험 제안 · 사람이 필요한 까닭) · `answer_source` / 남기기 `{text, audience?, priority, origin: user · query_miss}` → 201 `{id, asked_count, created, audience}`. 범위는 비면 나만(`user:<id>`), 가진 토큰 밖은 403. 같은 물음(문장 부호 · 공백 무시) · 범위면 한 줄에 `asked_count` 만 |
+| `GET /questions/{id}` · `PATCH /questions/{id}` | reader | 한 건(못 보면 404) / `{status: open · closed · dropped, priority}` — 남긴 사람 · 검토자(아니면 403). 다시 열면 시도 수를 비운다 |
+| `POST /questions/{id}/answer` | editor | `{answer, confidence}` → 201 — 그 사람 명의의 `inquiry_answer` 원천(물음의 범위 · system `human`) → 들이기, 물음은 answered. 전사 물음은 검토자 · admin 만(원천 받기의 전사 규칙) |
 | `POST /lint` | 검토자 | `{scope: full · docs, slugs?, llm?}` → 201 `{job_id}` — 워커가 돈다. `llm` 을 켜면 조용한 시간 · 하루 예산을 따른다 — [[#Lint]] |
 | `GET /lint/findings` | reader | 결함 — 범위 토큰을 다 가진 것만, `rule` · `status`(비면 open · question_raised, `all`) · `limit` · `offset` → `meta.total` · `by_rule` · `last_run`. 줄마다 볼 수 있는 문서만 |
 | `POST /lint/findings/{id}/dismiss` | 검토자 | `{note}`(꼭) — 버린 결함은 다음 점검에도 다시 열리지 않는다. 못 보는 결함 404 |
@@ -185,8 +190,10 @@ LLM 이 비어도(`llm: unset`) · 워커가 없어도 200 이다.
 ## Rule book
 
 [[src/app/wiki/schema.py]] — 규칙서 = 문서 `wiki-schema` 안의 YAML 코드 블록 **하나**(둘이면 거부). 판 = 그 문서의 판, 문서가 없으면
-첫 판 `DEFAULT`(판 0 — SCHEMA-DRAFT 의 규칙 열 문장 그대로 · 절 꼴 · 정책). 이 판에서 코드가 읽는 칸 — `rules` · `sections` ·
-`policy.auto_apply` · `policy.always_review_kinds` · `budget.ingest_tokens` · `ingest.*`(나머지는 W6 · W7 이 잇는다).
+첫 판 `DEFAULT`(판 0 — SCHEMA-DRAFT 의 규칙 열 문장 그대로 · 절 꼴 · 정책). 코드가 읽는 칸 — `rules` · `sections` ·
+`policy.auto_apply` · `policy.always_review_kinds` · `budget.*`([[#Budget]]) · `ingest.*` · `lint.*`([[#Lint]] — 첫 판 YAML 에 없는
+`contradiction_rel_tol` 은 기본 0.1) · `inquiry.*`([[#Inquiry]] — `tools_allowlist` 는 이름 또는 `{name, audience}`) · `qa.candidate_ttl_days` ·
+`standing_questions`. `access.max_age_h` 는 아직 코드 상수(`audience.ACCESS_MAX_AGE_H`).
 절 이름 끝 `(자동)` = 코드가 짓는 절, `(사람)` = 사람만 쓰는 절 — AI 쓰기는 나머지 절에만(V5). 저장 때 `validate_documentjson` 이
 slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 싣는다). **admin(또는 시스템)만 고친다** — 저장 길이 여럿(만들기 ·
 바꾸기 · 절 · 블록 패치 · 판 복원)이라 모두 지나는 `validate_documentjson` 에서 막고, 보관은 `archive_document` 에서 막는다(읽는
@@ -254,6 +261,32 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 시험 [[apps/api/tests/test_wiki_lint.py]] — 손으로 지은 위키에 아홉을 하나씩 심어 다 잡힘 · 범위대로 보임(읽는 사람 · 검토자) · 버림 ·
 닫힘 · 한 줄(질문 · 메모가 늘지 않음) · 반영 직후 작은 점검 · 워커 · 끝에서 끝(합성 20 → 들이기 → 밤 점검에 묶음의 모순 · 낡음 · 빈틈).
 
+## Inquiry
+
+[[src/app/wiki/inquire.py#run]] — 질문 하나 = 작업 하나(op `inquire`, request §5-9 · WK-D11). 단계는 코드, LLM 은 갈래만 고른다(`wiki_inquire`).
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 질문이 생기는 곳 | 점검(빈틈 · 모순 · 근거 없음 — [[#Lint]]) · 들이기(계획의 `questions` · `contradictions` — 원천의 범위, 원천 하나에 5) · 묻기 MISS(`query_miss`) · 사람(`user`) · 규칙서 상시 질문(`standing` — 아래 일정). 자동으로 생기는 것은 열린 질문이 `inquiry.max_open` 이면 남기지 않는다 |
+| 읽기 | **질문의 범위로만** — 읽는 사람 = 그 범위의 토큰 + org(사람 없음 — restricted 는 못 본다). 묻기와 같은 길(엔티티 이름 · 검색 → 문서 블록 근거 · 원천 발췌). 그래서 답 원천의 범위는 질문의 범위다 |
+| 갈래 | `answer`(근거 번호 · 숫자는 근거 값 그대로) · `call_tool` · `needs_human` · `needs_experiment`(제안만 — 돌리지 않는다) · `unknown`. 근거 번호도 도구 결과도 없는 answer 는 unknown 으로 본다 |
+| 도구 | [[src/app/wiki/tools.py]] — `WIKI_TOOLS_URL` · `WIKI_TOOLS_TOKEN`(포털 읽기 전용 PAT)이 있고 규칙서 `inquiry.tools_allowlist`(이름 또는 `{name, audience}` — 범위를 안 적으면 전사)에 있고, 그 범위를 질문 범위가 다 담고, 게이트웨이 `tools/list` 가 `readOnlyHint` 를 단 도구만 내놓는다. 질문 하나에 3번. MCP streamable HTTP(JSON · 이벤트 흐름 둘 다 읽음 · `Mcp-Session-Id`). 결과는 `<<<도구 결과 … >>>` 구획(데이터) |
+| 답 = 원천 | `inquiry_answer` — 질문 · 답(`[n]` → 남긴 근거 차례 `[k]`) · `evidence`(위키 블록 발췌 · 그 원천) · 도구 호출 요약(결과 2000자) · 확신도. origin `mxwp / wiki-inquiry/<질문 id>` · rev = 시도 수(다시 답하면 새 판 · 옛 답은 superseded) · 주인 위키(지은이 admin) · via `inquiry` → 들이기 작업. 질문 answered · `answer_source_id` |
+| 실패 · 되풀이 | unknown 은 시도를 쓰고 open — `max_asks_per_question`(3)이면 needs_human. LLM 이 안 닿거나 깨지면 그 시도는 없던 것으로(open · 시도 되돌림). 질문 예산 `inquiry_tokens` 를 넘으면 작업 held · 질문 needs_human |
+| 알림 | needs_human — `wiki_question`(0060). 물은 사람(user · query_miss) · 사람 한 명의 물음(`user:` 범위)이 아니면 그 범위를 다 가진 검토자 |
+| 사람의 답 | `POST /questions/{id}/answer` — 그 사람 명의의 원천(system `human`) → 같은 들이기 |
+| 기록 | `inquire`(질문의 범위) — 결과 · 근거 수 · 도구 수 · 토큰(· 원천) |
+
+[[src/app/wiki/schedule.py#tick]] — 워커가 1분마다(op 를 좁히지 않은 워커만). `wiki_schedule` 표지 + 트랜잭션 권고 잠금으로 워커가 여럿이어도 한 번.
+밤 점검 — KST 그날 `lint.nightly_at` 이 지났는데 그 뒤로 줄 세운 적이 없으면(LLM 이 있으면 `llm: true`). 상시 질문 — 하루 한 번, 유형마다 살아
+있는 엔티티의 문서(범위마다 한 장)에 '<문서 제목>: <물음>' 을 그 문서의 범위로, `every_days` 가 지나면 답했어도 다시 연다. 지속 질의 —
+조용한 시간에 한 시간마다, 남은 하루 예산(질문 하나 = `inquiry_tokens`)만큼 열린 질문을 우선순위 순으로(한 번에 10). LLM 이 없으면 줄
+세우지 않는다. 실제로 언제 도는지는 문지기([[#Budget]])가 정한다.
+
+시험 [[apps/api/tests/test_wiki_inquire.py]] — 위키로 답 → 원천(범위 · via · 근거 · 들이기 작업) · 질문 범위로만 읽음 · 근거 없는 답은 모름 ·
+되풀이 뒤 사람(알림) · 실험 제안 · 혼자만 보는 물음의 알림 · 도구(허용 목록 · 범위 · readOnlyHint · JSON / 이벤트 흐름) · 질문 예산 보류 · 낮에는
+기다림 · 일정 · 들이기의 물음 · 사람의 답 · 바꾸기. 가짜 게이트웨이 [[apps/api/tests/fakes/fake_mcp.py]].
+
 ## Ingest
 
 [[src/app/wiki/ingest.py#run]] — 원천 하나 = 작업 하나(op `ingest`). 단계는 코드가 이끌고 LLM 은 정해진 칸만 채운다.
@@ -273,6 +306,7 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
   작업 `held` · 원천 `held` · 기록. 그 밖의 예외는 재시도(남으면 원천 `queued`, 다 쓰면 `failed`).
 - 묶음의 `created_by` = 원천을 보낸 사람(작업의 `created_by`), 문서의 지은이 = 시스템(첫 admin — `apply.wiki_author`).
 - 관계 — [[#Relations]]. 계획 프롬프트의 후보 줄은 `후보: <slug> · <이름>(<유형 key>) · …` 이고 그 아래 술어 표(코드가 다는 넷은 뺀다)가 붙는다.
+- 물음(W7) — 실패하지 않은 묶음이면 계획의 `contradictions`(우선순위 2) · `questions`(3)를 질문 대기열에(원천의 범위 · origin `ingest:<묶음>` · 5까지) — [[#Inquiry]].
 
 ## Validation
 
@@ -383,7 +417,8 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 
 [[src/app/core/config.py#Settings]] — `WIKI_ENABLED`(기본 끔 → `/api/v1/wiki/*` 404) · 배경 `WIKI_LLM_{BASE_URL,MODEL,API_KEY}` ·
 구조화 출력 꼴 `WIKI_LLM_STRUCTURED`(json_schema · tools) ·
-묻기 `WIKI_QUERY_LLM_*`(비면 배경과 같게) · 위임 `MXWP_SSO_SECRET`(비면 위임 창구 404) · `MXWP_SSO_JIT_CREATE`(기본 켬).
+묻기 `WIKI_QUERY_LLM_*`(비면 배경과 같게) · 지속 질의의 읽기 전용 도구 `WIKI_TOOLS_URL` · `WIKI_TOOLS_TOKEN`(게이트웨이 MCP 끝점 ·
+포털 읽기 전용 PAT — 비면 위키 안에서만 답한다) · 위임 `MXWP_SSO_SECRET`(비면 위임 창구 404) · `MXWP_SSO_JIT_CREATE`(기본 켬).
 API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 — 새 키에 start.sh `--env` 를 더할 필요가 없다.
 
 ## Propose

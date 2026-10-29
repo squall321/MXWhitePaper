@@ -165,10 +165,29 @@ class Lint(_M):
     contradiction_rel_tol: float = Field(0.1, ge=0, le=1)
 
 
+class ToolAllow(_M):
+    """허용 도구 하나 — 결과를 볼 수 있는 범위를 적는다(비면 전사). 질문의 범위가 이 토큰을 다 담을 때만 그 질문에 내놓는다."""
+    name: str = Field(min_length=1, max_length=120)
+    audience: list[str] = Field(default_factory=lambda: ["org"])
+
+    @field_validator("audience")
+    @classmethod
+    def _audience(cls, v: list[str]) -> list[str]:
+        from app.wiki.envelope import normalize_audience
+
+        return normalize_audience(v)
+
+
 class Inquiry(_M):
     max_open: int = Field(200, ge=0)
     max_asks_per_question: int = Field(3, ge=1)
-    tools_allowlist: list[str] = Field(default_factory=list)
+    # 게이트웨이 도구 이름(읽기 전용만) 또는 {name, audience}. 비면 위키 안에서만 답한다(W7)
+    tools_allowlist: list[str | ToolAllow] = Field(default_factory=list)
+
+    def tools(self) -> dict[str, list[str]]:
+        """이름 → 결과 범위."""
+        return {(t if isinstance(t, str) else t.name): (["org"] if isinstance(t, str) else t.audience)
+                for t in self.tools_allowlist}
 
 
 class QaCfg(_M):

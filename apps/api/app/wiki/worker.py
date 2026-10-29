@@ -8,7 +8,8 @@ API 안의 asyncio 티커를 쓰지 않는 까닭 — API 재기동(dev 는 저�
 `WIKI_ENABLED` 가 꺼져 있으면 아무것도 집지 않고 쉰다(심장박동 표에는 'disabled' 로 남긴다). 읽는 사람은 시스템이다.
 
 집은 작업은 처리기에 넘기기 전에 문지기(`budget.gate`)를 지난다 — 조용한 시간에만 도는 작업(지속 질의 · LLM 을 쓰는 점검)이나 하루
-예산이 다 찬 날의 배경 작업은 시도 수를 쓰지 않고 그때까지 미룬다(W7).
+예산이 다 찬 날의 배경 작업은 시도 수를 쓰지 않고 그때까지 미룬다(W7). 켜져 있으면 1분마다 일정(`schedule.tick` — 밤 점검 · 상시 질문 ·
+지속 질의)을 본다.
 """
 from __future__ import annotations
 
@@ -26,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.db import session_scope
-from app.wiki import audience, budget, ingest, jobs, lint, llm
+from app.wiki import audience, budget, ingest, inquire, jobs, lint, llm, schedule
 
 log = logging.getLogger("mxwp.wiki.worker")
 
@@ -34,6 +35,7 @@ Handler = Callable[[AsyncSession, jobs.Job], Awaitable[dict[str, Any] | None]]
 HANDLERS: dict[str, Handler] = {}
 LEASE_S = 300
 DEFER_S = 120  # LLM 이 닿지 않을 때 다시 볼 때까지
+TICK_S = 60.0  # 일정을 보는 틈
 
 
 def handler(op: str) -> Callable[[Handler], Handler]:
@@ -55,6 +57,7 @@ async def _noop(s: AsyncSession, job: jobs.Job) -> dict[str, Any]:
 
 handler("ingest")(ingest.run)
 handler("lint")(lint.run)
+handler("inquire")(inquire.run)
 
 
 async def _touch(worker_id: str, state: str, job_id: str | None = None) -> None:
@@ -124,15 +127,32 @@ async def run_once(worker_id: str, *, lease_s: int = LEASE_S, ops: list[str] | N
     return True
 
 
+async def _tick() -> None:
+    try:
+        async with session_scope() as s:
+            done = await schedule.tick(s)
+        if done:
+            log.info("wiki schedule: %s", done)
+    except Exception:  # 일정이 깨져도 줄의 작업은 계속 돈다
+        log.warning("wiki schedule tick failed", exc_info=True)
+
+
 async def serve(stop: asyncio.Event, *, worker_id: str, idle_s: float = 2.0, lease_s: int = LEASE_S,
-                ops: list[str] | None = None) -> None:
+                ops: list[str] | None = None, tick: bool | None = None) -> None:
+    """`tick` — 일정을 볼지(비면 op 를 좁히지 않은 워커만 — 시험이 op 를 좁혀 돌리는 워커는 일정을 건드리지 않는다)."""
     audience.set_viewer(audience.SYSTEM)
+    tick = ops is None if tick is None else tick
+    last_tick = 0.0
+    loop = asyncio.get_running_loop()
     while not stop.is_set():
         if not get_settings().wiki_enabled:
             await _touch(worker_id, "disabled")
             delay = 30.0
         else:
             await _touch(worker_id, "idle")
+            if tick and loop.time() - last_tick >= TICK_S:
+                last_tick = loop.time()
+                await _tick()
             delay = 0.0 if await run_once(worker_id, lease_s=lease_s, ops=ops) else idle_s
         if delay:
             with contextlib.suppress(TimeoutError):

@@ -95,6 +95,8 @@ def _via(caller: dict[str, Any], env: SourceEnvelope) -> str:
         return _VIA_BY_CLIENT.get(via.split(":", 1)[1], via)
     if via == "api_token":
         return f"connector:{env.origin.system}"
+    if via == "wiki-inquiry":  # 지속 질의가 지은 답(W7) — 위키 자신이 보낸다
+        return "inquiry"
     return "upload"
 
 
