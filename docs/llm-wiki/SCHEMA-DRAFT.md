@@ -183,6 +183,9 @@ standing_questions:
     every_days: 60
 ```
 
+W7 에서 코드가 더 읽는 칸(첫 판 YAML 에는 없다 — 기본값으로 돈다) — `lint.contradiction_rel_tol`(숫자 모순의 상대 허용 폭, 기본 0.1) ·
+`inquiry.tools_allowlist` 의 `{name, audience}` 꼴(도구 결과를 볼 수 있는 범위 — 이름만 적으면 전사). 정본은 `docs/lat/wiki.md` §Lint · §Inquiry.
+
 ## 7. 예시 — 불량 유형 문서 한 장(모양만, 값은 지어낸 것)
 
 slug `ent-fm-hinge-bracket-crack--plmdefect` · 범위 `["plat:plmdefect"]`. 같은 개체의 넓은 문서 `ent-fm-hinge-bracket-crack`(범위 `["org"]`)에는

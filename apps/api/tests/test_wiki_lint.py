@@ -396,6 +396,49 @@ async def test_worker_runs_lint_jobs(world: dict[str, Any]) -> None:
     assert state == "done" and (result if isinstance(result, dict) else json.loads(result))["scope"] == "docs"
 
 
+async def test_text_contradictions_use_the_llm_within_the_lint_budget(world: dict[str, Any], fake_llm: Any,
+                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    """밤 점검의 글 모순 — 같은 AI 절에서 근거 원천이 다른 두 블록 짝을 LLM 이 본다. lint_tokens 가 차면 남은 문서는 세고 멈춘다."""
+    st = get_settings()
+    for key, value in (("wiki_llm_base_url", fake_llm.base_url), ("wiki_llm_model", fake_llm.model), ("wiki_llm_api_key", ""),
+                       ("wiki_llm_structured", "json_schema")):
+        monkeypatch.setattr(st, key, value)
+    book = wiki_schema.RuleBook(version=0, spec=wiki_schema.DEFAULT.spec.model_copy(update={
+        "budget": wiki_schema.DEFAULT.spec.budget.model_copy(update={"lint_tokens": 500})}))
+
+    async def load(_s: Any) -> wiki_schema.RuleBook:
+        return book
+
+    monkeypatch.setattr(wiki_schema, "load", load)
+    fake_llm.load({"rules": [{"match": {"schema": "wiki_lint_pairs"}, "reply": {
+        "json": {"pairs": [{"id": "p1", "contradicts": True, "why": "판정이 위험과 안전으로 갈린다"}]},
+        "usage": {"prompt_tokens": 900, "completion_tokens": 60}}}]})
+    async with session_scope() as s:  # 둘째 엔티티 문서에도 짝 — 예산 500 은 첫 문서의 한 번(960)으로 찬다
+        ent = await _entity(s, "part", f"배터리 팩 {SUF}")
+        d2 = await _page(s, slug=f"ent-part-bat-l{RUN}", title=f"배터리 팩 {SUF}", type_key="part", kind="entity", aud=["org"],
+                         entity=ent, blocks={"요약": [(pages.new_id(), "팩은 안전하다."), (pages.new_id(), "팩이 부푼다.")]})
+        content = await s.execute(text("SELECT content_json FROM documents WHERE id = CAST(:d AS uuid)"), {"d": d2})
+        blocks = (content.scalar_one() if not isinstance(content, str) else None)
+        blocks = blocks if isinstance(blocks, dict) else json.loads(blocks)
+        ids = [b["id"] for sec in blocks["sections"] for b in sec["blocks"]]
+        await _cite(s, d2, ids[0], world["src"]["03"])
+        await _cite(s, d2, ids[1], world["src"]["15"])
+    out = await _lint(llm=True)
+    got = await _findings(world)
+    texts = [f for f in got.get("contradiction", []) if f["detail"].get("kind") == "text"]
+    calls = [c for c in fake_llm.calls if c["body"].get("response_format", {}).get("json_schema", {}).get("name") == "wiki_lint_pairs"]
+    assert len(calls) == 1 and out["counts"]["llm_tokens"] == 960  # 한 번 부르고 예산이 찼다
+    assert len(texts) == 1 and texts[0]["status"] == "question_raised" and texts[0]["detail"]["why"].startswith("판정이")
+    async with session_scope() as s:
+        logged = (await s.execute(text("""
+            SELECT detail FROM wiki_log WHERE op = 'lint' AND title = 'full' AND job_id IN
+                   (SELECT job_id FROM wiki_lint_runs WHERE id = CAST(:r AS uuid)) AND audience = ARRAY['org']
+        """), {"r": out["run"]})).scalar_one()
+    logged = logged if isinstance(logged, dict) else json.loads(logged)
+    assert logged["LLM"].endswith("· 남김 1")  # 짝이 있는 둘째 문서는 예산 때문에 남겼다(짝이 없는 문서는 LLM 없이 본 것으로 센다)
+    assert "<<<짝" in calls[0]["body"]["messages"][-1]["content"]  # 블록 글은 데이터 구획 안
+
+
 # ── 끝에서 끝 — 합성 원천 20 → 가짜 LLM 들이기 → 밤 점검(묶음에 심긴 모순 · 낡음 · 빈틈) ─────────────────
 
 @pytest.fixture

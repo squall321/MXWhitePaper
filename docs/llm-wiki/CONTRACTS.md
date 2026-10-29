@@ -147,12 +147,17 @@ triple(지금의 결함 — FK 없음)을 이번에 함께 정리한다.
 `id` · `text` · `origin`(`lint` · `ingest` · `user` · `query_miss` · `standing`) · `origin_ref` · `about_entities` uuid[] · `audience` text[] ·
 `priority`(1~5) · `status`(`open` · `asking` · `answered` · `needs_human` · `needs_experiment` · `closed` · `dropped`) · `asked_count` · `last_asked_at` ·
 `answer_source_id` · `assignee` · `created_by` · `created_at`. 같은 질문이 쌓이지 않게 정규화 문장 해시로 UNIQUE(`audience` 별).
+W7(0059)에서 `attempts`(지속 질의 시도 — 규칙서 `max_asks_per_question` 에 닿으면 needs_human) · `detail` jsonb(답 발췌 · 실험 제안 ·
+사람이 필요한 까닭 · 지난 시도) · `answered_at` 을 더했다. 정본은 `docs/lat/wiki.md` §Inquiry.
 
 ### 2-8. `wiki_lint_runs` · `wiki_lint_findings`
 
 run — `id` · `scope`(`full` · `incremental:<cs id>`) · `started_at` · `finished_at` · `counts` jsonb.
 finding — `id` · `run_id` · `rule`(request §5-8 표의 열쇠) · `severity`(`info` · `warn` · `error`) · `doc_ids` · `source_ids` · `entity_ids` · `detail` jsonb ·
 `status`(`open` · `fixed` · `dismissed` · `question_raised`) · `fixed_by_changeset` · `closed_by` · `closed_at`. 같은 결함은 한 줄(열쇠 + 대상 해시).
+W7(0059)에서 지었다 — run 에 `llm` · `job_id` · `report_doc_id` · `error`, finding 에 `fingerprint`(UNIQUE — sha256(규칙 + 대상)) · `title`(그 범위
+안의 이름만) · `audience`(볼 수 있는 사람 — 대상 문서 · 원천의 좁은 토큰) · `last_run_id` · `first_seen_at` · `last_seen_at` · `question_id` ·
+`note`(버린 까닭)를 더했다. 정본은 `docs/lat/wiki.md` §Lint.
 
 ### 2-9. `wiki_log` — 기록(덧붙이기만)
 
@@ -223,7 +228,7 @@ DELETE 는 `SET LOCAL mxwp.wiki_purge = 'on'` 아래에서만).
 | `card` | `card_id` · `domain` · `title` · `claims[{text, evidence?}]` | AIDataHub 지식카드 |
 | `document` | `doc_slug` · `version` | MXWP 사람 백서를 그 판으로 원천에(request §6-4) |
 | `correction` | `doc_slug` · `block_id?` · `text` · `reason` | 사람이 위키 문서를 고친 것 — 다음 들이기가 따라야 하는 원천 |
-| `inquiry_answer` | `question_id` · `answer` · `tool_calls[{tool, args_digest, result_excerpt}]` · `confidence`(0~1) | 지속 질의의 답 |
+| `inquiry_answer` | `question_id` · `answer` · `evidence[{kind: doc · source · tool, ref, excerpt}]`(선택 — W7, 답의 `[k]` 는 k 째) · `tool_calls[{tool, args_digest, result_excerpt}]` · `confidence`(0~1) | 지속 질의의 답 · 사람의 답(질문판) |
 | `note` | `text` | 사람이 남긴 짧은 메모 |
 
 구현 — [[src/app/wiki/envelope.py]](`docs/lat/wiki.md` §Envelope 가 정본).
@@ -298,8 +303,8 @@ W5 구현 — `entity.merge` 는 `{doc: '', from, into, why}`(사람의 `human_r
 | `POST /changes/{id}/approve` · `/reject` · `/revert` | 검토자 · admin | |
 | `GET /entities` · `GET /entities/{id}` · `POST /entities/resolve` | reader + 범위 | 이름 → 후보(정확 · 별칭 · 외부 id · 검색 순) |
 | `GET /ontology` · `POST /ontology/{types|predicates}` · `POST …/{key}/approve` | 제안 editor · 승인 admin | |
-| `GET /questions` · `POST /questions` · `PATCH /questions/{id}` | reader · editor | |
-| `POST /lint` · `GET /lint/findings` · `POST /lint/findings/{id}/dismiss` | admin · 검토자 | |
+| `GET /questions` · `POST /questions` · `PATCH /questions/{id}` | reader · editor | 지은 꼴(W7) — `GET /questions/{id}` · `PATCH`(닫기 · 버리기 · 다시 열기 · 우선순위 — 남긴 사람 · 검토자) · `POST /questions/{id}/answer`(editor — 그 사람 명의의 `inquiry_answer` 원천, 전사 물음은 검토자 · admin) |
+| `POST /lint` · `GET /lint/findings` · `POST /lint/findings/{id}/dismiss` | admin · 검토자 | 지은 꼴(W7) — 돌리기 · 버리기는 검토자, **읽기는 reader**(범위로 거른다 — MCP `wiki_lint_report` 가 읽기 전용 PAT 로 닿게, WK-D77) |
 | `GET /log` · `GET /log.md` | reader + 범위 | `log.md` 는 Karpathy 꼴 그대로(§10) — `grep "^## \["` 가 된다 |
 | `GET /index` · `GET /index.md` | reader + 범위 | 목록(§10) |
 | `GET /schema` · `PUT /schema` | reader · admin | 규칙서(판 올림) |
@@ -346,6 +351,9 @@ W5 구현 — `entity.merge` 는 `{doc: '', from, into, why}`(사람의 `human_r
 - 예산은 규칙서 `budget` — 하루 토큰 상한 · 작업당 상한(들이기 기본 6만 · 점검 20만) · LLM 동시 수(기본 1) · 조용한 시간(배경 작업은 그때만).
   넘치면 작업을 `held` 로 두고 기록에 남긴다(조용히 버리지 않는다).
 - 사람이 기다리는 `query` 는 예산 밖 · 우선순위 맨 앞. 배경 작업은 그것을 밀어내지 않는다.
+- 지은 꼴(W7 — 정본 `docs/lat/wiki.md` §Budget) — 조용한 시간은 지속 질의 · LLM 을 쓰는 점검에만(들이기는 언제나 — WK-D74). 하루 상한은
+  held 가 아니라 다음 날로 미룸 + 기록 한 줄, 작업 · 질문 하나의 상한은 held(WK-D75). 쓴 양은 LLM 호출마다 장부(`wiki_llm_usage`). 묻기
+  우선은 묻기가 흐르는 동안의 DB 표지(`wiki_llm_turns`)를 배경 호출이 보고 기다리는 것, 동시 수는 권고 잠금 자리(WK-D76).
 
 ## 9. 신원(포털 연결 — request §4)
 
