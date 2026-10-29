@@ -1,0 +1,27 @@
+{
+  "_note": "Q11 찾기 재현율 정답표(합성 — W7). 합성 원천 20 으로 지은 위키(원천마다 사례 · 문답 · 심의 문서, 힌트마다 엔티티 문서)에 묻는다. expect 열쇠 — 'ent:<유형>:<이름>' 은 그 엔티티 문서, 'src:<번호>' 는 그 원천으로 지은 문서. exact 는 문서 · 엔티티 이름이 물음에 든 것, paraphrase 는 다른 말로 물은 것. 값은 모두 지어낸 것이다. 진짜 박스의 정답표는 사람이 실제 물음으로 만든다(리포에 넣지 않는다).",
+  "aliases": {
+    "part:힌지 브래킷": ["경첩 브라켓", "경첩"],
+    "part:커버 글라스": ["앞유리", "보호 유리"],
+    "failure-mode:배터리 스웰링": ["부풀음", "부풀어"],
+    "countermeasure:힌지 리브 추가": ["보강 리브"]
+  },
+  "cases": [
+    {"q": "힌지 브래킷 낙하 최대 응력은 얼마인가", "kind": "exact", "expect": ["ent:part:힌지 브래킷", "src:02", "src:03", "src:04"]},
+    {"q": "커버 글라스 깨짐은 어떤 조건에서 생기나", "kind": "exact", "expect": ["ent:failure-mode:커버 글라스 깨짐", "src:05", "src:06", "src:09"]},
+    {"q": "배터리 스웰링을 해석으로 볼 수 있나", "kind": "exact", "expect": ["src:15", "ent:failure-mode:배터리 스웰링"]},
+    {"q": "가상폴드 A1 시장 불량 집계", "kind": "exact", "expect": ["src:11", "ent:product-model:가상폴드 A1"]},
+    {"q": "힌지 리브 추가로 응력이 얼마나 줄었나", "kind": "exact", "expect": ["src:16", "ent:countermeasure:힌지 리브 추가", "src:03"]},
+    {"q": "가상바 B2 커버 글라스 두께 심의", "kind": "exact", "expect": ["src:19"]},
+    {"q": "전각도 낙하 해석 결과", "kind": "exact", "expect": ["ent:sim-type:전각도 낙하", "src:02", "src:03", "src:04"]},
+    {"q": "힌지 브래킷 재료 정정", "kind": "exact", "expect": ["ent:part:힌지 브래킷"]},
+    {"q": "경첩 브라켓이 떨어뜨릴 때 깨지나", "kind": "paraphrase", "expect": ["ent:part:힌지 브래킷", "ent:failure-mode:힌지 브래킷 균열", "src:02", "src:04", "src:07", "src:08"]},
+    {"q": "앞유리가 떨어뜨렸을 때 파손되는 문제", "kind": "paraphrase", "expect": ["ent:failure-mode:커버 글라스 깨짐", "ent:part:커버 글라스", "src:05", "src:06", "src:09"]},
+    {"q": "전지가 부풀어 오르는 현상", "kind": "paraphrase", "expect": ["ent:failure-mode:배터리 스웰링", "ent:part:배터리 팩", "src:10", "src:12", "src:15"]},
+    {"q": "보강 리브를 넣으면 효과가 있나", "kind": "paraphrase", "expect": ["ent:countermeasure:힌지 리브 추가", "src:03", "src:16", "src:18"]},
+    {"q": "화면 보호 유리 강도 판정 기준", "kind": "paraphrase", "expect": ["src:14", "ent:part:커버 글라스"]},
+    {"q": "접히는 폰 경첩에서 소리가 난다는 고객 불만", "kind": "paraphrase", "expect": ["src:07", "src:08", "ent:failure-mode:힌지 브래킷 균열"]},
+    {"q": "시험 일정 문의는 누구에게 하나", "kind": "paraphrase", "expect": ["src:17"]},
+    {"q": "응력 해석을 다시 후처리한 결과", "kind": "paraphrase", "expect": ["src:02"]}
+  ]
+}

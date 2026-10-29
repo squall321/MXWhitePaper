@@ -399,6 +399,7 @@ apps/web — 'AI 위키'(상단 내비 — 위키가 켜졌을 때만, `useWikiE
 `apps/api/tests/fixtures/wiki/` — 합성 원천 20 장(해석 6 · 사례 4 · 집계 2 · 문답 5 · 심의 2 · 정정 1)과 일부러 심은 결함(모순 · 낡음 ·
 빈틈 · 사람의 정정 · 연락처 꼴). 무엇이 어디 심겼는지는 그 폴더 `README.md`, 심겨 있는지는 [[apps/api/tests/test_wiki_w0.py]] 가 못 박는다.
 엔티티 해석 정답표 `resolve-gold.json`(초안 — 사람이 확인) — 등록부 13 · 사례 29(결정적 15 · 고르기 9 · 새 것 5) — [[#Resolution]].
+찾기 재현율 정답표 `search-gold.json`(W7 · Q11) — 물음 16(이름 8 · 바꿔 말함 8) · 별칭 넷 — [[#Query]].
 
 ## Fake LLM
 
@@ -480,6 +481,12 @@ API 인스턴스는 `.env` 를 `_common.sh` 의 `set -a` 로 물려받는다 —
 | 기록 | `query`(제목 = 물음 · 범위 = 물은 사람만 — 질문자 비공개 Q9) — 문서 · 근거 수 · 쓴 각주 · 쓴 양 |
 
 창구는 읽는 사람 문맥을 잡아 두고 제 세션으로 흘린다(스트림이 의존성 세션보다 오래 산다). 시험 [[apps/api/tests/test_wiki_query.py]].
+
+찾기 재현율(Q11 — W7) — [[src/app/scripts/wiki_search_eval.py#measure]] 가 찾기 단계의 길 셋(엔티티 · 검색 · 합)을 위 k 개 hit · recall 로
+잰다(`python -m app.scripts.wiki_search_eval --gold … [--as 이메일]` — 진짜 박스의 정답표는 사람이 실제 물음으로). 합성 정답표
+`tests/fixtures/wiki/search-gold.json`(이름이 든 물음 8 · 바꿔 말한 물음 8 · 별칭 넷)으로 [[apps/api/tests/test_wiki_search_recall.py]] 가
+잰다 — 10-29 dev 합성 위키에서 이름 물음 hit@5 1.00 · 바꿔 말한 물음 0.38, 등록부에 별칭을 달면 1.00(별칭은 정답표를 보고 골라 후하다).
+그래서 의미 검색(임베더)은 아직 들이지 않는다 — 별칭으로 메우고 cae00 실제 물음으로 다시 잰다(WK-D78).
 
 ## Resolution
 
