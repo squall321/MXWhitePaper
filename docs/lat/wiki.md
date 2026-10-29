@@ -19,7 +19,8 @@
 | W4 들이기 · 검토 · 근거 | 표(0054 · 0055) · 규칙서(YAML 검증 · 판) · LLM 클라이언트 · 결정적 해석 · 계획 · 쓰기 · 검증 V1~V11 · 반영 · 되돌리기 · 검토 큐 · 근거 읽기. 목록 `index` · `index.md` · 규칙서 창구(`/schema` — admin 만) · 화면(홈 · 문서 머리띠 · 각주 · 원천 카드 · 검토 큐 · 기록 · 원천). 남은 것 — 규칙서 사람 재검토 | [[#Rule book]] · [[#LLM]] · [[#Ingest]] · [[#Validation]] · [[#Apply · Revert]] · [[#Review]] |
 | W5 온톨로지 | 술어 표 첫 판 18(0056) · 유형 · 술어 제안 → admin 승인 · 거절 · 유형의 바깥 어휘 대응(`ext_axes`) · `doc_triples` 위키 칸 · 지운 문서의 triple 정리. 들이기의 관계(코드 · 계획) · '관계(자동)' 절 · 검토 화면의 관계 · 의미 관계 패널의 '위키' 표지 · 엔티티 등록부(보이기 · 별칭 · 외부 id · 중복 후보 · 합치기 — 늘 검토 · 되돌리기). 엔티티 후보 해석(열쇠 · 후보 · `wiki_resolve`) · 정답표 초안 · 평가 스크립트. 화면(온톨로지 · 엔티티 목록 · 한 건 · 합치기 카드). 남은 것 — 사람의 정답표 확인 · LLM 을 낀 정확도(진짜 LLM 이 있는 박스) | [[#Ontology]] · [[#Relations]] · [[#Entities]] · [[#Resolution]] |
 | W6 묻기 · 되쌓기 · MCP | 묻기(`/query` SSE · 근거 각주 · MISS) · 질문 대기열(0057 · `/questions`) · 되쌓기(`/fileback` → qa 원천 → 문답 문서 · 비슷한 물음은 같은 문서에) · 후보(주인만 보는 held 원천 · `/candidates` · 화면 '내 후보' · 0058) · 제안(`/propose` — 늘 검토) · 기계 호출의 위키 문서 직접 쓰기 막음 · MCP `wiki_*` 열넷(`/search` · `/ask`) · 메인 챗 위키 모드([[chat#위키 모드]]) · 게이트웨이 `tools/list` 열넷 확인(10-24 포털 세션). 남은 것 — 포털 P6~P8 뒤 끝에서 끝 | [[#Query]] · [[#Fileback]] · [[#Candidates]] · [[#Propose]] · [[#MCP]] |
-| W7 점검 ~ W8 cae00 | (아직) | — |
+| W7 점검 · 지속 질의 | 예산 · 조용한 시간 · 묻기 우선(0059 — LLM 쓴 양 장부 · 묻기 표지) | [[#Budget]] |
+| W8 cae00 | (아직) | — |
 
 ## 데이터 흐름(목표 — 지은 칸은 위 표)
 
@@ -44,6 +45,7 @@
 | 받기 · 멱등 · 철회 · 원천 문서 · 기록 | [[src/app/wiki/sources.py#receive]] · 문서 만들기 `document_service.create_document(wiki=…)` | W3 |
 | 규칙서(YAML 검증 · 판) | [[src/app/wiki/schema.py#RuleBook]] · 저장 검사 `document_service.validate_documentjson` | W4 |
 | LLM(구조화 출력) | [[src/app/wiki/llm.py#structured]] | W4 |
+| 예산 · 조용한 시간 · 묻기 우선 · 쓴 양 장부 | [[src/app/wiki/budget.py#gate]] · `background_turn` · `interactive_turn` · 표 `wiki_llm_usage` · `wiki_llm_turns`(0059) | W7 |
 | 해석 · 후보 문서 | [[src/app/wiki/resolve.py#targets]] · 표 `wiki_entity_types` · `wiki_entities`(0054) | W4 |
 | 온톨로지(유형 · 술어 · 제안 → 승인 · 정의역 · 치역) | [[src/app/wiki/ontology.py]] · 표 `wiki_predicates` · `doc_triples` 위키 칸(0056) | W5 |
 | 엔티티 등록부(목록 · 별칭 · 외부 id · 중복 후보 · 합치기) | [[src/app/wiki/entities.py]] | W5 |
@@ -199,6 +201,24 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 | 오류 | 429 · 5xx · 연결 · 끊김 · 시간 초과(연결 10초) → `LLMUnavailable`, 그 밖 4xx → `LLMError`. 오류 본문 셋(OpenAI · 옛 vLLM · `--api-key`)을 다 읽는다 |
 | 쓴 양 | `Usage`(prompt · completion 토큰 · 부른 수 · 초) — 부를 때마다 더한다 |
 | 흘리기 | `stream_text(ep, messages)` — `stream: true` · `include_usage`, 조각마다 낸다. 조각 사이 읽기 시간 120초(연결 10초). 4xx `LLMError` · 429 · 5xx · 끊김 `LLMUnavailable`(이미 낸 조각은 부르는 쪽 몫) |
+| 역할(W7) | `Endpoint.role` — `background()` 는 `background`, `interactive()` 는 `interactive`(묻기 자리가 비어 배경 서버를 써도 역할은 묻기). 배경 호출은 [[#Budget]] 의 문지기를 지나고, 묻기 흘리기는 표지를 둔다. 둘 다 쓴 토큰을 장부에. 역할이 빈 Endpoint(시험이 바로 짓는 것)는 거르지도 적지도 않는다 |
+
+## Budget
+
+[[src/app/wiki/budget.py]] — 규칙서 `budget` 칸(SCHEMA-DRAFT §6)으로 배경 작업을 거른다(request §5-9 · §5-13 · CONTRACTS §8).
+
+| 무엇 | 어떻게 |
+| --- | --- |
+| 문지기 | 워커가 작업을 집은 뒤 처리기 전에 `gate(op, args)` — 막히면 `jobs.defer`(시도 수를 쓰지 않음 · `error` 에 까닭) |
+| 조용한 시간 | `quiet_hours`(KST, 자정을 넘어도 된다) — **지속 질의 · LLM 을 쓰는 점검만**(`needs_quiet`). 들이기는 언제나(W8 '원천 → 반영 1시간'), LLM 없는 점검도 언제나 |
+| 하루 예산 | `daily_tokens` — 장부 `wiki_llm_usage` 의 배경 줄을 KST 하루로 더한다(작업이 실패 · 보류로 끝나도 쓴 양은 남는다). 넘으면 다음 날 0시(조용한 시간 작업은 그 뒤 첫 조용한 시간)로 미루고 기록 한 줄(하루에 한 번). 보류가 아니다 — 상한은 결함이 아니라 속도다 |
+| 작업 하나의 상한 | `ingest_tokens` · `inquiry_tokens` · `lint_tokens` — 넘으면 `BudgetExceeded` → 워커가 `held`(점검은 LLM 짝 판정을 멈추고 센다) |
+| 묻기 우선 | 묻기 흘리기가 도는 동안 `wiki_llm_turns` 에 한 줄(API 프로세스 · 330초 뒤 무시 — API 가 죽어도 배경이 영영 서지 않게). 배경 호출(워커 프로세스)은 그 줄이 있는 동안 0.5초씩 기다린다 |
+| 동시 수 | `llm_concurrency` — 배경 호출은 권고 잠금 자리(`pg_try_advisory_lock('WIKI', 자리)`) 하나를 쥐고 부른다(제 연결을 호출 내내 쥔다 — 워커가 여럿이어도). 묻기는 자리를 잡지 않는다(예산 밖 · 맨 앞) |
+| 장부 | 호출마다 `wiki_llm_usage(role, tokens, job_id, name)` — `job_id` 는 워커가 `current_job` 에 둔다. 장부 쓰기가 깨져도 호출은 막지 않는다 |
+
+시험 [[apps/api/tests/test_wiki_budget.py]] — 시간 셈 · 문지기(조용한 시간 · 하루 예산) · 미룸(시도 수 그대로) · 묻기 우선(느린 계획 호출 사이의 묻기 —
+배경의 다음 호출이 묻기 뒤에) · 동시 수 1 · 장부.
 
 ## Ingest
 
@@ -470,6 +490,8 @@ dev(LLM 없음 · 10-24) — 29 사례 중 결정적 15 건 100 % · 비슷한 �
 - **판 메모(change_log)는 ASCII 80자까지**(`[A-Za-z0-9._:-\s]`) — 반영 · 원천 문서 갱신이 쓰는 메모는 `wiki cs_xxxxxxxx` ·
   `wiki source cited-by`. 한글을 넣으면 `replace_document` 가 거부한다.
 - 시험에서 워커를 돌릴 때는 `run_once(…, ops=[…])` · `serve(…, ops=[…])` 로 집을 op 를 좁힌다 — 같은 시험 DB 의 다른 시험 작업을 집지 않게.
+- **배경 LLM 호출은 DB 를 본다**(W7) — 문지기 · 장부가 `wiki_llm_turns` · `wiki_llm_usage` 를 읽고 쓴다. 0059 전의 DB 에 새 코드를 올리면
+  배경 호출이 표 없음으로 깨진다 — 이관 먼저(배포 순서 그대로).
 - **워커는 `--reload` 가 없다** — 위키 코드를 고치면 `mxwp_wiki` 를 다시 띄워야 새 코드로 돈다(update.sh · sync-from-drive.sh 는
   알아서 한다). dev 에서 손으로 — `apptainer instance stop mxwp_wiki && ./infra/scripts/start.sh`.
 - **dev 의 워커(`mxwp_wiki`)는 dev DB 만 본다** — 시험 작업은 시험 DB 에 있어 위키를 켜 둔 채 시험해도 집지 않는다(10-24 까지는 같은 DB

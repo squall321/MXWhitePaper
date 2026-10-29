@@ -10,19 +10,24 @@
 - mock 으로 대신하지 않는다 — 설정이 비면 `background()` 가 None 이고 부르는 쪽이 멈춘다.
 - 프록시는 챗 클라이언트(`services/llm_client.py`)처럼 환경(HTTP(S)_PROXY · NO_PROXY)을 따른다.
 - 묻기(W6)는 `stream_text` — 글 조각을 받는 대로 내고(`stream: true` · `include_usage`), 조각 사이 읽기 시간 제한은 넉넉히(연결 10초는 그대로).
+- 역할(W7) — `background()` 의 호출은 묻기가 도는 동안 기다리고 LLM 동시 수 자리를 잡는다(`budget.background_turn`). `interactive()` 의
+  흘리기는 그동안 표지를 둔다(`budget.interactive_turn`). 둘 다 쓴 토큰을 장부(`wiki_llm_usage`)에 남긴다 — 하루 예산. 역할이 빈
+  Endpoint(시험이 바로 짓는 것)는 거르지도 적지도 않는다.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import httpx
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import get_settings
+from app.wiki import budget
 
 _CONNECT_S = 10.0
 _MESSAGE_MAX = 300
@@ -46,6 +51,7 @@ class Endpoint:
     model: str
     api_key: str = ""
     structured: str = "json_schema"
+    role: str = ""  # background · interactive — 빈 값은 거르지도 장부에 적지도 않는다
 
 
 @dataclass
@@ -64,20 +70,24 @@ class Usage:
                 "seconds": round(self.seconds, 2)}
 
 
-def _endpoint(base: str, model: str, key: str) -> Endpoint | None:
+def _endpoint(base: str, model: str, key: str, role: str) -> Endpoint | None:
     if not (base.strip() and model.strip()):
         return None
-    return Endpoint(base.strip().rstrip("/"), model.strip(), key, get_settings().wiki_llm_structured)
+    return Endpoint(base.strip().rstrip("/"), model.strip(), key, get_settings().wiki_llm_structured, role)
 
 
 def background() -> Endpoint | None:
     st = get_settings()
-    return _endpoint(st.wiki_llm_base_url, st.wiki_llm_model, st.wiki_llm_api_key)
+    return _endpoint(st.wiki_llm_base_url, st.wiki_llm_model, st.wiki_llm_api_key, "background")
 
 
 def interactive() -> Endpoint | None:
+    """묻기 자리 — 비면 배경과 같은 서버 · 모델을 쓰되 역할은 묻기다(예산 밖 · 배경이 비켜 선다)."""
     st = get_settings()
-    return _endpoint(st.wiki_query_llm_base_url, st.wiki_query_llm_model, st.wiki_query_llm_api_key) or background()
+    ep = _endpoint(st.wiki_query_llm_base_url, st.wiki_query_llm_model, st.wiki_query_llm_api_key, "interactive")
+    if ep is None and (bg := background()) is not None:
+        ep = replace(bg, role="interactive")
+    return ep
 
 
 def _error_message(resp: httpx.Response) -> str:
@@ -106,15 +116,17 @@ async def _call(
     else:
         body["response_format"] = {"type": "json_schema", "json_schema": {"name": name, "schema": schema}}
     headers = {"Authorization": f"Bearer {ep.api_key}"} if ep.api_key else {}
-    started = time.monotonic()
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s, connect=_CONNECT_S)) as c:
-            resp = await c.post(f"{ep.base_url}/chat/completions", json=body, headers=headers)
-    except httpx.HTTPError as e:
-        raise LLMUnavailable(f"LLM 에 닿지 않는다 — {type(e).__name__}: {e}"[:_MESSAGE_MAX]) from e
-    finally:
-        usage.calls += 1
-        usage.seconds += time.monotonic() - started
+    turn = budget.background_turn() if ep.role == "background" else contextlib.nullcontext()
+    async with turn:  # 묻기가 도는 동안 기다리고 동시 수 자리를 잡는다 — 기다린 시간은 쓴 시간에 넣지 않는다
+        started = time.monotonic()
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s, connect=_CONNECT_S)) as c:
+                resp = await c.post(f"{ep.base_url}/chat/completions", json=body, headers=headers)
+        except httpx.HTTPError as e:
+            raise LLMUnavailable(f"LLM 에 닿지 않는다 — {type(e).__name__}: {e}"[:_MESSAGE_MAX]) from e
+        finally:
+            usage.calls += 1
+            usage.seconds += time.monotonic() - started
     if resp.status_code == 429 or resp.status_code >= 500:
         raise LLMUnavailable(f"LLM {resp.status_code} — {_error_message(resp)}")
     if resp.status_code >= 400:
@@ -122,8 +134,11 @@ async def _call(
     try:
         data = resp.json()
         used = data.get("usage") or {}
+        spent = int(used.get("prompt_tokens") or 0) + int(used.get("completion_tokens") or 0)
         usage.prompt_tokens += int(used.get("prompt_tokens") or 0)
         usage.completion_tokens += int(used.get("completion_tokens") or 0)
+        if ep.role:
+            await budget.record(ep.role, spent, name=name)
         msg = data["choices"][0]["message"]
         if ep.structured == "tools":
             calls = msg.get("tool_calls") or []
@@ -142,8 +157,10 @@ async def stream_text(
     headers = {"Authorization": f"Bearer {ep.api_key}"} if ep.api_key else {}
     started = time.monotonic()
     usage.calls += 1
+    before = usage.tokens
+    turn = budget.interactive_turn() if ep.role == "interactive" else contextlib.nullcontext()
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s, connect=_CONNECT_S)) as c, \
+        async with turn, httpx.AsyncClient(timeout=httpx.Timeout(timeout_s, connect=_CONNECT_S)) as c, \
                 c.stream("POST", f"{ep.base_url}/chat/completions", json=body, headers=headers) as resp:
             if resp.status_code >= 400:
                 await resp.aread()
@@ -170,6 +187,8 @@ async def stream_text(
         raise LLMUnavailable(f"LLM 에 닿지 않는다 — {type(e).__name__}: {e}"[:_MESSAGE_MAX]) from e
     finally:
         usage.seconds += time.monotonic() - started
+        if ep.role:
+            await budget.record(ep.role, usage.tokens - before, name="stream")
 
 
 async def structured[M: BaseModel](

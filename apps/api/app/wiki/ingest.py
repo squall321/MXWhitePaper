@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.wiki import apply as wiki_apply
-from app.wiki import jobs, llm, ontology, pages, resolve, validate
+from app.wiki import budget, jobs, llm, ontology, pages, resolve, validate
 from app.wiki import schema as wiki_schema
 from app.wiki.envelope import normalize_audience
 from app.wiki.sources import short_id
@@ -38,8 +38,7 @@ from app.wiki.sources import short_id
 KST = ZoneInfo("Asia/Seoul")
 
 
-class BudgetExceeded(RuntimeError):
-    """들이기 하나의 토큰 예산을 넘었다 — 작업을 held 로 둔다."""
+BudgetExceeded = budget.BudgetExceeded  # 들이기 하나의 토큰 예산을 넘었다 — 워커가 작업을 held 로 둔다
 
 
 # ── LLM 출력 꼴 ─────────────────────────────────────────────────────────────────────────────────

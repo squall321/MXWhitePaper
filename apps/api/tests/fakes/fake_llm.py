@@ -34,7 +34,7 @@
     with FakeLLM("slow.json") as llm:   # 127.0.0.1 의 빈 포트
         llm.base_url                    # http://127.0.0.1:<port>/v1
         llm.load(other)                 # 시나리오 바꾸기(받은 요청 기록도 비운다)
-        llm.calls                       # [{path, body, rule}] — 프롬프트 · 구획 시험용
+        llm.calls                       # [{path, body, rule, at, done_at}] — 프롬프트 · 구획 시험용, 시각은 time.monotonic()
 
     python -m tests.fakes.fake_llm --scenario slow.json --port 8999      # apps/api 에서
 """
@@ -102,6 +102,7 @@ class FakeLLM:
     def __init__(self, scenario: dict[str, Any] | str | Path, *, host: str = "127.0.0.1", port: int = 0) -> None:
         self._lock = threading.Lock()
         self.calls: list[dict[str, Any]] = []
+        self._tls = threading.local()  # 요청 스레드마다 제 기록 — 응답을 다 보낸 때(done_at)를 적는다
         self.scenario: dict[str, Any] = {}
         self._used: list[int] = []
         self._created = int(time.time())
@@ -244,7 +245,9 @@ class FakeLLM:
         text = _message_text(messages)
         with self._lock:
             idx, rule = self._pick(target, text)
-            self.calls.append({"path": "/v1/chat/completions", "body": body, "rule": idx})
+            rec = {"path": "/v1/chat/completions", "body": body, "rule": idx, "at": time.monotonic(), "done_at": None}
+            self.calls.append(rec)
+            self._tls.rec = rec
         if rule is None:
             return 500, self._error_body(500, f"fake LLM: 맞는 규칙이 없다(mode={mode}, schema={target}) — 시나리오를 고친다",
                                          "InternalServerError")
@@ -348,7 +351,14 @@ def _handler_for(fake: FakeLLM) -> type[BaseHTTPRequestHandler]:
                 return
             if not self._authorized():
                 return
-            status, obj = fake.complete(raw)
+            fake._tls.rec = None
+            try:
+                self._reply(*fake.complete(raw))
+            finally:
+                if (rec := getattr(fake._tls, "rec", None)) is not None:
+                    rec["done_at"] = time.monotonic()
+
+        def _reply(self, status: int, obj: Any) -> None:
             if isinstance(obj, dict) and "__stream__" in obj:
                 parts = [f"data: {json.dumps(c, ensure_ascii=False)}\n\n".encode() for c in obj["__stream__"]]
                 parts.append(b"data: [DONE]\n\n")

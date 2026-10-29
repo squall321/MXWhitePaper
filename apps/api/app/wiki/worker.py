@@ -6,6 +6,9 @@ API 안의 asyncio 티커를 쓰지 않는 까닭 — API 재기동(dev 는 저�
 워커)가 그 작업을 다시 집는다. 처리기가 없는 op 는 집지 않는다 — 들이기(W4) 전에 받은 원천의 ingest 작업은 줄에서 기다린다.
 
 `WIKI_ENABLED` 가 꺼져 있으면 아무것도 집지 않고 쉰다(심장박동 표에는 'disabled' 로 남긴다). 읽는 사람은 시스템이다.
+
+집은 작업은 처리기에 넘기기 전에 문지기(`budget.gate`)를 지난다 — 조용한 시간에만 도는 작업(지속 질의 · LLM 을 쓰는 점검)이나 하루
+예산이 다 찬 날의 배경 작업은 시도 수를 쓰지 않고 그때까지 미룬다(W7).
 """
 from __future__ import annotations
 
@@ -23,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.db import session_scope
-from app.wiki import audience, ingest, jobs, llm
+from app.wiki import audience, budget, ingest, jobs, llm
 
 log = logging.getLogger("mxwp.wiki.worker")
 
@@ -80,20 +83,32 @@ async def run_once(worker_id: str, *, lease_s: int = LEASE_S, ops: list[str] | N
         job = await jobs.claim(s, worker_id, ops or list(HANDLERS), lease_s=lease_s)
     if job is None:
         return False
+    async with session_scope() as s:
+        blocked = await budget.gate(s, job.op, job.args)
+        if blocked is not None:
+            until, why = blocked
+            delay = max(1, int((until - budget.now()).total_seconds()))
+            await jobs.defer(s, job.id, worker_id, delay_s=delay, reason=why)
+            if why.startswith("하루 예산"):
+                await budget.note_daily_cap(s, job.op, why)
+            log.info("job %s (%s) waits %ss: %s", job.id, job.op, delay, why)
+            return True
     await _touch(worker_id, "running", job.id)
+    current = budget.current_job.set(job.id)
     done = asyncio.Event()
     beat = asyncio.create_task(_heartbeat(job, worker_id, lease_s, done))
     try:
         async with session_scope() as s:
             result = await HANDLERS[job.op](s, job)
         async with session_scope() as s:
-            await jobs.complete(s, job.id, worker_id, result=result)
+            await jobs.complete(s, job.id, worker_id, result=result,
+                                usage=(result or {}).get("usage") if isinstance(result, dict) else None)
         log.info("job %s (%s) done", job.id, job.op)
     except llm.LLMUnavailable as e:
         async with session_scope() as s:
             await jobs.defer(s, job.id, worker_id, delay_s=DEFER_S, reason=f"{job.op} 미룸 — {e}")
         log.warning("job %s (%s) deferred: %s", job.id, job.op, e)
-    except ingest.BudgetExceeded as e:
+    except budget.BudgetExceeded as e:
         async with session_scope() as s:
             await jobs.hold(s, job.id, worker_id, str(e))
         log.warning("job %s (%s) held: %s", job.id, job.op, e)
@@ -102,6 +117,7 @@ async def run_once(worker_id: str, *, lease_s: int = LEASE_S, ops: list[str] | N
             state = await jobs.fail(s, job.id, worker_id, f"{job.op} 실패 — {type(e).__name__}: {str(e)[:300]}")
         log.warning("job %s (%s) failed → %s: %s", job.id, job.op, state, e)
     finally:
+        budget.current_job.reset(current)
         done.set()
         await beat
     return True

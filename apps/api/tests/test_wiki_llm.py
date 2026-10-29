@@ -97,8 +97,9 @@ def test_endpoints_from_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     assert llm.background() is None and llm.interactive() is None  # mock 으로 대신하지 않는다
     monkeypatch.setattr(st, "wiki_llm_base_url", "http://bg:1/v1/")
     monkeypatch.setattr(st, "wiki_llm_model", "glm")
-    assert llm.background() == llm.Endpoint("http://bg:1/v1", "glm", st.wiki_llm_api_key, "json_schema")
-    assert llm.interactive() == llm.background()  # 묻기 자리가 비면 배경과 같게
+    assert llm.background() == llm.Endpoint("http://bg:1/v1", "glm", st.wiki_llm_api_key, "json_schema", "background")
+    # 묻기 자리가 비면 배경과 같은 서버 · 모델 — 역할만 묻기(예산 밖 · 배경이 비켜 선다)
+    assert llm.interactive() == llm.Endpoint("http://bg:1/v1", "glm", st.wiki_llm_api_key, "json_schema", "interactive")
 
 
 # ── 규칙서 ───────────────────────────────────────────────────────────────────────────────────
