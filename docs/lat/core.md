@@ -406,9 +406,9 @@ invalid_token 401) + 스냅숏 덮어쓰기 + 소속→팀 = 8 묶음 (cycle 19 
 - **http 모드는 서버 경로 도구를 싣지 않는다(10-27 MW-02)** — `build_server(http=True)` 는 `import_file` · `upload_image` ·
   `extract_pptx_images` 를 빼고 띄운다. 그 경로는 부른 사람의 PC 가 아니라 서버 컨테이너(운영 계정 홈 · /tmp · /workspace)라 다른 플랫폼의
   문서 파일을 MX 백서 문서로 옮기거나 있는지 떠볼 수 있었다. stdio(사용자 PC)는 그대로. 위키가 꺼진 박스는 `main` 이 뜰 때
-  `/api/v1/wiki/health` 를 보고 `wiki_*` 를 싣지 않는다(닿지 않으면 싣는다 — 부를 때 꺼져 있으면 `api_client.wiki` 가 'search_documents
-  를 쓰세요' 안내로 바꾼다). 도구 설명은 http 모드에 없는 이 셋을 가리키지 않는다(10-30 MW-12 — 이미지는
-  `upload_image_from_url` · `upload_image_base64`).
+  `/api/v1/wiki/health` 를 보고 `wiki_*` 를 싣지 않는다(닿지 않으면 http 모드는 싣지 않고 뜬 뒤 10초마다 다시 봐 켜짐이면 싣고 —
+  10-30 MW-01 다시, stdio 는 싣는다. 부를 때 꺼져 있으면 `api_client.wiki` 가 'search_documents 를 쓰세요' 안내로 바꾼다). 도구 설명은
+  http 모드에 없는 이 셋을 가리키지 않는다(10-30 MW-12 — 이미지는 `upload_image_from_url` · `upload_image_base64`).
 - **http 모드(:8765)는 위임 증명 머리글 넷을 넘긴다** — 게이트웨이가 실은 `X-Heax-User-Affiliation` · `X-Heax-Aff-Proof` ·
   `X-Heax-User-Plat` · `X-Heax-Plat-Proof` 를 받은 그대로 API 호출에 싣는다(`server._request_forward_headers` →
   `MxwpClient(extra_headers=…)`). 10-24 전에는 Bearer 만 넘겨 MCP 로는 `aff:` · `plat:` 범위 문서를 아무도 못 봤다(닫힌 쪽).

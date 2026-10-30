@@ -357,10 +357,21 @@
 
 ## 2026-10-30 — cae00 요청 MW-01 다시 · MW-12(포털 세션 hwaxportal-a5 — 정본은 포털 `4b08412` `docs/request_261030.md`)
 
+- **WK-D82 mxwp-mcp 는 위키 켜짐을 모르면(API 에 닿지 않음) http 모드에서 위키 도구를 싣지 않고 뜬 뒤 10초마다 다시 본다(닫힌 쪽).**
+  까닭 — 감시(`services.sh heal`)가 MCP 를 API 보다 먼저 살리면 '닿지 않으면 싣는다'(WK-D70) 때문에 위키가 꺼진 cae00 의 챗에도
+  `wiki_*` 14개가 보였다. 켜짐이면 그때 싣는다(`_open_wiki`). 게이트웨이는 백엔드 도구 목록을 60초마다 다시 받고 구성이 바뀌면
+  카탈로그를 다시 짓는다 — 붙잡아 둔 세션에서도 새 목록이 보이는 것을 시험용 MCP(:8766)와 켜짐 토막으로 확인했다. 꺼짐이면 닫힌 채
+  둔다. stdio 는 모름이면 그대로 싣는다 — 클라이언트가 목록을 한 번만 받아 늦게 실으면 못 보고, 감시가 API 와 겨루는 일도 없다.
+  '부를 때 꺼짐을 알면 목록을 바꾼다' 는 고르지 않았다 — 부르기 전까지 도구가 보인다. 꺼짐 문구('…열리지 않았습니다')는 바꾸지
+  않는다(포털 HA-08 다시가 두 문구를 다 받는다).
 - **WK-D83 http 모드의 도구 설명은 그 모드에 없는 도구를 가리키지 않는다(MW-12).** `upload_image_from_url` 설명 · `upload_image_base64`
   의 크기 초과 안내 · `insert_image_block` 설명이 http 에서 뺀 `upload_image`(MW-02)를 가리켜 운영자가 없는 도구를 찾았다. 셋에서 빼고
   `upload_image_from_url` · `upload_image_base64`(큰 이미지는 줄여 다시)로 안내한다. 시험이 http 모드의 모든 도구 설명에 뺀 도구
   셋(`import_file` · `upload_image` · `extract_pptx_images`)의 이름이 없는지 본다. stdio 용 SKILL · README 는 그대로 둔다(거기엔 있다).
+- cae00 반영 — 고친 것은 리포 체크아웃에서 도는 `dist/llm-docx-toolkit/mcp/server.py` 뿐이다. 포털 update-all 의 `git_update` 가
+  GitHub 에서 받으므로 새 이미지는 없다(Drive 는 그대로). f242254 뒤로 W7 이 들어 있어 update-all 의 `migrate.sh` 가 이관 0059 · 0060 을
+  돈다. 의존성 · `.def` 변경은 없다.
+- 게이트웨이 67d8d00(10-30 재기동)의 `/tools-map` — 읽기 아홉은 `routine_read`, 쓰기 넷은 `write`, `wiki_ask` 는 둘 다 아님(확인).
 
 ## 2026-10-25 — dev SSO 전용 켬(사용자 결정 · 포털 MW-D22)
 

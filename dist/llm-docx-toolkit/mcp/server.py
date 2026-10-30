@@ -49,6 +49,8 @@ import importlib.util
 import json
 import os
 import sys
+import threading
+import time
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -76,6 +78,10 @@ except ImportError:  # pragma: no cover — 낡은 SDK
 # The FastMCP instance, stashed by build_server() so per-request helpers can
 # reach the active request context (http mode). None until build_server runs.
 _MCP: FastMCP | None = None
+
+# 뜰 때 위키 켜짐을 몰라(API 에 닿지 않음) 미뤄 둔 wiki_* — (함수, mcp.tool 인자). `_open_wiki` 가 싣고 비운다.
+_WIKI_HELD: list[tuple[Any, dict[str, Any]]] = []
+_WIKI_RECHECK_S = 10.0
 
 # Resolved on startup; refers to the directory holding chunks.jsonl + index files.
 _rag_dir: Path | None = None
@@ -388,7 +394,7 @@ def _get_retriever(backend: str) -> Retriever:
 # ── server build ───────────────────────────────────────────────────
 
 
-def build_server(*, http: bool = False, wiki: bool = True) -> FastMCP:
+def build_server(*, http: bool = False, wiki: bool | None = True) -> FastMCP:
     """Construct the FastMCP server with tool/resource/prompt registered.
 
     Factored out so tests can instantiate without touching argparse / stdio.
@@ -398,11 +404,19 @@ def build_server(*, http: bool = False, wiki: bool = True) -> FastMCP:
     # http 모드는 게이트웨이로 여럿이 부르는 서버다 — 서버 쪽 경로를 읽는 도구(import_file · upload_image · extract_pptx_images)를
     # 싣지 않는다. 그 경로는 부른 사람의 PC 가 아니라 서버 컨테이너(운영 계정 홈 · /tmp · /workspace)라, 다른 플랫폼의 파일을
     # 읽어 문서로 옮기거나 있는지 떠볼 수 있었다(10-27 cae00 요청 MW-02). PC 파일은 RA prepare_upload 길로 올린다.
-    # 위키가 꺼진 박스(wiki=False — main 이 /wiki/health 로 본다)는 wiki_* 를 싣지 않는다(MW-01).
+    # 위키가 꺼진 박스(wiki=False — main 이 /wiki/health 로 본다)는 wiki_* 를 싣지 않는다(MW-01). 모름(None)이면 정의만 모아 두고
+    # 켜짐을 확인한 뒤 `_open_wiki` 가 싣는다(10-30 MW-01 다시).
     def _skip(**_kw: Any) -> Any:
         return lambda f: f
+
+    def _hold(**kw: Any) -> Any:
+        def deco(f: Any) -> Any:
+            _WIKI_HELD.append((f, kw))
+            return f
+        return deco
     local_tool = _skip if http else mcp.tool
-    wiki_tool = mcp.tool if wiki else _skip
+    wiki_tool = mcp.tool if wiki else (_hold if wiki is None else _skip)
+    _WIKI_HELD.clear()
     _MCP = mcp
 
     @mcp.tool(
@@ -1338,19 +1352,47 @@ def build_server(*, http: bool = False, wiki: bool = True) -> FastMCP:
 # ── entry point ────────────────────────────────────────────────────
 
 
-def _wiki_switch() -> bool:
-    """위키가 켜졌나 — 서버가 뜰 때 한 번 `GET /api/v1/wiki/health`(인증 없음). 404(꺼짐)면 False — wiki_* 를 싣지 않는다.
+def _wiki_switch() -> bool | None:
+    """위키가 켜졌나 — `GET /api/v1/wiki/health`(인증 없음). 200 이면 True, 404 `wiki_disabled`(꺼짐)면 False, 닿지 않거나
+    다른 오류면 None(모름).
 
-    닿지 않거나 다른 오류면 True(지금처럼 싣는다) — API 가 늦게 떠도 도구가 빠지지 않고, 부를 때 꺼져 있으면 그렇다고 말한다
-    (api_client.wiki). mxwp-mcp 는 mxwp_api 인스턴스 안에서 같이 뜨고 지므로 WIKI_ENABLED 를 바꾸면(API 재기동) 다시 본다.
+    모름이면 http 모드는 wiki_* 를 싣지 않고 뜬 뒤 `_watch_wiki` 가 다시 본다(닫힌 쪽 — 10-30 MW-01 다시). 감시가 MCP 를 API 보다
+    먼저 살리면 위키가 꺼진 박스의 챗에도 위키 도구가 보였다. mxwp-mcp 는 mxwp_api 인스턴스 안에서 같이 뜨고 지므로 WIKI_ENABLED 를
+    바꾸면(API 재기동) 다시 본다.
     """
     try:
         _make_client().wiki("GET", "/health")
     except _api().ApiError as e:
-        return not (e.status == 404 and e.code == "wiki_disabled")
-    except Exception:  # noqa: BLE001 — 닿지 않으면 싣는다
-        return True
+        return False if e.status == 404 and e.code == "wiki_disabled" else None
+    except Exception:  # noqa: BLE001 — 닿지 않으면 모름
+        return None
     return True
+
+
+def _open_wiki(mcp: FastMCP) -> int:
+    """미뤄 둔 wiki_* 를 싣는다 — 실은 수. `_watch_wiki` 의 스레드에서 불러도 된다 — FastMCP 의 도구 표는 dict 라 넣기와
+    목록 만들기(list(values()))가 GIL 아래 한 번에 끝난다."""
+    n = len(_WIKI_HELD)
+    for fn, kw in _WIKI_HELD:
+        mcp.tool(**kw)(fn)
+    _WIKI_HELD.clear()
+    return n
+
+
+def _watch_wiki(mcp: FastMCP, every: float = _WIKI_RECHECK_S) -> threading.Thread:
+    """뜰 때 위키 켜짐을 몰랐으면 갈릴 때까지 `every` 초마다 다시 본다 — 켜짐이면 그때 싣고(게이트웨이는 백엔드 도구 목록을
+    60초마다 다시 받는다), 꺼짐이면 닫힌 채 둔다."""
+    def run() -> None:
+        state = None
+        while state is None:
+            time.sleep(every)
+            state = _wiki_switch()
+        if state:
+            print(f"mxwp-mcp: 위키 켜짐 — 미뤄 둔 위키 도구 {_open_wiki(mcp)}개를 실었다", file=sys.stderr, flush=True)
+
+    t = threading.Thread(target=run, name="mxwp-wiki-switch", daemon=True)
+    t.start()
+    return t
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -1389,7 +1431,13 @@ def main(argv: list[str] | None = None) -> None:
     args = p.parse_args(argv)
     _rag_dir = (args.rag_dir or _default_rag_dir()).resolve()
     _system_prompt_path = (args.system_prompt or _default_system_prompt()).resolve()
-    server = build_server(http=args.http, wiki=_wiki_switch())
+    wiki = _wiki_switch()
+    if wiki is None and not args.http:
+        wiki = True  # stdio — 클라이언트가 도구 목록을 한 번만 받아 늦게 실으면 못 본다
+    server = build_server(http=args.http, wiki=wiki)
+    if wiki is None:
+        print("mxwp-mcp: API 에 닿지 않아 위키 켜짐을 모른다 — 위키 도구를 미루고 다시 본다", file=sys.stderr, flush=True)
+        _watch_wiki(server)
     if args.http:
         server.settings.host = args.host
         server.settings.port = args.port

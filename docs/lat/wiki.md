@@ -150,7 +150,8 @@ triple(주어 · 목적어) · 검색 · suggest · 챗 `search_corpus`(Meili `a
 [[src/app/routers/wiki.py]] — 꺼지면(`WIKI_ENABLED`) 모두 404 `wiki_disabled`(라우터 의존성). 문구는 'MX 백서 AI 위키는 아직 열리지
 않았다' — 설정 이름을 싣지 않는다(사람 · 에이전트가 읽는다, 10-27 MW-01). 503 으로 바꾸지 않는다 — 꺼짐은 잠깐의 고장이 아니고(되풀이를
 부른다) 화면 · 포털이 404 로 꺼짐을 안다. 인증 없는 `GET /wiki/health` 의 200 · 404 를 켜짐 신호로 쓰는 곳 — 웹 `useWikiEnabled` ·
-mxwp-mcp `_wiki_switch` · 포털 버튼(HP-16) · 에이전트 심의(HA-08). 닿지 않으면 '모름' 으로 보고 숨기지 않는다. 200 은 스위치만 본다 —
+mxwp-mcp `_wiki_switch` · 포털 버튼(HP-16) · 에이전트 심의(HA-08). 닿지 않으면 '모름' 으로 보고 숨기지 않는다 — mxwp-mcp http 모드만
+닫은 채 뜨고 다시 본다(아래 MCP, 10-30 MW-01 다시). 200 은 스위치만 본다 —
 LLM 이 비어도(`llm: unset`) · 워커가 없어도 200 이다.
 
 | 메서드 · 경로 | 권한 | 무엇 |
@@ -359,7 +360,10 @@ slug `wiki-schema` 면 YAML 을 검사하고 틀리면 422(첫 까닭을 글에 
 `dist/llm-docx-toolkit/mcp/server.py` 의 `wiki_*` 열넷(CONTRACTS §7) — `MxwpClient.wiki(method, path, …)` 한 길로 `/api/v1/wiki/*` 를 부른다.
 순수 읽기 아홉은 `annotations=_WIKI_READ`(`readOnlyHint`) — 게이트웨이가 읽기 전용 PAT 에 연다. `wiki_ask` 는 MISS 때 질문을 남겨 빠진다.
 위키가 꺼진 박스는 MCP 가 뜰 때(`_wiki_switch` — `/wiki/health`) `wiki_*` 열넷을 싣지 않는다 — 꺼진 도구를 먼저 불러 404 를 맞던 것을
-막는다(10-27 MW-01). 닿지 않으면 싣고, 부를 때 꺼짐이면 'search_documents 를 쓰세요' 안내를 돌려준다.
+막는다(10-27 MW-01). 닿지 않으면(모름) http 모드는 싣지 않고 뜬 뒤 `_watch_wiki` 가 10초마다 다시 봐 켜짐이면 그때 싣는다
+(`_open_wiki` — 게이트웨이는 백엔드 도구 목록을 60초마다 다시 받는다). 감시가 MCP 를 API 보다 먼저 살리면 꺼진 박스의 챗에 위키 도구가
+보였다(10-30 MW-01 다시). stdio 는 모름이면 싣는다 — 클라이언트가 목록을 한 번만 받는다. 부를 때 꺼짐이면 'search_documents 를 쓰세요'
+안내를 돌려준다.
 
 | 도구 | 창구 |
 | --- | --- |

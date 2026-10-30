@@ -229,8 +229,40 @@ def test_wiki_switch_reads_health(server_mod) -> None:
     assert server_mod._wiki_switch() is True
     _use(server_mod, {("GET", "/api/v1/wiki/health"): _wiki_off})
     assert server_mod._wiki_switch() is False  # 꺼짐 — 도구를 싣지 않는다
-    _use(server_mod, {})  # 닿지 않음(예상 밖 요청) — 싣는다
-    assert server_mod._wiki_switch() is True
+    _use(server_mod, {})  # 닿지 않음(예상 밖 요청) — 모름
+    assert server_mod._wiki_switch() is None
+
+
+def _wiki_names(s) -> set[str]:
+    return {n for n in _names(s) if n.startswith("wiki_")}
+
+
+def test_unknown_wiki_starts_closed_then_opens(server_mod) -> None:
+    s = server_mod.build_server(http=True, wiki=None)  # 뜰 때 API 에 닿지 않음 — 닫힌 쪽(10-30 MW-01 다시)
+    assert not _wiki_names(s)
+    _use(server_mod, {("GET", "/api/v1/wiki/health"): lambda r: _Resp({"jobs": {}}),
+                      ("GET", "/api/v1/wiki/index"): lambda r: _Resp({"version": 1, "at": "-", "docs": 0, "sources": 0, "sections": []})})
+    t = server_mod._watch_wiki(s, every=0.01)
+    t.join(5)
+    assert not t.is_alive()
+    tools = {x.name: x for x in asyncio.run(s.list_tools()) if x.name.startswith("wiki_")}
+    assert len(tools) == 14 and tools["wiki_lint_report"].annotations.readOnlyHint  # 표지도 그대로
+    assert "위키 목록" in _call(s, "wiki_index", {})
+
+
+def test_unknown_wiki_stays_closed_when_off(server_mod) -> None:
+    s = server_mod.build_server(http=True, wiki=None)
+    tries: list[Any] = []
+
+    def health(req):
+        tries.append(req)
+        if len(tries) < 3:
+            raise urllib.error.URLError("connection refused")  # API 가 아직 안 떴다
+        return _wiki_off(req)
+    _use(server_mod, {("GET", "/api/v1/wiki/health"): health})
+    t = server_mod._watch_wiki(s, every=0.01)
+    t.join(5)
+    assert not t.is_alive() and len(tries) == 3 and not _wiki_names(s)
 
 
 def test_wiki_off_answer_points_elsewhere(server_mod) -> None:
