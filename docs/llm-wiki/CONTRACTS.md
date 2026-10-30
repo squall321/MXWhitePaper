@@ -323,6 +323,8 @@ W5 구현 — `entity.merge` 는 `{doc: '', from, into, why}`(사람의 `human_r
 게이트웨이는 한 이름 공간에 300개가 넘는 도구를 모은다 — **`wiki_` 접두**로 겹침을 피하고, 붙인 뒤 게이트웨이 `tools/list` 로 확인한다
 (이름이 다른 앱과 헷갈린 선례 — d723105 `get_section`). 서버에 아무것도 남기지 않는 읽기 아홉(`wiki_index` · `search` · `read` · `source` ·
 `entity` · `graph` · `log` · `lint_report` · `questions`)은 `readOnlyHint` 를 단다 — 게이트웨이가 그 표지를 그대로 넘겨 읽기 전용 PAT 에 연다.
+게이트웨이 67d8d00 부터는 `/tools-map` 의 `write` · `routine_read`(분석 루틴 단계가 부를 수 있는 읽기)도 이 표지를 이름보다 먼저 본다 —
+빼면 이름으로만 가려 `wiki_lint_report` 처럼 조회 낱말이 없는 이름은 루틴에서 닫힌다.
 `wiki_ask` 는 답이 없으면 질문을 남겨 빠진다.
 
 | 도구 | 읽기/쓰기 | 인자 → 돌려줌 |

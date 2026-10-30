@@ -584,3 +584,6 @@ dev(LLM 없음 · 10-24) — 29 사례 중 결정적 15 건 100 % · 비슷한 �
   `set -a; . /workspace/.env; set +a` 를 먼저(안 하면 기본값 `minio:9000` 으로 붙으려다 멈춘다). 시험은 conftest 가 `.env` 를 읽는다.
 - 범위가 `["org"]` 보다 좁은 위키 문서는 바깥 웹훅 `doc_created` 를 보내지 않는다(WK-D34). 판 바꾸기 · 보관 웹훅은 아직 그대로 —
   W4 반영 경로가 `replace_document` 를 쓸 때 같은 규칙을 단다.
+- **MCP 읽기 아홉의 `readOnlyHint` 를 빼지 않는다** — 게이트웨이(HWAXMcpGateway 67d8d00~)는 읽기 전용 PAT 뿐 아니라 `/tools-map` 의
+  `write`(쓰기 분류) · `routine_read`(분석 루틴 단계가 부를 수 있는 읽기)도 이 표지를 이름보다 먼저 보고 가른다. 빼면 이름으로만 가려
+  `wiki_lint_report` 처럼 조회 낱말이 없는 이름은 루틴에서 닫힌다 — `test_only_pure_reads_are_marked_read_only` 가 지킨다.

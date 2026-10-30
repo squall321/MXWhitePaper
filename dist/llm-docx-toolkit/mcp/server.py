@@ -61,7 +61,8 @@ from rag.retriever import Chunk, Retriever
 
 
 # 위키 읽기 도구 표지 — 서버에 아무것도 남기지 않는 것만(wiki_ask 는 답이 없으면 질문을 남겨 빠진다). 게이트웨이는
-# 앱이 단 표지를 그대로 넘겨 읽기 전용 PAT 에 이 도구만 연다. MCP SDK 는 박스의 호스트 판이라(cae00 판 모름) 표지를 못 받는
+# 앱이 단 표지를 그대로 넘겨 읽기 전용 PAT 에 이 도구만 열고, 분석 루틴 단계(routine_read)도 표지를 이름보다 먼저 본다
+# (빼면 wiki_lint_report 처럼 조회 낱말이 없는 이름은 닫힌다). MCP SDK 는 박스의 호스트 판이라(cae00 판 모름) 표지를 못 받는
 # 낡은 판이면 표지만 빼고 도구는 그대로 띄운다 — 표지 하나 때문에 서버가 뜨지 못하면 안 된다.
 try:
     from mcp.types import ToolAnnotations
