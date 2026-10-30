@@ -6,6 +6,7 @@ import asyncio
 import io
 import importlib.util
 import json
+import re
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -205,6 +206,11 @@ def test_http_mode_drops_tools_that_read_server_paths(server_mod) -> None:
     assert _LOCAL_PATH_TOOLS <= stdio  # 사용자 PC 에서 도는 stdio 에서는 그대로
     assert not (_LOCAL_PATH_TOOLS & http)  # 게이트웨이로 여럿이 부르는 서버는 서버 쪽 경로를 읽지 않는다(MW-02)
     assert {"upload_image_from_url", "upload_image_base64"} <= http
+
+
+def test_http_mode_descriptions_do_not_point_at_dropped_tools(server_mod) -> None:
+    for t in asyncio.run(server_mod.build_server(http=True).list_tools()):  # 없는 도구를 찾게 하지 않는다(10-30 MW-12)
+        assert not [n for n in _LOCAL_PATH_TOOLS if re.search(rf"\b{n}\b", t.description or "")], t.name
 
 
 def test_wiki_tools_hide_when_the_wiki_is_off(server_mod) -> None:

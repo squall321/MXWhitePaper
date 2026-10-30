@@ -285,7 +285,7 @@ _IMAGE_MIME: dict[str, str] = {
 }
 
 # base64 업로드 캡 — base64 바이트가 모델 출력 토큰을 그대로 소모하므로
-# 작은 이미지로 제한 (초과 시 upload_image_from_url / upload_image 로 유도).
+# 작은 이미지로 제한 (초과 시 upload_image_from_url 이나 줄여 다시 올리기로 유도).
 _IMAGE_BASE64_MAX_BYTES = 256 * 1024
 
 
@@ -755,8 +755,8 @@ def build_server(*, http: bool = False, wiki: bool = True) -> FastMCP:
         description=(
             "웹 URL 의 이미지를 서버가 직접 fetch 해 MinIO 에 저장 → image_id. "
             "바이트가 모델을 안 거치므로 크기무제한. 공개 http/https URL 전용 — "
-            "사설/내부 주소는 서버가 차단. 로컬 파일은 upload_image (셸 경로) 또는 "
-            "upload_image_base64 (Desktop) 사용. 동일 내용은 dedup. image_id 는 "
+            "사설/내부 주소는 서버가 차단. 로컬 파일은 upload_image_base64 "
+            "(≤256KB) 사용. 동일 내용은 dedup. image_id 는 "
             "insert_image_block 에 그대로 사용. MXWP_API_TOKEN 필수. "
             "→ {image_id, image_url?, deduped}"
         ),
@@ -790,8 +790,8 @@ def build_server(*, http: bool = False, wiki: bool = True) -> FastMCP:
             raise RuntimeError(
                 f"이미지가 너무 큽니다 ({len(content) // 1024}KB). base64 업로드는 "
                 f"{_IMAGE_BASE64_MAX_BYTES // 1024}KB 이하만 됩니다 — 큰 이미지는 "
-                "웹 URL 이면 upload_image_from_url (서버가 직접 받음, 크기무제한), "
-                "셸 접근 가능하면 upload_image (로컬 경로) 를 쓰세요."
+                "웹 URL 이면 upload_image_from_url (서버가 직접 받음, 크기무제한) 을 쓰고, "
+                f"아니면 {_IMAGE_BASE64_MAX_BYTES // 1024}KB 이하로 줄여 다시 올리세요."
             )
         mime_type = _image_mime(filename)
         return client.upload_bytes(
@@ -841,7 +841,7 @@ def build_server(*, http: bool = False, wiki: bool = True) -> FastMCP:
     @mcp.tool(
         name="insert_image_block",
         description=(
-            "upload_image 로 얻은 image_id 로 ImageBlock 을 섹션에 삽입. "
+            "upload_image_from_url · upload_image_base64 로 얻은 image_id 로 ImageBlock 을 섹션에 삽입. "
             "after_block_id 생략 시 맨 뒤. 전송 전 로컬 schema 검증. "
             "MXWP_API_TOKEN 필수. → {block_id}"
         ),

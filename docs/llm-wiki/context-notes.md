@@ -355,6 +355,13 @@
 - 남은 것(W7 밖) — 게이트웨이 도구 단계는 포털 읽기 전용 PAT · 허용 목록이 있어야 켜진다(`WIKI_TOOLS_URL` · `WIKI_TOOLS_TOKEN` — 사람 몫, W8).
   글 모순 · 지속 질의 · 상시 질문의 실제 값은 LLM 이 있는 박스에서(W8). 게이트웨이 `tools/list` 의 `wiki_lint_report` 표지는 포털 세션이 본다.
 
+## 2026-10-30 — cae00 요청 MW-01 다시 · MW-12(포털 세션 hwaxportal-a5 — 정본은 포털 `4b08412` `docs/request_261030.md`)
+
+- **WK-D83 http 모드의 도구 설명은 그 모드에 없는 도구를 가리키지 않는다(MW-12).** `upload_image_from_url` 설명 · `upload_image_base64`
+  의 크기 초과 안내 · `insert_image_block` 설명이 http 에서 뺀 `upload_image`(MW-02)를 가리켜 운영자가 없는 도구를 찾았다. 셋에서 빼고
+  `upload_image_from_url` · `upload_image_base64`(큰 이미지는 줄여 다시)로 안내한다. 시험이 http 모드의 모든 도구 설명에 뺀 도구
+  셋(`import_file` · `upload_image` · `extract_pptx_images`)의 이름이 없는지 본다. stdio 용 SKILL · README 는 그대로 둔다(거기엔 있다).
+
 ## 2026-10-25 — dev SSO 전용 켬(사용자 결정 · 포털 MW-D22)
 
 - `.env` 에 `MXWP_SSO_ONLY=true` · `MXWP_LOCAL_LOGIN_ALLOW=admin@mx.local`(e2e · 비상) · `PORTAL_LAUNCH_URL` 을 더했다. 진입 링크는 상대 주소가
