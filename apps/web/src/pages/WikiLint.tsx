@@ -72,7 +72,7 @@ function Row({ f }: { f: WikiFinding }) {
           <p className="text-gray-900 dark:text-gray-100">{f.title}</p>
           {f.docs.length > 0 && (
             <p className="mt-0.5 text-xs">{f.docs.map((d) => (
-              <Link key={d.slug} to={`/docs/${d.slug}`} className="mr-2 text-smsg-700 hover:underline dark:text-smsg-300">{d.title}</Link>
+              <Link key={d.slug} to={`/docs/${d.slug}`} className="mr-2 text-smsg-700 hover:underline dark:text-[#5C7CFF]">{d.title}</Link>
             ))}</p>
           )}
           <Extra f={f} />

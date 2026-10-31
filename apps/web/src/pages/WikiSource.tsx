@@ -109,14 +109,14 @@ export function WikiSourcePage() {
           <dd className="text-gray-800 dark:text-gray-200">
             {src.origin.system} · <code className="font-mono text-xs">{src.origin.ref}</code>
             {src.origin.rev && <> · 판 {src.origin.rev}</>}
-            {src.origin.url && <> · <a href={src.origin.url} target="_blank" rel="noreferrer" className="text-smsg-700 hover:underline dark:text-smsg-300">원본 열기</a></>}
+            {src.origin.url && <> · <a href={src.origin.url} target="_blank" rel="noreferrer" className="text-smsg-700 hover:underline dark:text-[#5C7CFF]">원본 열기</a></>}
           </dd>
           <dt className="text-gray-500">생긴 때</dt>
           <dd className="text-gray-800 dark:text-gray-200">{kst(src.captured_at)} KST (받은 때 {kst(src.received_at)})</dd>
           <dt className="text-gray-500">원천 문서</dt>
           <dd>
             {src.doc_slug
-              ? <Link to={`/docs/${src.doc_slug}`} className="text-smsg-700 hover:underline dark:text-smsg-300">{src.doc_slug}</Link>
+              ? <Link to={`/docs/${src.doc_slug}`} className="text-smsg-700 hover:underline dark:text-[#5C7CFF]">{src.doc_slug}</Link>
               : <span className="text-gray-500">없음</span>}
           </dd>
           {src.blobs && src.blobs.length > 0 && (

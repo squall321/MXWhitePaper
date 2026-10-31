@@ -45,7 +45,7 @@ function Result({ q }: { q: WikiQuestion }) {
     return (
       <p className="mt-1 text-xs text-gray-700 dark:text-gray-300">
         답 — {text(d.answer) || '(사람이 남긴 답)'}
-        {q.answer_source && <Link to={`/wiki/sources/${q.answer_source.id}`} className="ml-2 font-mono text-smsg-700 hover:underline dark:text-smsg-300">{q.answer_source.short}</Link>}
+        {q.answer_source && <Link to={`/wiki/sources/${q.answer_source.id}`} className="ml-2 font-mono text-smsg-700 hover:underline dark:text-[#5C7CFF]">{q.answer_source.short}</Link>}
       </p>
     )
   }

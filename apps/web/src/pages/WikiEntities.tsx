@@ -102,7 +102,7 @@ export function WikiEntitiesPage() {
             {list.data.rows.map((e) => (
               <li key={e.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-sm">
                 <Badge tone="muted">{e.type_label}</Badge>
-                <Link to={`/wiki/entities/${e.id}`} className="font-medium text-smsg-800 hover:underline dark:text-smsg-300">{e.name}</Link>
+                <Link to={`/wiki/entities/${e.id}`} className="font-medium text-smsg-800 hover:underline dark:text-[#5C7CFF]">{e.name}</Link>
                 {e.aliases.length > 0 && <span className="text-xs text-gray-500">별칭 {e.aliases.join(', ')}</span>}
                 <span className="ml-auto text-xs text-gray-500">문서 {e.pages.length}</span>
               </li>

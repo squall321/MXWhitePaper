@@ -52,7 +52,7 @@ export function WikiHomePage() {
               <ul className="space-y-1 text-sm">
                 {sec.items.map((it) => (
                   <li key={it.slug}>
-                    <Link to={`/docs/${it.slug}`} className="text-smsg-700 hover:underline dark:text-smsg-300">{it.title}</Link>
+                    <Link to={`/docs/${it.slug}`} className="text-smsg-700 hover:underline dark:text-[#5C7CFF]">{it.title}</Link>
                     {it.summary && <span className="text-gray-500 dark:text-gray-400"> — {it.summary}</span>}
                   </li>
                 ))}
@@ -65,7 +65,7 @@ export function WikiHomePage() {
           {pending.isSuccess && (
             <Card padded="lg" data-testid="wiki-home-review">
               <h2 className="mb-1 text-sm font-semibold text-smsg-900 dark:text-gray-100">검토 기다림</h2>
-              <Link to="/wiki/changes" className="text-2xl font-bold text-smsg-700 hover:underline dark:text-smsg-300">
+              <Link to="/wiki/changes" className="text-2xl font-bold text-smsg-700 hover:underline dark:text-[#5C7CFF]">
                 {pending.data.total.toLocaleString()}
               </Link>
             </Card>
@@ -76,7 +76,7 @@ export function WikiHomePage() {
                 {asked.isSuccess && (
                   <div>
                     <h2 className="mb-1 text-sm font-semibold text-smsg-900 dark:text-gray-100">열린 질문</h2>
-                    <Link to="/wiki/questions" className="text-2xl font-bold text-smsg-700 hover:underline dark:text-smsg-300">
+                    <Link to="/wiki/questions" className="text-2xl font-bold text-smsg-700 hover:underline dark:text-[#5C7CFF]">
                       {asked.data.total.toLocaleString()}
                     </Link>
                   </div>
@@ -84,7 +84,7 @@ export function WikiHomePage() {
                 {lint.isSuccess && (
                   <div>
                     <h2 className="mb-1 text-sm font-semibold text-smsg-900 dark:text-gray-100">점검 결함</h2>
-                    <Link to="/wiki/lint" className="text-2xl font-bold text-smsg-700 hover:underline dark:text-smsg-300">
+                    <Link to="/wiki/lint" className="text-2xl font-bold text-smsg-700 hover:underline dark:text-[#5C7CFF]">
                       {lint.data.meta.total.toLocaleString()}
                     </Link>
                   </div>
@@ -105,7 +105,7 @@ export function WikiHomePage() {
               ))}
               {log.isSuccess && log.data.length === 0 && <li className="text-gray-500">아직 기록이 없다.</li>}
             </ul>
-            <Link to="/wiki/log" className="mt-2 inline-block text-xs text-smsg-700 hover:underline dark:text-smsg-300">기록 다 보기</Link>
+            <Link to="/wiki/log" className="mt-2 inline-block text-xs text-smsg-700 hover:underline dark:text-[#5C7CFF]">기록 다 보기</Link>
           </Card>
         </aside>
       </div>

@@ -50,7 +50,7 @@ function SourceCard({ cite, n, onClose }: { cite: WikiCite; n: number; onClose: 
           닫기
         </button>
       </div>
-      <Link to={`/wiki/sources/${cite.source_id}`} className="font-medium text-smsg-700 hover:underline dark:text-smsg-300">
+      <Link to={`/wiki/sources/${cite.source_id}`} className="font-medium text-smsg-700 hover:underline dark:text-[#5C7CFF]">
         {cite.title}
       </Link>
       <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
@@ -64,10 +64,10 @@ function SourceCard({ cite, n, onClose }: { cite: WikiCite; n: number; onClose: 
       )}
       <div className="mt-2 flex gap-3 text-xs">
         {cite.doc_slug && (
-          <Link to={`/docs/${cite.doc_slug}`} className="text-smsg-700 hover:underline dark:text-smsg-300">원천 문서</Link>
+          <Link to={`/docs/${cite.doc_slug}`} className="text-smsg-700 hover:underline dark:text-[#5C7CFF]">원천 문서</Link>
         )}
         {cite.url && (
-          <a href={cite.url} target="_blank" rel="noreferrer" className="text-smsg-700 hover:underline dark:text-smsg-300">
+          <a href={cite.url} target="_blank" rel="noreferrer" className="text-smsg-700 hover:underline dark:text-[#5C7CFF]">
             원본 열기
           </a>
         )}
@@ -96,7 +96,7 @@ export function WikiCited({ blockId, children }: { blockId: string; children: Re
               onClick={() => setOpen(open === c.source_id ? null : c.source_id)}
               aria-expanded={open === c.source_id}
               title={c.title}
-              className="rounded px-1 font-mono text-[11px] leading-4 text-smsg-700 hover:bg-smsg-50 dark:text-smsg-300 dark:hover:bg-gray-800"
+              className="rounded px-1 font-mono text-[11px] leading-4 text-smsg-700 hover:bg-smsg-50 dark:text-[#5C7CFF] dark:hover:bg-gray-800"
             >
               [{n}]
             </button>
@@ -135,7 +135,7 @@ export function WikiPageBanner({ page }: { page: WikiPageInfo }) {
           type="button"
           onClick={() => setShowSources((v) => !v)}
           aria-expanded={showSources}
-          className="ml-auto text-xs text-smsg-700 hover:underline dark:text-smsg-300"
+          className="ml-auto text-xs text-smsg-700 hover:underline dark:text-[#5C7CFF]"
         >
           이 문서가 기대는 원천 {page.sources.length}
         </button>
@@ -145,7 +145,7 @@ export function WikiPageBanner({ page }: { page: WikiPageInfo }) {
           {page.sources.map((s, i) => (
             <li key={s.source_id} className="flex gap-2">
               <span className="font-mono text-gray-500">[{i + 1}]</span>
-              <Link to={`/wiki/sources/${s.source_id}`} className="text-smsg-700 hover:underline dark:text-smsg-300">
+              <Link to={`/wiki/sources/${s.source_id}`} className="text-smsg-700 hover:underline dark:text-[#5C7CFF]">
                 {s.title}
               </Link>
               <span className="text-gray-500 dark:text-gray-400">

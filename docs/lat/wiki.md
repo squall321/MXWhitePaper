@@ -591,3 +591,8 @@ dev(LLM 없음 · 10-24) — 29 사례 중 결정적 15 건 100 % · 비슷한 �
 - **MCP 읽기 아홉의 `readOnlyHint` 를 빼지 않는다** — 게이트웨이(HWAXMcpGateway 67d8d00~)는 읽기 전용 PAT 뿐 아니라 `/tools-map` 의
   `write`(쓰기 분류) · `routine_read`(분석 루틴 단계가 부를 수 있는 읽기)도 이 표지를 이름보다 먼저 보고 가른다. 빼면 이름으로만 가려
   `wiki_lint_report` 처럼 조회 낱말이 없는 이름은 루틴에서 닫힌다 — `test_only_pure_reads_are_marked_read_only` 가 지킨다.
+- **Tailwind 는 `apps/web/tailwind.config.js` 를 읽는다(`.ts` 가 아니다)** — 5월의 옛 사본이라 `smsg` 에 900 · 700 · 500 · 100 만 있고
+  `darkMode` 도 없다(어두운 변형은 `prefers-color-scheme` 을 따른다). `smsg-300` · `smsg-200` · `smsg-800` · `smsg-50` 클래스는 CSS 가
+  만들어지지 않는다. 위키 화면의 어두운 모드 링크가 남색(밝은 모드 `text-smsg-700`)으로 남던 까닭이라, 위키 화면은 디자인 값을 그대로
+  `dark:text-[#5C7CFF]`(smsg-300)로 쓴다(10-31). 설정을 바로잡는 일은 앱 전체(테두리 · 안내선 · 포커스 테두리 100곳 넘게)를 바꾸므로
+  따로 정한다(사람).

@@ -60,7 +60,7 @@ export function WikiChangesPage() {
           <ul className="divide-y divide-gray-100 dark:divide-gray-800">
             {q.data.rows.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm">
-                <Link to={`/wiki/changes/${r.id}`} className="font-mono text-smsg-700 hover:underline dark:text-smsg-300">{r.short}</Link>
+                <Link to={`/wiki/changes/${r.id}`} className="font-mono text-smsg-700 hover:underline dark:text-[#5C7CFF]">{r.short}</Link>
                 <Badge tone={STATUS_TONE[r.status] ?? 'neutral'}>{STATUS_LABEL[r.status] ?? r.status}</Badge>
                 <span className="text-gray-500">{r.source.short}</span>
                 <span className="min-w-0 flex-1 truncate text-gray-800 dark:text-gray-200">
