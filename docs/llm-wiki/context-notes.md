@@ -373,6 +373,19 @@
   돈다. 의존성 · `.def` 변경은 없다.
 - 게이트웨이 67d8d00(10-30 재기동)의 `/tools-map` — 읽기 아홉은 `routine_read`, 쓰기 넷은 `write`, `wiki_ask` 는 둘 다 아님(확인).
 
+## 2026-10-31 — 위키 어두운 모드 링크 · dev web 교체 · Drive 올리기(사용자 결정 — 이 세션에서 물음)
+
+- **WK-D84 위키 화면의 어두운 모드 링크는 디자인 값을 그대로 `dark:text-[#5C7CFF]` 로 쓴다(48da3fd).** 까닭 — Tailwind 는
+  `apps/web/tailwind.config.js`(5월의 옛 사본)를 읽어 `smsg-300` 이 없고, `dark:text-smsg-300` 의 CSS 가 만들어지지 않아 링크 · 큰 숫자가
+  밝은 모드의 남색으로 남았다. 설정에 300 을 더하면 앱 전체에서 100곳 넘게(테두리 · 안내선 · 포커스 테두리 — 지금은 안 그려진다)가
+  한꺼번에 바뀌어 사람이 따로 정한다. 시각 회귀 위키 기준 그림을 `=all` 로 다시 떴다 — 밝은 그림 다섯은 W7 의 내비 둘이 이제야 실렸다.
+- dev 반영 — 접두판(`VITE_BASE_PATH=/mx-white-paper/`)으로 다시 빌드해 web.sif 를 스크래치에 짓고 mxwp_web 을 내려 바꿔 끼웠다(옛 것은
+  스크래치 `web.sif.bak-1029`). 포털 세션에 먼저 알렸다. HWAX 포털 8088 · HPC 포털 443 의 `/mx-white-paper/` 가 새 CSS
+  (`index-DYzVdW8n.css`, 새 링크 색 든 것)를 내는 것을 봤다. **8443 은 KooRemapper 다** — 모르는 경로도 200 으로 받아, 10-30 에 그
+  주소로 본 '포털 경유 200' 은 근거가 못 됐다(오늘 8088 · 443 으로 내용까지 다시 봤다).
+- Drive — `images-to-drive.sh`(사용자가 시킴)로 `images-20261031-073148Z` 와 `latest/` 를 올렸다. web 만 새것이고 api · wiki 는 Drive 와 같다.
+  보존(3벌)으로 `images-20260913-020235Z` 가 지워졌다. `latest/` 세 파일의 크기가 로컬과 같다.
+
 ## 2026-10-25 — dev SSO 전용 켬(사용자 결정 · 포털 MW-D22)
 
 - `.env` 에 `MXWP_SSO_ONLY=true` · `MXWP_LOCAL_LOGIN_ALLOW=admin@mx.local`(e2e · 비상) · `PORTAL_LAUNCH_URL` 을 더했다. 진입 링크는 상대 주소가
