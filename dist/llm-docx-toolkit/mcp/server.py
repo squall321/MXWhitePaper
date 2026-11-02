@@ -43,6 +43,7 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import hashlib
 import importlib
 import inspect
 import importlib.util
@@ -294,6 +295,10 @@ _IMAGE_MIME: dict[str, str] = {
 # 작은 이미지로 제한 (초과 시 upload_image_from_url 이나 줄여 다시 올리기로 유도).
 _IMAGE_BASE64_MAX_BYTES = 256 * 1024
 
+# upload_image_bytes(게이트웨이) 가 받는 mime — svg 는 뺀다. API 가 Pillow 로 WebP 로 다시 굽는데 Pillow 는 svg 를 못 읽어
+# finalize 가 422 를 낸다(extract_pptx_images 가 svg 를 건너뛰는 것과 같은 까닭).
+_IMAGE_BYTES_MIME = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
+
 
 def _resolve_import_kind(path: str, kind: str) -> tuple[str, str]:
     """(kind, content_type) — kind='auto' 면 확장자로 판정."""
@@ -415,6 +420,8 @@ def build_server(*, http: bool = False, wiki: bool | None = True) -> FastMCP:
             return f
         return deco
     local_tool = _skip if http else mcp.tool
+    # 게이트웨이(서버 쪽 호출자) 전용 도구는 http 모드에만 — stdio 의 모델이 base64 256KB 캡을 비켜 가는 길이 되지 않게(11-02).
+    gateway_tool = mcp.tool if http else _skip
     wiki_tool = mcp.tool if wiki else (_hold if wiki is None else _skip)
     _WIKI_HELD.clear()
     _MCP = mcp
@@ -808,6 +815,42 @@ def build_server(*, http: bool = False, wiki: bool | None = True) -> FastMCP:
                 f"아니면 {_IMAGE_BASE64_MAX_BYTES // 1024}KB 이하로 줄여 다시 올리세요."
             )
         mime_type = _image_mime(filename)
+        return client.upload_bytes(
+            filename=Path(filename).name, content=content, mime_type=mime_type
+        )
+
+    @gateway_tool(
+        name="upload_image_bytes",
+        description=(
+            "서버 쪽 호출자(HWAX 게이트웨이의 figure_to_doc)가 그림 바이트를 MinIO 에 올리는 도구 → image_id. "
+            "모델은 이 도구에 base64 를 직접 싣지 말고 figure_to_doc 을 쓰세요. data_base64 = 이미지 바이트의 base64, "
+            "mime = image/png · image/jpeg · image/gif · image/webp (svg 는 PNG 로 바꿔 올린다), sha256 = 바이트의 16진 "
+            "해시 — 맞지 않으면 API 를 부르지 않고 거부. 크기 상한은 API 의 IMAGE_MAX_BYTES(기본 20MB). 동일 내용은 dedup. "
+            "image_id 는 insert_image_block 에 그대로 사용. editor · write scope 토큰 필수. "
+            "→ {image_id, image_url?, deduped}"
+        ),
+    )
+    def upload_image_bytes(
+        filename: str, data_base64: str, mime: str, sha256: str
+    ) -> dict[str, Any]:
+        client = _make_client()
+        _require_token(client)
+        mime_type = mime.strip().lower()
+        if mime_type not in _IMAGE_BYTES_MIME:
+            raise RuntimeError(
+                f"지원하지 않는 mime {mime!r} — {' · '.join(sorted(_IMAGE_BYTES_MIME))} 중 하나. "
+                "svg 는 저장하지 못한다(API 가 WebP 로 다시 굽는다) — PNG 로 바꿔 올리세요."
+            )
+        try:
+            content = base64.b64decode(data_base64, validate=True)
+        except (binascii.Error, ValueError) as e:
+            raise RuntimeError("data_base64 가 올바른 base64 가 아닙니다.") from e
+        if not content:
+            raise RuntimeError("빈 이미지입니다.")
+        if hashlib.sha256(content).hexdigest() != sha256.strip().lower():
+            raise RuntimeError(
+                "sha256 이 받은 바이트와 맞지 않습니다 — 전송 중 바이트가 바뀌었거나 다른 그림의 해시입니다 (API 호출 안 함)."
+            )
         return client.upload_bytes(
             filename=Path(filename).name, content=content, mime_type=mime_type
         )

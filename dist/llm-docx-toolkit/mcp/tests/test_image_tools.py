@@ -12,9 +12,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import importlib.util
 import io
+import json
 import time
+import urllib.error
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -125,6 +128,98 @@ def test_from_url_api_client_mapping(server_mod) -> None:
     assert b"example.com" in captured["body"]
 
 
+# ── upload_image_bytes — 게이트웨이 figure_to_doc 전용(11-02) ──────────
+
+
+class _JsonResp:
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self._raw = json.dumps(payload).encode("utf-8")
+        self.headers: dict[str, str] = {}
+
+    def read(self) -> bytes:
+        return self._raw
+
+
+def _fake_client(server_mod, monkeypatch, routes: dict[tuple[str, str], Any]) -> list[tuple[str, str, bytes]]:
+    """_make_client 를 가짜 전송으로 — routes[(method, url 끝)] 는 응답 dict 또는 req 를 받는 함수. 부른 요청을 돌려준다."""
+    calls: list[tuple[str, str, bytes]] = []
+
+    def opener(req, timeout):
+        calls.append((req.get_method(), req.full_url, req.data))
+        for (method, suffix), answer in routes.items():
+            if req.get_method() == method and req.full_url.endswith(suffix):
+                return answer(req) if callable(answer) else _JsonResp(answer)
+        raise AssertionError(f"예상 밖 요청 {req.get_method()} {req.full_url}")
+
+    client = server_mod._api().MxwpClient(LIVE_URL, "tok", opener=opener)
+    monkeypatch.setattr(server_mod, "_make_client", lambda: client)
+    return calls
+
+
+def _bytes_args(content: bytes, **over: Any) -> dict[str, Any]:
+    args = {
+        "filename": "fig_abc.png",
+        "data_base64": base64.b64encode(content).decode("ascii"),
+        "mime": "image/png",
+        "sha256": hashlib.sha256(content).hexdigest(),
+    }
+    return {**args, **over}
+
+
+def test_upload_image_bytes_is_http_only(server_mod) -> None:
+    def names(s) -> set[str]:
+        return {t.name for t in asyncio.run(s.list_tools())}
+
+    assert "upload_image_bytes" in names(server_mod.build_server(http=True))
+    assert "upload_image_bytes" not in names(server_mod.build_server())  # stdio 모델이 256KB 캡을 비켜 가지 않게
+
+
+def test_upload_image_bytes_goes_init_put_finalize(server_mod, monkeypatch) -> None:
+    png = _make_png()
+    calls = _fake_client(server_mod, monkeypatch, {
+        ("POST", "/api/v1/uploads/image/init"): {"data": {"uploadId": "u1", "url": "http://minio.test/stage?sig=1"}},
+        ("PUT", "/stage?sig=1"): {},
+        ("POST", "/api/v1/uploads/image/finalize"): {
+            "data": {"image_id": "01HZZZZZZZZZZZZZZZZZZZZZZZ", "deduped": False, "urls": {"view": "http://x/v.webp"}}},
+    })
+    s = server_mod.build_server(http=True)
+    out = _call(s, "upload_image_bytes", _bytes_args(png, mime="IMAGE/PNG"))
+    assert out == {"image_id": "01HZZZZZZZZZZZZZZZZZZZZZZZ", "image_url": "http://x/v.webp", "deduped": False}
+    assert [c[0] for c in calls] == ["POST", "PUT", "POST"]
+    init = json.loads(calls[0][2])
+    assert init == {"filename": "fig_abc.png", "mime_type": "image/png",
+                    "sha256": hashlib.sha256(png).hexdigest(), "size": len(png)}
+    assert calls[1][2] == png
+
+
+@pytest.mark.parametrize("over, needle", [
+    ({"sha256": "0" * 64}, "sha256"),
+    ({"mime": "image/svg+xml"}, "PNG 로"),
+    ({"data_base64": "!!!notb64"}, "base64"),
+    ({"data_base64": ""}, "빈 이미지"),
+])
+def test_upload_image_bytes_refuses_bad_input_without_api_call(server_mod, monkeypatch, over, needle) -> None:
+    calls = _fake_client(server_mod, monkeypatch, {})
+    s = server_mod.build_server(http=True)
+    with pytest.raises(Exception) as ei:
+        _call(s, "upload_image_bytes", _bytes_args(_make_png(), **over))
+    assert needle in str(ei.value)
+    assert calls == []
+
+
+def test_upload_image_bytes_read_scope_is_refused_at_init(server_mod, monkeypatch) -> None:
+    def forbidden(req):
+        body = json.dumps({"data": None, "error": {"code": "FORBIDDEN", "message": "Token lacks write scope"}})
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", hdrs=None, fp=io.BytesIO(body.encode("utf-8")))
+
+    calls = _fake_client(server_mod, monkeypatch, {("POST", "/api/v1/uploads/image/init"): forbidden})
+    s = server_mod.build_server(http=True)
+    with pytest.raises(Exception) as ei:
+        _call(s, "upload_image_bytes", _bytes_args(_make_png()))
+    assert "403" in str(ei.value) and "write scope" in str(ei.value)
+    assert len(calls) == 1  # PUT · finalize 까지 가지 않는다
+
+
 # ── (b) live ─────────────────────────────────────────────────────────
 
 
@@ -214,5 +309,50 @@ def test_live_upload_image_from_url_if_available(server_mod, monkeypatch) -> Non
         if any(k in msg for k in ("timeout", "연결", "fetch", "다운로드", "URL")):
             pytest.skip(f"외부 fetch 불가 (컨테이너 네트워크 한계): {msg[:120]}")
         raise
+    finally:
+        _revoke_live_token(token, token_id)
+
+
+@pytest.mark.live
+def test_live_upload_image_bytes_then_insert_image_block(server_mod, monkeypatch) -> None:
+    """게이트웨이 figure_to_doc 의 두 걸음 — upload_image_bytes → insert_image_block 이 문서 섹션에 그림을 남긴다."""
+    if not _api_alive():
+        pytest.skip(f"live API not reachable at {LIVE_URL}")
+    token, token_id = _issue_live_token()
+    monkeypatch.setenv("MXWP_API_URL", LIVE_URL)
+    monkeypatch.setenv("MXWP_API_TOKEN", token)
+    s = server_mod.build_server(http=True)
+    slug = f"mcp-live-fig-{int(time.time() * 1000)}"
+    cleanup_client = server_mod._api().MxwpClient(LIVE_URL, token)
+    try:
+        _call(s, "create_document", {"title": f"MCP 그림 시험 {slug}", "slug": slug})
+        sec_id = _call(s, "get_document_outline", {"slug": slug})["sections"][0]["id"]
+        up = _call(s, "upload_image_bytes", _bytes_args(_make_png()))
+        assert len(up["image_id"]) == 26 and up["deduped"] is False
+        ins = _call(s, "insert_image_block", {
+            "slug": slug, "section_id": sec_id, "image_id": up["image_id"], "alt": "그림", "caption": "StepForge",
+        })
+        blk = _call(s, "get_block", {"slug": slug, "block_id": ins["block_id"]})
+        assert blk["type"] == "image" and blk["imageId"] == up["image_id"] and blk["caption"] == "StepForge"
+    finally:
+        try:
+            cleanup_client.delete_document(slug)
+        except Exception:
+            pass
+        _revoke_live_token(token, token_id)
+
+
+@pytest.mark.live
+def test_live_upload_image_bytes_read_only_token_refused(server_mod, monkeypatch) -> None:
+    if not _api_alive():
+        pytest.skip(f"live API not reachable at {LIVE_URL}")
+    token, token_id = _issue_live_token(scopes=("read",))
+    monkeypatch.setenv("MXWP_API_URL", LIVE_URL)
+    monkeypatch.setenv("MXWP_API_TOKEN", token)
+    s = server_mod.build_server(http=True)
+    try:
+        with pytest.raises(Exception) as ei:
+            _call(s, "upload_image_bytes", _bytes_args(_make_png()))
+        assert "403" in str(ei.value)
     finally:
         _revoke_live_token(token, token_id)

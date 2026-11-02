@@ -339,14 +339,14 @@ def _api_alive() -> bool:
         return False
 
 
-def _issue_live_token() -> tuple[str, str]:
+def _issue_live_token(scopes: tuple[str, ...] = ("read", "write")) -> tuple[str, str]:
     """dev no-token admin fallback 으로 write 토큰 발급 → (token, token_id).
 
     발급 호출은 익명 (anon rate-limit bucket, 60/min/IP) — 429 면 Retry-After
     만큼 기다렸다 재시도 (최대 3회)."""
     body = json.dumps({
         "name": f"mcp-live-{int(time.time() * 1000)}",
-        "scopes": ["read", "write"],
+        "scopes": list(scopes),
     }).encode("utf-8")
     req = urllib.request.Request(
         f"{LIVE_URL}/api/v1/me/api-tokens", data=body, method="POST",

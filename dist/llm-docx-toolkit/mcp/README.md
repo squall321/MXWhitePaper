@@ -44,6 +44,7 @@ stdio MCP 서버. 두 가지를 한다:
 | `upload_image(path)` | `{image_id, image_url?, deduped}` — **로컬 파일** 이미지 (png/jpg/jpeg/gif/webp/svg) 를 2-phase presigned 흐름 (init → PUT → finalize) 으로 업로드. 셸/로컬 접근 가능한 환경 (Claude Code) 용. 같은 sha256 은 dedup |
 | `upload_image_from_url(url, filename?)` | `{image_id, image_url?, deduped}` — **웹 URL** 이미지를 **서버가 직접 받아** 업로드 (바이트가 모델/클라이언트를 안 거쳐 **크기·화질 제약 없음**). 공개 http/https 만 (사설·내부 주소 차단). **권장 경로** |
 | `upload_image_base64(filename, data_base64, mime_type?)` | `{image_id, image_url?, deduped}` — **작은 로컬 이미지** 를 base64 로 업로드 (Claude Desktop 처럼 로컬 경로를 못 주는 환경). base64 가 모델 출력 토큰을 소모하므로 **≈256KB 이하 전용** (큰 파일 거부) |
+| `upload_image_bytes(filename, data_base64, mime, sha256)` | `{image_id, image_url?, deduped}` — **http 모드 전용, 서버 쪽 호출자(HWAX 게이트웨이 `figure_to_doc`)용.** 모델은 쓰지 않는다. sha256 검사 · png/jpeg/gif/webp 만 (svg 거부) · 크기 상한은 API 의 `IMAGE_MAX_BYTES`(20MB) |
 | `extract_pptx_images(path)` | `{source, images:[{image_id, ...}], extracted, ...}` — **.pptx 속 그림들** 을 각각 별도 이미지로 추출해 여러 `image_id` 반환. 각 id 를 `insert_image_block` 에 차례로 삽입 |
 | `insert_image_block(slug, section_id, image_id, alt?, caption?, after_block_id?)` | `{block_id}` — 위 업로드 도구가 준 `image_id` 로 ImageBlock 삽입 |
 
@@ -201,7 +202,8 @@ register-once 명령**이 토큰까지 채워져 나온다 — 복사해 실행�
 frozen 바이너리에는 HTTP 스택을 넣지 않는다 — HTTP transport 는 **컨테이너
 Python** (`instance://mxwp_api`) 으로 호스팅한다. http 모드는 서버 쪽 경로를 읽는 도구 셋(`import_file` · `upload_image` ·
 `extract_pptx_images`)을 싣지 않는다 — 그 경로는 부른 사람의 PC 가 아니라 서버 컨테이너다(10-27 MW-02). PC 파일은 RA
-`prepare_upload` 길로 올린다. 위키가 꺼진 박스(`/api/v1/wiki/health` 404)면 뜰 때 `wiki_*` 를 싣지 않는다(MW-01). API 에 닿지
+`prepare_upload` 길로 올린다. 거꾸로 `upload_image_bytes` 는 http 모드에만 싣는다 — 게이트웨이가 그 사람 명의로 그림 바이트를
+올리는 길이고, presigned PUT 은 이 MCP 프로세스가 하므로 API 의 `MINIO_PUBLIC_ENDPOINT` 가 이 박스에서 닿아야 한다. 위키가 꺼진 박스(`/api/v1/wiki/health` 404)면 뜰 때 `wiki_*` 를 싣지 않는다(MW-01). API 에 닿지
 않으면 싣지 않고 뜬 뒤 10초마다 다시 봐 켜짐이면 그때 싣는다(10-30 MW-01 다시). 한 줄 실행:
 
 ```bash
