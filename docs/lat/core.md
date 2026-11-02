@@ -409,6 +409,13 @@ invalid_token 401) + 스냅숏 덮어쓰기 + 소속→팀 = 8 묶음 (cycle 19 
   `/api/v1/wiki/health` 를 보고 `wiki_*` 를 싣지 않는다(닿지 않으면 http 모드는 싣지 않고 뜬 뒤 10초마다 다시 봐 켜짐이면 싣고 —
   10-30 MW-01 다시, stdio 는 싣는다. 부를 때 꺼져 있으면 `api_client.wiki` 가 'search_documents 를 쓰세요' 안내로 바꾼다). 도구 설명은
   http 모드에 없는 이 셋을 가리키지 않는다(10-30 MW-12 — 이미지는 `upload_image_from_url` · `upload_image_base64`).
+- **`upload_image_bytes(filename, data_base64, mime, sha256)` 는 http 모드에만 싣는다(11-02 포털 `figure_to_doc`)** — 게이트웨이가
+  저장해 둔 그림 바이트를 그 사람의 위임 Bearer 로 올리는 서버 쪽 길(모델이 바이트를 나르지 않는다). stdio 에는 없다 — PC 의 모델이
+  `upload_image_base64` 의 256KB 캡을 비켜 가는 길이 되지 않게. sha256 이 바이트와 다르거나 mime 이 png · jpeg · gif · webp 밖이면
+  (svg 는 Pillow 가 못 읽어 finalize 가 422) API 를 부르지 않고 거부. 크기 상한은 API init 의 `IMAGE_MAX_BYTES`(20MB) 하나. 길은
+  `upload_image_base64` 와 같은 `MxwpClient.upload_bytes`(init → presigned PUT → finalize, dedup 이면 PUT 생략) — **presigned PUT 은
+  MCP 프로세스가 직접 한다**, 그래서 API 의 `MINIO_PUBLIC_ENDPOINT`(start.sh 가 api 인스턴스에 `http://127.0.0.1:<port>`)가 MCP 가 도는
+  박스에서 닿아야 하고 호출자(게이트웨이)는 MinIO 에 닿을 필요가 없다. 뒤이어 `insert_image_block` 이 ETag 를 스스로 받아 넣는다.
 - **http 모드(:8765)는 위임 증명 머리글 넷을 넘긴다** — 게이트웨이가 실은 `X-Heax-User-Affiliation` · `X-Heax-Aff-Proof` ·
   `X-Heax-User-Plat` · `X-Heax-Plat-Proof` 를 받은 그대로 API 호출에 싣는다(`server._request_forward_headers` →
   `MxwpClient(extra_headers=…)`). 10-24 전에는 Bearer 만 넘겨 MCP 로는 `aff:` · `plat:` 범위 문서를 아무도 못 봤다(닫힌 쪽).

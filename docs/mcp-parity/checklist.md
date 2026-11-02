@@ -34,3 +34,10 @@
 - [x] systemd 서비스 템플릿 (infra/systemd 또는 deploy) — `infra/systemd/mxwp-mcp-http.service`
 - [x] in-app UI: `claude mcp add --transport http <url> --header "Authorization: Bearer <tok>"` 명령 제공 — `ApiTokens.tsx`
 - [x] mcp/README: HTTP 등록 절 추가
+
+## upload_image_bytes — 게이트웨이 figure_to_doc (2026-11-02, 포털 세션 hwaxportal-a5)
+- [x] `upload_image_bytes(filename, data_base64, mime, sha256)` — http 모드 전용, sha256 · mime(png/jpeg/gif/webp) 검사, `upload_bytes` 공유
+- [x] 단위 시험 7 (http 전용 · init→PUT→finalize · 잘못된 입력 넷은 API 안 부름 · read scope 403) + live 2 (dev 무토큰 폴백이 닫혀 skip)
+- [x] 새 코드 http 서버(:8766)에 streamable-http 로 붙어 노출 · 1.2MB PNG 검사 통과 · Bearer 전달(가짜 토큰 401) 확인
+- [x] lat core §7 · mcp/README
+- [ ] 진짜 사람 명의 끝에서 끝 — 포털 세션이 dev mxwp-mcp 를 다시 띄운 뒤 `figure_to_doc` 로 (이 세션은 사람 토큰을 만들지 않는다)

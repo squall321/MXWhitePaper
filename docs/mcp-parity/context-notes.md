@@ -38,3 +38,20 @@ MXWP 신규: `POST /api/v1/uploads/image/from-url {url}` — SSRF 가드 → 기
 - 크기 캡 — from-url 은 응답 스트림에 상한(예: 20MB) 둬서 메모리 폭주 방지.
 - base64 캡 — RA 는 256KB. 동일 적용.
 - 이미지 외 파일(FileBlock) 은 이번 범위 밖 (이미지 전송에 집중).
+
+## 2026-11-02 — upload_image_bytes (포털 hwaxportal-a5 요청 · figure_to_doc)
+
+- **http 모드에만 싣는다.** 게이트웨이가 7일 보관한 그림(`fig_<ref>`)을 그 사람 위임 Bearer 로 올리는 서버 쪽 길이다. stdio(PC)에
+  실으면 모델이 `upload_image_base64` 의 256KB 캡(모델 토큰 보호)을 비켜 가는 길이 된다 — 그래서 `local_tool` 의 거울 `gateway_tool`.
+- **크기 캡은 API 하나(init 의 `IMAGE_MAX_BYTES`, 20MB).** 툴킷이 따로 캡을 두면 두 값이 어긋난다. init 이 PUT 전에 거부한다.
+- **svg 거부.** API 가 Pillow 로 WebP 로 다시 굽는데 Pillow 는 svg 를 못 읽어 finalize 가 422 를 내고 staging 이 남는다.
+  `extract_pptx_images` 가 svg 를 건너뛰는 것과 같은 까닭. 게이트웨이도 'PNG 로' 로 거부한다(포털 회신).
+- **sha256 은 툴킷이 검사한다** — 게이트웨이 저장소 → MCP 사이에서 바뀐 바이트를 API 를 부르기 전에 잡는다. `upload_bytes` 가
+  init 에 싣는 sha256 은 받은 바이트로 다시 계산한 값이라, 검사하지 않으면 다른 그림이 그 해시로 dedup 될 일은 없지만 잘못 온 그림이
+  조용히 들어간다.
+- **presigned PUT 은 MCP 프로세스가 한다.** 호출자는 MinIO 에 닿을 필요가 없다. API 의 `MINIO_PUBLIC_ENDPOINT` 는 start.sh 가 api
+  인스턴스에 `http://127.0.0.1:<port>` 로 주고 MCP 는 같은 인스턴스 안에서 돈다(dev 확인: API 프로세스 env `http://127.0.0.1:9000`).
+- **배포는 git 만.** 툴킷은 어떤 sif 에도 굽지 않는다 — 박스는 `/workspace/dist/llm-docx-toolkit` 체크아웃에서 돈다. cae00 은
+  update-all 뒤 mxwp-mcp 재기동(서버가 server.py 를 뜰 때 한 번 읽는다). Drive 이미지 불필요.
+- **live 시험은 dev 에서 skip 된다** — `051acc3` 이후 무토큰 admin 폴백이 닫혀 `_issue_live_token` 이 401. 사람 명의 토큰을 따로
+  만드는 것은 이 세션 권한 밖이라(신원 승인 없음) 진짜 끝에서 끝은 포털 세션의 `figure_to_doc` 수락 시험으로 한다.
