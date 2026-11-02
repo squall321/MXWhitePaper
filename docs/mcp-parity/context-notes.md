@@ -55,3 +55,6 @@ MXWP 신규: `POST /api/v1/uploads/image/from-url {url}` — SSRF 가드 → 기
   update-all 뒤 mxwp-mcp 재기동(서버가 server.py 를 뜰 때 한 번 읽는다). Drive 이미지 불필요.
 - **live 시험은 dev 에서 skip 된다** — `051acc3` 이후 무토큰 admin 폴백이 닫혀 `_issue_live_token` 이 401. 사람 명의 토큰을 따로
   만드는 것은 이 세션 권한 밖이라(신원 승인 없음) 진짜 끝에서 끝은 포털 세션의 `figure_to_doc` 수락 시험으로 한다.
+- **11-02 끝에서 끝 통과(포털 세션)** — 포털 사용자가 시험 신원 `figsmoke@hwax.local` 을 승인했고, 첫 위임 발급에서 `/auth/sso` 가 JIT 로
+  editor 로 만들었다. `render_3d` PNG → `figure_to_doc` → 블록, 두 번째는 dedup(PUT · finalize 생략). init · PUT · finalize 오류 없음 —
+  dev 의 mxwp_api 안에서 `MINIO_PUBLIC_ENDPOINT` 가 닿는다. 툴킷에는 `delete_document` 가 없어 빈 초안이 남는다.

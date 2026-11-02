@@ -40,4 +40,5 @@
 - [x] 단위 시험 7 (http 전용 · init→PUT→finalize · 잘못된 입력 넷은 API 안 부름 · read scope 403) + live 2 (dev 무토큰 폴백이 닫혀 skip)
 - [x] 새 코드 http 서버(:8766)에 streamable-http 로 붙어 노출 · 1.2MB PNG 검사 통과 · Bearer 전달(가짜 토큰 401) 확인
 - [x] lat core §7 · mcp/README
-- [ ] 진짜 사람 명의 끝에서 끝 — 포털 세션이 dev mxwp-mcp 를 다시 띄운 뒤 `figure_to_doc` 로 (이 세션은 사람 토큰을 만들지 않는다)
+- [x] 진짜 사람 명의 끝에서 끝 — 11-02 포털 세션이 dev 에서 `figure_to_doc` 로 통과(StepForge PNG 22KB → 블록 · 같은 그림 두 번째는
+  `deduped: true`). 남은 것: 빈 초안 `figsmoke-scratch-1793659490` · dev 계정 `figsmoke@hwax.local`(editor, JIT) — 지울지는 사용자 결정
