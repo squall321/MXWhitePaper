@@ -2,6 +2,11 @@
 
 > 단계 · 완료 기준은 [request.md](request.md) §9. 포털 · 게이트웨이 · 에이전트 서버 몫은 HWAXPortal `docs/mxwp-wiki/checklist.md`.
 
+## 지금 지킬 것
+- [ ] **cae00 업데이트 라운드 동결(2026-11-22~, 포털 hwaxportal-87 — 사용자 결정 'ste 판 뒤 한 번에')** — origin main 에 push 하지 않고
+  Drive 이미지(`images-to-drive.sh` · `toolkit-to-drive.sh`)도 올리지 않는다. 로컬 커밋 · 가지 작업은 된다. 맞춰 본 짝은 main `078f28e` ·
+  Drive `images-20261031-073148Z`. **해제 — hwaxportal-87 이 cae00 수신을 알릴 때**(그때 이 줄을 [x] 로 바꾸고 쌓인 커밋을 push 한다).
+
 ## 요청서(2026-10-24, 포털 세션)
 - [x] 구조 조사(Karpathy 원문) · MXWP 현황 · 포털 연결 상태 · 원천 위치 조사
 - [x] request · CONTRACTS · SCHEMA-DRAFT · START · checklist · context-notes
