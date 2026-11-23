@@ -423,7 +423,7 @@ VITE_PROXY_TARGET=http://HOST_IP:8800   # 권장 — 어떤 apptainer 든 동작
 MXWP_APPT_HOST_NET=0                     # host CNI 있을 때만 1
 
 # 사내망 corporate workaround
-MXWP_FALLBACK_PROXY=http://168.219.61.252:8080   # outbound 프록시 (Samsung MX)
+MXWP_FALLBACK_PROXY=http://<사내 프록시>:8080   # outbound 프록시 — 박스 .env 에만, 비면 직결
 MXWP_COREPACK_OFFLINE=0                          # corepack 네트워크 차단 (지금은 unused — corepack 자체 제거됨)
 MXWP_NODE_TLS_VERIFY=0                           # NODE_TLS_REJECT_UNAUTHORIZED=0 (SSL 인터셉션 우회)
 

@@ -48,9 +48,9 @@
 #  Fallback proxy:
 #    If a curl / npm / pip download fails on the first attempt, the script
 #    automatically retries through the proxy in MXWP_FALLBACK_PROXY
-#    (default http://168.219.61.252:8080 — Samsung MX network egress).
+#    (no default — empty means no retry, and the script says so).
 #    Override or disable:
-#      MXWP_FALLBACK_PROXY=http://10.0.0.1:8080 sudo -E ./scripts/bootstrap-host.sh
+#      MXWP_FALLBACK_PROXY=http://<사내 프록시>:8080 sudo -E ./scripts/bootstrap-host.sh
 #      MXWP_FALLBACK_PROXY=  sudo ./scripts/bootstrap-host.sh   # disable
 # ─────────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -168,7 +168,7 @@ configure_proxy_for_apt_and_npm
 # Override at runtime with:
 #   MXWP_FALLBACK_PROXY=http://10.x.x.x:8080 ./bootstrap-host.sh
 # Set to empty to disable the second attempt.
-FALLBACK_PROXY="${MXWP_FALLBACK_PROXY:-http://168.219.61.252:8080}"
+FALLBACK_PROXY="${MXWP_FALLBACK_PROXY:-}"
 
 # curl with two passes: first whatever-the-env-says, then with the
 # fallback proxy if available. Bash arg order doesn't matter; positional
@@ -188,6 +188,8 @@ curl_with_proxy_fallback() {
       ok "downloaded via fallback proxy"
       return 0
     fi
+  else
+    note "MXWP_FALLBACK_PROXY is empty — not retrying through a proxy (사내망이면 MXWP_FALLBACK_PROXY 를 주고 다시)"
   fi
   return 1
 }

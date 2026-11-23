@@ -188,7 +188,8 @@ done
 # any PyPI install if the .def added new deps post-build, etc).
 # 127.0.0.1 is added to no_proxy explicitly so the API doesn't try to
 # tunnel localhost calls (postgres/meili/minio) through the proxy.
-MXWP_PROXY="${HTTPS_PROXY:-${HTTP_PROXY:-${MXWP_FALLBACK_PROXY:-http://168.219.61.252:8080}}}"
+MXWP_PROXY="${HTTPS_PROXY:-${HTTP_PROXY:-${MXWP_FALLBACK_PROXY:-}}}"
+[ -n "$MXWP_PROXY" ] || echo "ℹ 프록시 없음(HTTPS_PROXY · HTTP_PROXY · MXWP_FALLBACK_PROXY 모두 비어 있다) — api · web 은 직결로 나간다. 사내망 박스는 .env 에 MXWP_FALLBACK_PROXY 를 넣는다" >&2
 start_instance "$INST_API" "$API_SIF" \
   --bind "$REPO_ROOT:/workspace" \
   --env "API_PORT=${API_PORT}" \
@@ -236,7 +237,7 @@ fi
 # %startscript on first boot, which talks to registry.npmjs.org. In
 # corporate networks the registry isn't directly reachable, so forward
 # the same proxy that the host scripts use (env > MXWP_FALLBACK_PROXY).
-MXWP_PROXY="${HTTPS_PROXY:-${HTTP_PROXY:-${MXWP_FALLBACK_PROXY:-http://168.219.61.252:8080}}}"
+MXWP_PROXY="${HTTPS_PROXY:-${HTTP_PROXY:-${MXWP_FALLBACK_PROXY:-}}}"
 # Apptainer warns when the same env name is passed twice (e.g. both
 # lowercase + uppercase). We only set the uppercase variants here;
 # the container's runtime libraries that look for lowercase fall

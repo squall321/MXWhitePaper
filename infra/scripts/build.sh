@@ -7,14 +7,14 @@
 #   `sudo` strips those vars by default. This script:
 #     1. Inherits HTTP_PROXY / HTTPS_PROXY from the caller (sudo -E or
 #        explicit `--preserve-env=HTTPS_PROXY` works).
-#     2. Falls back to MXWP_FALLBACK_PROXY (default
-#        http://168.219.61.252:8080 — Samsung MX egress) when no env
+#     2. Falls back to MXWP_FALLBACK_PROXY (box-local .env — no default;
+#        empty means direct, and the script says so) when no env
 #        proxy is set OR when the first pull attempt fails.
 #     3. Pre-staged .sif files in infra/apptainer/ are always honoured
 #        first — no network call at all if the file already exists.
 #
 # Override or disable:
-#   MXWP_FALLBACK_PROXY=http://10.0.0.1:8080 sudo -E ./build.sh
+#   MXWP_FALLBACK_PROXY=http://<사내 프록시>:8080 sudo -E ./build.sh
 #   MXWP_FALLBACK_PROXY= sudo ./build.sh                 # disable fallback
 set -euo pipefail
 . "$(dirname "$0")/_common.sh"
@@ -24,14 +24,16 @@ FORCE=0
 [ "${1:-}" = "--force" ] && FORCE=1
 
 # Proxy: prefer existing env (sudo -E preserves HTTPS_PROXY etc.); fall
-# back to the well-known corporate egress. Apptainer reads the lowercase
+# back to the box's MXWP_FALLBACK_PROXY (.env). Apptainer reads the lowercase
 # variants — export both casings so any underlying lib finds them.
-FALLBACK_PROXY="${MXWP_FALLBACK_PROXY:-http://168.219.61.252:8080}"
+FALLBACK_PROXY="${MXWP_FALLBACK_PROXY:-}"
 PROXY_URL="${HTTPS_PROXY:-${HTTP_PROXY:-${https_proxy:-${http_proxy:-}}}}"
 
 if [ -z "$PROXY_URL" ] && [ -n "$FALLBACK_PROXY" ]; then
   PROXY_URL="$FALLBACK_PROXY"
   echo "ℹ no proxy in env — using fallback $PROXY_URL"
+elif [ -z "$PROXY_URL" ]; then
+  echo "ℹ no proxy in env and MXWP_FALLBACK_PROXY is empty — pulling direct (사내망 박스는 .env 에 MXWP_FALLBACK_PROXY 를 넣는다)"
 fi
 
 if [ -n "$PROXY_URL" ]; then

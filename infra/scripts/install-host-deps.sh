@@ -54,7 +54,7 @@ if [ "$CHECK_ONLY" -eq 0 ] && [ "$(id -u)" -ne 0 ]; then
   echo "✗ 설치는 sudo 필요. proxy 환경 변수도 같이 전달:"
   echo "    sudo -E $0 $*"
   echo "  또는 명시:"
-  echo "    sudo HTTPS_PROXY=http://168.219.61.252:8080 HTTP_PROXY=http://168.219.61.252:8080 $0 $*"
+  echo "    sudo HTTPS_PROXY=http://<사내 프록시>:8080 HTTP_PROXY=http://<사내 프록시>:8080 $0 $*"
   exit 1
 fi
 
