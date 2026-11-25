@@ -120,3 +120,6 @@
 - [ ] 연결기 — DynaForge · PLM 결함 · stcx 잡(사람 정보 떼기)
 - [ ] 배포 — api.sif(새 의존성 있으면 dev 빌드 → Drive) · 워커 인스턴스 · 포털 services.yaml
 - [ ] 평가(request §10) · 규칙서 값 고치기
+- [ ] MW-06(cae00 선택) — 온톨로지 reliability-test 의 SP 대응 `plm_task.test_kind` 가 코어 칸과 다르다(그 칸이 없다). 코어 받는 코드(허브
+  토큰 뒤)와 함께 새 이관으로 `wiki_entity_types.ext_axes` 를 고치고(0056 을 고쳐도 적용된 DB 는 안 바뀐다) SCHEMA-DRAFT §4 도 맞춘다.
+  맞는 칸이 없으면 '—'

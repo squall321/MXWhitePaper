@@ -386,6 +386,26 @@
 - Drive — `images-to-drive.sh`(사용자가 시킴)로 `images-20261031-073148Z` 와 `latest/` 를 올렸다. web 만 새것이고 api · wiki 는 Drive 와 같다.
   보존(3벌)으로 `images-20260913-020235Z` 가 지워졌다. `latest/` 세 파일의 크기가 로컬과 같다.
 
+## 2026-11-25 — cae00 요청 MW-06 · MW-08 · MW-09(포털 세션 hwaxportal-71 — 정본은 포털 `docs/request-1125/` · 받은 편지함 2026-11-25 R25-Q5)
+
+- **MW-08 dev 의 restricted 두 장(WK-D27 의 그 글)은 시드다 — 포털 답 초안이 맞다.** 골든 샘플 17개 가운데 restricted 는 06 · 08 둘이고,
+  `app/scripts/seed.py` 가 샘플 전부를 시드 관리자 소유 · 첫 판 change_log `seed` 로 싣는다. dev DB 의 restricted 도 이 두 장뿐이다(다른 시드
+  길인 `seed_dogfood.py` 는 `metadata.tags` 에 `dogfood` 를 단다). 겹치면 제목 · 요약 · 본문만 고치고 상태는 두므로, 보관한 것은 seed 를 다시
+  돌려도 보관으로 남고 지운 것은 다시 생긴다(새로 깔기 · DB 초기화 · `make seed` 처럼 seed 가 도는 길 — update-all 은 seed 를 돌리지 않는다).
+  운영 박스의 두 장이 같은 글인지는 R25-Q5(slug 맞대기)가 가리고, 보관할지 지울지(포털 D7 ①)는 사람이 정한다.
+- **MW-09 서비스 계정으로 원천 보내기를 열면 범위 · 주인 검사가 빠진다 — 답 초안이 맞다.** `receive` 는 SERVICE 시야(WK-D43 — 읽기에만)가
+  아니라 호출자의 `viewer_from_user` 를 쓴다. 서비스 계정은 기본이 admin 이라 `_check_sender` 의 셋(`['org']` 제한 · 범위 토큰 부분집합 · 주인을
+  남으로 적기)을 모두 건너뛴다. 그래서 챗이 사람 대신 그 계정으로 보내면 아무 범위 · 남의 주인으로 보낼 수 있고, 후보(`candidate`)는 그 주인의
+  '내 후보' 함으로 들어가며, 실제로 보낸 사람이 남지 않는다(`submitted_by` 는 서비스 계정, via 는 `connector:…`). 서비스 계정을 admin 아닌
+  것으로 바꾸면 이번엔 연결기가 남의 범위 · 주인으로 못 보내 깨진다. 사람 본인 토큰 · 위임 호출은 그대로 검사를 받는다. 결론 — 챗 보내기는
+  사람별 위임(포털 D7 ②) 뒤에 켜고, 연결기(W8)는 전용 계정으로 가른다. lat Gotchas 에 적었다.
+- **MW-06(선택) — 짓지 않았다.** 온톨로지 reliability-test 의 SP 대응 `plm_task.test_kind`(0056 · SCHEMA-DRAFT §4)가 코어 칸과 다르다(그
+  칸이 없다). 지금은 온톨로지 화면의 설명 한 줄에만 쓰이고 코어를 부르는 코드가 없다. 고칠 때는 새 이관으로 `ext_axes` 를 고친다(0056 을
+  고쳐도 이미 적용된 DB 는 안 바뀐다). 코어 받는 코드(허브 토큰 뒤)와 함께 하도록 W8 체크리스트에 걸었다.
+- 올리기 — 5차 라운드 동결(11-24~, 포털 hwaxportal-87) 동안에는 커밋 없이 답만 보냈다. 11-25 사용자 결정으로 풀린 뒤(hwaxportal-71 이 알림)
+  이 기록만 push 했다. 이관 · 의존성 · `.def` 변경이 없어 Drive 는 그대로다. d755a00 의 `wiki.def`(프록시 기본값 뺌)는 다음에 wiki.sif 를
+  지을 때 든다. 지금 Drive 의 wiki.sif 도 박스 `.env` 의 `MXWP_FALLBACK_PROXY` 를 먼저 쓰므로, 그 값이 있는 박스에서는 동작이 같다.
+
 ## 2026-10-25 — dev SSO 전용 켬(사용자 결정 · 포털 MW-D22)
 
 - `.env` 에 `MXWP_SSO_ONLY=true` · `MXWP_LOCAL_LOGIN_ALLOW=admin@mx.local`(e2e · 비상) · `PORTAL_LAUNCH_URL` 을 더했다. 진입 링크는 상대 주소가
