@@ -3,6 +3,8 @@
 > 단계 · 완료 기준은 [request.md](request.md) §9. 포털 · 게이트웨이 · 에이전트 서버 몫은 HWAXPortal `docs/mxwp-wiki/checklist.md`.
 
 ## 지금 지킬 것
+- [x] **풀림 11-25 — 5차 라운드 동결(2026-11-24~, 포털 hwaxportal-87 · 실은 판 main `d755a00`)도 사용자 결정으로 풀렸다(cae00 update-all
+  끝 코드 0 — hwaxportal-71 이 알림). 동결 동안 쌓인 커밋은 없었다.**
 - [x] **풀림 11-23 — hwaxportal-87 이 cae00 수신(사용자가 11-22 라운드 판으로 update-all 을 끝냄)을 알렸다. 11-12 hwaxportal-a5 동결도 함께 풀림.**
   **cae00 업데이트 라운드 동결(2026-11-22~, 포털 hwaxportal-87 — 사용자 결정 'ste 판 뒤 한 번에')** — origin main 에 push 하지 않고
   Drive 이미지(`images-to-drive.sh` · `toolkit-to-drive.sh`)도 올리지 않는다. 로컬 커밋 · 가지 작업은 된다. 맞춰 본 짝은 main `078f28e` ·
