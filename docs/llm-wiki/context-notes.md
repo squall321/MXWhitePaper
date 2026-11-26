@@ -390,9 +390,14 @@
 
 - **MW-08 dev 의 restricted 두 장(WK-D27 의 그 글)은 시드다 — 포털 답 초안이 맞다.** 골든 샘플 17개 가운데 restricted 는 06 · 08 둘이고,
   `app/scripts/seed.py` 가 샘플 전부를 시드 관리자 소유 · 첫 판 change_log `seed` 로 싣는다. dev DB 의 restricted 도 이 두 장뿐이다(다른 시드
-  길인 `seed_dogfood.py` 는 `metadata.tags` 에 `dogfood` 를 단다). 겹치면 제목 · 요약 · 본문만 고치고 상태는 두므로, 보관한 것은 seed 를 다시
-  돌려도 보관으로 남고 지운 것은 다시 생긴다(새로 깔기 · DB 초기화 · `make seed` 처럼 seed 가 도는 길 — update-all 은 seed 를 돌리지 않는다).
-  운영 박스의 두 장이 같은 글인지는 R25-Q5(slug 맞대기)가 가리고, 보관할지 지울지(포털 D7 ①)는 사람이 정한다.
+  길인 `seed_dogfood.py` 는 `metadata.tags` 에 `dogfood` 를 단다). 문서 지우기(DELETE)는 곧 보관(`status = 'archived'`)이고 slug 는 조건
+  없는 UNIQUE(`documents_slug_key`)라, seed 를 다시 돌려도 겹친 행의 제목 · 요약 · 본문만 고치고 상태는 둔다. 샘플만 다시 넣는
+  `apps/api/scripts/seed_samples.py` 도 같다(첫 판 메모는 `seed_samples`). 그래서 보관한 것은 남는다. 다시 생기는 것은 관리자 '보관 문서'
+  화면에서 영구 삭제(보관 7일 뒤, 또는 즉시 옵션)한 뒤 seed 가 돌 때뿐이다(새로 깔기 · 되살리기 · DB 초기화 · `make seed` — update-all 은
+  seed 를 돌리지 않는다). 운영 박스의 두 장이 같은 글인지는 R25-Q5(slug 맞대기)가 가리고, 보관할지 지울지(포털 D7 ①)는 사람이 정한다.
+  - **11-26 운영 답(R25-Q5 · 포털 Q50)** — 두 장 모두 slug 가 골든 06 · 08 과 같고, published · 시드 관리자 소유 · 첫 판 `seed` 라 부트스트랩
+    시드가 맞다. 그 박스의 restricted 도 이 두 장뿐이다. 운영 사용자가 D7 ① 을 **보관**으로 정했다(실행 결과는 아직). MX 백서에서 고칠
+    것은 없다 — 두 장을 영구 삭제하지만 않으면 seed 를 다시 돌려도 보관으로 남는다.
 - **MW-09 서비스 계정으로 원천 보내기를 열면 범위 · 주인 검사가 빠진다 — 답 초안이 맞다.** `receive` 는 SERVICE 시야(WK-D43 — 읽기에만)가
   아니라 호출자의 `viewer_from_user` 를 쓴다. 서비스 계정은 기본이 admin 이라 `_check_sender` 의 셋(`['org']` 제한 · 범위 토큰 부분집합 · 주인을
   남으로 적기)을 모두 건너뛴다. 그래서 챗이 사람 대신 그 계정으로 보내면 아무 범위 · 남의 주인으로 보낼 수 있고, 후보(`candidate`)는 그 주인의
