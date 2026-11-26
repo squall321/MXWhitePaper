@@ -625,9 +625,11 @@ materialized view refresh 도 스킵 가능.
    는 표시용이지 권위 없음. FE 도 응답값을 다시 받아 표시.
 3. **`replace_document` 는 비싸다** — 본문 전체 교체 + 버전 INSERT + 인덱싱
    3 단계. UI 의 빠른 편집은 patch_section/patch_block 으로 가야 한다.
-4. **soft-delete 후 같은 slug 재생성 금지** — `archived_at IS NULL` 조건의
-   unique index 가 있어서 archive 된 문서를 살리려면 `restore_version` 이나
-   admin SQL 이 필요.
+4. **soft-delete 후 같은 slug 재생성 금지** — 보관은 `status = 'archived'` 일
+   뿐이고(`archived_at` 칸은 없다) slug 는 조건 없는 UNIQUE
+   (`documents_slug_key`)라 보관된 행이 slug 를 계속 잡는다. 살리려면 관리자
+   '보관 문서' 화면의 복원(`POST /api/v1/admin/archived-docs/restore` → draft,
+   [[src/app/routers/admin.py#restore_archived_docs]])을 쓴다.
 5. **block redaction 은 응답 전용** — DB 변경 함수에 절대 끼우지 말 것.
 6. **`_walk_sections` / `_walk_blocks_in_section` 는 generator** — 다중 소비하면
    재호출 필요. 종종 `list(_walk_…)` 로 박제하고 시작하는 게 안전.
